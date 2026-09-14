@@ -108,3 +108,16 @@ def food_detail(food_id: str):
     return {"food_id": rec.food_id, "name": rec.name, "source": rec.source,
             "nutrients_per_100g": {k: str(v) for k,v in rec.nutrients_per_100g.items()},
             "known_nutrients": sorted(rec.nutrients_per_100g.keys())}
+
+
+class MealIn(BaseModel):
+    label: str
+    foods: list[FoodItem]
+
+@app.post("/plan/{person_id}")
+def plan_menu(person_id: str, meals: list[MealIn]):
+    return svc.plan_menu(person_id, [{"label": m.label, "foods": [f.model_dump() for f in m.foods]} for m in meals])
+
+@app.get("/gap-v2/{person_id}/{date}")
+def gap_v2(person_id: str, date: str):
+    return svc.daily_gap_v2(person_id, date)

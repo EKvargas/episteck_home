@@ -81,6 +81,13 @@ def get_pregnancy_profile(person_id: str) -> dict:
     if not p: return {"error": "no profile"}
     return p
 
+@mcp.tool
+def plan_menu(person_id: str, meals: list[dict]) -> dict:
+    """Evaluate a proposed menu (list of {label, foods:[{food_id,grams}]}) against the
+    person's reference targets, deterministically. Returns a PROPOSED plan with gaps.
+    This is a plan against configured reference targets, NOT a medical recommendation."""
+    return _svc.plan_menu(person_id, meals)
+
 if __name__ == "__main__":
     import os
     mcp.run(transport="http", host="0.0.0.0", port=int(os.environ.get("MCP_PORT","9931")))
