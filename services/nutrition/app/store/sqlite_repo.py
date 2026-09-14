@@ -26,6 +26,9 @@ class SqliteNutritionRepository(NutritionRepository):
                 id TEXT PRIMARY KEY, person_id TEXT NOT NULL, date TEXT NOT NULL,
                 kind TEXT NOT NULL, doc TEXT NOT NULL)""")
             c.execute("CREATE INDEX IF NOT EXISTS ix_intake ON intake(person_id,date,kind)")
+            c.execute("""CREATE TABLE IF NOT EXISTS consent(
+                person_id TEXT PRIMARY KEY, scope TEXT NOT NULL, state TEXT NOT NULL,
+                granted_at TEXT, note TEXT)""")
 
     def upsert_profile(self, person_id: str, profile: dict) -> dict:
         import datetime
@@ -57,3 +60,21 @@ class SqliteNutritionRepository(NutritionRepository):
         with self._lock, self._conn() as c:
             rows = c.execute(q, args).fetchall()
         return [json.loads(r["doc"]) for r in rows]
+
+    def set_consent(self, person_id: str, scope: str, state: str, note: str = "") -> dict:
+        with self._lock, self._conn() as c:
+            c.execute("INSERT INTO consent(person_id,scope,state,granted_at,note) "
+                      "VALUES(?,?,?,datetime('now'),?) ON CONFLICT(person_id) DO UPDATE SET "
+                      "scope=excluded.scope,state=excluded.state,granted_at=excluded.granted_at,note=excluded.note",
+                      (person_id, scope, state, note))
+        return self.get_consent(person_id)
+
+    def get_consent(self, person_id: str) -> dict | None:
+        with self._lock, self._conn() as c:
+            r = c.execute("SELECT person_id,scope,state,granted_at,note FROM consent WHERE person_id=?",
+                          (person_id,)).fetchone()
+        return dict(r) if r else None
+
+    def has_consent(self, person_id: str, scope: str = "NUTRITION") -> bool:
+        rec = self.get_consent(person_id)
+        return bool(rec and rec["scope"] == scope and rec["state"] == "GRANTED")

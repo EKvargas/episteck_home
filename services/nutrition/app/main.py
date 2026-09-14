@@ -67,3 +67,44 @@ def recipes(query: str):
 def mealplan(start: str, end: str):
     if not svc.mealie: raise HTTPException(503, "mealie not configured")
     return svc.mealie.get_meal_plan(start, end)
+
+
+class PregnancyProfileIn(BaseModel):
+    stage: str | None = None
+    preferences: str = ""
+    dislikes: str = ""
+    intolerances: str = ""
+    avoided_foods: str = ""
+    user_goals: dict = {}
+
+@app.post("/consent/{person_id}")
+def set_consent(person_id: str, state: str = "GRANTED", note: str = ""):
+    return svc.set_consent(person_id, state, note)
+
+@app.get("/consent/{person_id}")
+def get_consent(person_id: str):
+    c = svc.get_consent(person_id)
+    if c is None: raise HTTPException(404, "no consent record")
+    return c
+
+@app.post("/profile/{person_id}/pregnancy")
+def create_pregnancy(person_id: str, body: PregnancyProfileIn):
+    try:
+        return svc.create_pregnancy_profile(person_id, stage=body.stage,
+            preferences=body.preferences, dislikes=body.dislikes,
+            intolerances=body.intolerances, avoided_foods=body.avoided_foods,
+            user_goals=body.user_goals)
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+
+@app.get("/food/search")
+def food_search(query: str):
+    hits = svc.provider.search_food(query)
+    return [{"food_id": h.food_id, "name": h.name, "provider": h.food_id.split(":",1)[0]} for h in hits]
+
+@app.get("/food/{food_id:path}")
+def food_detail(food_id: str):
+    rec = svc.provider.get_food(food_id)
+    return {"food_id": rec.food_id, "name": rec.name, "source": rec.source,
+            "nutrients_per_100g": {k: str(v) for k,v in rec.nutrients_per_100g.items()},
+            "known_nutrients": sorted(rec.nutrients_per_100g.keys())}

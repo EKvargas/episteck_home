@@ -57,6 +57,30 @@ def get_meal_plan(start_date: str, end_date: str) -> list:
     """Read the Mealie meal plan for a date range."""
     return _svc.mealie.get_meal_plan(start_date, end_date) if _svc.mealie else []
 
+@mcp.tool
+def search_foods(query: str) -> list:
+    """Search real food databases (USDA primary, Open Food Facts secondary).
+    Returns [{food_id, name, provider}]. Nutrient numbers are NOT here — call evaluate_meal."""
+    hits = _svc.provider.search_food(query)
+    return [{"food_id": h.food_id, "name": h.name, "provider": h.food_id.split(":",1)[0]} for h in hits]
+
+@mcp.tool
+def get_food_detail(food_id: str) -> dict:
+    """Nutrient composition per 100g for a food, with source provenance. Missing nutrients
+    are simply absent (unknown != zero)."""
+    rec = _svc.provider.get_food(food_id)
+    return {"food_id": rec.food_id, "name": rec.name, "source": rec.source,
+            "nutrients_per_100g": {k: str(v) for k,v in rec.nutrients_per_100g.items()},
+            "known_nutrients": sorted(rec.nutrients_per_100g.keys())}
+
+@mcp.tool
+def get_pregnancy_profile(person_id: str) -> dict:
+    """Return the pregnancy nutrition profile incl. authoritative reference targets and
+    their provenance (DGE/EFSA). Requires the person to have granted consent."""
+    p = _svc.get_profile(person_id)
+    if not p: return {"error": "no profile"}
+    return p
+
 if __name__ == "__main__":
     import os
     mcp.run(transport="http", host="0.0.0.0", port=int(os.environ.get("MCP_PORT","9931")))
