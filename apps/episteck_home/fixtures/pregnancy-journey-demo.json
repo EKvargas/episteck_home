@@ -1,0 +1,8 @@
+[
+  {"doctype": "Care Journey", "name": "CJ-00001", "title": "Synthetic care journey", "journey_template": "Pregnancy", "subject_person_reference": "PERSON-A-SYNTHETIC", "household_reference": "HOUSEHOLD-SYNTHETIC", "status": "ACTIVE"},
+  {"doctype": "Care Journey Item", "care_journey": "CJ-00001", "item_type": "TASK", "title": "Prepare shared task", "status": "PLANNED", "knowledge_status": "USER_CONFIRMED", "source_type": "USER_INPUT"},
+  {"doctype": "Care Journey Item", "care_journey": "CJ-00001", "item_type": "APPOINTMENT_PLAN", "title": "Coordinate planned appointment", "status": "PLANNED", "knowledge_status": "USER_CONFIRMED", "source_type": "USER_INPUT"},
+  {"doctype": "Care Journey Item", "care_journey": "CJ-00001", "item_type": "EXAM_PLAN", "title": "Prepare planned exam", "status": "PLANNED", "knowledge_status": "USER_CONFIRMED", "source_type": "USER_INPUT"},
+  {"doctype": "Care Journey Item", "care_journey": "CJ-00001", "item_type": "DOCUMENT_REFERENCE", "title": "Review controlled document reference", "status": "PLANNED", "knowledge_status": "USER_CONFIRMED", "source_type": "USER_INPUT"},
+  {"doctype": "Care Journey Item", "care_journey": "CJ-00001", "item_type": "EXPENSE_FOLLOW_UP", "title": "Review pending expense category", "status": "PLANNED", "knowledge_status": "USER_CONFIRMED", "source_type": "USER_INPUT"}
+]

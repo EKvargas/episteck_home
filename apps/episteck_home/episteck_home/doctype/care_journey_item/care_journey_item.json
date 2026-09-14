@@ -1,0 +1,20 @@
+{
+ "doctype": "DocType",
+ "name": "Care Journey Item",
+ "module": "Episteck Home",
+ "autoname": "format:CJI-{#####}",
+ "title_field": "title",
+ "fields": [
+  {"fieldname": "care_journey", "fieldtype": "Link", "label": "Care Journey", "options": "Care Journey", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "item_type", "fieldtype": "Select", "label": "Type", "options": "TASK\nAPPOINTMENT_PLAN\nEXAM_PLAN\nDOCUMENT_REFERENCE\nEXPENSE_FOLLOW_UP\nQUESTION\nREMINDER", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "title", "fieldtype": "Data", "label": "Title", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "responsible_user", "fieldtype": "Link", "label": "Responsible User", "options": "User"},
+  {"fieldname": "shared_with_user", "fieldtype": "Link", "label": "Explicitly Shared With", "options": "User", "read_only": 1},
+  {"fieldname": "planned_for", "fieldtype": "Datetime", "label": "Planned For"},
+  {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "PLANNED\nIN_PROGRESS\nDONE\nCANCELLED", "default": "PLANNED", "in_list_view": 1},
+  {"fieldname": "external_reference", "fieldtype": "Data", "label": "Controlled Reference", "read_only": 1},
+  {"fieldname": "knowledge_status", "fieldtype": "Select", "label": "Knowledge Status", "options": "USER_CONFIRMED\nEXTERNAL_REPORTED\nAI_EXTRACTED\nAI_HYPOTHESIS", "default": "USER_CONFIRMED", "reqd": 1},
+  {"fieldname": "source_type", "fieldtype": "Select", "label": "Source", "options": "USER_INPUT", "default": "USER_INPUT", "reqd": 1}
+ ],
+ "permissions": [{"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1}]
+}

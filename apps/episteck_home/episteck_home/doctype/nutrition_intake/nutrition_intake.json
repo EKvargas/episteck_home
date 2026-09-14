@@ -1,0 +1,18 @@
+{
+ "doctype": "DocType",
+ "name": "Nutrition Intake",
+ "module": "Episteck Home",
+ "autoname": "format:NI-{#####}",
+ "title_field": "person_reference",
+ "fields": [
+  {"fieldname": "person_reference", "fieldtype": "Data", "label": "Person Reference", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "consumed_at", "fieldtype": "Datetime", "label": "Consumed At", "reqd": 1},
+  {"fieldname": "meal_type", "fieldtype": "Select", "label": "Meal Type", "options": "BREAKFAST\nLUNCH\nDINNER\nSNACK", "reqd": 1},
+  {"fieldname": "source", "fieldtype": "Select", "label": "Source", "options": "PLANNED_MEAL\nRECIPE\nFOOD\nMANUAL", "reqd": 1},
+  {"fieldname": "planned_meal_reference", "fieldtype": "Data", "label": "Planned Meal Reference"},
+  {"fieldname": "actual_portion_factor", "fieldtype": "Float", "label": "Actual Portion Factor", "default": "1"},
+  {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "CONFIRMED\nCHANGED\nSKIPPED", "default": "CONFIRMED", "reqd": 1},
+  {"fieldname": "provenance", "fieldtype": "Select", "label": "Provenance", "options": "USER_CONFIRMED", "default": "USER_CONFIRMED", "reqd": 1}
+ ],
+ "permissions": [{"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1}]
+}

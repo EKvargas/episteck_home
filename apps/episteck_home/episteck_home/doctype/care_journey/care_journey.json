@@ -1,0 +1,17 @@
+{
+ "doctype": "DocType",
+ "name": "Care Journey",
+ "module": "Episteck Home",
+ "autoname": "format:CJ-{#####}",
+ "title_field": "title",
+ "fields": [
+  {"fieldname": "title", "fieldtype": "Data", "label": "Title", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "journey_template", "fieldtype": "Select", "label": "Journey Template", "options": "Generic Care Journey\nPregnancy", "default": "Generic Care Journey", "reqd": 1},
+  {"fieldname": "subject_person_reference", "fieldtype": "Data", "label": "Subject Person Reference", "reqd": 1},
+  {"fieldname": "household_reference", "fieldtype": "Data", "label": "Household Reference", "reqd": 1},
+  {"fieldname": "period_start", "fieldtype": "Date", "label": "Period Start"},
+  {"fieldname": "period_end", "fieldtype": "Date", "label": "Period End"},
+  {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "ACTIVE\nCLOSED", "default": "ACTIVE", "in_list_view": 1}
+ ],
+ "permissions": [{"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1}]
+}

@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "EPISTECK HOME · Health Journey aprobado",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "viewBox": [1390, 820]
+  },
+  "components": [
+    { "id": "finance_connector", "type": "external", "label": "Finance Connector", "sublabel": "Banco y tokens quedan aquí", "tag": "FUTURO", "pos": [70, 90], "size": [270, 76] },
+    { "id": "mind_context", "type": "external", "label": "Mind", "sublabel": "Diarios y memoria AI", "tag": "FUTURO", "pos": [365, 90], "size": [185, 76] },
+    { "id": "fhir_clinical", "type": "external", "label": "FHIR / clínica", "sublabel": "Fuente clínica de verdad", "tag": "FUTURO", "pos": [585, 90], "size": [270, 76] },
+    { "id": "wger_wellness", "type": "external", "label": "wger / wellness", "sublabel": "Peso · nutrición · actividad", "tag": "PENDIENTE GATE", "pos": [1060, 90], "size": [270, 76] },
+    { "id": "household_human", "type": "external", "label": "Persona autorizada", "sublabel": "Confirma valores y uso", "pos": [70, 370], "size": [270, 76] },
+    { "id": "scoped_api_mcp", "type": "security", "label": "API / MCP acotados", "sublabel": "Ámbito · propósito · permiso", "tag": "PROPUESTO", "pos": [585, 370], "size": [270, 76] },
+    { "id": "home_core", "type": "backend", "label": "episteck_home Core", "sublabel": "Health Journey · coordinación", "tag": "APP FUTURA", "pos": [1060, 370], "size": [270, 76] },
+    { "id": "future_agents", "type": "external", "label": "Agentes futuros", "sublabel": "Sin DB, shell ni secretos", "tag": "NO HABILITADOS", "pos": [70, 675], "size": [270, 76] },
+    { "id": "erpnext_backbone", "type": "backend", "label": "ERPNext / Frappe", "sublabel": "Foundation existente", "tag": "HOME", "pos": [1060, 675], "size": [270, 76] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "FINANCE · fuera del Core", "wraps": ["finance_connector"], "pad": 24 },
+    { "kind": "region", "label": "HEALTH · fuentes especializadas", "wraps": ["fhir_clinical", "wger_wellness"], "pad": 24 },
+    { "kind": "region", "label": "MIND · fuera del Core", "wraps": ["mind_context"], "pad": 24 },
+    { "kind": "security-group", "label": "HOME · límites lógicos", "wraps": ["home_core", "erpnext_backbone"], "pad": 30 }
+  ],
+  "connections": [
+    { "id": "human_authority", "from": "household_human", "to": "scoped_api_mcp", "label": "Revisión humana", "variant": "emphasis", "labelDx": -65 },
+    { "id": "domain_operations", "from": "scoped_api_mcp", "to": "home_core", "label": "Operación autorizada", "variant": "security", "labelDx": 45, "labelDy": 24 },
+    { "id": "foundation_reuse", "from": "home_core", "to": "erpnext_backbone", "label": "Reutilización selectiva", "variant": "emphasis", "labelDy": 130 },
+    { "id": "agents_scoped_tools", "from": "future_agents", "to": "scoped_api_mcp", "label": "Leer / proponer", "variant": "dashed" },
+    { "id": "fhir_reference", "from": "fhir_clinical", "to": "scoped_api_mcp", "label": "Referencia consentida", "variant": "dashed", "labelAt": [840, 180] },
+    { "id": "wger_projection", "from": "wger_wellness", "to": "home_core", "label": "Wellness tras gate y API", "variant": "dashed", "labelAt": [1320, 180] }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "Primer vertical aprobado", "items": ["Health Journey / Pregnancy Journey", "Coordinación manual y confirmación humana"] },
+    { "dot": "amber", "title": "Cuatro estados separados", "items": ["USER_CONFIRMED · EXTERNAL_REPORTED", "AI_EXTRACTED · AI_HYPOTHESIS"] },
+    { "dot": "rose", "title": "Sólo diseño", "items": ["Límites lógicos ≠ aislamiento del host", "Sin implementación ni despliegue"] }
+  ]
+}

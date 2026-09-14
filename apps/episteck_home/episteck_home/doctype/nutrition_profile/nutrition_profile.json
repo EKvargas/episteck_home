@@ -1,0 +1,18 @@
+{
+ "doctype": "DocType",
+ "name": "Nutrition Profile",
+ "module": "Episteck Home",
+ "autoname": "field:person_reference",
+ "title_field": "person_reference",
+ "fields": [
+  {"fieldname": "person_reference", "fieldtype": "Data", "label": "Person Reference", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "preferences", "fieldtype": "Small Text", "label": "Preferences"},
+  {"fieldname": "dislikes", "fieldtype": "Small Text", "label": "Dislikes"},
+  {"fieldname": "explicit_intolerances", "fieldtype": "Small Text", "label": "Explicitly Entered Intolerances"},
+  {"fieldname": "target_source", "fieldtype": "Select", "label": "Target Source", "options": "REFERENCE_TARGET\nUSER_CONFIGURED\nPROFESSIONAL_PROVIDED\nAI_SUGGESTION", "default": "USER_CONFIGURED", "reqd": 1},
+  {"fieldname": "target_reference", "fieldtype": "Data", "label": "Target Provenance Reference"},
+  {"fieldname": "valid_from", "fieldtype": "Date", "label": "Valid From"},
+  {"fieldname": "valid_to", "fieldtype": "Date", "label": "Valid To"}
+ ],
+ "permissions": [{"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1}]
+}
