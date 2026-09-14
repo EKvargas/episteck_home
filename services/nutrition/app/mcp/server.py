@@ -58,4 +58,5 @@ def get_meal_plan(start_date: str, end_date: str) -> list:
     return _svc.mealie.get_meal_plan(start_date, end_date) if _svc.mealie else []
 
 if __name__ == "__main__":
-    mcp.run()
+    import os
+    mcp.run(transport="http", host="0.0.0.0", port=int(os.environ.get("MCP_PORT","9931")))
