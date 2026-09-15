@@ -49,7 +49,7 @@ def check_access(
     domain: str,
     action: str = "VIEW",
 ) -> dict:
-    """Ask the canonical Home policy for an actor/subject/domain/action decision."""
+    """Ask canonical Home policy. On false/error, stop; never retry or call downstream."""
     return _client.check_access(actor_person_id, subject_person_id, domain, action)
 
 

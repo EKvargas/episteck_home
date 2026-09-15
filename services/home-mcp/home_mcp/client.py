@@ -98,8 +98,12 @@ class HomeControlPlaneClient:
             {
                 "actor_person_id": actor_person_id,
                 "subject_person_id": subject_person_id,
-                "domain": domain,
-                "action": action,
+                # Agent models commonly produce display casing (for example,
+                # "Nutrition"). Canonicalizing casing is not an authorization
+                # fallback: Frappe still validates the resulting exact domain and
+                # action and remains the sole decision authority.
+                "domain": str(domain).strip().upper(),
+                "action": str(action).strip().upper(),
             },
         )
         if not isinstance(result, dict) or type(result.get("allow")) is not bool:
