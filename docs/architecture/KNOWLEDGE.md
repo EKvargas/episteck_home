@@ -1,13 +1,13 @@
-# Knowledge Architecture (CONTRACTS ONLY — nothing installed)
+# Knowledge Architecture (PURE CONTRACTS IMPLEMENTED — no runtime installed)
 
 Episteck **Knowledge** is a governance layer for durable, reusable, contextual
 personal/family knowledge — with ownership, provenance, consent, sharing, and
 correction/deletion. It is **not** a duplicate store for structured domain facts
 (those stay in their owning services) and **not** the Hermes working memory.
 
-> This stage defines **contracts** so Person/Circle/Consent are ready for a future
-> Knowledge service. **No** Mem0 / Graphiti / RAGFlow / Postgres+pgvector / Docling
-> is installed now.
+> The dependency-free contracts live in `packages/home-contracts`. They provide no
+> storage, extraction, indexing, retrieval, embeddings, or service runtime. **No**
+> Mem0 / Graphiti / RAGFlow / Postgres+pgvector / Docling is installed.
 
 ## Concepts
 
@@ -48,12 +48,16 @@ PROPOSED → ACTIVE → (SUPERSEDED | DISPUTED | REVOKED | EXPIRED).
 - Knowledge preserves source/provenance always.
 - Never store credentials/secrets as Knowledge.
 
+The contract represents confirmation by creating a new `USER_CONFIRMED` claim with
+an explicit confirmation Episode and a `supersedes_claim_id`; it never rewrites an
+AI hypothesis in place. Lifecycle transitions preserve provenance and source.
+
 ## Knowledge vs domain truth (examples)
 weight → Device Gateway · diagnosis → FHIR · nutrition intake → svc-nutrition ·
 calendar event → Calendar · Person/Circle → Home Control Plane. Knowledge references
 these; it does not replace them.
 
-## Future ContextBundle contract (define, do NOT implement)
+## ContextBundle contract (implemented; retrieval is not)
 Pipeline (authorization BEFORE any sensitive retrieval):
 ```
 query
@@ -68,9 +72,17 @@ query
  → assemble ContextBundle
  → Home Agent
 ```
-**ContextBundle** (conceptual): `actor`, `subjects`, `circles`, `authorized_domains`,
-`knowledge_claims`, `document_evidence`, `structured_domain_context`,
-`sources/provenance`.
+`ContextBundle` formalizes `actor_person_id`, `subject_person_ids`, `circle_ids`,
+`authorized_domains`, `knowledge_claims`, `document_evidence`,
+`structured_domain_context`, and `sources`. Its constructor rejects Knowledge,
+document evidence, or structured-domain references without prior matching
+subject/domain VIEW authorization. Structured domain truth is represented by
+`StructuredDomainReference(owner_service, record_type, record_id)`, not copied into
+durable Knowledge.
+
+The module also formalizes `KnowledgeScopeType`, `KnowledgeScope`,
+`KnowledgeEpisode`, `KnowledgeClaim`, `KnowledgeProvenance`, `KnowledgeStatus`,
+`AuthorizedDomain`, `DocumentEvidence`, and `SourceReference`.
 
 ## Candidate technology (documented, NOT selected/installed)
 - **Episteck Knowledge governance layer** — always Episteck-owned (Person/Circle/Consent).
