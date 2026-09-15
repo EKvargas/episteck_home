@@ -62,6 +62,7 @@ class SqliteNutritionRepository(NutritionRepository):
         return [json.loads(r["doc"]) for r in rows]
 
     def set_consent(self, person_id: str, scope: str, state: str, note: str = "") -> dict:
+        """Retain a legacy record for migration/audit; never use it for access."""
         with self._lock, self._conn() as c:
             c.execute("INSERT INTO consent(person_id,scope,state,granted_at,note) "
                       "VALUES(?,?,?,datetime('now'),?) ON CONFLICT(person_id) DO UPDATE SET "
@@ -70,11 +71,8 @@ class SqliteNutritionRepository(NutritionRepository):
         return self.get_consent(person_id)
 
     def get_consent(self, person_id: str) -> dict | None:
+        """Read legacy migration/audit state; this is not an access decision."""
         with self._lock, self._conn() as c:
             r = c.execute("SELECT person_id,scope,state,granted_at,note FROM consent WHERE person_id=?",
                           (person_id,)).fetchone()
         return dict(r) if r else None
-
-    def has_consent(self, person_id: str, scope: str = "NUTRITION") -> bool:
-        rec = self.get_consent(person_id)
-        return bool(rec and rec["scope"] == scope and rec["state"] == "GRANTED")

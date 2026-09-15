@@ -10,23 +10,31 @@
 
 ## This stage (G1.5)
 Home Control Plane model + Knowledge contracts + architecture docs. **No real data.**
-- Person/Circle/CircleMembership/CareRelationship/ConsentGrant + central `can_access`.
-- Stable Home Core API + Home Agent MCP.
-- Nutrition authorization migration (client + fail-closed; live cutover gated).
-- Knowledge contracts + ContextBundle contract (no tech installed).
+- ✅ Person/Circle/CircleMembership/CareRelationship/ConsentGrant + central `can_access`.
+- ✅ Actor-aware Home Core API + thin Home Agent MCP source.
+- ✅ Nutrition Home authorization client + pre-retrieval fail-closed cutover source.
+- ✅ Knowledge + ContextBundle contracts (`packages/home-contracts`; no tech installed).
+- ⏳ Live MCP deployment, synthetic conversation matrix, and latency evidence.
 
 ## Gates ahead
 ### Knowledge Technology Gate `[PENDING]`
 Decide + install the Knowledge stack (candidates: Mem0 + Docling + Postgres/pgvector;
 Graphiti deferred; RAGFlow rejected). Prereqs: capacity check on Nuremberg, a clear
 first Knowledge use case, and the governance layer (Scope/Episode/Claim) implemented
-in the Home Control Plane.
+in the Home Control Plane. The pure G1.5 contracts are complete but are not a
+Knowledge runtime or persistence implementation.
 
 ### G2 — Real family onboarding `[BLOCKED on approval]`
 First real Person + explicit consent + real Pregnancy Nutrition Profile + real
 providers + real meal plan + planned→actual + Home Agent with the real user. Requires:
 off-box backup (done), real USDA key (done), this G1.5 model live + validated, and
 explicit user approval.
+
+**Additional hard prerequisite:** trusted actor binding. The authenticated real user
+or session must be authoritatively bound to exactly its allowed Person identity and
+must resist actor-id substitution. Supplying an arbitrary `actor_person_id` is never
+authentication. Until this is implemented and verified, G2 remains blocked and Home
+Agent receives no real family data.
 
 ### Later
 Device Gateway/Withings, FHIR, Mind, Calendar, Documents, Finance, reverse proxy +

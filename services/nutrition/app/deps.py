@@ -4,8 +4,14 @@ import os
 from .store.sqlite_repo import SqliteNutritionRepository
 from .providers.synthetic import SyntheticFoodProvider
 from .service import NutritionService
+from .home_control.client import HomeControlPlaneClient
 
 _DB = os.environ.get("NUTRITION_DB", "/data/nutrition.sqlite")
+
+
+def build_home_authorizer() -> HomeControlPlaneClient:
+    """Build lazily so importing the module never reads or exposes credentials."""
+    return HomeControlPlaneClient.from_env()
 
 
 def _build_provider():
@@ -28,4 +34,4 @@ def build_service() -> NutritionService:
     if os.environ.get("MEALIE_BASE_URL") and os.environ.get("MEALIE_API_TOKEN"):
         from .mealie.adapter import MealieAdapter
         mealie = MealieAdapter()
-    return NutritionService(repo, provider, mealie)
+    return NutritionService(repo, provider, mealie, authorizer=build_home_authorizer())

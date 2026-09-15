@@ -7,6 +7,7 @@ from app.service import NutritionService
 from app.providers.food_provider import FoodProvider, FoodSearchHit, FoodRecord
 from app.providers.chain import ProviderChain
 from app.providers.nutrient_map import to_canonical
+from tests.support import AllowAllAuthorizer, DenyAllAuthorizer
 
 class FakeUSDA(FoodProvider):
     name = "USDA_FDC"
@@ -24,9 +25,13 @@ class FakeOFF(FoodProvider):
     def get_nutrients(self, fid, qty, unit):
         f=self.get_food(fid).nutrients_per_100g; k=Decimal(str(qty))/Decimal("100"); return {n:v*k for n,v in f.items()}
 
-def _svc(provider=None):
+def _svc(provider=None, authorizer=None):
     fd,p=tempfile.mkstemp(suffix=".sqlite"); os.close(fd)
-    return NutritionService(SqliteNutritionRepository(p), provider or ProviderChain([FakeUSDA(), FakeOFF()]))
+    return NutritionService(
+        SqliteNutritionRepository(p),
+        provider or ProviderChain([FakeUSDA(), FakeOFF()]),
+        authorizer=authorizer or AllowAllAuthorizer(),
+    )
 
 def test_chain_search_concatenates_both_sources():
     s=_svc(); hits=s.provider.search_food("x")
@@ -51,34 +56,34 @@ def test_unit_normalization_fails_loud_on_unknown_path():
     try: to_canonical("1","g","kcal"); raise AssertionError("should fail")
     except ValueError: pass
 
-def test_consent_required_for_pregnancy_profile():
-    s=_svc()
+def test_home_authorization_required_for_pregnancy_profile():
+    s=_svc(authorizer=DenyAllAuthorizer())
     try:
-        s.create_pregnancy_profile("p-real"); raise AssertionError("should require consent")
+        s.create_pregnancy_profile("p-real", "p-real"); raise AssertionError("should require authorization")
     except PermissionError: pass
-    s.set_consent("p-real","GRANTED")
-    prof=s.create_pregnancy_profile("p-real", stage="2nd trimester", preferences="veg")
+    s=_svc()
+    prof=s.create_pregnancy_profile("p-real", "p-real", stage="2nd trimester", preferences="veg")
     assert prof["context"]=="PREGNANCY" and prof["target_source"]=="REFERENCE_TARGET"
 
 def test_pregnancy_targets_have_reference_provenance():
-    s=_svc(); s.set_consent("p2","GRANTED")
-    prof=s.create_pregnancy_profile("p2")
+    s=_svc()
+    prof=s.create_pregnancy_profile("p2", "p2")
     d=prof["targets_detail"]
     assert d["folate_ug"]["value"]=="550" and d["folate_ug"]["source_org"].startswith("DGE")
     assert d["iodine_ug"]["value"]=="230"
     assert all(v["provenance"]=="REFERENCE_TARGET" for v in d.values())
 
 def test_gap_v2_marks_unknown_vs_known():
-    s=_svc(); s.set_consent("p3","GRANTED"); s.create_pregnancy_profile("p3")
+    s=_svc(); s.create_pregnancy_profile("p3", "p3")
     # eat egg (protein known, iron/folate unknown from this food)
-    s.record_actual("p3","2026-09-15",[{"food_id":"usda:1","grams":100}])
-    g=s.daily_gap_v2("p3","2026-09-15")
+    s.record_actual("p3", "p3","2026-09-15",[{"food_id":"usda:1","grams":100}])
+    g=s.daily_gap_v2("p3", "p3","2026-09-15")
     assert g["protein_g"]["status"]=="KNOWN"
     assert g["iron_mg"]["status"]=="UNKNOWN" and g["iron_mg"]["consumed"] is None
 
 def test_menu_plan_is_proposal_not_medical():
-    s=_svc(); s.set_consent("p4","GRANTED"); s.create_pregnancy_profile("p4")
-    plan=s.plan_menu("p4",[{"label":"lunch","foods":[{"food_id":"usda:1","grams":150}]}])
+    s=_svc(); s.create_pregnancy_profile("p4", "p4")
+    plan=s.plan_menu("p4", "p4", [{"label":"lunch","foods":[{"food_id":"usda:1","grams":150}]}])
     assert plan["status"]=="PROPOSED"
     assert "Not a medical recommendation" in plan["disclaimer"]
 

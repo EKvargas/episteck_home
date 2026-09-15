@@ -20,7 +20,7 @@ data access. Authorization is explicit and consent-driven.
 
 | Plane | Runs on | Role |
 | --- | --- | --- |
-| **Home Control Plane** — `episteck_home` Frappe app on **home.episteck.com** | Ashburn VPS | Canonical identity, family/care relationships, consent, coordination. `[LIVE SITE, app install in progress]` |
+| **Home Control Plane** — `episteck_home` Frappe app on **home.episteck.com** | Ashburn VPS | Canonical identity, family/care relationships, consent, coordination. `[LIVE]` |
 | **Episteck company ERP** — `erp.episteck.com` | Ashburn VPS | Company-internal ERP. **Separate** from Home. Not part of this product. |
 | **Domain services** | Nuremberg node | Independent specialized services (Nutrition, Mealie, future FHIR/Device Gateway/Mind/Knowledge) |
 | **Agents** | Nuremberg node | Two independent Hermes instances: `infra-agent` (privileged ops) and `home-agent` (unprivileged, user-facing) |
@@ -37,6 +37,7 @@ flowchart TB
   subgraph NBG["Nuremberg node (EU)"]
     HA["home-agent (Hermes, unprivileged)"]
     IA["infra-agent (Hermes, privileged)"]
+    HMCP["Home MCP :9932 (loopback)<br/>[SOURCE READY; DEPLOYMENT PENDING]"]
     subgraph NUT["svc-nutrition (rootless Podman)"]
       NAPI["Nutrition API :9930 (loopback)"]
       NMCP["Nutrition MCP :9931 (loopback)"]
@@ -54,13 +55,14 @@ flowchart TB
   OFF["Open Food Facts"]:::ext
 
   user --> HA
+  HA -- MCP --> HMCP
   HA -- MCP --> NMCP
+  HMCP -- "actor-aware Home business API<br/>(Tailscale + machine token)" --> HOME
   NMCP --> NAPI
   NAPI -- adapter/token --> MEAL
   NAPI -- provider chain --> FDC
   NAPI -- provider chain --> OFF
-  NAPI -. "check_access (Tailscale) [PLANNED cutover]" .-> HOME
-  HA -. "Home Core API (Tailscale) [PLANNED]" .-> HOME
+  NAPI -- "check_access before person data<br/>(Tailscale + machine token)" --> HOME
   IA -- admin --> NUT
   IA -- admin --> MEAL
   NUT --> BKP
@@ -68,6 +70,24 @@ flowchart TB
 
   classDef ext fill:#eee,stroke:#999,stroke-dasharray:3 3;
 ```
+
+### 3.1 Home business API and actor boundary
+
+The Home Core API enforces actor context inside the Frappe application, not only in
+MCP. A linked human User may act only as its linked Person. An unlinked machine User
+must be explicitly allowlisted and must supply an actor; it has no DocType mutation
+permissions. `get_person` checks discoverability from self, visible circle/care
+context, or effective consent **before** loading the Person. Circle rosters require
+actor membership, care queries are filtered to the actor, and effective-access
+queries can inspect only that actor's access.
+
+Explicit actor ids are a **synthetic G1.5 bridge**, not authentication. Before any
+real data or G2, an authenticated user/session must be authoritatively bound to its
+allowed Person identity; a future Home Agent may not establish identity by merely
+supplying `actor_person_id`.
+
+The Nuremberg Home MCP is a thin business adapter only. It owns no identity, consent,
+or family data and exposes no consent mutation. Frappe remains the Control Plane.
 
 ## 4. Key decisions (see ADRs)
 
@@ -96,6 +116,8 @@ flowchart TB
 
 - **Authorization before retrieval.** No sensitive data is fetched before
   `can_access` allows it. Membership/care relationship alone never authorizes.
+- **Actor binding before G2.** Explicit synthetic actor ids are not valid identity
+  proof for real data.
 - **Provenance everywhere.** Nutrition facts, targets, intake, and Knowledge claims
   all carry a source. AI output is a proposal/hypothesis until user-confirmed.
 - **Secrets never in Git, never to home-agent, never in MCP output or logs.**
