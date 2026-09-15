@@ -15,6 +15,7 @@
 | Nutrition API | svc-nutrition (1005) | 127.0.0.1:9930 | FastAPI |
 | Nutrition MCP | svc-nutrition (1005) | 127.0.0.1:9931 | FastMCP, home-agent connects |
 | Home MCP | svc-home-mcp (1006) | 127.0.0.1:9932 | thin business adapter; no Home data store |
+| Home BFF `[G1.6]` | svc-home-bff (planned) | 127.0.0.1:9933 | confidential OAuth client + session boundary; holds client secret and user tokens server-side |
 | infra-agent gateway | infra-agent (1002) | none public | system-scope systemd |
 | home-agent gateway | home-agent (1003) | none public | user-scope systemd |
 
@@ -39,10 +40,34 @@ proxy `[PLANNED]`.
   API machine credential and resolve the Home hostname to the Tailscale address.
   There is no cross-region database connection and no authorization cache.
 
+## Human authentication `[G1.6]`
+
+The **Home BFF** on the Nuremberg EU node is the only OAuth client. It is
+**confidential**: the client secret never leaves the server and the authorization code
+never reaches a browser. It always sends S256 PKCE.
+
+Frappe v15.99.0 **cannot require PKCE** — a client that omits `code_challenge` is
+accepted (`oauth.py` `validate_code` falls through to `return True`), and `OAuth Client`
+has no `public_client` or `require_pkce` field. Creating a public client is therefore
+**forbidden**, and direct native/mobile OIDC stays deferred. Mobile ships against the
+BFF.
+
+The browser holds only an opaque `Secure + HttpOnly + SameSite` cookie. Per agent turn
+the BFF mints a short-lived, single-audience delegation carrying an **opaque session
+id and no Person id**.
+
+**Schema note:** the `Home Delegated Session` DocType and the unique index on
+`Person.linked_user` require a manual `bench --site home.episteck.com migrate` after
+merge. `home.episteck.com` has **no** post-deploy hook (only `imox` does).
+
+Required site config keys: `home_delegation_secret`, `home_delegation_issuer`.
+
 ## Machine credentials
 
 Home MCP and Nutrition authorization use separate Frappe API Users with no System
-Manager role and no Consent Grant or other DocType mutation permission. Their API
+Manager role and no Consent Grant or other DocType mutation permission. `[G1.6]` A
+machine credential proves only that the service may call the interface; it is **never**
+a human actor and alone cannot reach person data. Their API
 secrets live only in owner-readable Nuremberg service files. `home-agent` receives
 only loopback MCP URLs and cannot read the secrets. The Frappe site allowlists the
 machine usernames for actor-aware business methods; this allowlist does not grant

@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-09-15
+**Updated:** 2026-09-16
 
 ## Live now
 | Component | State |
@@ -13,6 +13,7 @@
 | home.episteck.com Frappe site | ✅ live (frappe+erpnext) |
 | episteck_home app on home.episteck.com | ✅ actor-aware Control Plane API live |
 | Home MCP | ✅ live, rootless svc-home-mcp, loopback :9932 |
+| Home BFF (confidential OAuth client, EU node) | 🟡 implemented + tested; not yet deployed |
 
 ## G1.5 final state — PASS
 | Item | State |
@@ -31,12 +32,32 @@ Real family/health data (G2, blocked on approval). Knowledge tech install
 (Mem0/Graphiti/RAGFlow/pgvector/Docling). FHIR, Device Gateway, Mind, Calendar,
 Finance, public UI, voice. `svc-home-core` (explicitly rejected — Frappe is the plane).
 
-## G2 blocker — trusted actor binding
+## G1.6 — trusted actor binding (implemented, awaiting merge + deploy)
 
-Explicit synthetic `actor_person_id` is permitted only for G1.5 validation. It is not
-authentication. No real family data may be exposed to Home Agent, and G2 must not
-begin, until an authenticated user/session is authoritatively bound to exactly its
-allowed Person and actor substitution tests pass.
+| Item | State |
+| --- | --- |
+| Actor removed from every caller-facing surface | ✅ Home API, 8 MCP tools, Nutrition routes/tools |
+| Server-side resolution (session → User → Person) | ✅ `identity/actor.py`, fail-closed |
+| Delegated context (pure, verified) | ✅ `identity/delegation.py` — issuer/audience/exp/jti/replay |
+| Frappe `auth_hooks` seam + `Home Delegated Session` | ✅ revocation & logout deny next call |
+| Dual principal (machine_caller + human_actor) | ✅ retained in audit context |
+| Nutrition independent actor resolution | ✅ never accepts an asserted actor |
+| Home BFF (confidential client, always S256 PKCE) | ✅ EU node; browser holds no tokens |
+| `Person.linked_user` unique + ambiguity fails closed | ✅ schema + tests |
+| Consent semantics | ✅ **unchanged** (`policy/access.py` untouched) |
+| Automated tests | ✅ **199 passing** (was 93) |
+| Live delegation matrix on prod runtime | ✅ 10/10 pass |
+| PKCE S256 agreement with Frappe's computation | ✅ byte-for-byte on live box |
+
+**Not yet done:** merge to `main`, `bench migrate` on home.episteck.com, OAuth client
+creation (blocked — needs credential-write approval), real-login binding (A10).
+
+## G2 blockers
+
+1. **Stage G1.7 — EU Home Control Plane migration** (new hard blocker, amendment A11).
+2. Explicit user approval for real family data.
+3. Real-Person onboarding + real ConsentGrants.
+4. Duplicate `sub` remediation (prepared; reference audit found **zero** consumers).
 
 ## Known notes
 - USDA key was logged once to the root-only sudo journal (low risk, user accepted).
