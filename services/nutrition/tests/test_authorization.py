@@ -26,6 +26,7 @@ class RecordingAuthorizer:
 class CountingRepository(SqliteNutritionRepository):
     def __init__(self, path):
         self.profile_reads = 0
+        self.profile_writes = 0
         self.intake_reads = 0
         self.intake_writes = 0
         super().__init__(path)
@@ -33,6 +34,10 @@ class CountingRepository(SqliteNutritionRepository):
     def get_profile(self, person_id):
         self.profile_reads += 1
         return super().get_profile(person_id)
+
+    def upsert_profile(self, person_id, profile):
+        self.profile_writes += 1
+        return super().upsert_profile(person_id, profile)
 
     def list_intake(self, person_id, date, kind=None):
         self.intake_reads += 1
@@ -44,6 +49,7 @@ class CountingRepository(SqliteNutritionRepository):
 
     def reset_counts(self):
         self.profile_reads = 0
+        self.profile_writes = 0
         self.intake_reads = 0
         self.intake_writes = 0
 
@@ -140,8 +146,11 @@ def test_pregnancy_profile_uses_home_authorization_not_legacy_consent(repo):
     denied = _service(repo, RecordingAuthorizer())
     with pytest.raises(PermissionError):
         denied.create_pregnancy_profile(ACTOR, SUBJECT)
+    assert repo.profile_writes == 0
 
-    request = (ACTOR, SUBJECT, "NUTRITION", "CREATE")
+    request = (ACTOR, SUBJECT, "NUTRITION", "UPDATE")
     allowed = _service(repo, RecordingAuthorizer({request}))
     profile = allowed.create_pregnancy_profile(ACTOR, SUBJECT, stage="synthetic")
     assert profile["context"] == "PREGNANCY"
+    assert allowed.authorizer.calls == [request]
+    assert repo.profile_writes == 1

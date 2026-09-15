@@ -236,7 +236,10 @@ class NutritionService:
         avoided_foods: str = "",
         user_goals: dict | None = None,
     ):
-        self._require_access(actor_person_id, subject_person_id, "CREATE")
+        # This operation persists through an upsert and can replace an existing
+        # profile, so UPDATE is the minimum safe action even when the first call
+        # happens to create the row.
+        self._require_access(actor_person_id, subject_person_id, "UPDATE")
         profile = {
             "context": "PREGNANCY",
             "pregnancy_stage": stage,
