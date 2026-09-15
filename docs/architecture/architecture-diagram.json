@@ -1,0 +1,461 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Episteck Home - Product Architecture",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1380,
+      663
+    ],
+    "views": [
+      {
+        "id": "built",
+        "label": "Built today",
+        "focus": [
+          "user",
+          "home_agent",
+          "nut_mcp",
+          "nut_api",
+          "mealie",
+          "usda",
+          "off",
+          "restic",
+          "home_cp"
+        ],
+        "note": "The live path: user to home-agent to Nutrition MCP to Nutrition API to Mealie and food providers, with off-box backup."
+      },
+      {
+        "id": "control",
+        "label": "Control plane + consent",
+        "focus": [
+          "home_cp",
+          "erp",
+          "nut_api",
+          "home_agent"
+        ],
+        "note": "Home Control Plane owns identity and consent; can_access is the fail-closed authorization decision point."
+      },
+      {
+        "id": "planned",
+        "label": "Planned domains",
+        "focus": [
+          "fhir",
+          "devgw",
+          "mind",
+          "calfin",
+          "knowledge",
+          "ctxbundle",
+          "proxy"
+        ],
+        "note": "Contract-only and planned services grouped by future domain ownership."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "user",
+      "type": "external",
+      "label": "User",
+      "sublabel": "tablet / mobile",
+      "pos": [
+        60,
+        190
+      ],
+      "size": [
+        160,
+        70
+      ]
+    },
+    {
+      "id": "home_agent",
+      "type": "backend",
+      "label": "home-agent",
+      "sublabel": "Hermes - unprivileged",
+      "tag": "user-facing",
+      "pos": [
+        300,
+        190
+      ],
+      "size": [
+        170,
+        74
+      ]
+    },
+    {
+      "id": "infra_agent",
+      "type": "security",
+      "label": "infra-agent",
+      "sublabel": "Hermes - privileged",
+      "tag": "operator only",
+      "pos": [
+        300,
+        403
+      ],
+      "size": [
+        170,
+        74
+      ]
+    },
+    {
+      "id": "nut_mcp",
+      "type": "backend",
+      "label": "Nutrition MCP",
+      "sublabel": "FastMCP :9931 loopback",
+      "tag": "business tools",
+      "pos": [
+        560,
+        120
+      ],
+      "size": [
+        175,
+        70
+      ]
+    },
+    {
+      "id": "nut_api",
+      "type": "backend",
+      "label": "Nutrition API",
+      "sublabel": "FastAPI :9930",
+      "tag": "source of truth",
+      "pos": [
+        560,
+        220
+      ],
+      "size": [
+        175,
+        84
+      ]
+    },
+    {
+      "id": "mealie",
+      "type": "backend",
+      "label": "Mealie v3.26.0",
+      "sublabel": "recipes, plans, lists",
+      "tag": "provider",
+      "pos": [
+        820,
+        310
+      ],
+      "size": [
+        170,
+        74
+      ]
+    },
+    {
+      "id": "usda",
+      "type": "external",
+      "label": "USDA FDC",
+      "sublabel": "FoodData Central",
+      "pos": [
+        820,
+        120
+      ],
+      "size": [
+        150,
+        60
+      ]
+    },
+    {
+      "id": "off",
+      "type": "external",
+      "label": "Open Food Facts",
+      "sublabel": "packaged foods",
+      "pos": [
+        820,
+        200
+      ],
+      "size": [
+        150,
+        60
+      ]
+    },
+    {
+      "id": "restic",
+      "type": "database",
+      "label": "restic to Storage Box",
+      "sublabel": "Hetzner, EU, encrypted",
+      "tag": "off-box DR",
+      "pos": [
+        560,
+        420
+      ],
+      "size": [
+        200,
+        74
+      ]
+    },
+    {
+      "id": "home_cp",
+      "type": "cloud",
+      "label": "Home Control Plane",
+      "sublabel": "home.episteck.com (Frappe)",
+      "tag": "Person, Circle, Consent",
+      "pos": [
+        1000,
+        150
+      ],
+      "size": [
+        230,
+        96
+      ]
+    },
+    {
+      "id": "erp",
+      "type": "cloud",
+      "label": "erp.episteck.com",
+      "sublabel": "company ERP (separate)",
+      "pos": [
+        1000,
+        290
+      ],
+      "size": [
+        230,
+        58
+      ]
+    },
+    {
+      "id": "fhir",
+      "type": "backend",
+      "label": "FHIR service",
+      "sublabel": "clinical truth",
+      "tag": "PLANNED",
+      "pos": [
+        1000,
+        394
+      ],
+      "size": [
+        160,
+        58
+      ]
+    },
+    {
+      "id": "devgw",
+      "type": "backend",
+      "label": "Device Gateway",
+      "sublabel": "Withings, measurements",
+      "tag": "PLANNED",
+      "pos": [
+        1000,
+        461
+      ],
+      "size": [
+        160,
+        58
+      ]
+    },
+    {
+      "id": "mind",
+      "type": "backend",
+      "label": "Mind service",
+      "sublabel": "Mind domain truth",
+      "tag": "PLANNED",
+      "pos": [
+        1000,
+        528
+      ],
+      "size": [
+        160,
+        58
+      ]
+    },
+    {
+      "id": "calfin",
+      "type": "backend",
+      "label": "Calendar / Docs / Finance",
+      "sublabel": "domain services",
+      "tag": "PLANNED",
+      "pos": [
+        1175,
+        394
+      ],
+      "size": [
+        165,
+        58
+      ]
+    },
+    {
+      "id": "knowledge",
+      "type": "database",
+      "label": "Knowledge service",
+      "sublabel": "Scope, Episode, Claim",
+      "tag": "contract-only",
+      "pos": [
+        1175,
+        461
+      ],
+      "size": [
+        165,
+        76
+      ]
+    },
+    {
+      "id": "ctxbundle",
+      "type": "backend",
+      "label": "ContextBundle builder",
+      "sublabel": "authorize then retrieve",
+      "tag": "PLANNED",
+      "pos": [
+        1175,
+        565
+      ],
+      "size": [
+        165,
+        58
+      ]
+    },
+    {
+      "id": "proxy",
+      "type": "security",
+      "label": "Reverse proxy + public UI",
+      "sublabel": "80/443",
+      "tag": "PLANNED",
+      "pos": [
+        1000,
+        40
+      ],
+      "size": [
+        180,
+        58
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Nuremberg node - EU (agents + domain services)",
+      "wraps": [
+        "home_agent",
+        "infra_agent",
+        "nut_mcp",
+        "nut_api",
+        "mealie",
+        "restic"
+      ],
+      "pad": 24
+    },
+    {
+      "kind": "region",
+      "label": "Ashburn VPS - US (Home Control Plane + planned domains)",
+      "wraps": [
+        "home_cp",
+        "erp",
+        "fhir",
+        "devgw",
+        "mind",
+        "calfin",
+        "knowledge",
+        "ctxbundle",
+        "proxy"
+      ],
+      "pad": 24
+    }
+  ],
+  "connections": [
+    {
+      "id": "user-ha",
+      "from": "user",
+      "to": "home_agent",
+      "label": "chat",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ha-mcp",
+      "from": "home_agent",
+      "to": "nut_mcp",
+      "label": "MCP",
+      "variant": "emphasis"
+    },
+    {
+      "id": "mcp-api",
+      "from": "nut_mcp",
+      "to": "nut_api"
+    },
+    {
+      "id": "api-mealie",
+      "from": "nut_api",
+      "to": "mealie",
+      "label": "adapter, token",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "api-usda",
+      "from": "nut_api",
+      "to": "usda",
+      "label": "provider chain",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "api-off",
+      "from": "nut_api",
+      "to": "off",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "api-restic",
+      "from": "nut_api",
+      "to": "restic",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "mealie-restic",
+      "from": "mealie",
+      "to": "restic",
+      "label": "native backup",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "right"
+    },
+    {
+      "id": "infra-admin",
+      "from": "infra_agent",
+      "to": "nut_api",
+      "label": "admin",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "ctx-knowledge",
+      "from": "ctxbundle",
+      "to": "knowledge",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "bottom"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Built today",
+      "items": [
+        "Two independent Hermes agents (home / infra)",
+        "svc-nutrition: API + MCP, deterministic Decimal calc; USDA + OFF providers",
+        "Mealie provider; restic off-box backup (restore-proven)"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Control plane + consent",
+      "items": [
+        "home.episteck.com = Home Control Plane (Frappe); no svc-home-core",
+        "Owns Person, Circle, CareRelationship, ConsentGrant",
+        "can_access(actor, subject, domain, action) - fail closed; membership is not authorization"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Planned / contract-only",
+      "items": [
+        "FHIR, Device Gateway, Mind, Calendar/Docs/Finance",
+        "Knowledge governance (Scope/Episode/Claim + provenance); ContextBundle authorizes before retrieval",
+        "Tech deferred: Mem0/Docling/pgvector; Graphiti later; RAGFlow rejected"
+      ]
+    }
+  ]
+}
