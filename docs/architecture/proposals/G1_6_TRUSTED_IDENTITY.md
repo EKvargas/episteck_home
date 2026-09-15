@@ -1,7 +1,7 @@
 # Stage G1.6 — Trusted Identity / Actor Binding (PROPOSAL — not implemented)
 
 **Status:** **APPROVED** — implementation authorized with the amendments in §0
-**Date:** 2026-09-15 · **Revision:** 3 (approval amendments; supersedes revisions 1–2)
+**Date:** 2026-09-15 · **Revision:** 4 (2026-09-16 data-residency correction: A11 superseded, G1.7 withdrawn; supersedes revisions 1–3)
 **Blocks:** G2 (real family onboarding)
 **Repo state at authoring:** `main` @ `25328dc`, clean, in sync with origin
 
@@ -14,7 +14,7 @@ conflict with anything later in this document, **these win**.
 
 | # | Decision | Effect on this document |
 | --- | --- | --- |
-| A1 | **BFF lives on the Nuremberg EU node**, not Ashburn | Resolves §22 Q2. Frappe may stay on Ashburn for G1.6 because all Home data is synthetic. No later BFF migration required. |
+| A1 | **BFF lives on the Nuremberg EU node**, not Ashburn | Resolves §22 Q2. Frappe stays on Ashburn — for G1.6 and, per the 2026-09-16 correction, for real personal/family data as well. No BFF migration required. |
 | A2 | Browser holds **no** Frappe tokens; opaque **Secure + HttpOnly + SameSite** cookie only; OAuth state/tokens stay server-side | Tightens §4.4 / §6 |
 | A3 | Frappe remains identity authority. **Confidential-client/BFF flow only.** No Keycloak/Authentik. Native/public OIDC **not approved** | Confirms §4.2, §11 |
 | A4 | Trusted actor invariant: neither `actor_person_id` **nor** `User.name` is ever a caller assertion | Confirms §4.1 |
@@ -24,7 +24,7 @@ conflict with anything later in this document, **these win**.
 | A8 | Home MCP: remove actor from model-controlled schemas; **subject may remain** a parameter | Confirms §6/§10 target contract |
 | A9 | Nutrition resolves the actor independently; repository access only after literal ALLOW | Confirms §8 |
 | A10 | G1.6 test identities: **(A)** operator's real account → synthetic Person, **(B)** one dedicated **low-privilege** test User → another synthetic Person | Confirms §14 incl. my recommendation |
-| A11 | **EU residency is a new hard G2 blocker.** Create **Stage G1.7 — EU Home Control Plane Migration**. Do not perform it during G1.6 | **New** — see §16 and §23 |
+| A11 | ~~EU residency is a new hard G2 blocker; create Stage G1.7~~ — **SUPERSEDED 2026-09-16.** `home.episteck.com` is the operator's own personal/family deployment; keeping the Home Control Plane in Ashburn/US is accepted. **No G1.7 migration requirement.** EU residency is a **future commercialization** concern | **Revised** — see §16 and §23 |
 | A12 | Repo `EKvargas/episteck_home` only; branch → tests → PR → main; no secrets in Git; no real data; no G2; no Knowledge runtime | Implementation rules |
 
 ### Amendment detail: dual-principal model (A6)
@@ -618,7 +618,7 @@ G1.6 is complete when **all** hold:
 | Blocker | Cleared by G1.6? |
 | --- | --- |
 | Trusted actor binding | ✅ **yes** — this is the deliverable |
-| **Stage G1.7 — EU Home Control Plane migration** (A11) | ❌ **no — new hard blocker.** See §23 |
+| ~~Stage G1.7 — EU Home Control Plane migration~~ (A11) | ✅ **withdrawn 2026-09-16** — not a blocker. Personal/family deployment stays in Ashburn/US. See §23 |
 | Explicit user approval for real data | ❌ no — your decision |
 | Real-Person onboarding + real ConsentGrants | ❌ no — G2 scope |
 | Duplicate `sub` remediation (gated on reference audit, A5) | ⚠️ prepared in G1.6; required before native OIDC |
@@ -697,16 +697,18 @@ administrative `linked_user` write plus the unique index.
 
 ### Q5. Residency — Home Control Plane is US-hosted while health data is EU. Flagged, not a G1.6 blocker?
 
-**DECISION:** Still flagged, **not** a G1.6 blocker, but promoted to an explicit **G2
-blocker** (§16).
-**WHY:** G1.6 handles synthetic data only, so no real personal data crosses regions.
-But G1.6 makes Ashburn the **authentication** authority in addition to the consent
-authority, which increases what a US-region compromise or legal process would reach.
-**SECURITY CONSEQUENCE:** Unchanged for G1.6. For G2 the concentration of identity +
-consent + authentication in one US node warrants an explicit decision before real EU
-health data exists.
-**IMPLEMENTATION CONSEQUENCE:** None in G1.6. The `auth_hooks` seam (§6.4) keeps a
-future relocation or external-IdP swap contained to one module.
+**DECISION (revised 2026-09-16):** Not a G1.6 blocker and **not a G2 blocker either.**
+The earlier promotion to a hard G2 blocker is withdrawn along with Stage G1.7.
+**WHY:** `home.episteck.com` is the operator's own personal/family deployment, and the
+operator accepts US hosting for it. G1.6 does make Ashburn the authentication authority
+in addition to the consent authority, concentrating identity + consent + authentication
+in one US node — that is a known, accepted property of a personal deployment, not a
+defect to remediate before real data.
+**SECURITY CONSEQUENCE:** Unchanged for G1.6. For G2, the concentration is accepted by
+the data subject, who is also the operator.
+**IMPLEMENTATION CONSEQUENCE:** None. The `auth_hooks` seam (§6.4) keeps a future
+relocation or external-IdP swap contained to one module, which is what makes residency
+safe to defer to a commercialization-time design (§23).
 
 **Relevance check (per the brief):** all five remain relevant after the architecture
 correction. Q2 and Q3 changed substantively; Q1, Q4, Q5 are confirmed with added
@@ -794,8 +796,8 @@ was committed or pushed. All live inspection was **read-only**.
 1. **Delegation token vs. forwarded bearer token** (§6.3) — adopt the scoped delegation
    token? *(Recommend: yes.)*
 2. **BFF placement** — Ashburn (next to Frappe, lower auth latency) or Nuremberg (next
-   to the agent, EU)? This interacts with the residency question. *(Recommend: decide
-   with Q5.)*
+   to the agent, EU)? *(Resolved by A1: Nuremberg. Residency is settled separately in
+   §23 — Ashburn/US is accepted for the personal deployment.)*
 3. **`sub` remediation timing** — during G1.6 as planned, or immediately as a standalone
    fix given a System Manager is involved? *(Recommend: standalone and soon.)*
 4. **Second low-privilege test User** (§14) — approve creating one to prove the path
@@ -805,49 +807,44 @@ was committed or pushed. All live inspection was **read-only**.
 
 ---
 
-## 23. Stage G1.7 — EU Home Control Plane Migration (proposed, NOT part of G1.6)
+## 23. Data residency — Ashburn/US accepted for personal use `[CORRECTED 2026-09-16]`
 
-**Status:** PROPOSED · created per amendment A11 · **hard G2 blocker**
-**Do not execute during G1.6.**
+**Status:** **Stage G1.7 (EU Home Control Plane Migration) is WITHDRAWN.** It is **not**
+a G2 blocker. Amendment A11 is superseded by this section.
 
-### Why
+### Decision
 
-G1.6 makes the Ashburn (US) Frappe instance the **authentication** authority in
-addition to the identity and consent authority. Nutrition and Mealie hold EU data on
-Nuremberg, and off-box backup is EU (Falkenstein). Concentrating identity + consent +
-authentication in a US node is acceptable while **all Home data is synthetic**. It is
-not acceptable once real family health data exists.
+The current `home.episteck.com` deployment is the operator's **own personal and family**
+deployment. The operator accepts keeping the Home Control Plane — identity, consent and
+authentication authority — in **Ashburn (US)**.
 
-Because amendment A1 places the BFF on Nuremberg from the start, G1.7 moves only the
-Frappe Control Plane. **No BFF migration will be required.**
+Therefore:
 
-### Scope
+- **G1.6 (trusted identity) remains the current blocker** for G2.
+- After G1.6, **real family onboarding may proceed on the existing Ashburn Home Frappe
+  instance**. Real data does not require an EU Control Plane.
+- **Do not migrate `home.episteck.com`** during this phase.
+- **Do not create a G1.7 infrastructure migration requirement.**
 
-| In scope | Out of scope |
-| --- | --- |
-| Move `home.episteck.com` Frappe site (identity, Person/Circle/Care/Consent) to an EU node | Nutrition, Mealie (already EU) |
-| Re-point Home MCP, Nutrition authorization client, and the BFF OAuth client | The BFF itself (already EU per A1) |
-| Migrate OAuth clients, bearer tokens, and `linked_user` bindings | Company `erp.episteck.com` (separate product) |
-| Re-validate the full G1.6 threat matrix post-move | New features of any kind |
+### What is unchanged
 
-### Sequence (outline)
+Everything else stands. The BFF still runs on the Nuremberg EU node (A1) — that was
+chosen on its own merits and is not contingent on a later migration. Nutrition, Mealie
+and off-box backup remain EU. Cross-node calls remain Tailscale-only with no cross-region
+database. All other approved G1.6 identity and security decisions are untouched.
 
-1. Provision the EU Frappe site; install `episteck_home`; `bench migrate`.
-2. Migrate identity + consent data; verify `linked_user` uniqueness survives.
-3. Re-issue machine credentials and the BFF OAuth client for the EU host.
-4. Re-point Home MCP, Nutrition, BFF; keep Tailscale-only routing.
-5. Re-run the **entire** §10 threat matrix and §11 PKCE plan against EU.
-6. Confirm off-box backup covers EU Home identity data.
-7. Decommission the Ashburn Home site only after evidence is recorded.
+### Future commercialization
 
-### Gates
+EU data residency is a **future commercialization concern**, not an engineering blocker
+for personal use. Before onboarding **external EU customers**, a regional
+deployment / data-residency strategy will be designed separately — likely **dedicated EU
+Home instances for those customers** rather than migrating the operator's personal US
+instance. That design is out of scope here and has no scheduled stage.
 
-- Latency re-measured; Nuremberg→EU should **improve** on the 119.88 ms / 121.60 ms
-  p95 Ashburn baseline, since the cross-Atlantic hop disappears.
-- Rollback: keep Ashburn intact and re-pointable until EU validation passes.
-- All 93 + G1.6 tests green against the EU instance.
+The `auth_hooks` seam (§6.4) keeps any future relocation or external-IdP swap contained
+to one module, so this decision is cheap to revisit.
 
 ### Relationship to G2
 
-G2 (real family onboarding) requires **G1.6 complete** and **G1.7 complete** and
-explicit user approval. G1.7 must not begin without separate approval.
+G2 (real family onboarding) requires **G1.6 complete** and **explicit user approval**.
+No migration stage gates it.

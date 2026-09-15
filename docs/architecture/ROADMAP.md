@@ -18,7 +18,7 @@ Home Control Plane model + Knowledge contracts + architecture docs. **No real da
 
 See `G1_5_VALIDATION.md`. Stop here; do not begin G2.
 
-## Stage G1.6 — COMPLETE (trusted actor binding)
+## Stage G1.6 — trusted actor binding (implemented; completion is the current G2 blocker)
 Actor identity is derived from an authenticated session, never supplied. **No real data.**
 - ✅ `actor_person_id` removed from the Home API, all MCP tools, and Nutrition routes.
 - ✅ Server-side resolution: validated auth → Frappe User → `Person.linked_user` → actor.
@@ -32,21 +32,16 @@ See `adr/0009-trusted-actor-binding.md` and `G1_6_VALIDATION.md`.
 
 ## Gates ahead
 
-### Stage G1.7 — EU Home Control Plane migration `[HARD G2 BLOCKER]`
-Move `home.episteck.com` (identity + consent + authentication authority) to EU hosting
-before any real family data exists. G1.6 made Ashburn the authentication authority as
-well, and Nutrition/Mealie/backup are already EU.
+### ~~Stage G1.7 — EU Home Control Plane migration~~ `[WITHDRAWN 2026-09-16]`
+**Not a blocker. Do not create this stage.** `home.episteck.com` is the operator's own
+personal/family deployment, and Ashburn/US hosting for the Home Control Plane is
+accepted. Real family onboarding may proceed on the existing Ashburn instance once G1.6
+is complete. **Do not migrate `home.episteck.com` during this phase.**
 
-The Home BFF is **already** on the EU node, so **no BFF migration is required**.
-
-Scope: provision the EU Frappe site, migrate identity + consent data (preserving
-`linked_user` uniqueness), re-issue machine credentials and the BFF OAuth client,
-re-point Home MCP / Nutrition / BFF over Tailscale, re-run the full G1.6 threat matrix
-and PKCE plan against EU, confirm off-box backup covers Home identity data, and only
-then decommission Ashburn Home. Keep Ashburn intact and re-pointable until EU passes.
-
-Out of scope: Nutrition/Mealie (already EU), the BFF, company `erp.episteck.com`, and
-any new feature. **Do not begin without explicit approval.**
+EU data residency is a **future commercialization** concern. Before onboarding external
+EU customers, a regional deployment/data-residency strategy will be designed separately —
+likely dedicated EU Home instances for those customers rather than migrating the personal
+US instance. No stage is scheduled for it.
 
 ### Knowledge Technology Gate `[PENDING]`
 Decide + install the Knowledge stack (candidates: Mem0 + Docling + Postgres/pgvector;
@@ -60,14 +55,18 @@ First real Person + explicit consent + real Pregnancy Nutrition Profile + real
 providers + real meal plan + planned→actual + Home Agent with the real user.
 
 Remaining blockers:
-1. **G1.7 EU migration** (above).
+1. **G1.6 completion** — merge to `main`, `bench migrate`, OAuth client creation, and
+   real-login binding (A10). This is the current blocker.
 2. Explicit user approval for real data.
 3. Real-Person onboarding + real ConsentGrants.
 4. Duplicate OIDC `sub` remediation before any native/public OIDC client (a reference
    audit found zero current consumers: no OAuth clients, no bearer tokens, no social
    login keys).
 
-Trusted actor binding is **no longer a blocker** — delivered in G1.6.
+EU residency is **not** a blocker — see the withdrawn G1.7 note above.
+
+Trusted actor *design and implementation* are done (G1.6); only its merge/deploy
+steps remain, which is blocker 1.
 
 ### Later
 Device Gateway/Withings, FHIR, Mind, Calendar, Documents, Finance, reverse proxy +

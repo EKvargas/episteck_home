@@ -44,8 +44,8 @@ Neither `actor_person_id` nor `User.name` is ever a caller assertion.
    approved** until PKCE is enforceable.
 2. **The BFF runs on the Nuremberg EU node.** It holds the client secret and the user's
    tokens server-side; the browser receives only an opaque `Secure + HttpOnly +
-   SameSite` cookie. Placing it in the EU now means the future EU migration (G1.7)
-   requires no BFF move.
+   SameSite` cookie. The EU placement keeps the token-handling component next to the
+   agent and the EU services; it does not depend on any Control Plane migration.
 3. **Dual principal.** Every delegated sensitive request carries `machine_caller`
    (proven by the service API key) and `human_actor` (resolved from the delegated
    session). A service credential never means "this service is Person X". Both are
@@ -78,8 +78,11 @@ Neither `actor_person_id` nor `User.name` is ever a caller assertion.
 − Two credentials per delegated call instead of one.
 − Direct native-mobile OIDC is blocked until upstream can enforce PKCE; mobile ships
   against the BFF in the interim.
-− The Home Control Plane is still US-hosted while the BFF is EU. This is acceptable
-  only while all Home data is synthetic, and is why G1.7 exists.
+− The Home Control Plane is US-hosted (Ashburn) while the BFF is EU. **Accepted**
+  (2026-09-16): `home.episteck.com` is the operator's own personal/family deployment, so
+  this holds for real data too — identity, consent and authentication concentrate in one
+  US node by choice. Stage G1.7 (EU migration) is withdrawn; EU residency is a future
+  commercialization concern. The `auth_hooks` seam keeps a later relocation cheap.
 
 ## Alternatives considered
 

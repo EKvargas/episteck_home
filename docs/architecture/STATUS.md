@@ -54,10 +54,16 @@ creation (blocked — needs credential-write approval), real-login binding (A10)
 
 ## G2 blockers
 
-1. **Stage G1.7 — EU Home Control Plane migration** (new hard blocker, amendment A11).
+1. **G1.6 completion** — merge, `bench migrate`, OAuth client creation, real-login
+   binding (A10). **This is the current blocker.**
 2. Explicit user approval for real family data.
 3. Real-Person onboarding + real ConsentGrants.
 4. Duplicate `sub` remediation (prepared; reference audit found **zero** consumers).
+
+**Not a blocker:** EU data residency. Stage G1.7 (EU Home Control Plane migration) is
+**withdrawn** as of 2026-09-16 — `home.episteck.com` is a personal/family deployment and
+Ashburn/US hosting is accepted. Real onboarding may proceed on the existing Ashburn
+instance. EU residency is a future commercialization concern only.
 
 ## Known notes
 - USDA key was logged once to the root-only sudo journal (low risk, user accepted).

@@ -13,7 +13,8 @@ the system and links every other document.
 - `KNOWLEDGE.md` — Knowledge contracts (Scope/Episode/Claim) + ContextBundle (no tech installed)
 - `DEPLOYMENT.md` — nodes, services, images, backup
 - `ROADMAP.md` — delivered / gates ahead / **Architecture Change Rule**
-- `proposals/` — approved design proposals (G1.6 trusted identity; G1.7 EU migration)
+- `proposals/` — approved design proposals (G1.6 trusted identity; its §23 records the
+  2026-09-16 residency correction that withdrew G1.7)
 - `STATUS.md` — current state (update with every change)
 - `adr/` — Architecture Decision Records (0001–0009)
 - **`architecture-diagram.html`** — explorable whole-product diagram (open in a browser)

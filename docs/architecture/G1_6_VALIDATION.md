@@ -197,7 +197,8 @@ lookup, and no authorization caching. The expected added cost is well under a
 millisecond against a ~120 ms network-bound baseline.
 
 Post-deploy measurement is deferred to the merge step, since the new path is not yet
-live. **G1.7 should improve these numbers** by removing the cross-Atlantic hop.
+live. The cross-Atlantic hop is a permanent property of this deployment: Stage G1.7 was
+withdrawn on 2026-09-16 and the Control Plane stays in Ashburn.
 
 ---
 

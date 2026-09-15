@@ -108,12 +108,19 @@ authorization authority.
 
 The complete synthetic denial matrix is recorded in `G1_5_VALIDATION.md`.
 
-## Data residency
+## Data residency `[CORRECTED 2026-09-16]`
 EU node (Nuremberg) holds Nutrition + Mealie. Off-box backup is EU (Falkenstein).
-Home Control Plane currently on Ashburn (US) — cross-node auth calls go over Tailscale;
-**no cross-region DB**. Residency of real health data is revisited before G2 real data.
+Home Control Plane is on Ashburn (US) — cross-node auth calls go over Tailscale;
+**no cross-region DB**.
 
-**The Home BFF runs on the EU node (Nuremberg)** `[G1.6]` so no BFF migration is needed
-later. The Control Plane is still US-hosted, which is acceptable only while all Home
-data is synthetic. **Stage G1.7 (EU Home Control Plane migration) is a hard G2
-blocker** — see `ROADMAP.md`.
+**The Home BFF runs on the EU node (Nuremberg)** `[G1.6]`. That placement was chosen on
+its own merits and is not contingent on any later migration.
+
+**The Ashburn/US Control Plane is accepted for real family data.** `home.episteck.com` is
+the operator's own personal/family deployment; the data subject is also the operator.
+Stage G1.7 (EU Home Control Plane migration) is **withdrawn** and is **not** a G2 blocker
+— see `ROADMAP.md`. Do not migrate `home.episteck.com` during this phase.
+
+EU data residency is a **future commercialization** concern: before onboarding external
+EU customers, a regional deployment/data-residency strategy will be designed separately,
+likely using dedicated EU Home instances rather than relocating the personal instance.
