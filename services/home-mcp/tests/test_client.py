@@ -81,3 +81,18 @@ def test_check_access_preserves_authoritative_denial():
         )
     ).check_access("PSN-ACTOR", "PSN-SUBJECT", "MIND", "VIEW")
     assert result == {"allow": False, "reason": "no matching active grant"}
+
+
+def test_check_access_canonicalizes_agent_supplied_domain_and_action():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["domain"] == "NUTRITION"
+        assert request.url.params["action"] == "VIEW"
+        return httpx.Response(
+            200,
+            json={"message": {"allow": True, "reason": "grant NUTRITION/VIEW"}},
+        )
+
+    result = _client(handler).check_access(
+        "PSN-ACTOR", "PSN-SUBJECT", "nutrition", "view"
+    )
+    assert result == {"allow": True, "reason": "grant NUTRITION/VIEW"}
