@@ -46,19 +46,25 @@ Neither `actor_person_id` nor `User.name` is ever a caller assertion.
    tokens server-side; the browser receives only an opaque `Secure + HttpOnly +
    SameSite` cookie. The EU placement keeps the token-handling component next to the
    agent and the EU services; it does not depend on any Control Plane migration.
-3. **Dual principal.** Every delegated sensitive request carries `machine_caller`
+3. **Delegated sessions are opened self-service.** The BFF calls
+   `identity/session.open_session` with the **human's own** OAuth access token, and
+   that method takes no user parameter. Frappe resolves the User from the token it
+   just validated, so the BFF cannot open a session for anyone but the person who
+   authenticated, and needs no elevated credential. Letting the BFF name the User
+   would have reintroduced precisely the caller-supplied identity this ADR removes.
+4. **Dual principal.** Every delegated sensitive request carries `machine_caller`
    (proven by the service API key) and `human_actor` (resolved from the delegated
    session). A service credential never means "this service is Person X". Both are
    retained in audit context.
-4. **Delegated context**, not a trusted header. A short-lived, single-audience,
+5. **Delegated context**, not a trusted header. A short-lived, single-audience,
    replay-resistant token carries an **opaque session id** — never a Person id. A plain
    `X-Actor-ID` header is forbidden. Frappe's `auth_hooks` validates it server-side and
    maps the session to a User via a `Home Delegated Session` record, so revocation and
    logout deny the very next call.
-5. **Nutrition resolves the actor independently** against Home, and never accepts an
+6. **Nutrition resolves the actor independently** against Home, and never accepts an
    actor string from the Home Agent or Home MCP.
-6. **`Person.linked_user` is unique.** Ambiguity fails closed rather than guessing.
-7. **`sub` stays off the critical path.** Internal resolution uses the authenticated
+7. **`Person.linked_user` is unique.** Ambiguity fails closed rather than guessing.
+8. **`sub` stays off the critical path.** Internal resolution uses the authenticated
    session. `(issuer, sub)` is remediated before any native OIDC client relies on it.
 
 ## Consequences

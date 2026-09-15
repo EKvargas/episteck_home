@@ -1,6 +1,10 @@
 # Stage G1.6 Validation — Trusted Identity / Actor Binding
 
-**Result:** PASS (implementation + evidence) · **merge and deploy pending**
+**Result:** implementation + offline evidence complete · **live validation pending**
+
+⚠️ This stage is **not COMPLETE**. The BFF is built and tested but not yet deployed;
+the OAuth authorization-code round trip and both real-login bindings require the
+live service. See §8.
 
 **Validated:** 2026-09-16
 
@@ -57,9 +61,25 @@ Agent or Home MCP. Retained unchanged: 3 s timeout, **no authorization caching**
 DENY on transport, HTTP, JSON, shape, or decision ambiguity.
 
 ### Home BFF (new, Nuremberg EU node — amendment A1)
-Confidential OAuth client, always S256 PKCE. Holds the client secret and user tokens
-server-side; the browser receives only an opaque `Secure + HttpOnly + SameSite` cookie.
-Mints short-lived, single-audience delegations carrying **no Person id**.
+An **operational FastAPI service**, not merely a client library. Routes: `/login`,
+`/callback`, `/logout`, `/health`, plus `/session`, `/whoami` and `/delegation` for the
+trusted runtime.
+
+Confidential OAuth client, always S256 PKCE. `/login` persists state, nonce and the
+PKCE verifier **server-side**; the browser carries only an opaque state key. `/callback`
+consumes that transaction atomically, so a replayed `state` finds nothing. The browser
+receives only an opaque `Secure + HttpOnly + SameSite=Lax` cookie — `Lax` is required
+because the cookie is set on the top-level redirect back from the authorization
+endpoint, where `Strict` would withhold it.
+
+Session state (tokens, verifiers) lives in SQLite on a service-owned volume — no new
+infrastructure dependency. Delegations minted per call carry **no Person id**.
+
+**Session creation preserves the invariant.** `identity/session.py` exposes
+`open_session`/`close_session`, which take **no user parameter**: the BFF calls them
+with the human's own OAuth access token, so Frappe resolves the User itself. The BFF
+cannot open a session for anyone other than the person who just authenticated, and
+needs no elevated credential to do so.
 
 ---
 
@@ -67,13 +87,13 @@ Mints short-lived, single-audience delegations carrying **no Person id**.
 
 | Suite | Before (G1.5) | After (G1.6) |
 | --- | ---: | ---: |
-| Home Control Plane (policy, API, delegation, auth hook) | 22 | **84** |
+| Home Control Plane (policy, API, delegation, auth hook, session) | 22 | **98** |
 | Knowledge + ContextBundle contracts | 12 | 12 |
 | Nutrition domain (deterministic calc) | 9 | 9 |
 | Home MCP (client + tool contract) | 8 | **19** |
-| **Home BFF (new)** | — | **18** |
+| **Home BFF (new)** | — | **71** |
 | Nutrition service + boundaries | 42 | **57** |
-| **Total** | **93** | **199** |
+| **Total** | **93** | **266** |
 
 All 93 original tests still pass. `policy/access.py` was **not modified**: same
 signature, same six invariants, same 11 pure policy tests.
@@ -202,24 +222,30 @@ withdrawn on 2026-09-16 and the Control Plane stays in Ashburn.
 
 ---
 
-## 8. Blocked during this stage
+## 8. Remaining work before G1.6 is COMPLETE
 
-**OAuth client creation was denied** by the environment's credential-write guard
-(`Secret-Store Writes`). Creating the `OAuth Client` record generates a `client_secret`.
+### 8.1 The BFF was a library, now it is a service
 
-Consequently the following are implemented and unit-tested but **not yet exercised
-end-to-end against the live site**:
+The first G1.6 pass delivered `services/home-bff` as **two pure modules** — parameter
+builders and PKCE/HMAC math — with no HTTP layer, no routes, no deployment. It was
+correct and well tested, but nothing could log in through it. That gap is now closed:
+the service exists, with 71 tests covering login, callback, session, delegation and
+logout, including the adversarial cases.
 
-- the authorization-code round trip (PKCE cases 1–4, 7, 8 in the proposal's plan);
-- real operator login bound to a synthetic Person (amendment A10-A);
-- the dedicated low-privilege test User bound to a second synthetic Person (A10-B);
-- post-cutover latency measurement.
+### 8.2 Still pending, and why
 
-All of these require one approved credential-writing step. Everything that does **not**
-require it was completed and verified, including the full live delegation matrix on the
-production runtime and byte-for-byte S256 agreement.
+| Item | Blocked on |
+| --- | --- |
+| `bff.home.episteck.com` DNS A record → `91.98.132.9` | **operator action** — no API access to the zone |
+| nginx + certbot on the Nuremberg node | the DNS record (ACME needs it to resolve) |
+| OAuth Client creation on `home.episteck.com` | the final callback URL, which needs the above |
+| Authorization-code round trip (PKCE live cases) | the OAuth client |
+| Operator real login → synthetic Person (A10-A) | the deployed service; the operator logs in personally |
+| Low-privilege test User → second synthetic Person (A10-B) | the User does not exist yet; creation is a G1.6 write |
+| Post-cutover latency measurement | the live path |
 
----
+Everything not dependent on public ingress is done and verified offline, including
+the full delegation matrix on the production runtime and byte-for-byte S256 agreement.
 
 ## 9. Deployment status
 
@@ -230,6 +256,22 @@ has changed in production; `home.episteck.com` still runs G1.5. Verified live:
 **After merge, a manual `bench --site home.episteck.com migrate` is required** for the
 `Home Delegated Session` DocType and the unique index on `Person.linked_user`.
 `home.episteck.com` has **no** post-deploy hook — only `imox` does.
+
+### `linked_user` migration preflight — PASS (read-only, 2026-09-16)
+
+| Check | Result |
+| --- | --- |
+| Persons | 3 — `PSN-00001` SYN Ana, `PSN-00002` SYN Ben, `PSN-00003` SYN Cara |
+| Non-null `linked_user` | **0** |
+| Duplicate non-null `linked_user` | **0** |
+| Real Person bindings | **none** — all three are synthetic |
+| Existing index on `linked_user` | none (only `PRIMARY`, `modified`) |
+| OAuth Clients | **0** |
+| `Home Delegated Session` table | absent, as expected pre-migrate |
+| `home_delegation_secret` / `_issuer` in site config | **absent — must be provisioned** |
+
+All values are NULL, which cannot collide under a MySQL unique index. **The unique
+index is safe to create.**
 
 Rollback: the branch is additive at the transport layer and subtractive at the
 parameter layer. Reverting it restores G1.5 behaviour exactly.
