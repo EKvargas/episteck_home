@@ -37,7 +37,7 @@ flowchart TB
   subgraph NBG["Nuremberg node (EU)"]
     HA["home-agent (Hermes, unprivileged)"]
     IA["infra-agent (Hermes, privileged)"]
-    HMCP["Home MCP :9932 (loopback)<br/>[SOURCE READY; DEPLOYMENT PENDING]"]
+    HMCP["Home MCP :9932 (loopback)<br/>[LIVE]"]
     subgraph NUT["svc-nutrition (rootless Podman)"]
       NAPI["Nutrition API :9930 (loopback)"]
       NMCP["Nutrition MCP :9931 (loopback)"]
@@ -87,7 +87,11 @@ allowed Person identity; a future Home Agent may not establish identity by merel
 supplying `actor_person_id`.
 
 The Nuremberg Home MCP is a thin business adapter only. It owns no identity, consent,
-or family data and exposes no consent mutation. Frappe remains the Control Plane.
+or family data and exposes no consent mutation. It canonicalizes agent-supplied
+domain/action display casing before the canonical Frappe policy validates the exact
+values. A Home Agent deny/invalid/indeterminate result is terminal: it may not retry
+with altered parameters or call the downstream domain tool. Frappe remains the
+Control Plane.
 
 ## 4. Key decisions (see ADRs)
 
@@ -125,4 +129,4 @@ or family data and exposes no consent mutation. Frappe remains the Control Plane
   numbers or authoritative values.
 
 See `DATA_OWNERSHIP.md`, `SECURITY_AND_CONSENT.md`, `KNOWLEDGE.md`, `AGENTS.md`,
-`DEPLOYMENT.md`, `ROADMAP.md`, `STATUS.md`.
+`DEPLOYMENT.md`, `ROADMAP.md`, `STATUS.md`, and `G1_5_VALIDATION.md`.

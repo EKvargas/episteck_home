@@ -61,10 +61,17 @@ Nutrition asks Home `check_access` before every person-specific repository read 
 write. Network failure, timeout, non-2xx response, malformed JSON, missing fields, or
 non-boolean decisions are DENY.
 
+The live Home Agent policy also makes denial terminal. It may proceed to a
+person-specific downstream tool only after literal `allow: true`; otherwise it stops
+without retrying a different actor, subject, domain, action, or route. A redacted
+revocation trace confirmed that no Nutrition call followed Home DENY.
+
 The old SQLite Nutrition consent table is retained solely for audit/migration. It is
 not queried for authorization, has no `has_consent` decision helper, and is not
 exposed through Nutrition FastAPI or MCP. ConsentGrant/can_access in Home is the sole
 authorization authority.
+
+The complete synthetic denial matrix is recorded in `G1_5_VALIDATION.md`.
 
 ## Data residency
 EU node (Nuremberg) holds Nutrition + Mealie. Off-box backup is EU (Falkenstein).
