@@ -29,7 +29,14 @@ ISSUER = "episteck-home-bff"
 DELEGATION_TTL_SECONDS = 120
 
 # Cookie policy for the browser-facing session reference.
+#
+# ``samesite=lax`` is REQUIRED here, not a weakening of ``strict``: the cookie is set
+# on the top-level GET redirect back from Frappe's authorization endpoint, and a
+# strict cookie is withheld on that cross-site navigation, so the session would be
+# invisible on the very next request. ``lax`` still blocks cross-site POST, and the
+# cookie carries no authority of its own — it is an opaque lookup key.
 COOKIE_NAME = "episteck_home_session"
+COOKIE_MAX_AGE_SECONDS = 12 * 60 * 60
 COOKIE_FLAGS = {
     "httponly": True,
     "secure": True,
