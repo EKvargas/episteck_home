@@ -34,4 +34,4 @@ def build_service() -> NutritionService:
     if os.environ.get("MEALIE_BASE_URL") and os.environ.get("MEALIE_API_TOKEN"):
         from .mealie.adapter import MealieAdapter
         mealie = MealieAdapter()
-    return NutritionService(repo, provider, mealie)
+    return NutritionService(repo, provider, mealie, authorizer=build_home_authorizer())

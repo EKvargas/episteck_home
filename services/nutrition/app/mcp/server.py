@@ -1,93 +1,180 @@
-"""Episteck Nutrition MCP — high-level BUSINESS tools for the Home Agent.
-Exposes ONLY business capabilities. Never exposes SQL, Mealie credentials,
-arbitrary HTTP, filesystem, or service secrets. All nutrient numbers come from
-the deterministic service, never fabricated by the model.
-"""
+"""Business-only Nutrition MCP for the unprivileged Home Agent."""
 from __future__ import annotations
+
+import os
+from collections.abc import Callable
+from typing import Any
+
 from fastmcp import FastMCP
+
 from ..deps import build_service
+
 
 mcp = FastMCP("episteck-nutrition")
 _svc = build_service()
 
+
+def _authorized(operation: Callable[[], Any]):
+    try:
+        return operation()
+    except PermissionError as error:
+        return {"allow": False, "error": "access_denied", "reason": str(error)}
+
+
 @mcp.tool
-def get_nutrition_profile(person_id: str) -> dict:
-    """Return the person's nutrition profile (targets, preferences, provenance)."""
-    return _svc.get_profile(person_id) or {"error": "no profile"}
+def get_nutrition_profile(
+    actor_person_id: str, subject_person_id: str
+) -> dict:
+    """Read a profile after Home authorizes this exact actor and subject."""
+    return _authorized(
+        lambda: _svc.get_profile(actor_person_id, subject_person_id)
+        or {"error": "no profile"}
+    )
+
 
 @mcp.tool
 def evaluate_meal(foods: list[dict]) -> dict:
-    """Deterministically compute nutrient totals for a set of foods.
-    foods = [{"food_id": str, "grams": number}]."""
+    """Deterministically compute nutrient totals for confirmed food amounts."""
     return _svc.evaluate_meal(foods)
 
-@mcp.tool
-def get_daily_nutrition_gap(person_id: str, date: str) -> dict:
-    """Target vs consumed vs remaining vs percentage per nutrient for a date."""
-    return _svc.daily_gap(person_id, date)
 
 @mcp.tool
-def record_planned_meal(person_id: str, date: str, foods: list[dict], ref: str = None) -> dict:
-    """Record an intended meal (planned intake)."""
-    return _svc.record_planned(person_id, date, foods, ref)
+def get_daily_nutrition_gap(
+    actor_person_id: str, subject_person_id: str, date: str
+) -> dict:
+    """Read target, consumed, and remaining nutrients after Home authorization."""
+    return _authorized(
+        lambda: _svc.daily_gap(actor_person_id, subject_person_id, date)
+    )
+
 
 @mcp.tool
-def record_actual_intake(person_id: str, date: str, foods: list[dict]) -> dict:
-    """Record confirmed actual consumption."""
-    return _svc.record_actual(person_id, date, foods)
+def record_planned_meal(
+    actor_person_id: str,
+    subject_person_id: str,
+    date: str,
+    foods: list[dict],
+    ref: str | None = None,
+) -> dict:
+    """Record intended intake after Home authorizes CREATE for actor and subject."""
+    return _authorized(
+        lambda: _svc.record_planned(
+            actor_person_id, subject_person_id, date, foods, ref
+        )
+    )
+
 
 @mcp.tool
-def ate_as_planned(person_id: str, date: str, planned_id: str) -> dict:
-    """Confirm the planned meal was eaten as-is (copies planned->actual, no re-entry)."""
-    return _svc.ate_as_planned(person_id, date, planned_id)
+def record_actual_intake(
+    actor_person_id: str,
+    subject_person_id: str,
+    date: str,
+    foods: list[dict],
+) -> dict:
+    """Record confirmed intake after Home authorizes CREATE for actor and subject."""
+    return _authorized(
+        lambda: _svc.record_actual(
+            actor_person_id, subject_person_id, date, foods
+        )
+    )
+
+
+@mcp.tool
+def ate_as_planned(
+    actor_person_id: str,
+    subject_person_id: str,
+    date: str,
+    planned_id: str,
+) -> dict:
+    """Read a plan and create actual intake only after both Home decisions allow."""
+    return _authorized(
+        lambda: _svc.ate_as_planned(
+            actor_person_id, subject_person_id, date, planned_id
+        )
+    )
+
 
 @mcp.tool
 def propose_meal_change(foods: list[dict]) -> dict:
-    """Return a PROPOSAL for a changed meal. NOT authoritative — user must confirm
-    before it becomes actual intake."""
+    """Return a non-authoritative proposal that still requires user confirmation."""
     return _svc.propose_change(foods)
+
 
 @mcp.tool
 def search_recipes(query: str) -> list:
-    """Search recipes via Mealie (through the Episteck adapter)."""
+    """Search recipes through the credential-hiding Mealie adapter."""
     return _svc.mealie.search_recipes(query) if _svc.mealie else []
 
+
 @mcp.tool
-def get_meal_plan(start_date: str, end_date: str) -> list:
-    """Read the Mealie meal plan for a date range."""
-    return _svc.mealie.get_meal_plan(start_date, end_date) if _svc.mealie else []
+def get_meal_plan(
+    actor_person_id: str,
+    subject_person_id: str,
+    start_date: str,
+    end_date: str,
+) -> list | dict:
+    """Read the provider meal plan only after Home authorizes Nutrition VIEW."""
+    return _authorized(
+        lambda: _svc.get_meal_plan(
+            actor_person_id, subject_person_id, start_date, end_date
+        )
+    )
+
 
 @mcp.tool
 def search_foods(query: str) -> list:
-    """Search real food databases (USDA primary, Open Food Facts secondary).
-    Returns [{food_id, name, provider}]. Nutrient numbers are NOT here — call evaluate_meal."""
+    """Search configured food databases without returning nutrient numbers."""
     hits = _svc.provider.search_food(query)
-    return [{"food_id": h.food_id, "name": h.name, "provider": h.food_id.split(":",1)[0]} for h in hits]
+    return [
+        {
+            "food_id": hit.food_id,
+            "name": hit.name,
+            "provider": hit.food_id.split(":", 1)[0],
+        }
+        for hit in hits
+    ]
+
 
 @mcp.tool
 def get_food_detail(food_id: str) -> dict:
-    """Nutrient composition per 100g for a food, with source provenance. Missing nutrients
-    are simply absent (unknown != zero)."""
-    rec = _svc.provider.get_food(food_id)
-    return {"food_id": rec.food_id, "name": rec.name, "source": rec.source,
-            "nutrients_per_100g": {k: str(v) for k,v in rec.nutrients_per_100g.items()},
-            "known_nutrients": sorted(rec.nutrients_per_100g.keys())}
+    """Get source-labelled nutrients per 100g; absent nutrients remain unknown."""
+    record = _svc.provider.get_food(food_id)
+    return {
+        "food_id": record.food_id,
+        "name": record.name,
+        "source": record.source,
+        "nutrients_per_100g": {
+            nutrient: str(value)
+            for nutrient, value in record.nutrients_per_100g.items()
+        },
+        "known_nutrients": sorted(record.nutrients_per_100g),
+    }
+
 
 @mcp.tool
-def get_pregnancy_profile(person_id: str) -> dict:
-    """Return the pregnancy nutrition profile incl. authoritative reference targets and
-    their provenance (DGE/EFSA). Requires the person to have granted consent."""
-    p = _svc.get_profile(person_id)
-    if not p: return {"error": "no profile"}
-    return p
+def get_pregnancy_profile(
+    actor_person_id: str, subject_person_id: str
+) -> dict:
+    """Read a synthetic pregnancy profile only after Home authorization."""
+    return _authorized(
+        lambda: _svc.get_profile(actor_person_id, subject_person_id)
+        or {"error": "no profile"}
+    )
+
 
 @mcp.tool
-def plan_menu(person_id: str, meals: list[dict]) -> dict:
-    """Evaluate a proposed menu (list of {label, foods:[{food_id,grams}]}) against the
-    person's reference targets, deterministically. Returns a PROPOSED plan with gaps.
-    This is a plan against configured reference targets, NOT a medical recommendation."""
-    return _svc.plan_menu(person_id, meals)
+def plan_menu(
+    actor_person_id: str, subject_person_id: str, meals: list[dict]
+) -> dict:
+    """Evaluate a proposed menu after Home authorizes Nutrition VIEW."""
+    return _authorized(
+        lambda: _svc.plan_menu(actor_person_id, subject_person_id, meals)
+    )
+
 
 if __name__ == "__main__":
-    import os
-    mcp.run(transport="http", host="0.0.0.0", port=int(os.environ.get("MCP_PORT","9931")))
+    mcp.run(
+        transport="http",
+        host="0.0.0.0",
+        port=int(os.environ.get("MCP_PORT", "9931")),
+    )

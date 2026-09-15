@@ -1,116 +1,242 @@
-"""Nutrition service core — wires domain + provider + store + Mealie. Deterministic:
-all nutrient numbers come from nutrition_domain, never from an LLM. AI-derived intake
-is always a PROPOSAL until user-confirmed.
+"""Nutrition service core with Home-authorized person data access.
+
+All nutrient calculations remain deterministic. Every person-specific repository read
+or write is preceded by an exact actor/subject/domain/action decision from the Home
+Control Plane. Nutrition-local consent is not consulted.
 """
 from __future__ import annotations
+
 from decimal import Decimal
+from typing import Protocol
+
 from nutrition_domain import (
-    FoodFact, ConfirmedFoodAmount, calculate_meal_nutrients, calculate_daily_intake,
-    compare_to_targets, calculate_daily_gap,
-    IntakeKind, IntakeProvenance,
+    ConfirmedFoodAmount,
+    FoodFact,
+    IntakeKind,
+    IntakeProvenance,
+    calculate_daily_gap,
+    calculate_daily_intake,
+    calculate_meal_nutrients,
+    compare_to_targets,
 )
+
 from .providers.food_provider import FoodProvider
+from .reference.pregnancy_targets import (
+    pregnancy_targets_detailed,
+    pregnancy_targets_map,
+)
 from .store.repository import NutritionRepository
-from .reference.pregnancy_targets import pregnancy_targets_map, pregnancy_targets_detailed
+
+
+class AccessAuthorizer(Protocol):
+    def check_access(
+        self,
+        actor_person_id: str,
+        subject_person_id: str,
+        domain: str,
+        action: str,
+    ): ...
 
 
 class NutritionService:
-    def __init__(self, repo: NutritionRepository, provider: FoodProvider, mealie=None):
+    def __init__(
+        self,
+        repo: NutritionRepository,
+        provider: FoodProvider,
+        mealie=None,
+        *,
+        authorizer: AccessAuthorizer,
+    ):
         self.repo = repo
         self.provider = provider
         self.mealie = mealie
+        self.authorizer = authorizer
+
+    def _require_access(
+        self, actor_person_id: str, subject_person_id: str, action: str
+    ) -> None:
+        decision = self.authorizer.check_access(
+            actor_person_id, subject_person_id, "NUTRITION", action
+        )
+        if not decision.allow:
+            raise PermissionError(decision.reason)
 
     # --- profile ---
-    def get_profile(self, person_id: str):
-        return self.repo.get_profile(person_id)
+    def get_profile(self, actor_person_id: str, subject_person_id: str):
+        self._require_access(actor_person_id, subject_person_id, "VIEW")
+        return self.repo.get_profile(subject_person_id)
 
-    def upsert_profile(self, person_id: str, profile: dict):
-        return self.repo.upsert_profile(person_id, profile)
+    def upsert_profile(
+        self, actor_person_id: str, subject_person_id: str, profile: dict
+    ):
+        self._require_access(actor_person_id, subject_person_id, "UPDATE")
+        return self.repo.upsert_profile(subject_person_id, profile)
 
     # --- deterministic evaluation ---
     def _to_confirmed(self, foods: list[dict]) -> list[ConfirmedFoodAmount]:
-        out = []
-        for f in foods:
-            rec = self.provider.get_food(f["food_id"])
-            out.append(ConfirmedFoodAmount(
-                FoodFact(rec.food_id, rec.nutrients_per_100g, rec.source),
-                Decimal(str(f["grams"]))))
-        return out
+        confirmed = []
+        for food in foods:
+            record = self.provider.get_food(food["food_id"])
+            confirmed.append(
+                ConfirmedFoodAmount(
+                    FoodFact(
+                        record.food_id,
+                        record.nutrients_per_100g,
+                        record.source,
+                    ),
+                    Decimal(str(food["grams"])),
+                )
+            )
+        return confirmed
 
     def evaluate_meal(self, foods: list[dict]) -> dict:
         totals = calculate_meal_nutrients(self._to_confirmed(foods))
-        return {k: str(v) for k, v in totals.items()}
+        return {nutrient: str(value) for nutrient, value in totals.items()}
 
-    def daily_intake(self, person_id: str, date: str) -> dict:
-        records = self.repo.list_intake(person_id, date, kind=IntakeKind.ACTUAL.value)
-        meals = [self._to_confirmed(r["foods"]) for r in records if r.get("foods")]
+    def _daily_intake(self, subject_person_id: str, date: str) -> dict:
+        records = self.repo.list_intake(
+            subject_person_id, date, kind=IntakeKind.ACTUAL.value
+        )
+        meals = [self._to_confirmed(record["foods"]) for record in records if record.get("foods")]
         totals = calculate_daily_intake(meals)
-        return {k: str(v) for k, v in totals.items()}
+        return {nutrient: str(value) for nutrient, value in totals.items()}
 
-    def daily_gap(self, person_id: str, date: str) -> dict:
-        prof = self.repo.get_profile(person_id) or {}
-        targets = {k: Decimal(str(v)) for k, v in (prof.get("targets") or {}).items()}
-        consumed = {k: Decimal(v) for k, v in self.daily_intake(person_id, date).items()}
+    def daily_intake(
+        self, actor_person_id: str, subject_person_id: str, date: str
+    ) -> dict:
+        self._require_access(actor_person_id, subject_person_id, "VIEW")
+        return self._daily_intake(subject_person_id, date)
+
+    def daily_gap(self, actor_person_id: str, subject_person_id: str, date: str) -> dict:
+        self._require_access(actor_person_id, subject_person_id, "VIEW")
+        profile = self.repo.get_profile(subject_person_id) or {}
+        targets = {
+            nutrient: Decimal(str(value))
+            for nutrient, value in (profile.get("targets") or {}).items()
+        }
+        consumed = {
+            nutrient: Decimal(value)
+            for nutrient, value in self._daily_intake(subject_person_id, date).items()
+        }
         gap = calculate_daily_gap(consumed, targets)
-        cmp = compare_to_targets(consumed, targets)
+        comparisons = compare_to_targets(consumed, targets)
         return {
-            "targets": {k: str(v) for k, v in targets.items()},
-            "consumed": {k: str(v) for k, v in consumed.items()},
-            "gap": {k: str(v) for k, v in gap.items()},
-            "detail": {k: {"target": str(c.target), "consumed": str(c.consumed),
-                           "remaining": str(c.remaining), "percentage": str(c.percentage)}
-                       for k, c in cmp.items()},
+            "targets": {nutrient: str(value) for nutrient, value in targets.items()},
+            "consumed": {nutrient: str(value) for nutrient, value in consumed.items()},
+            "gap": {nutrient: str(value) for nutrient, value in gap.items()},
+            "detail": {
+                nutrient: {
+                    "target": str(comparison.target),
+                    "consumed": str(comparison.consumed),
+                    "remaining": str(comparison.remaining),
+                    "percentage": str(comparison.percentage),
+                }
+                for nutrient, comparison in comparisons.items()
+            },
         }
 
     # --- planned vs actual ---
-    def record_planned(self, person_id: str, date: str, foods: list[dict], ref: str | None = None):
-        return self.repo.add_intake(person_id, {
-            "date": date, "kind": IntakeKind.PLANNED.value, "foods": foods,
-            "planned_meal_reference": ref, "provenance": IntakeProvenance.USER_CONFIRMED.value})
+    def record_planned(
+        self,
+        actor_person_id: str,
+        subject_person_id: str,
+        date: str,
+        foods: list[dict],
+        ref: str | None = None,
+    ):
+        self._require_access(actor_person_id, subject_person_id, "CREATE")
+        return self.repo.add_intake(
+            subject_person_id,
+            {
+                "date": date,
+                "kind": IntakeKind.PLANNED.value,
+                "foods": foods,
+                "planned_meal_reference": ref,
+                "provenance": IntakeProvenance.USER_CONFIRMED.value,
+            },
+        )
 
-    def record_actual(self, person_id: str, date: str, foods: list[dict],
-                      provenance: str = IntakeProvenance.USER_CONFIRMED.value, ref: str | None = None):
-        return self.repo.add_intake(person_id, {
-            "date": date, "kind": IntakeKind.ACTUAL.value, "foods": foods,
-            "planned_meal_reference": ref, "provenance": provenance})
+    def _record_actual(
+        self,
+        subject_person_id: str,
+        date: str,
+        foods: list[dict],
+        provenance: str,
+        ref: str | None,
+    ):
+        return self.repo.add_intake(
+            subject_person_id,
+            {
+                "date": date,
+                "kind": IntakeKind.ACTUAL.value,
+                "foods": foods,
+                "planned_meal_reference": ref,
+                "provenance": provenance,
+            },
+        )
 
-    def ate_as_planned(self, person_id: str, date: str, planned_id: str):
-        """Copy a PLANNED record into an ACTUAL USER_CONFIRMED one. No re-entry."""
-        planned = [r for r in self.repo.list_intake(person_id, date, IntakeKind.PLANNED.value)
-                   if r["id"] == planned_id]
+    def record_actual(
+        self,
+        actor_person_id: str,
+        subject_person_id: str,
+        date: str,
+        foods: list[dict],
+        provenance: str = IntakeProvenance.USER_CONFIRMED.value,
+        ref: str | None = None,
+    ):
+        self._require_access(actor_person_id, subject_person_id, "CREATE")
+        return self._record_actual(subject_person_id, date, foods, provenance, ref)
+
+    def ate_as_planned(
+        self,
+        actor_person_id: str,
+        subject_person_id: str,
+        date: str,
+        planned_id: str,
+    ):
+        self._require_access(actor_person_id, subject_person_id, "VIEW")
+        planned = [
+            record
+            for record in self.repo.list_intake(
+                subject_person_id, date, IntakeKind.PLANNED.value
+            )
+            if record["id"] == planned_id
+        ]
         if not planned:
             raise KeyError("planned record not found")
-        p = planned[0]
-        return self.record_actual(person_id, date, p["foods"],
-                                  provenance=IntakeProvenance.USER_CONFIRMED.value,
-                                  ref=p.get("planned_meal_reference") or planned_id)
+        self._require_access(actor_person_id, subject_person_id, "CREATE")
+        record = planned[0]
+        return self._record_actual(
+            subject_person_id,
+            date,
+            record["foods"],
+            IntakeProvenance.USER_CONFIRMED.value,
+            record.get("planned_meal_reference") or planned_id,
+        )
 
     def propose_change(self, foods: list[dict]) -> dict:
-        """AI/NL change returns a PROPOSAL (not authoritative). Caller must confirm
-        before it becomes actual intake."""
-        return {"provenance": IntakeProvenance.AI_PROPOSAL.value,
-                "foods": foods, "nutrients": self.evaluate_meal(foods),
-                "requires_confirmation": True}
-
-    # --- consent ---
-    def set_consent(self, person_id: str, state: str = "GRANTED", note: str = ""):
-        return self.repo.set_consent(person_id, "NUTRITION", state, note)
-
-    def get_consent(self, person_id: str):
-        return self.repo.get_consent(person_id)
-
-    def _require_consent(self, person_id: str):
-        if not self.repo.has_consent(person_id, "NUTRITION"):
-            raise PermissionError(f"no NUTRITION consent for {person_id}")
+        """Return an AI proposal; callers must confirm before persistence."""
+        return {
+            "provenance": IntakeProvenance.AI_PROPOSAL.value,
+            "foods": foods,
+            "nutrients": self.evaluate_meal(foods),
+            "requires_confirmation": True,
+        }
 
     # --- pregnancy profile with authoritative reference targets ---
-    def create_pregnancy_profile(self, person_id: str, *, stage: str | None = None,
-                                 preferences: str = "", dislikes: str = "",
-                                 intolerances: str = "", avoided_foods: str = "",
-                                 user_goals: dict | None = None):
-        """Create a PREGNANCY-context profile whose targets come from DGE/EFSA reference
-        values (provenance REFERENCE_TARGET). Requires consent. Only explicit facts stored."""
-        self._require_consent(person_id)
+    def create_pregnancy_profile(
+        self,
+        actor_person_id: str,
+        subject_person_id: str,
+        *,
+        stage: str | None = None,
+        preferences: str = "",
+        dislikes: str = "",
+        intolerances: str = "",
+        avoided_foods: str = "",
+        user_goals: dict | None = None,
+    ):
+        self._require_access(actor_person_id, subject_person_id, "CREATE")
         profile = {
             "context": "PREGNANCY",
             "pregnancy_stage": stage,
@@ -119,60 +245,98 @@ class NutritionService:
             "explicit_intolerances": intolerances,
             "avoided_foods": avoided_foods,
             "user_goals": user_goals or {},
-            "targets": {n: str(v) for n, v in pregnancy_targets_map().items()},
+            "targets": {
+                nutrient: str(value)
+                for nutrient, value in pregnancy_targets_map().items()
+            },
             "targets_detail": pregnancy_targets_detailed(),
             "target_source": "REFERENCE_TARGET",
         }
-        return self.repo.upsert_profile(person_id, profile)
+        return self.repo.upsert_profile(subject_person_id, profile)
 
-    def daily_gap_v2(self, person_id: str, date: str) -> dict:
-        """Like daily_gap but distinguishes UNKNOWN (no data for a targeted nutrient) from
-        a genuine zero-consumed. A nutrient is 'unavailable' if NO consumed food reported it."""
-        from decimal import Decimal
-        prof = self.repo.get_profile(person_id) or {}
-        targets = {k: Decimal(str(v)) for k, v in (prof.get("targets") or {}).items()}
-        records = self.repo.list_intake(person_id, date, kind="ACTUAL")
-        # which nutrients were actually reported by any consumed food?
+    def daily_gap_v2(
+        self, actor_person_id: str, subject_person_id: str, date: str
+    ) -> dict:
+        self._require_access(actor_person_id, subject_person_id, "VIEW")
+        profile = self.repo.get_profile(subject_person_id) or {}
+        targets = {
+            nutrient: Decimal(str(value))
+            for nutrient, value in (profile.get("targets") or {}).items()
+        }
+        records = self.repo.list_intake(subject_person_id, date, kind="ACTUAL")
         reported = set()
-        for r in records:
-            for f in r.get("foods", []):
+        for record in records:
+            for food in record.get("foods", []):
                 try:
-                    rec = self.provider.get_food(f["food_id"])
-                    reported |= set(rec.nutrients_per_100g.keys())
+                    reported |= set(
+                        self.provider.get_food(food["food_id"]).nutrients_per_100g
+                    )
                 except Exception:
                     continue
-        consumed = {k: Decimal(v) for k, v in self.daily_intake(person_id, date).items()}
-        out = {}
-        for n, tgt in targets.items():
-            if n not in reported:
-                out[n] = {"target": str(tgt), "consumed": None, "remaining": None,
-                          "percentage": None, "status": "UNKNOWN"}
+        consumed = {
+            nutrient: Decimal(value)
+            for nutrient, value in self._daily_intake(subject_person_id, date).items()
+        }
+        result = {}
+        for nutrient, target in targets.items():
+            if nutrient not in reported:
+                result[nutrient] = {
+                    "target": str(target),
+                    "consumed": None,
+                    "remaining": None,
+                    "percentage": None,
+                    "status": "UNKNOWN",
+                }
             else:
-                c = consumed.get(n, Decimal("0"))
-                out[n] = {"target": str(tgt), "consumed": str(c), "remaining": str(tgt - c),
-                          "percentage": str((c/tgt*100) if tgt else Decimal("0")), "status": "KNOWN"}
-        return out
+                consumed_value = consumed.get(nutrient, Decimal("0"))
+                result[nutrient] = {
+                    "target": str(target),
+                    "consumed": str(consumed_value),
+                    "remaining": str(target - consumed_value),
+                    "percentage": str(
+                        (consumed_value / target * 100) if target else Decimal("0")
+                    ),
+                    "status": "KNOWN",
+                }
+        return result
 
-    # --- menu planning (deterministic evaluation; NOT medical optimization) ---
-    def plan_menu(self, person_id: str, candidate_meals: list[dict]) -> dict:
-        """candidate_meals = [{"label": str, "foods": [{food_id,grams}]}]. Evaluates each meal
-        and the day total against targets deterministically. Returns a PLAN with gaps, framed
-        as constructed against configured reference targets — NOT a medical optimum."""
-        from decimal import Decimal
-        prof = self.repo.get_profile(person_id) or {}
-        targets = {k: Decimal(str(v)) for k, v in (prof.get("targets") or {}).items()}
-        day_meals = []
-        for m in candidate_meals:
-            day_meals.append(self._to_confirmed(m["foods"]))
-        from nutrition_domain import calculate_daily_intake, calculate_daily_gap
+    # --- menu planning (deterministic evaluation; not medical optimization) ---
+    def plan_menu(
+        self,
+        actor_person_id: str,
+        subject_person_id: str,
+        candidate_meals: list[dict],
+    ) -> dict:
+        self._require_access(actor_person_id, subject_person_id, "VIEW")
+        profile = self.repo.get_profile(subject_person_id) or {}
+        targets = {
+            nutrient: Decimal(str(value))
+            for nutrient, value in (profile.get("targets") or {}).items()
+        }
+        day_meals = [self._to_confirmed(meal["foods"]) for meal in candidate_meals]
         total = calculate_daily_intake(day_meals)
         gap = calculate_daily_gap(total, targets)
         return {
-            "person_id": person_id,
-            "meals": [{"label": m["label"], "foods": m["foods"]} for m in candidate_meals],
-            "day_total": {k: str(v) for k, v in total.items()},
-            "gap_vs_reference": {k: str(v) for k, v in gap.items()},
+            "person_id": subject_person_id,
+            "meals": [
+                {"label": meal["label"], "foods": meal["foods"]}
+                for meal in candidate_meals
+            ],
+            "day_total": {nutrient: str(value) for nutrient, value in total.items()},
+            "gap_vs_reference": {
+                nutrient: str(value) for nutrient, value in gap.items()
+            },
             "disclaimer": "Plan constructed against configured DGE/EFSA reference targets and "
-                          "stated preferences. Not a medical recommendation.",
+            "stated preferences. Not a medical recommendation.",
             "status": "PROPOSED",
         }
+
+    def get_meal_plan(
+        self,
+        actor_person_id: str,
+        subject_person_id: str,
+        start_date: str,
+        end_date: str,
+    ) -> list:
+        self._require_access(actor_person_id, subject_person_id, "VIEW")
+        return self.mealie.get_meal_plan(start_date, end_date) if self.mealie else []

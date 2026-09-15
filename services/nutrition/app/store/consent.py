@@ -1,6 +1,7 @@
-"""Explicit consent/reference state. Storing/processing a person's real Nutrition data
-requires an explicit consent record. Household membership alone NEVER implies access.
-Home Agent access is scoped to persons with an active consent record.
+"""Legacy Nutrition consent table retained for audit/migration only.
+
+The Home Control Plane is the sole authorization authority. Nothing in this module
+may grant access, and the table is not exposed through FastAPI or MCP.
 """
 from __future__ import annotations
 
