@@ -1,0 +1,30 @@
+# Quadlet unit for the Episteck Home BFF (G1.6).
+#
+# Install to: /home/svc-home-bff/.config/containers/systemd/home-bff.container
+# Owner:      svc-home-bff (unprivileged, rootless podman, no sudo)
+# Enable:     systemctl --user daemon-reload && systemctl --user start home-bff
+#
+# The service binds LOOPBACK ONLY. Public ingress arrives via the nginx reverse
+# proxy on this node; the application port is never exposed directly (§J).
+[Unit]
+Description=Episteck Home BFF (confidential OAuth client + session boundary)
+After=network-online.target
+
+[Container]
+Image=localhost/episteck-home-bff:REPLACE_WITH_COMMIT_SHA
+ContainerName=home-bff
+PublishPort=127.0.0.1:9933:9933
+Volume=/srv/episteck/services/home-bff/data:/data:Z
+EnvironmentFile=/srv/episteck/services/home-bff/secrets/oauth.env
+Environment=BFF_STORE_PATH=/data/bff.sqlite
+Environment=BFF_PORT=9933
+# The Control Plane is reached over the Tailscale mesh, not the public Internet.
+AddHost=home.episteck.com:100.71.79.33
+PodmanArgs=--memory=384m --memory-swap=384m
+
+[Service]
+Restart=always
+TimeoutStartSec=180
+
+[Install]
+WantedBy=default.target
