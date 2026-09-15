@@ -1,10 +1,27 @@
-"""Fail-closed Home Control Plane client owned by svc-nutrition."""
+"""Fail-closed Home Control Plane client owned by svc-nutrition.
+
+G1.6 INDEPENDENT ACTOR RESOLUTION
+---------------------------------
+Nutrition NEVER accepts an ``actor_person_id`` from the Home Agent, the Home MCP, or
+any client input. It receives only the delegated human session and resolves the actor
+ITSELF against the Home Control Plane, using its OWN machine credential.
+
+This is what prevents a confused deputy: no upstream component can say "trust me, the
+actor is PSN-00002". Two services resolving the same delegation independently must
+arrive at the same actor, and neither can vouch for a human to the other.
+
+    delegated session -> resolve_actor()  (Home decides who this is)
+                      -> check_access(actor, subject, NUTRITION, action)
+                      -> repository access only after literal ALLOW
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
 import os
 
 import httpx
+
+DELEGATION_HEADER = "X-Episteck-Delegation"
 
 
 @dataclass(frozen=True)
@@ -16,6 +33,14 @@ class AccessDecision:
 _INDETERMINATE = AccessDecision(
     False, "authorization indeterminate (fail closed)"
 )
+
+_NO_SESSION = AccessDecision(
+    False, "no authenticated human session (fail closed)"
+)
+
+
+class UnresolvedActorError(PermissionError):
+    """Raised when no trusted actor can be resolved for a delegated session."""
 
 
 class HomeControlPlaneClient:
@@ -49,24 +74,47 @@ class HomeControlPlaneClient:
             timeout_seconds=float(os.environ.get("HOME_API_TIMEOUT_SECONDS", "3")),
         )
 
+    def resolve_actor(self, delegation: str | None) -> str | None:
+        """Resolve the trusted actor for a delegated session. None on any doubt.
+
+        Nutrition asks Home who the human is; it never accepts an asserted answer.
+        """
+        if not delegation:
+            return None
+        try:
+            response = self._client.get(
+                "/api/method/episteck_home.api.whoami",
+                headers={DELEGATION_HEADER: delegation},
+            )
+            response.raise_for_status()
+            actor = response.json()["message"]["actor_person_id"]
+            if not isinstance(actor, str) or not actor.strip():
+                return None
+            return actor
+        except (httpx.HTTPError, KeyError, TypeError, ValueError):
+            return None
+
     def check_access(
         self,
         actor_person_id: str,
         subject_person_id: str,
         domain: str,
         action: str,
+        delegation: str | None = None,
     ) -> AccessDecision:
         if not all((actor_person_id, subject_person_id, domain, action)):
             return _INDETERMINATE
+        if not delegation:
+            return _NO_SESSION
         try:
             response = self._client.get(
                 "/api/method/episteck_home.api.check_access",
                 params={
-                    "actor_person_id": actor_person_id,
                     "subject_person_id": subject_person_id,
                     "domain": domain,
                     "action": action,
                 },
+                headers={DELEGATION_HEADER: delegation},
             )
             response.raise_for_status()
             payload = response.json()

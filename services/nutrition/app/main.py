@@ -4,14 +4,28 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from .deps import build_service
 
 
-app = FastAPI(title="Episteck Nutrition", version="0.2.0")
+app = FastAPI(title="Episteck Nutrition", version="0.3.0")
 svc = build_service()
+
+DELEGATION_HEADER = "X-Episteck-Delegation"
+
+
+def human_session(
+    x_episteck_delegation: str | None = Header(default=None),
+) -> str | None:
+    """Trusted human session from transport, never a query/body parameter.
+
+    G1.6: there is no ``delegation`` input anywhere on this API. Nutrition
+    resolves the actor itself from this session against the Home Control Plane.
+    """
+    value = (x_episteck_delegation or "").strip()
+    return value or None
 
 
 def _authorized(operation: Callable[[], Any]):
@@ -41,17 +55,17 @@ def health():
 
 
 @app.get("/profile/{person_id}")
-def get_profile(person_id: str, actor_person_id: str):
-    profile = _authorized(lambda: svc.get_profile(actor_person_id, person_id))
+def get_profile(person_id: str, delegation: str | None = Depends(human_session)):
+    profile = _authorized(lambda: svc.get_profile(delegation, person_id))
     if profile is None:
         raise HTTPException(404, "no profile")
     return profile
 
 
 @app.put("/profile/{person_id}")
-def put_profile(person_id: str, body: ProfileIn, actor_person_id: str):
+def put_profile(person_id: str, body: ProfileIn, delegation: str | None = Depends(human_session)):
     return _authorized(
-        lambda: svc.upsert_profile(actor_person_id, person_id, body.model_dump())
+        lambda: svc.upsert_profile(delegation, person_id, body.model_dump())
     )
 
 
@@ -61,11 +75,11 @@ def evaluate_meal(foods: list[FoodItem]):
 
 
 @app.get("/daily/{person_id}/{date}")
-def daily(person_id: str, date: str, actor_person_id: str):
+def daily(person_id: str, date: str, delegation: str | None = Depends(human_session)):
     return _authorized(
         lambda: {
-            "intake": svc.daily_intake(actor_person_id, person_id, date),
-            "gap": svc.daily_gap(actor_person_id, person_id, date),
+            "intake": svc.daily_intake(delegation, person_id, date),
+            "gap": svc.daily_gap(delegation, person_id, date),
         }
     )
 
@@ -75,12 +89,12 @@ def planned(
     person_id: str,
     date: str,
     foods: list[FoodItem],
-    actor_person_id: str,
+    delegation: str | None = Depends(human_session),
     ref: str | None = None,
 ):
     return _authorized(
         lambda: svc.record_planned(
-            actor_person_id,
+            delegation,
             person_id,
             date,
             [food.model_dump() for food in foods],
@@ -91,11 +105,11 @@ def planned(
 
 @app.post("/intake/{person_id}/actual")
 def actual(
-    person_id: str, date: str, foods: list[FoodItem], actor_person_id: str
+    person_id: str, date: str, foods: list[FoodItem], delegation: str | None = Depends(human_session)
 ):
     return _authorized(
         lambda: svc.record_actual(
-            actor_person_id,
+            delegation,
             person_id,
             date,
             [food.model_dump() for food in foods],
@@ -104,11 +118,11 @@ def actual(
 
 
 @app.post("/intake/{person_id}/ate-as-planned")
-def ate(person_id: str, date: str, planned_id: str, actor_person_id: str):
+def ate(person_id: str, date: str, planned_id: str, delegation: str | None = Depends(human_session)):
     try:
         return _authorized(
             lambda: svc.ate_as_planned(
-                actor_person_id, person_id, date, planned_id
+                delegation, person_id, date, planned_id
             )
         )
     except KeyError as error:
@@ -129,11 +143,11 @@ def recipes(query: str):
 
 @app.get("/mealplan/{start}/{end}")
 def mealplan(
-    start: str, end: str, actor_person_id: str, subject_person_id: str
+    start: str, end: str, subject_person_id: str, delegation: str | None = Depends(human_session)
 ):
     return _authorized(
         lambda: svc.get_meal_plan(
-            actor_person_id, subject_person_id, start, end
+            delegation, subject_person_id, start, end
         )
     )
 
@@ -149,11 +163,11 @@ class PregnancyProfileIn(BaseModel):
 
 @app.post("/profile/{person_id}/pregnancy")
 def create_pregnancy(
-    person_id: str, body: PregnancyProfileIn, actor_person_id: str
+    person_id: str, body: PregnancyProfileIn, delegation: str | None = Depends(human_session)
 ):
     return _authorized(
         lambda: svc.create_pregnancy_profile(
-            actor_person_id,
+            delegation,
             person_id,
             stage=body.stage,
             preferences=body.preferences,
@@ -199,7 +213,7 @@ class MealIn(BaseModel):
 
 
 @app.post("/plan/{person_id}")
-def plan_menu(person_id: str, meals: list[MealIn], actor_person_id: str):
+def plan_menu(person_id: str, meals: list[MealIn], delegation: str | None = Depends(human_session)):
     candidates = [
         {
             "label": meal.label,
@@ -208,12 +222,12 @@ def plan_menu(person_id: str, meals: list[MealIn], actor_person_id: str):
         for meal in meals
     ]
     return _authorized(
-        lambda: svc.plan_menu(actor_person_id, person_id, candidates)
+        lambda: svc.plan_menu(delegation, person_id, candidates)
     )
 
 
 @app.get("/gap-v2/{person_id}/{date}")
-def gap_v2(person_id: str, date: str, actor_person_id: str):
+def gap_v2(person_id: str, date: str, delegation: str | None = Depends(human_session)):
     return _authorized(
-        lambda: svc.daily_gap_v2(actor_person_id, person_id, date)
+        lambda: svc.daily_gap_v2(delegation, person_id, date)
     )
