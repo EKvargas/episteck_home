@@ -1,0 +1,77 @@
+{
+ "doctype": "DocType",
+ "name": "Consent Grant",
+ "module": "Episteck Home",
+ "autoname": "format:CG-{#####}",
+ "naming_rule": "Expression",
+ "engine": "InnoDB",
+ "fields": [
+  {
+   "fieldname": "actor_person",
+   "fieldtype": "Link",
+   "label": "Actor Person",
+   "options": "Person",
+   "reqd": 1
+  },
+  {
+   "fieldname": "subject_person",
+   "fieldtype": "Link",
+   "label": "Subject Person",
+   "options": "Person",
+   "reqd": 1
+  },
+  {
+   "fieldname": "domain",
+   "fieldtype": "Select",
+   "label": "Domain",
+   "options": "NUTRITION\nHEALTH\nCALENDAR\nDOCUMENTS\nFINANCE\nMIND\nHOUSEHOLD\nKNOWLEDGE",
+   "reqd": 1
+  },
+  {
+   "fieldname": "actions",
+   "fieldtype": "Small Text",
+   "label": "Actions",
+   "reqd": 1,
+   "description": "comma or newline separated: VIEW,CREATE,UPDATE,MANAGE"
+  },
+  {
+   "fieldname": "state",
+   "fieldtype": "Select",
+   "label": "State",
+   "options": "ACTIVE\nREVOKED",
+   "default": "ACTIVE",
+   "reqd": 1
+  },
+  {
+   "fieldname": "valid_from",
+   "fieldtype": "Datetime",
+   "label": "Valid From"
+  },
+  {
+   "fieldname": "valid_until",
+   "fieldtype": "Datetime",
+   "label": "Valid Until"
+  },
+  {
+   "fieldname": "granted_by",
+   "fieldtype": "Link",
+   "label": "Granted By",
+   "options": "Person",
+   "description": "who authorized this grant"
+  },
+  {
+   "fieldname": "note",
+   "fieldtype": "Small Text",
+   "label": "Note"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  }
+ ]
+}

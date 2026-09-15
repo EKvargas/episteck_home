@@ -1,0 +1,44 @@
+{
+ "doctype": "DocType",
+ "name": "Person",
+ "module": "Episteck Home",
+ "autoname": "format:PSN-{#####}",
+ "naming_rule": "Expression",
+ "engine": "InnoDB",
+ "fields": [
+  {
+   "fieldname": "full_name",
+   "fieldtype": "Data",
+   "label": "Full Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "external_ref",
+   "fieldtype": "Data",
+   "label": "External Ref",
+   "description": "stable external id; maps to future Episteck Core identity"
+  },
+  {
+   "fieldname": "linked_user",
+   "fieldtype": "Link",
+   "label": "Linked User",
+   "options": "User",
+   "description": "OPTIONAL - Person != User; may exist without login"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  }
+ ],
+ "title_field": "full_name"
+}

@@ -1,0 +1,56 @@
+{
+ "doctype": "DocType",
+ "name": "Care Relationship",
+ "module": "Episteck Home",
+ "autoname": "format:CR-{#####}",
+ "naming_rule": "Expression",
+ "engine": "InnoDB",
+ "fields": [
+  {
+   "fieldname": "caregiver_person",
+   "fieldtype": "Link",
+   "label": "Caregiver Person",
+   "options": "Person",
+   "reqd": 1
+  },
+  {
+   "fieldname": "subject_person",
+   "fieldtype": "Link",
+   "label": "Subject Person",
+   "options": "Person",
+   "reqd": 1
+  },
+  {
+   "fieldname": "relationship_type",
+   "fieldtype": "Select",
+   "label": "Relationship Type",
+   "options": "CAREGIVER\nCOORDINATOR\nGUARDIAN\nFAMILY_SUPPORT",
+   "reqd": 1
+  },
+  {
+   "fieldname": "valid_from",
+   "fieldtype": "Date",
+   "label": "Valid From"
+  },
+  {
+   "fieldname": "valid_to",
+   "fieldtype": "Date",
+   "label": "Valid To"
+  },
+  {
+   "fieldname": "note",
+   "fieldtype": "Small Text",
+   "label": "Note",
+   "description": "relationship is NOT authorization; a ConsentGrant is still required"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  }
+ ]
+}

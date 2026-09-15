@@ -1,0 +1,39 @@
+{
+ "doctype": "DocType",
+ "name": "Circle Membership",
+ "module": "Episteck Home",
+ "autoname": "format:CM-{#####}",
+ "naming_rule": "Expression",
+ "engine": "InnoDB",
+ "fields": [
+  {
+   "fieldname": "circle",
+   "fieldtype": "Link",
+   "label": "Circle",
+   "options": "Circle",
+   "reqd": 1
+  },
+  {
+   "fieldname": "person",
+   "fieldtype": "Link",
+   "label": "Person",
+   "options": "Person",
+   "reqd": 1
+  },
+  {
+   "fieldname": "role_in_circle",
+   "fieldtype": "Data",
+   "label": "Role In Circle",
+   "description": "descriptive only - NOT an authorization"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  }
+ ]
+}

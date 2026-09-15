@@ -1,0 +1,38 @@
+{
+ "doctype": "DocType",
+ "name": "Circle",
+ "module": "Episteck Home",
+ "autoname": "format:CIR-{#####}",
+ "naming_rule": "Expression",
+ "engine": "InnoDB",
+ "fields": [
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "reqd": 1
+  },
+  {
+   "fieldname": "circle_type",
+   "fieldtype": "Select",
+   "label": "Circle Type",
+   "options": "HOUSEHOLD\nFAMILY\nCARE\nCUSTOM",
+   "reqd": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  }
+ ],
+ "title_field": "title"
+}
