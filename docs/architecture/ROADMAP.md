@@ -8,13 +8,15 @@
   gate; unknown≠zero; menu planning; home-agent pilot (synthetic).
 - Stage G1: off-box restic backup + restore validated; USDA production key live.
 
-## This stage (G1.5)
+## Stage G1.5 — COMPLETE (PASS)
 Home Control Plane model + Knowledge contracts + architecture docs. **No real data.**
 - ✅ Person/Circle/CircleMembership/CareRelationship/ConsentGrant + central `can_access`.
-- ✅ Actor-aware Home Core API + thin Home Agent MCP source.
-- ✅ Nutrition Home authorization client + pre-retrieval fail-closed cutover source.
+- ✅ Actor-aware Home Core API + live thin Home Agent MCP.
+- ✅ Nutrition Home authorization client + live pre-retrieval fail-closed cutover.
 - ✅ Knowledge + ContextBundle contracts (`packages/home-contracts`; no tech installed).
-- ⏳ Live MCP deployment, synthetic conversation matrix, and latency evidence.
+- ✅ Synthetic Home Agent conversation, denial matrix, and latency evidence.
+
+See `G1_5_VALIDATION.md`. Stop here; do not begin G2.
 
 ## Gates ahead
 ### Knowledge Technology Gate `[PENDING]`
@@ -24,7 +26,7 @@ first Knowledge use case, and the governance layer (Scope/Episode/Claim) impleme
 in the Home Control Plane. The pure G1.5 contracts are complete but are not a
 Knowledge runtime or persistence implementation.
 
-### G2 — Real family onboarding `[BLOCKED on approval]`
+### G2 — Real family onboarding `[BLOCKED: actor binding + approval]`
 First real Person + explicit consent + real Pregnancy Nutrition Profile + real
 providers + real meal plan + planned→actual + Home Agent with the real user. Requires:
 off-box backup (done), real USDA key (done), this G1.5 model live + validated, and

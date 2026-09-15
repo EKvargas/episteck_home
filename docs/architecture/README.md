@@ -4,6 +4,7 @@
 the system and links every other document.
 
 ## Contents
+- `G1_5_VALIDATION.md` — final synthetic security, conversation, deployment, and latency evidence
 - `ARCHITECTURE.md` — canonical architecture + component map (read first)
 - `DATA_OWNERSHIP.md` — who owns which data (no universal DB)
 - `AGENTS.md` — infra-agent / home-agent; Hermes-memory vs Episteck-Knowledge boundary
