@@ -54,9 +54,9 @@ creation (blocked — needs credential-write approval), real-login binding (A10)
 
 ## G2 blockers
 
-1. **G1.6 completion** — merge, `bench migrate`, **BFF deployment** (needs a
-   `bff.home.episteck.com` DNS record), OAuth client creation, and real-login binding
-   (A10). **This is the current blocker.**
+1. **G1.6 completion** — merge, `bench migrate`, BFF deployment, OAuth client
+   creation, and real-login binding (A10). DNS for `bff.home.episteck.com` is live.
+   **This is the current blocker.**
 2. Explicit user approval for real family data.
 3. Real-Person onboarding + real ConsentGrants.
 4. Duplicate `sub` remediation (prepared; reference audit found **zero** consumers).

@@ -266,11 +266,16 @@ logout, including the adversarial cases.
 
 ### 8.2 Still pending, and why
 
+**DNS is live.** `bff.home.episteck.com` → `91.98.132.9`, created by the operator and
+verified propagated on 2026-09-16 against three independent resolvers (corporate,
+`8.8.8.8`, `1.1.1.1`). The callback URL is therefore final:
+`https://bff.home.episteck.com/callback`.
+
 | Item | Blocked on |
 | --- | --- |
-| `bff.home.episteck.com` DNS A record → `91.98.132.9` | **operator action** — no API access to the zone |
-| nginx + certbot on the Nuremberg node | the DNS record (ACME needs it to resolve) |
-| OAuth Client creation on `home.episteck.com` | the final callback URL, which needs the above |
+| ~~`bff.home.episteck.com` DNS A record~~ | ✅ **done** — propagated and verified |
+| nginx + certbot on the Nuremberg node | Phase 2 deployment |
+| OAuth Client creation on `home.episteck.com` | Phase 2, after the callback is serving |
 | Authorization-code round trip (PKCE live cases) | the OAuth client |
 | Operator real login → synthetic Person (A10-A) | the deployed service; the operator logs in personally |
 | Low-privilege test User → second synthetic Person (A10-B) | the User does not exist yet; creation is a G1.6 write |

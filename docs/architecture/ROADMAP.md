@@ -55,9 +55,9 @@ First real Person + explicit consent + real Pregnancy Nutrition Profile + real
 providers + real meal plan + planned→actual + Home Agent with the real user.
 
 Remaining blockers:
-1. **G1.6 completion** — merge to `main`, `bench migrate`, deploy the Home BFF
-   (requires a `bff.home.episteck.com` DNS record — operator action), create the OAuth
-   client, and complete the real-login bindings (A10). This is the current blocker.
+1. **G1.6 completion** — merge to `main`, `bench migrate`, deploy the Home BFF,
+   create the OAuth client, and complete the real-login bindings (A10). DNS for
+   `bff.home.episteck.com` is live. This is the current blocker.
 2. Explicit user approval for real data.
 3. Real-Person onboarding + real ConsentGrants.
 4. Duplicate OIDC `sub` remediation before any native/public OIDC client (a reference
