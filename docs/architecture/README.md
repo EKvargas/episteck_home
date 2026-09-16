@@ -17,10 +17,14 @@ the system and links every other document.
 - `proposals/SMART_SHOPPING_AND_POSSESSIONS.md` — approved architecture proposal for
   Smart Shopping, Smart Inventory/Possessions, Wardrobe/Style, baby lifecycle, provider
   adapters and low-friction capture
+- `proposals/SMART_SHOPPING_COMMERCE_AND_GROCERY.md` — Smart Shopping extension for
+  groceries/consumables, product quality-price comparison, BasketPlan, commerce-provider
+  capabilities and progressive purchase automation
 - `STATUS.md` — current state (update with every change)
 - `adr/` — Architecture Decision Records (0001–0010)
   - `0010-smart-shopping-and-possessions.md` — Shopping and Inventory as sibling domain
-    services; provider/hardware adapters; Friction Budget
+    services; Shopping is the physical-product procurement intelligence layer; provider/
+    hardware adapters; Friction Budget
 - **`architecture-diagram.html`** — explorable whole-product diagram (open in a browser)
 - `architecture-diagram.json` — archify source for the diagram
 
