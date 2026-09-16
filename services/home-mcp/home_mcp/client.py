@@ -1,10 +1,31 @@
-"""Authenticated client for the Frappe Home Control Plane business API."""
+"""Authenticated client for the Frappe Home Control Plane business API.
+
+DUAL PRINCIPAL (G1.6)
+---------------------
+Every call carries two independent credentials:
+
+  * ``Authorization: token <key>:<secret>`` — proves the MACHINE caller (this service)
+  * ``X-Episteck-Delegation: <token>``      — proves WHICH HUMAN SESSION we act for
+
+Frappe verifies the machine credential, then the auth hook verifies the delegation and
+resolves the actor server-side. This client never sends, and cannot send, an
+``actor_person_id``: the Control Plane has no such parameter.
+
+The delegation token is supplied by the trusted runtime (the BFF) out of band. It is
+never a tool parameter, never enters the model's context, and is never logged.
+"""
 from __future__ import annotations
 
 import os
 from typing import Any
 
 import httpx
+
+DELEGATION_HEADER = "X-Episteck-Delegation"
+
+
+class MissingDelegationError(RuntimeError):
+    """Raised when a person-scoped call is attempted with no human session."""
 
 
 class HomeControlPlaneClient:
@@ -38,10 +59,15 @@ class HomeControlPlaneClient:
             timeout_seconds=float(os.environ.get("HOME_API_TIMEOUT_SECONDS", "3")),
         )
 
-    def _call(self, method: str, params: dict[str, str]) -> Any:
+    def _call(self, method: str, params: dict[str, str], delegation: str | None) -> Any:
+        # Fail closed: no human session means no person-scoped call is attempted.
+        if not delegation:
+            return {"ok": False, "error": "no_authenticated_human_session"}
         try:
             response = self._client.get(
-                f"/api/method/episteck_home.api.{method}", params=params
+                f"/api/method/episteck_home.api.{method}",
+                params=params,
+                headers={DELEGATION_HEADER: delegation},
             )
             response.raise_for_status()
             payload = response.json()
@@ -49,7 +75,7 @@ class HomeControlPlaneClient:
                 raise ValueError("missing Frappe message")
             return payload["message"]
         except httpx.HTTPStatusError as error:
-            if error.response.status_code in {403, 404}:
+            if error.response.status_code in {401, 403, 404}:
                 return {"ok": False, "error": "not_authorized_or_not_found"}
             return {"ok": False, "error": "home_control_plane_unavailable"}
         except httpx.HTTPError:
@@ -57,46 +83,38 @@ class HomeControlPlaneClient:
         except (TypeError, ValueError):
             return {"ok": False, "error": "invalid_home_control_plane_response"}
 
-    def get_person(self, actor_person_id: str, person_id: str):
-        return self._call(
-            "get_person",
-            {"actor_person_id": actor_person_id, "person_id": person_id},
-        )
+    def whoami(self, delegation: str | None):
+        return self._call("whoami", {}, delegation)
 
-    def list_my_circles(self, actor_person_id: str):
-        return self._call("list_my_circles", {"actor_person_id": actor_person_id})
+    def get_person(self, person_id: str, delegation: str | None):
+        return self._call("get_person", {"person_id": person_id}, delegation)
 
-    def list_circle_members(self, actor_person_id: str, circle_id: str):
-        return self._call(
-            "list_circle_members",
-            {"actor_person_id": actor_person_id, "circle_id": circle_id},
-        )
+    def list_my_circles(self, delegation: str | None):
+        return self._call("list_my_circles", {}, delegation)
 
-    def list_people_i_care_for(self, actor_person_id: str):
-        return self._call(
-            "list_people_i_care_for", {"actor_person_id": actor_person_id}
-        )
+    def list_circle_members(self, circle_id: str, delegation: str | None):
+        return self._call("list_circle_members", {"circle_id": circle_id}, delegation)
 
-    def get_access_to_person(self, actor_person_id: str, subject_person_id: str):
+    def list_people_i_care_for(self, delegation: str | None):
+        return self._call("list_people_i_care_for", {}, delegation)
+
+    def get_access_to_person(self, subject_person_id: str, delegation: str | None):
         return self._call(
             "get_access_to_person",
-            {
-                "actor_person_id": actor_person_id,
-                "subject_person_id": subject_person_id,
-            },
+            {"subject_person_id": subject_person_id},
+            delegation,
         )
 
     def check_access(
         self,
-        actor_person_id: str,
         subject_person_id: str,
         domain: str,
-        action: str = "VIEW",
+        action: str,
+        delegation: str | None,
     ) -> dict:
         result = self._call(
             "check_access",
             {
-                "actor_person_id": actor_person_id,
                 "subject_person_id": subject_person_id,
                 # Agent models commonly produce display casing (for example,
                 # "Nutrition"). Canonicalizing casing is not an authorization
@@ -105,6 +123,7 @@ class HomeControlPlaneClient:
                 "domain": str(domain).strip().upper(),
                 "action": str(action).strip().upper(),
             },
+            delegation,
         )
         if not isinstance(result, dict) or type(result.get("allow")) is not bool:
             return {
@@ -116,5 +135,5 @@ class HomeControlPlaneClient:
             "reason": str(result.get("reason") or "Home Control Plane decision"),
         }
 
-    def get_care_dashboard(self, actor_person_id: str):
-        return self._call("get_care_dashboard", {"actor_person_id": actor_person_id})
+    def get_care_dashboard(self, delegation: str | None):
+        return self._call("get_care_dashboard", {}, delegation)

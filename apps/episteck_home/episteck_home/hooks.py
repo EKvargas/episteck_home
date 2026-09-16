@@ -11,3 +11,9 @@ permission_query_conditions = {
 has_permission = {
     "Care Journey Item": "episteck_home.permissions.has_care_journey_item_permission",
 }
+
+# G1.6 trusted actor binding: establish delegated human context server-side, after
+# Frappe has authenticated the machine caller. Never accepts a caller-supplied actor.
+auth_hooks = [
+    "episteck_home.identity.auth_hook.establish_delegated_context",
+]

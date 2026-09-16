@@ -34,31 +34,66 @@ can_access(actor_person_id, subject_person_id, domain, action) -> ALLOW | DENY
   **no unrestricted consent mutation**.
 - infra-agent: privileged ops, but not given business/health content for routine admin.
 
-## Actor binding — hard G2 blocker
+## Trusted actor binding `[G1.6 — DELIVERED]`
 
-G1.5 synthetic validation may pass an explicit synthetic `actor_person_id`. This is
-**not** an identity mechanism. No real family, health, Nutrition, Mind, document, or
-other personal data may be exposed to Home Agent until an authenticated user/session
-is cryptographically or otherwise authoritatively bound to exactly its allowed
-Person identity. The future real Home Agent must never establish identity by simply
-supplying `actor_person_id="..."`. G2 is blocked until this binding is designed,
-implemented, and tested against actor substitution.
+**`actor_person_id` is never an input.** It is always a server-side derivation of
+validated authentication context:
 
-During G1.5, defense in depth still applies inside the Home Core API:
-- linked human Users may assert only their linked Person;
-- unlinked machine Users must be explicitly allowlisted and have no DocType mutation
-  permissions;
-- `get_person` denies unrelated/guessed ids without loading or revealing the Person;
-- circle rosters require actor visibility of the circle;
-- care and dashboard results are filtered to the resolved actor;
-- effective-access queries return only that actor's decisions.
+```
+validated authentication -> Frappe User -> Person.linked_user -> actor
+```
+
+Neither `actor_person_id` nor `User.name` is ever a caller assertion. No caller — user
+text, LLM, MCP tool argument, client JSON, or request header — may supply an actor. No
+Home business method, MCP tool, or Nutrition route has an actor parameter, so actor
+substitution is **unrepresentable** rather than merely rejected.
+
+### Dual principal
+Every delegated sensitive request carries two independent principals:
+
+| Principal | Proven by | Means |
+| --- | --- | --- |
+| `machine_caller` | service API key on `Authorization` | "this service may call this interface" |
+| `human_actor` | delegated session, resolved server-side | which human this request acts for |
+
+A machine credential **never** means "this service is Person X". A machine credential
+alone yields `PermissionError` for any person data. Both identities are retained in
+audit context.
+
+### Delegated context (never a trusted header)
+A short-lived, single-audience token carries an **opaque session id** and never a
+Person id. It is verified for issuer, audience, issued-at, expiry, unique token id,
+session binding, replay, and a maximum lifetime; any anomaly is DENY. A plain
+`X-Actor-ID: PSN-123` header is **forbidden** and inert.
+
+Frappe `auth_hooks` verifies the delegation and maps the session to a User through a
+`Home Delegated Session` record. Because the User comes from a server-side record
+rather than a token claim, **logout and revocation deny the very next call** even if
+the token is still unexpired.
+
+### Binding integrity
+- `Person.linked_user` is **unique**: one User maps to at most one Person.
+- Two Persons for one User, or a User with no Person, **fails closed** — never guesses.
+- A **Person without a User** remains a valid *subject* of consent and care, but can
+  never be an *actor*. Children and dependents are not forced to have logins.
+- Creating or changing `linked_user` is administrative: not in the business API, not
+  available to machine users, not reachable by the agent.
+
+### Token secrecy
+Bearer/refresh material never enters Hermes prompts, LLM context, MCP tool arguments,
+model-visible memory, logs, or Git. The agent holds an opaque session reference; the
+delegation travels as transport metadata resolved outside model-controlled arguments.
 
 ## Service authorization boundary
 
 The Home MCP and svc-nutrition use separate machine credentials stored in
 owner-readable service secret files. `home-agent` cannot read either credential.
-Nutrition asks Home `check_access` before every person-specific repository read or
-write. Network failure, timeout, non-2xx response, malformed JSON, missing fields, or
+
+**Nutrition resolves the actor INDEPENDENTLY** `[G1.6]`: it asks Home who the human is
+using its own machine credential and the delegated session, then asks `check_access`
+before every person-specific repository read or write. It never accepts an actor string
+from the Home Agent or Home MCP, so no upstream component can say "trust me, the actor
+is PSN-00002". Two services resolving the same session independently must agree. Network failure, timeout, non-2xx response, malformed JSON, missing fields, or
 non-boolean decisions are DENY.
 
 The live Home Agent policy also makes denial terminal. It may proceed to a
@@ -73,7 +108,19 @@ authorization authority.
 
 The complete synthetic denial matrix is recorded in `G1_5_VALIDATION.md`.
 
-## Data residency
+## Data residency `[CORRECTED 2026-09-16]`
 EU node (Nuremberg) holds Nutrition + Mealie. Off-box backup is EU (Falkenstein).
-Home Control Plane currently on Ashburn (US) — cross-node auth calls go over Tailscale;
-**no cross-region DB**. Residency of real health data is revisited before G2 real data.
+Home Control Plane is on Ashburn (US) — cross-node auth calls go over Tailscale;
+**no cross-region DB**.
+
+**The Home BFF runs on the EU node (Nuremberg)** `[G1.6]`. That placement was chosen on
+its own merits and is not contingent on any later migration.
+
+**The Ashburn/US Control Plane is accepted for real family data.** `home.episteck.com` is
+the operator's own personal/family deployment; the data subject is also the operator.
+Stage G1.7 (EU Home Control Plane migration) is **withdrawn** and is **not** a G2 blocker
+— see `ROADMAP.md`. Do not migrate `home.episteck.com` during this phase.
+
+EU data residency is a **future commercialization** concern: before onboarding external
+EU customers, a regional deployment/data-residency strategy will be designed separately,
+likely using dedicated EU Home instances rather than relocating the personal instance.

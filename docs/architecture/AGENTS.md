@@ -18,8 +18,12 @@ do not currently talk to each other.
   Core API + domain MCPs.
 
 ## Agent authorization model
-- The Home Agent is **NOT a Person**. It acts **on behalf of** `actor_person_id`
-  and operates on a `subject_person_id`.
+- The Home Agent is **NOT a Person**. It acts **on behalf of** an authenticated human
+  session and operates on a `subject_person_id`.
+- `[G1.6]` **The agent cannot choose, alter, or observe who it acts as.** No tool has an
+  actor parameter; identity is resolved server-side from the session. Prompt injection
+  has no channel to identity. The agent holds an opaque session reference — never a
+  bearer token, never a Person id.
 - It receives **business-safe** MCP capabilities only. It must **not** be given
   unrestricted consent mutation, SQL, raw credentials, arbitrary HTTP, or filesystem.
 - Every sensitive operation is gated by the central policy engine (`can_access`),

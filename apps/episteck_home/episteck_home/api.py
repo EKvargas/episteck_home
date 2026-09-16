@@ -1,14 +1,26 @@
-"""Stable, actor-aware Home Control Plane business API.
+"""Stable, trusted-actor Home Control Plane business API (G1.6).
 
 Domain services and the Home Agent call these methods rather than generic DocType
 resources. Relationship and consent metadata is evaluated before sensitive records
-are loaded. Explicit actor ids are a synthetic G1.5 bridge only; real users require
-an authoritative session-to-Person binding before G2.
+are loaded.
+
+TRUSTED ACTOR INVARIANT (G1.6)
+------------------------------
+``actor_person_id`` is NEVER a parameter of any method here. The acting Person is
+derived server-side from validated authentication context:
+
+    validated authentication -> Frappe User -> Person.linked_user -> actor
+
+Neither ``actor_person_id`` nor ``User.name`` is ever a caller assertion. A caller
+cannot express an actor, so actor substitution is not merely blocked — it is
+unrepresentable. ``subject_person_id`` remains a parameter because the user is
+legitimately asking about that person; it is still gated by ``can_access``.
 """
 from __future__ import annotations
 
 import frappe
 
+from episteck_home.identity.actor import resolve_actor, resolve_principals
 from episteck_home.policy.access import ACTIONS, DOMAINS
 from episteck_home.policy.wrappers import check_access as _check_access
 
@@ -16,32 +28,6 @@ from episteck_home.policy.wrappers import check_access as _check_access
 def _not_found(resource: str) -> None:
     """Return the same response for missing and undiscoverable resources."""
     frappe.throw(f"{resource} not found", frappe.DoesNotExistError)
-
-
-def _service_users() -> set[str]:
-    configured = frappe.conf.get("home_control_plane_service_users") or []
-    if isinstance(configured, str):
-        configured = [value.strip() for value in configured.split(",") if value.strip()]
-    return set(configured)
-
-
-def _actor(actor_person_id: str | None = None) -> str:
-    """Resolve the actor without treating a machine credential as a Person."""
-    user = frappe.session.user
-    if not user or user == "Guest":
-        frappe.throw("authentication required", frappe.PermissionError)
-
-    linked_person = frappe.db.get_value("Person", {"linked_user": user}, "name")
-    if linked_person:
-        if actor_person_id and actor_person_id != linked_person:
-            frappe.throw("actor mismatch", frappe.PermissionError)
-        return linked_person
-
-    if user not in _service_users() or not actor_person_id:
-        frappe.throw("actor binding required", frappe.PermissionError)
-    if not frappe.db.exists("Person", actor_person_id):
-        _not_found("Person")
-    return actor_person_id
 
 
 def _shares_circle(actor_person_id: str, subject_person_id: str) -> bool:
@@ -100,15 +86,18 @@ def _can_discover_person(actor_person_id: str, subject_person_id: str) -> bool:
 
 
 @frappe.whitelist()
-def check_access(actor_person_id: str, subject_person_id: str, domain: str, action: str):
-    """Return only the resolved actor's authorization decision and safe reason."""
-    actor = _actor(actor_person_id)
+def check_access(subject_person_id: str, domain: str, action: str):
+    """Return the trusted actor's authorization decision and safe reason.
+
+    The actor is resolved server-side; a caller cannot name one.
+    """
+    actor = resolve_actor()
     return _check_access(actor, subject_person_id, domain, action)
 
 
 @frappe.whitelist()
-def get_person(person_id: str, actor_person_id: str | None = None):
-    actor = _actor(actor_person_id)
+def get_person(person_id: str):
+    actor = resolve_actor()
     if not _can_discover_person(actor, person_id):
         _not_found("Person")
     person = frappe.get_doc("Person", person_id)
@@ -120,8 +109,12 @@ def get_person(person_id: str, actor_person_id: str | None = None):
 
 
 @frappe.whitelist()
-def list_my_circles(actor_person_id: str | None = None):
-    actor = _actor(actor_person_id)
+def list_my_circles():
+    actor = resolve_actor()
+    return _circles_for(actor)
+
+
+def _circles_for(actor: str) -> list[dict]:
     rows = frappe.get_all(
         "Circle Membership", filters={"person": actor}, fields=["circle"]
     )
@@ -139,8 +132,8 @@ def list_my_circles(actor_person_id: str | None = None):
 
 
 @frappe.whitelist()
-def list_circle_members(circle_id: str, actor_person_id: str | None = None):
-    actor = _actor(actor_person_id)
+def list_circle_members(circle_id: str):
+    actor = resolve_actor()
     if not frappe.db.exists(
         "Circle Membership", {"circle": circle_id, "person": actor}
     ):
@@ -157,8 +150,12 @@ def list_circle_members(circle_id: str, actor_person_id: str | None = None):
 
 
 @frappe.whitelist()
-def list_people_i_care_for(actor_person_id: str | None = None):
-    actor = _actor(actor_person_id)
+def list_people_i_care_for():
+    actor = resolve_actor()
+    return _care_for(actor)
+
+
+def _care_for(actor: str) -> list[dict]:
     return [
         {
             "person_id": row["subject_person"],
@@ -169,11 +166,9 @@ def list_people_i_care_for(actor_person_id: str | None = None):
 
 
 @frappe.whitelist()
-def get_access_to_person(
-    subject_person_id: str, actor_person_id: str | None = None
-):
-    """Return only the resolved actor's effective actions for a discoverable Person."""
-    actor = _actor(actor_person_id)
+def get_access_to_person(subject_person_id: str):
+    """Return only the trusted actor's effective actions for a discoverable Person."""
+    actor = resolve_actor()
     if not _can_discover_person(actor, subject_person_id):
         _not_found("Person")
     access = {}
@@ -193,10 +188,25 @@ def get_access_to_person(
 
 
 @frappe.whitelist()
-def get_care_dashboard(actor_person_id: str | None = None):
-    actor = _actor(actor_person_id)
+def get_care_dashboard():
+    principals = resolve_principals()
+    actor = principals.human_actor
     return {
         "actor_person_id": actor,
-        "circles": list_my_circles(actor),
-        "caring_for": list_people_i_care_for(actor),
+        "circles": _circles_for(actor),
+        "caring_for": _care_for(actor),
+    }
+
+
+@frappe.whitelist()
+def whoami():
+    """Return the trusted actor and BOTH principals (dual-principal audit context).
+
+    Exposes no consent or relationship data. Used to prove session -> User -> Person
+    binding end to end without revealing anything a caller did not already have.
+    """
+    principals = resolve_principals()
+    return {
+        "actor_person_id": principals.human_actor,
+        "principals": principals.audit(),
     }

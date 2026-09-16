@@ -6,7 +6,7 @@
 > and commit the docs **with** the implementation change. Git documentation is the
 > architecture source of truth. (See `ROADMAP.md` §Change Rule.)
 
-**Status date:** 2026-09-15 · **Scope:** describes what EXISTS today plus clearly
+**Status date:** 2026-09-16 · **Scope:** describes what EXISTS today plus clearly
 labelled `[PLANNED]` / `[CONTRACT-ONLY]` items. No aspirational fiction.
 
 ## 1. What Episteck Home is
@@ -24,6 +24,7 @@ data access. Authorization is explicit and consent-driven.
 | **Episteck company ERP** — `erp.episteck.com` | Ashburn VPS | Company-internal ERP. **Separate** from Home. Not part of this product. |
 | **Domain services** | Nuremberg node | Independent specialized services (Nutrition, Mealie, future FHIR/Device Gateway/Mind/Knowledge) |
 | **Agents** | Nuremberg node | Two independent Hermes instances: `infra-agent` (privileged ops) and `home-agent` (unprivileged, user-facing) |
+| **Home BFF** — confidential OAuth client + session boundary | **Nuremberg node (EU)** | Holds the client secret and user tokens server-side; browser gets an opaque cookie. Mints short-lived delegations. `[G1.6]` |
 
 Nodes are separate (US Ashburn / EU Nuremberg). Cross-node calls use **Tailscale**,
 never public unauthenticated endpoints and **never cross-region DB connections**.
@@ -35,6 +36,7 @@ flowchart TB
   user([User / tablet / voice / mobile])
 
   subgraph NBG["Nuremberg node (EU)"]
+    BFF["Home BFF :9933 (confidential OAuth client)<br/>opaque Secure+HttpOnly cookie<br/>[G1.6]"]
     HA["home-agent (Hermes, unprivileged)"]
     IA["infra-agent (Hermes, privileged)"]
     HMCP["Home MCP :9932 (loopback)<br/>[LIVE]"]
@@ -54,15 +56,18 @@ flowchart TB
   FDC["USDA FoodData Central"]:::ext
   OFF["Open Food Facts"]:::ext
 
+  user -- login (OAuth code + S256 PKCE) --> BFF
+  BFF -- confidential OAuth --> HOME
   user --> HA
+  BFF -- "short-lived delegation<br/>(opaque session id, no Person id)" --> HA
   HA -- MCP --> HMCP
   HA -- MCP --> NMCP
-  HMCP -- "actor-aware Home business API<br/>(Tailscale + machine token)" --> HOME
+  HMCP -- "machine token + delegation<br/>(actor resolved server-side)" --> HOME
   NMCP --> NAPI
   NAPI -- adapter/token --> MEAL
   NAPI -- provider chain --> FDC
   NAPI -- provider chain --> OFF
-  NAPI -- "check_access before person data<br/>(Tailscale + machine token)" --> HOME
+  NAPI -- "resolves actor INDEPENDENTLY, then<br/>check_access (machine token + delegation)" --> HOME
   IA -- admin --> NUT
   IA -- admin --> MEAL
   NUT --> BKP
@@ -71,20 +76,39 @@ flowchart TB
   classDef ext fill:#eee,stroke:#999,stroke-dasharray:3 3;
 ```
 
-### 3.1 Home business API and actor boundary
+### 3.1 Home business API and actor boundary `[G1.6 — trusted actor binding]`
 
-The Home Core API enforces actor context inside the Frappe application, not only in
-MCP. A linked human User may act only as its linked Person. An unlinked machine User
-must be explicitly allowlisted and must supply an actor; it has no DocType mutation
-permissions. `get_person` checks discoverability from self, visible circle/care
-context, or effective consent **before** loading the Person. Circle rosters require
-actor membership, care queries are filtered to the actor, and effective-access
-queries can inspect only that actor's access.
+**`actor_person_id` is never an input.** It is always a server-side derivation of
+validated authentication context:
 
-Explicit actor ids are a **synthetic G1.5 bridge**, not authentication. Before any
-real data or G2, an authenticated user/session must be authoritatively bound to its
-allowed Person identity; a future Home Agent may not establish identity by merely
-supplying `actor_person_id`.
+```
+validated authentication -> Frappe User -> Person.linked_user -> actor
+```
+
+Neither `actor_person_id` nor `User.name` is ever a caller assertion. No Home business
+method, MCP tool, or Nutrition route accepts an actor parameter, so actor substitution
+is **unrepresentable** rather than merely rejected. `subject_person_id` remains a
+parameter — the person legitimately asks about someone else — and is still gated by
+`can_access`.
+
+`get_person` checks discoverability from self, visible circle/care context, or
+effective consent **before** loading the Person. Circle rosters require actor
+membership, care queries are filtered to the actor, and effective-access queries can
+inspect only that actor's access.
+
+**Dual principal.** Every delegated sensitive request carries two independent
+principals: `machine_caller` (proven by the service API key) and `human_actor`
+(resolved from the delegated session). A service credential proves only "this service
+may call this interface"; it never means "this service is Person X". Both identities
+are retained in audit context. A machine credential alone yields `PermissionError`.
+
+**Delegated context, not a trusted header.** A short-lived, single-audience,
+replay-resistant token carries an **opaque session id** and never a Person id. A plain
+`X-Actor-ID` header is forbidden. Frappe `auth_hooks` verifies it and maps the session
+to a User via a `Home Delegated Session` record, so logout and revocation deny the very
+next call. `Person.linked_user` is unique; ambiguity fails closed.
+
+See `adr/0009-trusted-actor-binding.md`.
 
 The Nuremberg Home MCP is a thin business adapter only. It owns no identity, consent,
 or family data and exposes no consent mutation. It canonicalizes agent-supplied
@@ -115,13 +139,17 @@ Control Plane.
    `adr/0007-knowledge-architecture.md`
 8. **Consent is centralized + fail-closed** (`can_access`). →
    `adr/0008-consent-fail-closed.md`
+9. **Trusted actor binding** — actor is derived from an authenticated session, never
+   supplied; confidential BFF on the EU node; dual principal; native OIDC deferred
+   because Frappe cannot require PKCE. → `adr/0009-trusted-actor-binding.md`
 
 ## 5. Cross-cutting rules
 
 - **Authorization before retrieval.** No sensitive data is fetched before
   `can_access` allows it. Membership/care relationship alone never authorizes.
-- **Actor binding before G2.** Explicit synthetic actor ids are not valid identity
-  proof for real data.
+- **Actor identity is derived, never asserted.** `[G1.6]` No caller — user, LLM, tool
+  argument, client JSON, or header — may supply an actor. A machine credential is a
+  service identity and never a human one.
 - **Provenance everywhere.** Nutrition facts, targets, intake, and Knowledge claims
   all carry a source. AI output is a proposal/hypothesis until user-confirmed.
 - **Secrets never in Git, never to home-agent, never in MCP output or logs.**

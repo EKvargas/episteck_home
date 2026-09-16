@@ -1,0 +1,53 @@
+{
+ "doctype": "DocType",
+ "name": "Home Delegated Session",
+ "module": "Episteck Home",
+ "autoname": "hash",
+ "naming_rule": "Hash",
+ "engine": "InnoDB",
+ "description": "Server-side human session created by the Home BFF. The opaque name is the session id carried by delegation tokens; revoking a row denies the next call.",
+ "fields": [
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "label": "User",
+   "options": "User",
+   "reqd": 1,
+   "description": "authenticated Frappe User this session belongs to"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Active\nRevoked",
+   "default": "Active",
+   "reqd": 1
+  },
+  {
+   "fieldname": "expires_at",
+   "fieldtype": "Datetime",
+   "label": "Expires At",
+   "reqd": 1
+  },
+  {
+   "fieldname": "client",
+   "fieldtype": "Data",
+   "label": "Client",
+   "description": "which Home client established this session (bff-web, bff-tablet)"
+  },
+  {
+   "fieldname": "revoked_at",
+   "fieldtype": "Datetime",
+   "label": "Revoked At"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  }
+ ]
+}

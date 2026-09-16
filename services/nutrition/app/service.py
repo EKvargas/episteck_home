@@ -29,12 +29,15 @@ from .store.repository import NutritionRepository
 
 
 class AccessAuthorizer(Protocol):
+    def resolve_actor(self, delegation: str | None) -> str | None: ...
+
     def check_access(
         self,
         actor_person_id: str,
         subject_person_id: str,
         domain: str,
         action: str,
+        delegation: str | None = None,
     ): ...
 
 
@@ -52,24 +55,38 @@ class NutritionService:
         self.mealie = mealie
         self.authorizer = authorizer
 
+    def resolve_actor(self, delegation: str | None) -> str:
+        """Resolve the trusted actor INDEPENDENTLY. Never accepts an asserted actor."""
+        actor = self.authorizer.resolve_actor(delegation)
+        if not actor:
+            raise PermissionError("no authenticated human session (fail closed)")
+        return actor
+
     def _require_access(
-        self, actor_person_id: str, subject_person_id: str, action: str
-    ) -> None:
+        self, delegation: str | None, subject_person_id: str, action: str
+    ) -> str:
+        """Resolve the actor from the session, then authorize. Returns the actor.
+
+        The actor is NEVER taken from a caller parameter: Nutrition asks Home who the
+        human is, so no upstream component can assert an identity to this service.
+        """
+        actor_person_id = self.resolve_actor(delegation)
         decision = self.authorizer.check_access(
-            actor_person_id, subject_person_id, "NUTRITION", action
+            actor_person_id, subject_person_id, "NUTRITION", action, delegation
         )
         if not decision.allow:
             raise PermissionError(decision.reason)
+        return actor_person_id
 
     # --- profile ---
-    def get_profile(self, actor_person_id: str, subject_person_id: str):
-        self._require_access(actor_person_id, subject_person_id, "VIEW")
+    def get_profile(self, delegation: str | None, subject_person_id: str):
+        self._require_access(delegation, subject_person_id, "VIEW")
         return self.repo.get_profile(subject_person_id)
 
     def upsert_profile(
-        self, actor_person_id: str, subject_person_id: str, profile: dict
+        self, delegation: str | None, subject_person_id: str, profile: dict
     ):
-        self._require_access(actor_person_id, subject_person_id, "UPDATE")
+        self._require_access(delegation, subject_person_id, "UPDATE")
         return self.repo.upsert_profile(subject_person_id, profile)
 
     # --- deterministic evaluation ---
@@ -102,13 +119,13 @@ class NutritionService:
         return {nutrient: str(value) for nutrient, value in totals.items()}
 
     def daily_intake(
-        self, actor_person_id: str, subject_person_id: str, date: str
+        self, delegation: str | None, subject_person_id: str, date: str
     ) -> dict:
-        self._require_access(actor_person_id, subject_person_id, "VIEW")
+        self._require_access(delegation, subject_person_id, "VIEW")
         return self._daily_intake(subject_person_id, date)
 
-    def daily_gap(self, actor_person_id: str, subject_person_id: str, date: str) -> dict:
-        self._require_access(actor_person_id, subject_person_id, "VIEW")
+    def daily_gap(self, delegation: str | None, subject_person_id: str, date: str) -> dict:
+        self._require_access(delegation, subject_person_id, "VIEW")
         profile = self.repo.get_profile(subject_person_id) or {}
         targets = {
             nutrient: Decimal(str(value))
@@ -138,13 +155,13 @@ class NutritionService:
     # --- planned vs actual ---
     def record_planned(
         self,
-        actor_person_id: str,
+        delegation: str | None,
         subject_person_id: str,
         date: str,
         foods: list[dict],
         ref: str | None = None,
     ):
-        self._require_access(actor_person_id, subject_person_id, "CREATE")
+        self._require_access(delegation, subject_person_id, "CREATE")
         return self.repo.add_intake(
             subject_person_id,
             {
@@ -177,24 +194,24 @@ class NutritionService:
 
     def record_actual(
         self,
-        actor_person_id: str,
+        delegation: str | None,
         subject_person_id: str,
         date: str,
         foods: list[dict],
         provenance: str = IntakeProvenance.USER_CONFIRMED.value,
         ref: str | None = None,
     ):
-        self._require_access(actor_person_id, subject_person_id, "CREATE")
+        self._require_access(delegation, subject_person_id, "CREATE")
         return self._record_actual(subject_person_id, date, foods, provenance, ref)
 
     def ate_as_planned(
         self,
-        actor_person_id: str,
+        delegation: str | None,
         subject_person_id: str,
         date: str,
         planned_id: str,
     ):
-        self._require_access(actor_person_id, subject_person_id, "VIEW")
+        self._require_access(delegation, subject_person_id, "VIEW")
         planned = [
             record
             for record in self.repo.list_intake(
@@ -204,7 +221,7 @@ class NutritionService:
         ]
         if not planned:
             raise KeyError("planned record not found")
-        self._require_access(actor_person_id, subject_person_id, "CREATE")
+        self._require_access(delegation, subject_person_id, "CREATE")
         record = planned[0]
         return self._record_actual(
             subject_person_id,
@@ -226,7 +243,7 @@ class NutritionService:
     # --- pregnancy profile with authoritative reference targets ---
     def create_pregnancy_profile(
         self,
-        actor_person_id: str,
+        delegation: str | None,
         subject_person_id: str,
         *,
         stage: str | None = None,
@@ -239,7 +256,7 @@ class NutritionService:
         # This operation persists through an upsert and can replace an existing
         # profile, so UPDATE is the minimum safe action even when the first call
         # happens to create the row.
-        self._require_access(actor_person_id, subject_person_id, "UPDATE")
+        self._require_access(delegation, subject_person_id, "UPDATE")
         profile = {
             "context": "PREGNANCY",
             "pregnancy_stage": stage,
@@ -258,9 +275,9 @@ class NutritionService:
         return self.repo.upsert_profile(subject_person_id, profile)
 
     def daily_gap_v2(
-        self, actor_person_id: str, subject_person_id: str, date: str
+        self, delegation: str | None, subject_person_id: str, date: str
     ) -> dict:
-        self._require_access(actor_person_id, subject_person_id, "VIEW")
+        self._require_access(delegation, subject_person_id, "VIEW")
         profile = self.repo.get_profile(subject_person_id) or {}
         targets = {
             nutrient: Decimal(str(value))
@@ -306,11 +323,11 @@ class NutritionService:
     # --- menu planning (deterministic evaluation; not medical optimization) ---
     def plan_menu(
         self,
-        actor_person_id: str,
+        delegation: str | None,
         subject_person_id: str,
         candidate_meals: list[dict],
     ) -> dict:
-        self._require_access(actor_person_id, subject_person_id, "VIEW")
+        self._require_access(delegation, subject_person_id, "VIEW")
         profile = self.repo.get_profile(subject_person_id) or {}
         targets = {
             nutrient: Decimal(str(value))
@@ -336,10 +353,10 @@ class NutritionService:
 
     def get_meal_plan(
         self,
-        actor_person_id: str,
+        delegation: str | None,
         subject_person_id: str,
         start_date: str,
         end_date: str,
     ) -> list:
-        self._require_access(actor_person_id, subject_person_id, "VIEW")
+        self._require_access(delegation, subject_person_id, "VIEW")
         return self.mealie.get_meal_plan(start_date, end_date) if self.mealie else []

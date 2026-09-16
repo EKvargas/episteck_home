@@ -23,7 +23,8 @@
    "fieldtype": "Link",
    "label": "Linked User",
    "options": "User",
-   "description": "OPTIONAL - Person != User; may exist without login"
+   "description": "OPTIONAL - Person != User; may exist without login. UNIQUE: one User maps to at most one Person (G1.6 actor binding integrity).",
+   "unique": 1
   },
   {
    "fieldname": "notes",

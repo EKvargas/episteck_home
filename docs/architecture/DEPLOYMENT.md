@@ -15,11 +15,14 @@
 | Nutrition API | svc-nutrition (1005) | 127.0.0.1:9930 | FastAPI |
 | Nutrition MCP | svc-nutrition (1005) | 127.0.0.1:9931 | FastMCP, home-agent connects |
 | Home MCP | svc-home-mcp (1006) | 127.0.0.1:9932 | thin business adapter; no Home data store |
+| Home BFF `[G1.6]` | svc-home-bff (uid 1007) | 127.0.0.1:9933 + public 443 via nginx | confidential OAuth client + session boundary; holds client secret and user tokens server-side. FastAPI/uvicorn, rootless Quadlet. Runbook: `deploy/home-bff/README.md` |
 | infra-agent gateway | infra-agent (1002) | none public | system-scope systemd |
 | home-agent gateway | home-agent (1003) | none public | user-scope systemd |
 
-Nothing is exposed to the public Internet. Future public web goes via 80/443 reverse
-proxy `[PLANNED]`.
+Only the Home BFF is exposed publicly, on 80/443 via nginx at
+`bff.home.episteck.com` `[G1.6]` — a browser must reach the OAuth callback over HTTPS.
+Application ports stay on loopback; `/delegation` is denied at the proxy. Every other
+service remains unreachable from the Internet.
 
 ## Source & image flow
 - **Home product code:** `EKvargas/episteck_home` (canonical). Company code:
@@ -39,10 +42,41 @@ proxy `[PLANNED]`.
   API machine credential and resolve the Home hostname to the Tailscale address.
   There is no cross-region database connection and no authorization cache.
 
+## Human authentication `[G1.6]`
+
+The **Home BFF** on the Nuremberg EU node is the only OAuth client. It is
+**confidential**: the client secret never leaves the server and the authorization code
+never reaches a browser. It always sends S256 PKCE.
+
+Frappe v15.99.0 **cannot require PKCE** — a client that omits `code_challenge` is
+accepted (`oauth.py` `validate_code` falls through to `return True`), and `OAuth Client`
+has no `public_client` or `require_pkce` field. Creating a public client is therefore
+**forbidden**, and direct native/mobile OIDC stays deferred. Mobile ships against the
+BFF.
+
+The browser holds only an opaque `Secure + HttpOnly + SameSite` cookie. Per agent turn
+the BFF mints a short-lived, single-audience delegation carrying an **opaque session
+id and no Person id**.
+
+**Schema note:** the `Home Delegated Session` DocType and the unique index on
+`Person.linked_user` require a manual `bench --site home.episteck.com migrate` after
+merge. `home.episteck.com` has **no** post-deploy hook (only `imox` does).
+
+Required site config keys: `home_delegation_secret`, `home_delegation_issuer`.
+`home_delegation_secret` must match `HOME_DELEGATION_SECRET` in the BFF's
+`EnvironmentFile` byte for byte, or every delegation fails closed.
+
+**BFF session state:** `/srv/episteck/services/home-bff/data/bff.sqlite`, owner
+`svc-home-bff`, dir `700` / file `600`. Holds OAuth tokens and PKCE verifiers, so it is
+treated as a secret and **excluded from backup** (all contents are re-obtainable by
+logging in again). Transactions expire in 10 min, sessions in 12 h, purged on `/login`.
+
 ## Machine credentials
 
 Home MCP and Nutrition authorization use separate Frappe API Users with no System
-Manager role and no Consent Grant or other DocType mutation permission. Their API
+Manager role and no Consent Grant or other DocType mutation permission. `[G1.6]` A
+machine credential proves only that the service may call the interface; it is **never**
+a human actor and alone cannot reach person data. Their API
 secrets live only in owner-readable Nuremberg service files. `home-agent` receives
 only loopback MCP URLs and cannot read the secrets. The Frappe site allowlists the
 machine usernames for actor-aware business methods; this allowlist does not grant
