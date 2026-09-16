@@ -210,3 +210,27 @@ def whoami():
         "actor_person_id": principals.human_actor,
         "principals": principals.audit(),
     }
+
+
+@frappe.whitelist()
+def delegation_diagnostics():
+    """Report WHY the delegation hook did or did not bind, as static codes.
+
+    Returns no identity, no token, no session id and no Person id — only the stage
+    the hook reached and whether a delegated context exists. This exists because the
+    hook fails closed and silently by design, which once made a live defect (a
+    timezone-skewed clock rejecting every token) invisible from outside.
+
+    Safe to expose: an authenticated caller learns only the fate of the delegation it
+    just sent, which it could already infer from the 403 it would otherwise receive.
+    """
+    return {
+        "stage": getattr(frappe.local, "episteck_delegation_stage", None),
+        "denial_category": getattr(frappe.local, "episteck_denial_category", None),
+        "delegated_context_present": bool(
+            getattr(frappe.local, "episteck_delegated_user", None)
+        ),
+        "machine_caller_present": bool(
+            getattr(frappe.local, "episteck_machine_caller", None)
+        ),
+    }
