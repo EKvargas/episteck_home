@@ -29,11 +29,10 @@ from .store.repository import NutritionRepository
 
 
 class AccessAuthorizer(Protocol):
-    def resolve_actor(self, delegation: str | None) -> str | None: ...
+    """One delegated Home call per authorization. See ``_require_access``."""
 
     def check_access(
         self,
-        actor_person_id: str,
         subject_person_id: str,
         domain: str,
         action: str,
@@ -55,28 +54,36 @@ class NutritionService:
         self.mealie = mealie
         self.authorizer = authorizer
 
-    def resolve_actor(self, delegation: str | None) -> str:
-        """Resolve the trusted actor INDEPENDENTLY. Never accepts an asserted actor."""
-        actor = self.authorizer.resolve_actor(delegation)
-        if not actor:
-            raise PermissionError("no authenticated human session (fail closed)")
-        return actor
-
     def _require_access(
         self, delegation: str | None, subject_person_id: str, action: str
-    ) -> str:
-        """Resolve the actor from the session, then authorize. Returns the actor.
+    ) -> None:
+        """Authorize this operation with EXACTLY ONE delegated Home request.
 
-        The actor is NEVER taken from a caller parameter: Nutrition asks Home who the
-        human is, so no upstream component can assert an identity to this service.
+        WHY ONE CALL
+        ------------
+        This previously resolved the actor via ``whoami`` and then called
+        ``check_access`` with the SAME delegation. Delegations are single-use
+        (``identity/replay.py``), so the second call is replay-denied and every
+        person-sensitive operation fails. Verified live against production:
+
+            whoami       -> 200 (actor resolved)
+            check_access -> 403 (replay detected)
+
+        The actor step was also redundant. Home's ``check_access`` derives the human
+        actor server-side from machine credential + delegation, it never accepted an
+        actor argument, and all twelve call sites here discarded the resolved value.
+
+        The trusted-actor invariant is unchanged and arguably stronger: Nutrition
+        still supplies only its own machine credential and the opaque delegation, and
+        there is now no actor value in this service to assert, forward, or confuse.
         """
-        actor_person_id = self.resolve_actor(delegation)
         decision = self.authorizer.check_access(
-            actor_person_id, subject_person_id, "NUTRITION", action, delegation
+            subject_person_id, "NUTRITION", action, delegation
         )
+        # Literal allow only: anything else — deny, malformed, indeterminate,
+        # unreachable — is a refusal.
         if not decision.allow:
             raise PermissionError(decision.reason)
-        return actor_person_id
 
     # --- profile ---
     def get_profile(self, delegation: str | None, subject_person_id: str):

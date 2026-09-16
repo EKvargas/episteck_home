@@ -1,18 +1,27 @@
 """Fail-closed Home Control Plane client owned by svc-nutrition.
 
-G1.6 INDEPENDENT ACTOR RESOLUTION
----------------------------------
+G1.6 INDEPENDENT AUTHORIZATION
+-----------------------------
 Nutrition NEVER accepts an ``actor_person_id`` from the Home Agent, the Home MCP, or
-any client input. It receives only the delegated human session and resolves the actor
-ITSELF against the Home Control Plane, using its OWN machine credential.
+any client input. It sends only its OWN machine credential and the opaque delegated
+session, and Home decides both who the human is and whether they may proceed.
 
 This is what prevents a confused deputy: no upstream component can say "trust me, the
-actor is PSN-00002". Two services resolving the same delegation independently must
-arrive at the same actor, and neither can vouch for a human to the other.
+actor is PSN-00002". There is no actor value in this service at all, so none can be
+asserted, forwarded, or confused.
 
-    delegated session -> resolve_actor()  (Home decides who this is)
-                      -> check_access(actor, subject, NUTRITION, action)
+    delegated session -> check_access(subject, NUTRITION, action)
+                      -> Home derives the actor server-side
                       -> repository access only after literal ALLOW
+
+ONE CALL PER OPERATION
+----------------------
+Exactly one delegated Home request per person-sensitive operation. Delegations are
+single-use (``identity/replay.py``), so a second call on the same token is
+replay-denied. An earlier ``resolve_actor()`` step made this client issue two requests
+per operation; the first succeeded and the second was refused, breaking every
+person-sensitive route. Its result was discarded by every caller, so removing it costs
+nothing and restores the flow.
 """
 from __future__ import annotations
 
@@ -74,35 +83,19 @@ class HomeControlPlaneClient:
             timeout_seconds=float(os.environ.get("HOME_API_TIMEOUT_SECONDS", "3")),
         )
 
-    def resolve_actor(self, delegation: str | None) -> str | None:
-        """Resolve the trusted actor for a delegated session. None on any doubt.
-
-        Nutrition asks Home who the human is; it never accepts an asserted answer.
-        """
-        if not delegation:
-            return None
-        try:
-            response = self._client.get(
-                "/api/method/episteck_home.api.whoami",
-                headers={DELEGATION_HEADER: delegation},
-            )
-            response.raise_for_status()
-            actor = response.json()["message"]["actor_person_id"]
-            if not isinstance(actor, str) or not actor.strip():
-                return None
-            return actor
-        except (httpx.HTTPError, KeyError, TypeError, ValueError):
-            return None
-
     def check_access(
         self,
-        actor_person_id: str,
         subject_person_id: str,
         domain: str,
         action: str,
         delegation: str | None = None,
     ) -> AccessDecision:
-        if not all((actor_person_id, subject_person_id, domain, action)):
+        """The ONLY delegated Home request an operation may make.
+
+        Takes no actor: Home derives the human server-side from this service's machine
+        credential plus the delegation, and has never accepted an actor argument.
+        """
+        if not all((subject_person_id, domain, action)):
             return _INDETERMINATE
         if not delegation:
             return _NO_SESSION
