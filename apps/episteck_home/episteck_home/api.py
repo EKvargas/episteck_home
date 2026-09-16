@@ -212,18 +212,33 @@ def whoami():
     }
 
 
+#: Only these machine callers may read delegation diagnostics. The payload is
+#: already identity-free, but this is operational introspection added for one
+#: investigation — it should not be permanent surface for every authenticated user.
+DIAGNOSTIC_CALLERS = frozenset(
+    {
+        "home-mcp-service@episteck.invalid",
+        "nutrition-auth-service@episteck.invalid",
+    }
+)
+
+
 @frappe.whitelist()
 def delegation_diagnostics():
     """Report WHY the delegation hook did or did not bind, as static codes.
 
     Returns no identity, no token, no session id and no Person id — only the stage
     the hook reached and whether a delegated context exists. This exists because the
-    hook fails closed and silently by design, which once made a live defect (a
-    timezone-skewed clock rejecting every token) invisible from outside.
+    hook fails closed and silently by design, which twice made a live defect
+    invisible from outside: a timezone-skewed clock rejecting every token, and an
+    unenforced replay claim accepting every repeat.
 
-    Safe to expose: an authenticated caller learns only the fate of the delegation it
-    just sent, which it could already infer from the 403 it would otherwise receive.
+    Restricted to the known service callers. A human session has no use for it, and
+    keeping the surface narrow costs nothing.
     """
+    caller = getattr(frappe.local, "episteck_machine_caller", None) or frappe.session.user
+    if caller not in DIAGNOSTIC_CALLERS:
+        frappe.throw("not permitted", frappe.PermissionError)
     return {
         "stage": getattr(frappe.local, "episteck_delegation_stage", None),
         "denial_category": getattr(frappe.local, "episteck_denial_category", None),

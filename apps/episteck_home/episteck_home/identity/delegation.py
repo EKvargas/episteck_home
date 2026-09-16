@@ -28,7 +28,9 @@ HARD INVARIANTS (must always hold):
   - Expired (now >= exp) -> DENY.
   - Not yet valid (now < iat, beyond clock skew) -> DENY.
   - Missing/blank required claim -> DENY.
-  - Replayed token id -> DENY (single use, enforced by the caller's replay store).
+  - Replayed token id -> DENY **only if the caller passes a replay store**. This
+    module is a pure validator and holds no state of its own; see the note on
+    `seen_token_ids` below. Production single-use lives in `identity/replay.py`.
   - Malformed input of ANY kind -> DENY. Never raise into the request path.
   - A verified token yields a SESSION id, never a Person id.
 """
@@ -100,8 +102,18 @@ def verify(
 ) -> VerificationResult:
     """Verify a delegation token. Fail closed on every anomaly.
 
-    `seen_token_ids` is the caller's replay store. When supplied, a token id that has
-    already been used is rejected; the caller records the id only after a full pass.
+    ``seen_token_ids`` is a **test seam, not production replay protection.** It lets a
+    test express replay semantics against this pure function with an injected set.
+
+    It is NOT sufficient in production, and passing it would not make it so: a Python
+    set lives in one worker's memory, so with several gunicorn workers a replayed
+    token lands on a different worker and is accepted. Live validation confirmed this
+    exactly — the same ``jti`` succeeded twice.
+
+    **Production single-use is enforced by ``identity/replay.py``**, which makes one
+    atomic ``SET NX EX`` claim in the shared Redis cache, and by ``auth_hook``, which
+    calls it after this function has proven the token authentic. This module stays
+    pure and has no cache dependency, so it remains testable in isolation.
     """
     if not token or not secret or not expected_issuer or not expected_audience:
         return _deny("delegation unavailable (fail closed)")
