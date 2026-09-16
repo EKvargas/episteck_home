@@ -16,13 +16,19 @@ Episteck Home is a privacy-first personal/family operating system. A conversatio
 tasks and (later) Mind — through **approved tools and APIs**, never through broad
 data access. Authorization is explicit and consent-driven.
 
+Planned physical-goods capabilities follow the same pattern: **Smart Shopping** helps
+the family decide what to acquire and whether an offer is worth it; **Smart Possessions
+/ Inventory** tracks what the family actually owns and its lifecycle (wardrobe, baby
+goods, home/storage, use, maintenance, sell/donate/give-away/discard). They are sibling
+domains, not extensions of the Home Control Plane. `[PLANNED]`
+
 ## 2. Planes and nodes
 
 | Plane | Runs on | Role |
 | --- | --- | --- |
 | **Home Control Plane** — `episteck_home` Frappe app on **home.episteck.com** | Ashburn VPS | Canonical identity, family/care relationships, consent, coordination. `[LIVE]` |
 | **Episteck company ERP** — `erp.episteck.com` | Ashburn VPS | Company-internal ERP. **Separate** from Home. Not part of this product. |
-| **Domain services** | Nuremberg node | Independent specialized services (Nutrition, Mealie, future FHIR/Device Gateway/Mind/Knowledge) |
+| **Domain services** | Nuremberg node | Independent specialized services (Nutrition, Mealie, future FHIR/Device Gateway/Mind/Knowledge/Shopping/Inventory) |
 | **Agents** | Nuremberg node | Two independent Hermes instances: `infra-agent` (privileged ops) and `home-agent` (unprivileged, user-facing) |
 | **Home BFF** — confidential OAuth client + session boundary | **Nuremberg node (EU)** | Holds the client secret and user tokens server-side; browser gets an opaque cookie. Mints short-lived delegations. `[G1.6]` |
 
@@ -117,6 +123,45 @@ values. A Home Agent deny/invalid/indeterminate result is terminal: it may not r
 with altered parameters or call the downstream domain tool. Frappe remains the
 Control Plane.
 
+### 3.2 Smart Shopping + Smart Possessions `[PLANNED]`
+
+Two sibling bounded contexts handle physical-goods lifecycle without turning Frappe
+into a universal inventory database:
+
+- **`svc-shopping`** — ShoppingList/Need, WatchRule, AlertRule, normalized marketplace
+  listings/snapshots, price observations, deterministic explainable DealEvaluation,
+  PurchasePolicy and Purchase. Provider/mail/notification integrations are adapters.
+- **`svc-inventory`** — OwnedItem, collections/locations, condition, usage,
+  maintenance, disposition, InventoryGap, wardrobe/outfits and baby-item lifecycle.
+
+They communicate through explicit contracts/events (e.g. `PurchaseCompleted`,
+`InventoryGapDetected`, `ItemOutgrown`) and do not share tables. Shopping answers
+"what should we acquire?"; Inventory answers "what do we own and what should happen to
+it?".
+
+The planned provider architecture is independent of Kleinanzeigen/Gmail. The first MVP
+adapter is intentionally `Kleinanzeigen Saved Search -> email notification -> mail
+adapter -> MarketplaceProvider -> normalized listing`; no direct scraping dependency is
+required.
+
+Wardrobe/style recommendations combine Inventory with contextual inputs such as Calendar,
+Weather, personal preferences and fashion knowledge without copying those domains'
+canonical data. The default behavior is **use what you own**; Shopping is proposed only
+for a real functional/style gap or explicit user goal.
+
+A hard product constraint is the **friction budget**: V1 must work without special
+hardware using photo-first capture, natural language, grouped/bulk items and one-tap
+usage/disposition feedback. QR/NFC (prefer containers/zones before every item), smart
+wardrobe/laundry/RFID and Home Assistant integrations are later accelerators, not V1
+requirements.
+
+Planned consent domains are `SHOPPING` and `INVENTORY`, but they are not live policy
+values until those services and their pre-retrieval authorization paths are implemented
+and tested.
+
+See `adr/0010-smart-shopping-and-possessions.md` and
+`proposals/SMART_SHOPPING_AND_POSSESSIONS.md`.
+
 ## 4. Key decisions (see ADRs)
 
 1. **home.episteck + episteck_home Frappe = the Home Control Plane** for Person,
@@ -142,6 +187,10 @@ Control Plane.
 9. **Trusted actor binding** — actor is derived from an authenticated session, never
    supplied; confidential BFF on the EU node; dual principal; native OIDC deferred
    because Frappe cannot require PKCE. → `adr/0009-trusted-actor-binding.md`
+10. **Smart Shopping + Smart Possessions are sibling domain services** — Shopping owns
+    intent/deals/purchases; Inventory owns actual possessions/lifecycle; provider and
+    hardware integrations remain adapters; low friction is a product invariant. →
+    `adr/0010-smart-shopping-and-possessions.md`
 
 ## 5. Cross-cutting rules
 
@@ -150,11 +199,14 @@ Control Plane.
 - **Actor identity is derived, never asserted.** `[G1.6]` No caller — user, LLM, tool
   argument, client JSON, or header — may supply an actor. A machine credential is a
   service identity and never a human one.
-- **Provenance everywhere.** Nutrition facts, targets, intake, and Knowledge claims
-  all carry a source. AI output is a proposal/hypothesis until user-confirmed.
+- **Provenance everywhere.** Nutrition facts, targets, intake, Knowledge claims and
+  future Shopping/Inventory observations/inferences carry source/provenance. AI output
+  is a proposal/hypothesis until user-confirmed when confirmation matters.
 - **Secrets never in Git, never to home-agent, never in MCP output or logs.**
-- **Deterministic domain math.** LLMs explain; they never fabricate nutrient
-  numbers or authoritative values.
+- **Deterministic domain math.** LLMs explain; they never fabricate nutrient numbers,
+  prices, safety facts, deal arithmetic or other authoritative values.
+- **Low-friction by design.** Future household inventory features must tolerate
+  incomplete coverage and minimize manual upkeep; hardware automation is optional.
 
 See `DATA_OWNERSHIP.md`, `SECURITY_AND_CONSENT.md`, `KNOWLEDGE.md`, `AGENTS.md`,
 `DEPLOYMENT.md`, `ROADMAP.md`, `STATUS.md`, and `G1_5_VALIDATION.md`.
