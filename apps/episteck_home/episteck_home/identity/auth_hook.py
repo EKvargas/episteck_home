@@ -39,6 +39,7 @@ import time
 
 import frappe
 
+from . import replay
 from .delegation import verify
 
 DELEGATION_HEADER = "X-Episteck-Delegation"
@@ -61,6 +62,9 @@ STAGE_SESSION_MISSING = "delegation_hook.session_missing"
 STAGE_SESSION_FOUND = "delegation_hook.session_found"
 STAGE_BOUND = "delegation_hook.bound"
 STAGE_EXCEPTION = "delegation_hook.exception"
+STAGE_REPLAY_CLAIMED = "delegation_hook.replay_claimed"
+STAGE_REPLAY_DETECTED = "delegation_hook.replay_detected"
+STAGE_REPLAY_UNAVAILABLE = "delegation_hook.replay_store_unavailable"
 
 
 def _stage(code: str) -> None:
@@ -127,20 +131,50 @@ def _establish() -> None:
             pass
         return
 
+    now = _now()
     result = verify(
         token,
         secret=secret,
         expected_issuer=_config("home_delegation_issuer") or "episteck-home-bff",
         expected_audience=CONTROL_PLANE_AUDIENCE,
-        now=_now(),
+        now=now,
     )
     if not result.valid:
         # result.reason is a fixed phrase from delegation.py, never request-derived.
+        # Note this branch does NOT claim the jti: a malformed, forged, wrong-audience
+        # or already-expired token must not be able to burn a legitimate token id.
         _stage(f"{STAGE_VERIFY_INVALID}:{result.reason}")
         return
     _stage(STAGE_VERIFY_VALID)
 
-    session_user = _user_for_session(result.context.session_id)
+    # Single-use, enforced across ALL workers. Claimed here — after the token is
+    # proven authentic, before any identity is resolved — so a cryptographically
+    # valid delegation is spent even if the session or user check later fails. A
+    # caller whose request legitimately fails can mint a fresh delegation; it must
+    # not retry with the old one.
+    context = result.context
+    try:
+        first_use = replay.claim(
+            context.issuer,
+            context.audience,
+            context.token_id,
+            ttl_seconds=replay.ttl_for(context.expires_at, now),
+        )
+    except replay.ReplayStoreUnavailable:
+        # Replay-store availability is part of the trust boundary: an outage denies
+        # delegated access rather than silently disabling single-use.
+        _stage(STAGE_REPLAY_UNAVAILABLE)
+        try:
+            frappe.log_error(STAGE_REPLAY_UNAVAILABLE, LOG_TITLE)
+        except Exception:
+            pass
+        return
+    if not first_use:
+        _stage(STAGE_REPLAY_DETECTED)
+        return
+    _stage(STAGE_REPLAY_CLAIMED)
+
+    session_user = _user_for_session(context.session_id)
     if not session_user:
         _stage(STAGE_SESSION_MISSING)
         return

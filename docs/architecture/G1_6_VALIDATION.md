@@ -153,12 +153,31 @@ response body, or log.
 | T-15 | Subject substitution | policy-gated | unchanged G1.5 behaviour |
 | T-16 | Domain/action substitution | policy-gated | exact match; no cross-domain implication |
 | T-17 | Stale authz after revocation | DENY | no caching anywhere |
-| T-18 | Replayed delegation token id | DENY | `jti` replay store |
+| T-18 | Replayed delegation token id | DENY | atomic `SET NX EX` claim in shared Redis (`identity/replay.py`); **live-verified after PR #7** |
 | T-19 | Overlong delegation lifetime | DENY | max-lifetime bound caps the replay window |
 | T-20 | Plain `X-Actor-ID` header (forbidden, A7) | inert | `"PSN-00001"` as a token fails verification |
 | T-21 | Anonymous request + delegation header | inert | no machine caller ⇒ no bind |
 | T-22 | Token/credential leak to LLM | none | no tool exposes a token; schema-asserted |
 | T-23 | Hook raises into request path | never | wrapped; DB failure leaves context unset |
+
+### Correction: T-18 was unit-true and production-false (PR #7)
+
+The original T-18 evidence was `verify()`'s `seen_token_ids` parameter. That parameter
+is a **test seam**: it lets a test express replay semantics against a pure function,
+but the production hook never passed one, so nothing enforced single use. Live
+validation presented the same `jti` twice and both calls succeeded.
+
+An in-process set could not have fixed it either — four gunicorn workers means four
+sets, so a replay lands on a different worker and is accepted.
+
+Production enforcement is now one atomic `SET key 1 NX EX ttl` against the shared
+Frappe Redis cache (`identity/replay.py`), claimed after the token is proven authentic
+and before any identity is resolved. Cache unavailable denies. Forged, expired and
+wrong-audience tokens never burn a legitimate token id.
+
+This is the same failure shape as the timezone defect: every component correct in
+isolation, the composition wrong. Both now have integration tests that fail when the
+fix is reverted.
 
 ### Live delegation matrix (production Python runtime, Ashburn)
 

@@ -35,6 +35,7 @@ SESSION_ID = "HDS-INTEGRATION"
 MACHINE = "home-mcp-service@example.invalid"
 HUMAN = "syn-lowpriv@example.invalid"
 PERSON = "PSN-00002"
+SITE_DB_NAME = "_test_site_db"
 
 # The skew that caused the live failure: a site two hours ahead of UTC.
 BERLIN_OFFSET_SECONDS = 7200
@@ -42,6 +43,41 @@ BERLIN_OFFSET_SECONDS = 7200
 
 class _PermissionError(Exception):
     pass
+
+
+class FakeCache:
+    """Models the Redis semantics the replay claim depends on.
+
+    ``SET key value NX EX ttl`` returns True when it creates the key and **nil**
+    (None) when NX finds it present. Getting that return contract right is the whole
+    point: a fake that returned True twice would let a broken implementation pass.
+    """
+
+    def __init__(self):
+        self.store: dict[str, tuple[bytes, int]] = {}
+        self.fail = False          # simulate an unreachable cache
+        self.weird_return = False  # simulate an unrecognised reply
+        self.clock = 0             # advanced manually to expire keys
+
+    def set(self, key, value, nx=False, ex=None):
+        if self.fail:
+            raise ConnectionError("redis unreachable")
+        if self.weird_return:
+            return "MAYBE"
+        self._expire()
+        if nx and key in self.store:
+            return None
+        self.store[key] = (value, self.clock + (ex or 0))
+        return True
+
+    def _expire(self):
+        for k, (_, exp) in list(self.store.items()):
+            if exp and exp <= self.clock:
+                del self.store[k]
+
+    def advance(self, seconds: int):
+        self.clock += seconds
+        self._expire()
 
 
 def _make_fake_frappe(*, site_offset: int = 0, session_user: str = MACHINE):
@@ -53,6 +89,9 @@ def _make_fake_frappe(*, site_offset: int = 0, session_user: str = MACHINE):
     fake.conf = {
         "home_delegation_secret": SECRET,
         "home_delegation_issuer": ISSUER,
+        # Redis is shared across every site on a bench, so replay keys are
+        # site-scoped by db_name.
+        "db_name": SITE_DB_NAME,
     }
     fake.request_headers = {}
     fake.logged = []
@@ -101,6 +140,8 @@ def _make_fake_frappe(*, site_offset: int = 0, session_user: str = MACHINE):
             return None
 
     fake.db = DB()
+    fake.cache_store = FakeCache()
+    fake.cache = lambda: fake.cache_store
 
     utils = types.ModuleType("frappe.utils")
     # now_datetime() is NAIVE site-local: this is exactly the trap.
@@ -124,6 +165,10 @@ def harness(monkeypatch):
         fake = _make_fake_frappe(site_offset=site_offset, session_user=session_user)
         monkeypatch.setitem(sys.modules, "frappe", fake)
         monkeypatch.setitem(sys.modules, "frappe.utils", fake.utils)
+        # Reload replay BEFORE auth_hook: each module binds `frappe` at import, so a
+        # stale binding would keep pointing at a previous test's double (or the real
+        # module) and silently bypass this harness.
+        importlib.reload(importlib.import_module("episteck_home.identity.replay"))
         hook = importlib.reload(
             importlib.import_module("episteck_home.identity.auth_hook")
         )

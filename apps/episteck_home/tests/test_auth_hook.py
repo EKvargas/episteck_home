@@ -80,6 +80,21 @@ def _make_fake_frappe():
         now_datetime=lambda: SimpleNamespace(timestamp=lambda: NOW),
         now=lambda: "2026-09-16 00:00:00",
     )
+    # The hook makes an atomic single-use claim in the shared cache. Without a cache
+    # the claim is indeterminate and the hook denies — correct behaviour, but it
+    # would mask what these tests are actually about. Replay itself is covered in
+    # test_replay_enforcement.py.
+    fake.conf["db_name"] = "_test_auth_hook_db"
+    claimed: set[str] = set()
+
+    class _Cache:
+        def set(self, key, value, nx=False, ex=None):
+            if nx and key in claimed:
+                return None
+            claimed.add(key)
+            return True
+
+    fake.cache = _Cache
     return fake
 
 
