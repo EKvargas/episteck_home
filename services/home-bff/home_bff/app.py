@@ -135,7 +135,11 @@ def create_app(
                 code_verifier=transaction.code_verifier,
             )
         except TokenExchangeError as exchange_error:
-            logger.warning("token exchange failed: %s", exchange_error)
+            # Log the FAILURE CLASS, never the message: an upstream error can echo
+            # request parameters, and this record is the one that persists.
+            logger.warning(
+                "token exchange failed (%s)", type(exchange_error).__name__
+            )
             raise HTTPException(400, "authorization could not be completed") from None
 
         # 6-9. The Control Plane resolves the User from the token and maps it to a
@@ -144,7 +148,11 @@ def create_app(
         try:
             home_session_id = client.open_home_session(tokens.access_token)
         except SessionOpenError as session_error:
-            logger.warning("home session refused: %s", session_error)
+            # Same rule: class only. The refusal reason lives upstream, where it is
+            # already recorded against an authenticated identity.
+            logger.warning(
+                "home session refused (%s)", type(session_error).__name__
+            )
             raise HTTPException(
                 403, "this account is not linked to a Home person"
             ) from None

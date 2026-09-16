@@ -91,12 +91,44 @@ needs no elevated credential to do so.
 | Knowledge + ContextBundle contracts | 12 | 12 |
 | Nutrition domain (deterministic calc) | 9 | 9 |
 | Home MCP (client + tool contract) | 8 | **19** |
-| **Home BFF (new)** | — | **71** |
+| **Home BFF (new)** | — | **117** |
 | Nutrition service + boundaries | 42 | **57** |
-| **Total** | **93** | **266** |
+| **Total** | **93** | **312** |
 
 All 93 original tests still pass. `policy/access.py` was **not modified**: same
 signature, same six invariants, same 11 pure policy tests.
+
+---
+
+## 3a. Pre-merge adversarial audit of the operational BFF
+
+Requested before merge, and kept as permanent tests (`tests/test_security_audit.py`,
+46 cases) so a later regression fails the build.
+
+| # | Property | Result |
+| --- | --- | --- |
+| 1 | `/delegation` unreachable without a valid session | **PASS** — denied with no cookie, forged cookie, empty cookie, post-logout, expired, server-side-deleted, and a guessed Home session id; `GET` is 405 |
+| 2 | Cross-site POST cannot mint a delegation | **PASS** — cookie is `SameSite=Lax` + `HttpOnly`, so a cross-site POST arrives with no cookie and is denied; all three form-submittable content types denied; nginx additionally returns 404 for `/delegation` |
+| 3 | Actor cannot be supplied via body/query/header | **PASS** — 5 body keys × 5 query keys × 4 headers all ignored; the minted delegation stays bound to the session's own Home session; OpenAPI declares no actor or credential parameter anywhere |
+| 4 | No token or secret in any response or normal log | **FOUND AND FIXED** — see below |
+| 5 | `/health` exposes no sensitive configuration | **PASS** — fixed two-key body, no host/port/path/client id, requires no session, creates no state, never calls upstream |
+
+### Finding: upstream error text reached the log (fixed)
+
+`/callback` logged `logger.warning("token exchange failed: %s", exchange_error)` and
+the equivalent on session refusal. The **response** correctly withheld upstream detail,
+but the **log line** interpolated the exception message — and an upstream OAuth error
+can echo request parameters, including the client secret. The log is the record that
+persists, so this was the more durable leak of the two.
+
+Both call sites now log the exception **class only**. All four `logger.warning` calls in
+the service are class-only or fixed strings, and the only f-string exception message in
+the package is a configuration key name. Two regression tests cover the happy path and
+both failure paths.
+
+Also verified: `access_log=False` on uvicorn, so `/callback?code=…` query strings are
+never written to an access log, and the PKCE verifier never appears in a redirect,
+response body, or log.
 
 ---
 
