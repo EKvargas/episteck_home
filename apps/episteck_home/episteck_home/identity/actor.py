@@ -56,6 +56,16 @@ def _throw(message: str) -> None:
     frappe.throw(message, frappe.PermissionError)
 
 
+def _mark_denial(category: str) -> None:
+    """Record why a denial happened, as a static category.
+
+    Pairs with ``frappe.local.episteck_delegation_stage`` from the auth hook: together
+    they say whether the hook bound a delegated user and, if it did, whether that user
+    mapped to exactly one Person. Never records an identity or a credential.
+    """
+    frappe.local.episteck_denial_category = category
+
+
 def resolve_principals() -> Principals:
     """Resolve both principals from authenticated context only. Fail closed.
 
@@ -77,6 +87,16 @@ def resolve_principals() -> Principals:
     if not person:
         # The credential authenticated, but it is not a human actor. This is the
         # branch that makes a stolen service credential useless for person data.
+        #
+        # Record WHICH of the two shapes this was, so a denial is diagnosable without
+        # reproducing it: either the hook never bound a delegated user (its own stage
+        # code says why), or it did and the User has no unique linked Person. Static
+        # categories only — no identity, no credential.
+        _mark_denial(
+            "actor.no_person_for_delegated_user"
+            if delegated_user
+            else "actor.no_delegated_user"
+        )
         _throw("no human actor bound to this session")
 
     return Principals(human_actor=person, machine_caller=machine_caller)

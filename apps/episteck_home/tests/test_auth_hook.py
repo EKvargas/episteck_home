@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+import time
 import types
 from types import SimpleNamespace
 
@@ -16,7 +17,10 @@ from episteck_home.identity.delegation import sign
 
 SECRET = "hook-secret"
 ISSUER = "episteck-home-bff"
-NOW = 1_700_000_000
+# The hook derives its clock from real epoch UTC (time.time()), never from the site's
+# naive local datetime — see auth_hook TIME IS UTC. So these tokens must be minted
+# against real time, not a frozen constant, or every one of them reads as expired.
+NOW = int(time.time())
 
 
 def _claims(**overrides):
