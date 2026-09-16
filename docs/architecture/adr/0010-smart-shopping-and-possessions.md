@@ -29,8 +29,10 @@ into the Home Control Plane would violate the existing no-universal-database dec
 
 Create two sibling bounded contexts, implemented later as independent domain services:
 
-1. **Smart Shopping** (`svc-shopping`) — intent to acquire, provider listings, deal and
-   price intelligence, watch/alert rules, purchase policies and purchases.
+1. **Smart Shopping** (`svc-shopping`) — the family's physical-product procurement
+   intelligence layer: intent to acquire, product/offer comparison, provider listings,
+   deal and price intelligence, grocery/retail basket planning, watch/alert rules,
+   purchase policies, approval-aware purchase execution and purchase history.
 2. **Smart Possessions / Inventory** (`svc-inventory`) — what is actually owned,
    locations, condition, usage, lifecycle, wardrobe/baby/home organization, disposition
    and inventory gaps.
@@ -54,9 +56,12 @@ ConsentGrant and CareJourney. It does not become the Shopping or Inventory datab
 - MarketplaceListing
 - ListingSnapshot
 - PriceObservation
+- ProductEvaluation / OfferEvaluation / ValueEvaluation
 - DealEvaluation
+- BasketPlan
 - PurchasePolicy
-- Purchase
+- PurchaseApprovalPolicy
+- Purchase / order-procurement history
 - NotificationIntent / deduplication state
 
 ### `svc-inventory` owns
@@ -94,8 +99,11 @@ These domains are architecture decisions only until implemented in the policy en
 
 ## Shopping provider boundary
 
-Shopping must not depend directly on Kleinanzeigen, Gmail, eBay, Amazon, Idealo or any
-other source. The domain consumes normalized provider events behind abstractions:
+Shopping must not depend directly on Kleinanzeigen, Gmail, eBay, Amazon, Idealo,
+supermarkets or any other source. The domain consumes normalized provider events behind
+replaceable abstractions.
+
+The classifieds path uses:
 
 - `InboundMessageSource` — obtains an inbound event (Gmail, IMAP, forwarding, webhook,
   etc.).
@@ -109,6 +117,78 @@ Kleinanzeigen provider adapter -> normalized listing -> Deal Engine`
 
 No direct scraping dependency is required. Missing provider fields remain `UNKNOWN`;
 the system does not fabricate condition, seller, distance, description or availability.
+
+For retail/grocery, a more general `CommerceProvider` capability boundary may expose
+only the capabilities a provider actually supports, such as product search, offers,
+price feeds, unit price, availability, delivery options, cart read/write, checkout,
+order status and substitutions. The Deal/Value engines consume normalized domain
+objects, never provider payloads.
+
+## Smart Shopping includes grocery procurement
+
+Smart Shopping is intentionally broader than durable-goods deals. It is the common
+physical-product procurement layer for baby goods, clothing, electronics, household
+products, consumables and groceries.
+
+Grocery ownership is split cleanly:
+
+- **Mealie** remains owner/provider for meal-plan-linked grocery/shopping lists.
+- **svc-nutrition** remains owner of nutrition profiles, targets and nutrition truth.
+- **svc-shopping** owns grocery procurement intelligence and fulfillment: normalized
+  product/offer comparison, unit-price comparison, BasketPlan, retailer selection,
+  purchase intent, provider cart/order interaction and price history.
+- **svc-inventory** may later provide pantry/consumable stock signals, but Shopping must
+  work without requiring a perfect pantry inventory.
+
+Shopping therefore consumes grocery requirements from Mealie rather than becoming a
+second canonical grocery list.
+
+## Product quality / price / value intelligence
+
+Smart Shopping must answer not only "is this discounted?" but also "which product is
+better for us?" and "is the extra cost worth it?".
+
+`ProductEvaluation` is category-aware and evidence-based. Possible inputs include
+feature/spec fit, durability/reliability evidence, safety/recall evidence,
+nutrition/ingredient evidence for food, family preference fit, expected useful life and
+trusted external testing/review evidence.
+
+`OfferEvaluation` covers current price, unit price, availability, delivery/service fees,
+condition, coupon/discount evidence, seller/provider confidence, historical price and
+other acquisition costs.
+
+`ValueEvaluation` combines product quality/fit and offer economics for the family's
+actual constraints. It must remain explainable and carry confidence/provenance. The LLM
+may summarize the evidence but may not invent prices, quality claims, tests, safety facts
+or nutrition data.
+
+No single universal quality score is required: a stroller, rain jacket and yogurt use
+different evaluation profiles.
+
+## Grocery basket optimization
+
+Grocery/consumables require multi-item planning rather than independent deal scoring.
+A future `BasketPlan` can account for requested quantity, unit price, substitutions,
+availability, delivery/pickup cost, minimum-order thresholds, coupons and family
+constraints. Initial optimization should remain deterministic and simple; comparing
+single-retailer baskets can precede advanced multi-retailer optimization.
+
+## Purchase automation must be progressive
+
+Shopping may eventually automate purchasing, but automation level is explicit policy,
+not an LLM decision.
+
+Suggested progression:
+
+- **LEVEL 0 — RECOMMEND:** compare/recommend only.
+- **LEVEL 1 — PREPARE_CART:** prepare/propose a provider cart; user checks out.
+- **LEVEL 2 — CONFIRM_TO_BUY:** one explicit user approval authorizes the shown
+  basket/purchase within its exact constraints.
+- **LEVEL 3 — POLICY_AUTOBUY:** future opt-in only for tightly bounded recurring or
+  low-risk items under explicit amount/provider/category/substitution/frequency limits.
+
+MVP does not silently execute payments. Raw payment credentials never enter the agent or
+model context.
 
 ## Deal Engine
 
@@ -136,6 +216,11 @@ PurchasePolicy is configurable data, not hardcoded baby logic. Initial policy cl
 A policy can carry required checks, severity, rationale, provenance, jurisdiction and
 review date. Unknown safety facts remain unknown; absence of evidence is never converted
 into a positive safety claim.
+
+A separate future `PurchaseApprovalPolicy` controls whether Episteck may perform a
+commercial action (amount limits, approved providers/categories, substitutions,
+quantities, recurring allowlists and explicit-confirmation thresholds). Safety policy
+and payment/approval policy are deliberately separate concerns.
 
 ## Shopping <-> Inventory events
 
@@ -192,6 +277,8 @@ V1 must provide value without special hardware:
 - one-tap "wore this", "another", "donate", "sold", "purchased"
 - natural-language creation/update of needs
 - incomplete inventory is explicitly allowed; confidence/coverage can be tracked
+- grocery/consumable requirements should flow from existing lists/plans rather than be
+  re-entered manually
 
 V2 may add QR/NFC, with a default preference to tag **containers/locations before every
 item** (boxes, drawers, baskets, wardrobe zones). This delivers most automation with
@@ -206,6 +293,10 @@ optional accelerator, never a prerequisite for a useful product.
 Positive:
 
 - shopping decisions become inventory-aware instead of encouraging unnecessary buying;
+- the same procurement intelligence can compare durable goods, retail products,
+  groceries and recurring household essentials;
+- grocery planning can flow from Mealie into price/quality/basket optimization without
+  duplicating the canonical meal/grocery list;
 - baby temporary goods can be optimized for buy/use/resell/donate lifecycle;
 - wardrobe/outfit planning can become a daily Home experience;
 - provider and hardware integrations remain replaceable adapters;
@@ -214,10 +305,14 @@ Positive:
 Costs / risks:
 
 - two services and explicit contracts are more work than one broad Shopping service;
+- grocery/retail checkout integrations add provider, payment, authorization and audit
+  complexity and must be introduced progressively;
 - item normalization and duplicate detection are inherently probabilistic;
 - manual inventory maintenance can destroy adoption unless the friction budget is
   enforced;
-- provider email formats/APIs can change, so adapters need fixtures/versioning;
+- provider email/API formats can change, so adapters need fixtures/versioning;
+- quality comparisons require evidence/provenance and category-specific logic rather
+  than opaque AI scoring;
 - trend/style recommendations require preference learning and should not create alert
   fatigue or unnecessary consumption;
 - images, seller data and household possessions may be sensitive and require conservative
@@ -229,7 +324,9 @@ This ADR does **not** authorize implementation before the current G1.6 security 
 complete.
 
 After G1.6, the next architecture step is contracts/schema design for `svc-shopping` and
-`svc-inventory`, followed by an intentionally small V1. Smart tags, smart wardrobe and
-laundry automation are deferred to later versions after normal-use adoption is proven.
+`svc-inventory`, followed by an intentionally small V1. Smart tags, smart wardrobe,
+advanced grocery checkout and laundry automation are deferred until the relevant
+low-friction/manual flows prove useful.
 
-See `../proposals/SMART_SHOPPING_AND_POSSESSIONS.md` for the detailed phased proposal.
+See `../proposals/SMART_SHOPPING_AND_POSSESSIONS.md` for the main phased proposal and
+`../proposals/SMART_SHOPPING_COMMERCE_AND_GROCERY.md` for the commerce/grocery extension.
