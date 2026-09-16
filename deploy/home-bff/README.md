@@ -77,6 +77,7 @@ sudo -u XDG_RUNTIME_DIR=/run/user/1007 systemctl --user start home-bff
 
 ```bash
 sudo apt install -y nginx certbot python3-certbot-nginx
+sudo cp episteck-log-format.conf /etc/nginx/conf.d/episteck-log-format.conf
 sudo cp nginx-home-bff.conf /etc/nginx/sites-available/home-bff.conf
 sudo ln -sf /etc/nginx/sites-available/home-bff.conf /etc/nginx/sites-enabled/
 sudo ufw allow 80/tcp comment 'HTTP (ACME + redirect)'
@@ -92,6 +93,9 @@ stays on loopback.
 
 ```bash
 curl -fsS https://bff.home.episteck.com/health          # {"status":"ok",...}
+# No query string may ever appear in the access log:
+curl -s -o /dev/null 'https://bff.home.episteck.com/health?probe=LEAKCHECK'
+sudo grep -c LEAKCHECK /var/log/nginx/home-bff-access.log   # must be 0
 curl -fsS -o /dev/null -w '%{http_code}\n' \
      https://bff.home.episteck.com/delegation           # 404 — not public
 ss -tlnp | grep 9933                                    # 127.0.0.1 only
