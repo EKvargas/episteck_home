@@ -90,25 +90,45 @@ async def test_no_tool_description_invites_supplying_an_actor():
         assert "actor_person_id" not in description, name
 
 
-def test_delegation_is_read_from_transport_not_arguments():
-    context.set_delegation(None)
+def test_delegation_is_read_from_transport_not_arguments(monkeypatch):
+    """The token comes from the live request context, never from a tool argument.
+
+    Patched at the FastMCP seam rather than through a local setter: there is no
+    setter any more, which is the point — the transport owns this value.
+    """
+    monkeypatch.setattr(context, "get_http_headers", lambda: {})
     assert context.current_delegation() is None
-    context.set_delegation("  tok-123  ")
+
+    monkeypatch.setattr(
+        context, "get_http_headers", lambda: {"x-episteck-delegation": "  tok-123  "}
+    )
     assert context.current_delegation() == "tok-123"
-    context.set_delegation("   ")
+
+    monkeypatch.setattr(
+        context, "get_http_headers", lambda: {"x-episteck-delegation": "   "}
+    )
     assert context.current_delegation() is None
 
 
-def test_delegation_header_extraction_is_defensive():
-    assert context.delegation_from_headers(None) is None
-    assert context.delegation_from_headers({}) is None
-    assert context.delegation_from_headers({"X-Episteck-Delegation": "t"}) == "t"
-    assert context.delegation_from_headers({"x-episteck-delegation": "t"}) == "t"
-    assert context.delegation_from_headers({"X-Episteck-Delegation": "  "}) is None
+def test_delegation_lookup_is_defensive(monkeypatch):
+    """Anything other than a usable string is no session."""
+    for headers in ({}, {"x-episteck-delegation": None}, {"other": "x"}):
+        monkeypatch.setattr(context, "get_http_headers", lambda h=headers: h)
+        assert context.current_delegation() is None
 
 
-def test_person_scoped_tools_fail_closed_without_a_session():
-    context.set_delegation(None)
+def test_unreadable_request_context_fails_closed(monkeypatch):
+    """get_http_headers is documented never to raise; if it does, deny anyway."""
+
+    def boom():
+        raise RuntimeError("no request context")
+
+    monkeypatch.setattr(context, "get_http_headers", boom)
+    assert context.current_delegation() is None
+
+
+def test_person_scoped_tools_fail_closed_without_a_session(monkeypatch):
+    monkeypatch.setattr(context, "get_http_headers", lambda: {})
     assert server.list_my_circles.fn() == context.NO_SESSION
     assert server.get_person.fn("PSN-1") == context.NO_SESSION
     decision = server.check_access.fn("PSN-1", "NUTRITION", "VIEW")

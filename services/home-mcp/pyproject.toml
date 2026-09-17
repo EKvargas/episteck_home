@@ -3,7 +3,13 @@ name = "episteck-home-mcp"
 version = "0.1.0"
 description = "Business-safe MCP adapter for the Episteck Home Control Plane"
 requires-python = ">=3.11"
-dependencies = ["fastmcp>=2.0", "httpx>=0.27"]
+# fastmcp is PINNED, not floated. The delegation seam depends on
+# fastmcp.server.dependencies.get_http_headers, whose location and default
+# credential-stripping behaviour are not covered by any stability guarantee. The
+# previous ">=2.0" already let a rebuild land on 4.x unnoticed; a future jump could
+# move or change that function and silently break the trusted-actor binding.
+# Upgrades are deliberate: bump this pin and re-run tests/test_transport_binding.py.
+dependencies = ["fastmcp==4.0.3", "httpx>=0.27"]
 
 [build-system]
 requires = ["setuptools>=68"]
