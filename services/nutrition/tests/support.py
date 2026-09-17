@@ -23,12 +23,15 @@ class _CountingAuthorizer:
     """Base double. Counts delegated Home calls and the tokens they used.
 
     ``home_calls`` is what proves the single-use contract: one person-sensitive
-    operation must produce exactly one delegated request.
+    operation must produce exactly one delegated request. It counts REQUESTS, not
+    requirements: ``check_access_many`` decides several permissions in one request and
+    therefore increments this once, which is exactly the property under test.
     """
 
     def __init__(self):
         self.home_calls = 0
         self.delegations: list[str | None] = []
+        self.requirements: list[tuple] = []
 
     def _record(self, delegation):
         self.home_calls += 1
@@ -51,10 +54,24 @@ class AllowAllAuthorizer(_CountingAuthorizer):
             )
         return AccessDecision(True, "test allow")
 
+    def check_access_many(self, subject, requirements, delegation=None):
+        self._record(delegation)
+        self.requirements.append(tuple(requirements))
+        if not delegation:
+            return AccessDecision(
+                False, "no authenticated human session (fail closed)"
+            )
+        return AccessDecision(True, "test allow")
+
 
 class DenyAllAuthorizer(_CountingAuthorizer):
     def check_access(self, subject, domain, action, delegation=None):
         self._record(delegation)
+        return AccessDecision(False, "test deny")
+
+    def check_access_many(self, subject, requirements, delegation=None):
+        self._record(delegation)
+        self.requirements.append(tuple(requirements))
         return AccessDecision(False, "test deny")
 
 
@@ -71,6 +88,13 @@ class RecordingAuthorizer(_CountingAuthorizer):
         self.calls.append((subject, domain, action))
         return AccessDecision(self.allow, "recorded")
 
+    def check_access_many(self, subject, requirements, delegation=None):
+        self._record(delegation)
+        self.requirements.append(tuple(requirements))
+        for domain, action in requirements:
+            self.calls.append((subject, domain, action))
+        return AccessDecision(self.allow, "recorded")
+
 
 class UnresolvableSessionAuthorizer(_CountingAuthorizer):
     """Home refuses the session: revoked, expired, replayed, or unreachable.
@@ -85,6 +109,11 @@ class UnresolvableSessionAuthorizer(_CountingAuthorizer):
 
     def check_access(self, subject, domain, action, delegation=None):
         self._record(delegation)
+        return AccessDecision(False, self.reason)
+
+    def check_access_many(self, subject, requirements, delegation=None):
+        self._record(delegation)
+        self.requirements.append(tuple(requirements))
         return AccessDecision(False, self.reason)
 
 

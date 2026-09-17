@@ -76,12 +76,13 @@ def evaluate_meal(foods: list[FoodItem]):
 
 @app.get("/daily/{person_id}/{date}")
 def daily(person_id: str, date: str, delegation: str | None = Depends(human_session)):
-    return _authorized(
-        lambda: {
-            "intake": svc.daily_intake(delegation, person_id, date),
-            "gap": svc.daily_gap(delegation, person_id, date),
-        }
-    )
+    """One delegated Home request, not two.
+
+    This used to call ``daily_intake`` and ``daily_gap``; both authorize, so a single
+    HTTP request spent the single-use delegation twice and the second was
+    replay-denied. ``svc.daily`` authorizes VIEW once and composes internally.
+    """
+    return _authorized(lambda: svc.daily(delegation, person_id, date))
 
 
 @app.post("/intake/{person_id}/planned")

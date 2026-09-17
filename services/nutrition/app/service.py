@@ -39,6 +39,13 @@ class AccessAuthorizer(Protocol):
         delegation: str | None = None,
     ): ...
 
+    def check_access_many(
+        self,
+        subject_person_id: str,
+        requirements: list[tuple[str, str]],
+        delegation: str | None = None,
+    ): ...
+
 
 class NutritionService:
     def __init__(
@@ -82,6 +89,27 @@ class NutritionService:
         )
         # Literal allow only: anything else — deny, malformed, indeterminate,
         # unreachable — is a refusal.
+        if not decision.allow:
+            raise PermissionError(decision.reason)
+
+    def _require_all(
+        self, delegation: str | None, subject_person_id: str, actions: list[str]
+    ) -> None:
+        """Authorize an operation needing SEVERAL permissions, still in ONE request.
+
+        ``ate_as_planned`` reads a plan and then writes intake. Calling
+        ``_require_access`` twice would spend the single-use delegation on the first
+        and be replay-denied on the second, so the operation could never complete —
+        the same class of defect as the removed ``resolve_actor`` step, one layer up.
+
+        Asking for only CREATE would be the other wrong fix: it would let an actor
+        write an intake derived from a plan they were not allowed to read.
+        """
+        decision = self.authorizer.check_access_many(
+            subject_person_id,
+            [("NUTRITION", action) for action in actions],
+            delegation,
+        )
         if not decision.allow:
             raise PermissionError(decision.reason)
 
@@ -133,6 +161,28 @@ class NutritionService:
 
     def daily_gap(self, delegation: str | None, subject_person_id: str, date: str) -> dict:
         self._require_access(delegation, subject_person_id, "VIEW")
+        return self._daily_gap(subject_person_id, date)
+
+    def daily(self, delegation: str | None, subject_person_id: str, date: str) -> dict:
+        """Intake AND gap for one day, authorized ONCE.
+
+        The ``/daily`` route used to call ``daily_intake`` and then ``daily_gap``.
+        Both are public and both authorize, so one HTTP request produced TWO delegated
+        Home requests on the same single-use delegation — the second replay-denied.
+
+        Composing at the service layer rather than the route is what keeps the rule
+        enforceable: the authorization lives next to the data access it guards, and a
+        future caller cannot reassemble the broken version by picking two public
+        methods that each look correctly authorized on their own.
+        """
+        self._require_access(delegation, subject_person_id, "VIEW")
+        return {
+            "intake": self._daily_intake(subject_person_id, date),
+            "gap": self._daily_gap(subject_person_id, date),
+        }
+
+    def _daily_gap(self, subject_person_id: str, date: str) -> dict:
+        """Gap computation with NO authorization: callers must have authorized."""
         profile = self.repo.get_profile(subject_person_id) or {}
         targets = {
             nutrient: Decimal(str(value))
@@ -218,7 +268,9 @@ class NutritionService:
         date: str,
         planned_id: str,
     ):
-        self._require_access(delegation, subject_person_id, "VIEW")
+        # BOTH permissions, ONE delegated request: this reads a plan and writes an
+        # intake, and the delegation can only be spent once.
+        self._require_all(delegation, subject_person_id, ["VIEW", "CREATE"])
         planned = [
             record
             for record in self.repo.list_intake(
@@ -228,7 +280,6 @@ class NutritionService:
         ]
         if not planned:
             raise KeyError("planned record not found")
-        self._require_access(delegation, subject_person_id, "CREATE")
         record = planned[0]
         return self._record_actual(
             subject_person_id,
