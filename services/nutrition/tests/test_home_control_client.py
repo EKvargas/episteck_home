@@ -1,4 +1,14 @@
-"""Nutrition's Home authorization client — independent actor resolution (G1.6)."""
+"""Nutrition's Home authorization client — one delegated call per operation (G1.6).
+
+The client sends its OWN machine credential and the opaque delegation, and nothing
+else. It has no actor parameter, so no upstream component — and no amount of model
+output — can assert an identity to this service.
+
+A previous revision resolved the actor via ``whoami`` before authorizing. Delegations
+are single-use, so that second request was replay-denied and every person-sensitive
+route broke. These tests now assert the single-request contract directly, by counting
+the requests the client actually issues.
+"""
 from __future__ import annotations
 
 import httpx
@@ -7,6 +17,7 @@ import pytest
 from app.home_control.client import AccessDecision, HomeControlPlaneClient
 
 SESSION = "delegation-token-xyz"
+INDETERMINATE = AccessDecision(False, "authorization indeterminate (fail closed)")
 
 
 def _client(handler) -> HomeControlPlaneClient:
@@ -18,94 +29,107 @@ def _client(handler) -> HomeControlPlaneClient:
     )
 
 
-# --------------------------------------------------------------------------
-# Independent actor resolution
-# --------------------------------------------------------------------------
+class _Counter:
+    """Handler wrapper that records every request the client issues."""
+
+    def __init__(self, response_factory):
+        self.requests: list[httpx.Request] = []
+        self._factory = response_factory
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        return self._factory(request)
+
+    @property
+    def paths(self) -> list[str]:
+        return [r.url.path for r in self.requests]
 
 
-def test_resolve_actor_asks_home_with_its_own_machine_credential():
-    """Nutrition asks Home who the human is; it never accepts an asserted answer."""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        assert request.headers["Authorization"] == "token nutrition-key:nutrition-secret"
-        assert request.headers["X-Episteck-Delegation"] == SESSION
-        assert request.url.path.endswith("/episteck_home.api.whoami")
-        # Nutrition must not be able to suggest an actor.
-        assert "actor_person_id" not in str(request.url)
-        return httpx.Response(200, json={"message": {"actor_person_id": "PSN-A"}})
-
-    assert _client(handler).resolve_actor(SESSION) == "PSN-A"
+def _allow(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(
+        200, json={"message": {"allow": True, "reason": "grant NUTRITION/VIEW"}}
+    )
 
 
-def test_resolve_actor_without_session_makes_no_network_call():
-    calls = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        calls.append(request)
-        return httpx.Response(200, json={"message": {"actor_person_id": "PSN-A"}})
-
-    assert _client(handler).resolve_actor(None) is None
-    assert calls == []
+# ==========================================================================
+# The single-call contract
+# ==========================================================================
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [{}, {"message": {}}, {"message": {"actor_person_id": ""}}, {"message": None}],
-)
-def test_resolve_actor_denies_on_malformed_identity(payload):
-    assert _client(lambda request: httpx.Response(200, json=payload)).resolve_actor(
-        SESSION
-    ) is None
+def test_authorization_issues_exactly_one_home_request():
+    """One authorization, one delegated request. This is the regression."""
+    counter = _Counter(_allow)
+
+    _client(counter).check_access("PSN-B", "NUTRITION", "VIEW", SESSION)
+
+    assert len(counter.requests) == 1, counter.paths
+    assert counter.paths[0].endswith("/episteck_home.api.check_access")
 
 
-def test_resolve_actor_denies_on_revoked_or_expired_session():
-    for status in (401, 403, 404):
-        assert _client(
-            lambda request, s=status: httpx.Response(s)
-        ).resolve_actor(SESSION) is None
+def test_authorization_never_calls_whoami():
+    """whoami would consume the delegation and leave check_access replay-denied."""
+    counter = _Counter(_allow)
+
+    _client(counter).check_access("PSN-B", "NUTRITION", "VIEW", SESSION)
+
+    assert not any("whoami" in p for p in counter.paths), counter.paths
 
 
-def test_resolve_actor_denies_when_home_is_unreachable():
-    def timeout(request: httpx.Request) -> httpx.Response:
-        raise httpx.ReadTimeout("timeout", request=request)
-
-    assert _client(timeout).resolve_actor(SESSION) is None
+def test_client_exposes_no_actor_resolution_method():
+    """The seam that caused the double call is gone, not merely unused."""
+    assert not hasattr(HomeControlPlaneClient, "resolve_actor")
 
 
-# --------------------------------------------------------------------------
-# Authorization decisions
-# --------------------------------------------------------------------------
+def test_check_access_signature_takes_no_actor():
+    import inspect
+
+    params = set(inspect.signature(HomeControlPlaneClient.check_access).parameters)
+    assert "actor_person_id" not in params
+    assert "actor" not in params
+    assert params == {"self", "subject_person_id", "domain", "action", "delegation"}
 
 
-def test_valid_allow_is_accepted_with_machine_auth_and_exact_scope():
+# ==========================================================================
+# Request shape
+# ==========================================================================
+
+
+def test_sends_own_machine_credential_and_delegation_only():
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["Authorization"] == "token nutrition-key:nutrition-secret"
         assert request.headers["X-Episteck-Delegation"] == SESSION
         assert request.url.path.endswith("/episteck_home.api.check_access")
-        # The actor is resolved by Home from the session; it is never sent.
+        # No actor is ever sent: Home derives it from the delegation.
         assert dict(request.url.params) == {
             "subject_person_id": "PSN-B",
             "domain": "NUTRITION",
             "action": "VIEW",
         }
-        return httpx.Response(
-            200,
-            json={"message": {"allow": True, "reason": "grant NUTRITION/VIEW"}},
-        )
+        return _allow(request)
 
-    decision = _client(handler).check_access(
-        "PSN-A", "PSN-B", "NUTRITION", "VIEW", SESSION
-    )
+    decision = _client(handler).check_access("PSN-B", "NUTRITION", "VIEW", SESSION)
     assert decision == AccessDecision(True, "grant NUTRITION/VIEW")
+
+
+def test_no_actor_appears_anywhere_in_the_request():
+    counter = _Counter(_allow)
+    _client(counter).check_access("PSN-B", "NUTRITION", "VIEW", SESSION)
+
+    raw = str(counter.requests[0].url) + str(dict(counter.requests[0].headers))
+    assert "actor" not in raw.lower()
+
+
+# ==========================================================================
+# Decisions and fail-closed behaviour
+# ==========================================================================
 
 
 def test_authoritative_denial_is_preserved():
     decision = _client(
         lambda request: httpx.Response(
-            200,
-            json={"message": {"allow": False, "reason": "no consent grant"}},
+            200, json={"message": {"allow": False, "reason": "no consent grant"}}
         )
-    ).check_access("PSN-A", "PSN-B", "NUTRITION", "VIEW", SESSION)
+    ).check_access("PSN-B", "NUTRITION", "VIEW", SESSION)
     assert decision == AccessDecision(False, "no consent grant")
 
 
@@ -114,64 +138,61 @@ def test_authoritative_denial_is_preserved():
     [{}, {"message": {}}, {"message": {"allow": "yes"}}, {"message": None}],
 )
 def test_malformed_decision_denies(payload):
-    decision = _client(lambda request: httpx.Response(200, json=payload)).check_access(
-        "PSN-A", "PSN-B", "NUTRITION", "VIEW", SESSION
-    )
-    assert decision == AccessDecision(
-        False, "authorization indeterminate (fail closed)"
-    )
+    decision = _client(
+        lambda request: httpx.Response(200, json=payload)
+    ).check_access("PSN-B", "NUTRITION", "VIEW", SESSION)
+    assert decision == INDETERMINATE
+
+
+def test_replayed_or_rejected_delegation_denies():
+    """A 403 is exactly what a replayed or revoked delegation produces upstream."""
+    decision = _client(
+        lambda request: httpx.Response(403, json={"exception": "PermissionError"})
+    ).check_access("PSN-B", "NUTRITION", "VIEW", SESSION)
+    assert decision == INDETERMINATE
 
 
 def test_timeout_denies():
     def timeout(request: httpx.Request) -> httpx.Response:
         raise httpx.ReadTimeout("timeout", request=request)
 
-    decision = _client(timeout).check_access(
-        "PSN-A", "PSN-B", "NUTRITION", "VIEW", SESSION
-    )
-    assert decision.allow is False
-    assert decision.reason == "authorization indeterminate (fail closed)"
+    assert _client(timeout).check_access(
+        "PSN-B", "NUTRITION", "VIEW", SESSION
+    ) == INDETERMINATE
 
 
 def test_http_error_denies():
-    decision = _client(lambda request: httpx.Response(503)).check_access(
-        "PSN-A", "PSN-B", "NUTRITION", "VIEW", SESSION
-    )
-    assert decision.allow is False
-    assert decision.reason == "authorization indeterminate (fail closed)"
+    assert _client(
+        lambda request: httpx.Response(500, text="boom")
+    ).check_access("PSN-B", "NUTRITION", "VIEW", SESSION) == INDETERMINATE
+
+
+def test_unreachable_home_denies():
+    def unreachable(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("no route", request=request)
+
+    assert _client(unreachable).check_access(
+        "PSN-B", "NUTRITION", "VIEW", SESSION
+    ) == INDETERMINATE
 
 
 def test_missing_session_denies_without_network():
-    calls = []
+    counter = _Counter(_allow)
+    decision = _client(counter).check_access("PSN-B", "NUTRITION", "VIEW", None)
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        calls.append(request)
-        return httpx.Response(200, json={"message": {"allow": True}})
-
-    decision = _client(handler).check_access(
-        "PSN-A", "PSN-B", "NUTRITION", "VIEW", None
+    assert decision == AccessDecision(
+        False, "no authenticated human session (fail closed)"
     )
-    assert decision.allow is False
-    assert calls == []
+    assert counter.requests == [], "a missing session must not reach the network"
 
 
 @pytest.mark.parametrize(
-    ("actor", "subject", "domain", "action"),
-    [
-        ("", "PSN-B", "NUTRITION", "VIEW"),
-        ("PSN-A", "", "NUTRITION", "VIEW"),
-        ("PSN-A", "PSN-B", "", "VIEW"),
-        ("PSN-A", "PSN-B", "NUTRITION", ""),
-    ],
+    "subject,domain,action",
+    [("", "NUTRITION", "VIEW"), ("PSN-B", "", "VIEW"), ("PSN-B", "NUTRITION", "")],
 )
-def test_missing_scope_value_denies_without_network(actor, subject, domain, action):
-    calls = 0
+def test_missing_scope_value_denies_without_network(subject, domain, action):
+    counter = _Counter(_allow)
+    decision = _client(counter).check_access(subject, domain, action, SESSION)
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        nonlocal calls
-        calls += 1
-        return httpx.Response(200, json={"message": {"allow": True}})
-
-    decision = _client(handler).check_access(actor, subject, domain, action, SESSION)
-    assert decision.allow is False
-    assert calls == 0
+    assert decision == INDETERMINATE
+    assert counter.requests == []
