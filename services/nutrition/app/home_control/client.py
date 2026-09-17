@@ -149,6 +149,25 @@ class HomeControlPlaneClient:
         Returns a single ``AccessDecision``: allow only when EVERY requirement allows.
         The per-requirement detail is used for the refusal reason; callers get a
         decision, not a permission list to interpret.
+
+        EXACT RESPONSE COVERAGE
+        -----------------------
+        An allow is accepted only when the response proves it decided THE
+        REQUIREMENTS WE SENT — not merely the right NUMBER of them. Counting alone
+        would accept a response that allowed two permissions we never asked for, so
+        each returned decision must match the requirement at its own position:
+
+            sent[i] == (domain, action) == returned[i]
+
+        ORDERING IS PART OF THE CONTRACT. ``check_access_many`` decides requirements
+        in the order received and returns them in that order, so positional matching
+        is exact and a reordered response is refused rather than re-sorted. Matching
+        as an unordered set would be weaker for no benefit: it would accept a response
+        that silently swapped which permission was allowed when the same pair appears
+        with different decisions, and it would hide a server that had stopped
+        preserving order — a change we want to fail loudly, not absorb.
+
+        Every mismatch is INDETERMINATE (fail closed), never a silent allow.
         """
         if not subject_person_id or not requirements:
             return _INDETERMINATE
@@ -173,24 +192,26 @@ class HomeControlPlaneClient:
             decision = payload["message"]
             if not isinstance(decision, dict) or type(decision.get("allow")) is not bool:
                 return _INDETERMINATE
-            # The overall allow is authoritative, but it must not be trusted over a
-            # decision list that disagrees with it: if any listed requirement denies,
-            # this is a denial regardless of the summary flag.
+
+            reason = str(decision.get("reason") or "Home Control Plane decision")
             listed = decision.get("decisions")
-            if isinstance(listed, list) and listed:
-                if len(listed) != len(requirements):
-                    return _INDETERMINATE
-                if any(item.get("allow") is not True for item in listed):
-                    return AccessDecision(
-                        False,
-                        str(decision.get("reason") or "Home Control Plane decision"),
-                    )
-            elif decision["allow"]:
-                # An allow with no per-requirement detail cannot be verified.
+
+            # A denial needs no corroboration: refusing is always safe.
+            if not decision["allow"]:
+                return AccessDecision(False, reason)
+
+            # An allow must be proven against the requirements we actually sent.
+            if not isinstance(listed, list) or len(listed) != len(requirements):
                 return _INDETERMINATE
-            return AccessDecision(
-                decision["allow"],
-                str(decision.get("reason") or "Home Control Plane decision"),
-            )
-        except (httpx.HTTPError, KeyError, TypeError, ValueError):
+            for (domain, action), item in zip(requirements, listed):
+                # `item` is untrusted: a non-dict must yield a controlled denial, not
+                # an AttributeError from item.get(). Checked before any attribute use.
+                if not isinstance(item, dict):
+                    return _INDETERMINATE
+                if item.get("domain") != domain or item.get("action") != action:
+                    return _INDETERMINATE
+                if item.get("allow") is not True:
+                    return AccessDecision(False, reason)
+            return AccessDecision(True, reason)
+        except (httpx.HTTPError, AttributeError, KeyError, TypeError, ValueError):
             return _INDETERMINATE
