@@ -2,12 +2,24 @@
 name = "episteck-nutrition-service"
 version = "0.1.0"
 requires-python = ">=3.11"
+# fastmcp is PINNED, not floated. The delegation seam depends on
+# fastmcp.server.dependencies.get_http_headers, whose location and default
+# credential-stripping behaviour are not covered by any stability guarantee. The
+# previous ">=2.0" already let a rebuild land on 4.x unnoticed; a future jump could
+# move or change that function and silently break the trusted-actor binding.
+# Upgrades are deliberate: bump this pin and re-run tests/test_transport_binding.py.
+#
+# fastapi>=0.140 is REQUIRED BY that pin, not a preference: fastmcp 4.0.3 resolves
+# starlette>=1.0.1, and FastAPI only accepted starlette<0.50 until 0.140. Installing
+# the pin against fastapi 0.115 leaves a tree where `FastAPI(...)` raises at import,
+# so every route in app/main.py is dead. Unlike home-mcp, this service runs BOTH a
+# FastAPI app and an MCP server in one environment, so the two bounds are coupled.
 dependencies = [
-    "fastapi>=0.115",
+    "fastapi>=0.140",
     "uvicorn>=0.30",
     "pydantic>=2",
     "httpx>=0.27",
-    "fastmcp>=2.0",
+    "fastmcp==4.0.3",
     "nutrition-domain",
 ]
 [build-system]
