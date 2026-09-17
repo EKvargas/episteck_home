@@ -196,3 +196,191 @@ def test_missing_scope_value_denies_without_network(subject, domain, action):
 
     assert decision == INDETERMINATE
     assert counter.requests == []
+
+
+# ==========================================================================
+# Several requirements, still ONE delegated request
+# ==========================================================================
+
+VIEW_CREATE = [("NUTRITION", "VIEW"), ("NUTRITION", "CREATE")]
+
+
+def _allow_many(request: httpx.Request) -> httpx.Response:
+    import json
+
+    requirements = json.loads(request.content)["requirements"]
+    return httpx.Response(
+        200,
+        json={
+            "message": {
+                "allow": True,
+                "reason": "all requirements allowed",
+                "decisions": [
+                    {
+                        "domain": r["domain"],
+                        "action": r["action"],
+                        "allow": True,
+                        "reason": "grant",
+                    }
+                    for r in requirements
+                ],
+            }
+        },
+    )
+
+
+def test_many_requirements_issue_exactly_one_request():
+    """THE POINT: two permissions, one delegated request."""
+    counter = _Counter(_allow_many)
+
+    decision = _client(counter).check_access_many("PSN-B", VIEW_CREATE, SESSION)
+
+    assert decision.allow is True
+    assert len(counter.requests) == 1
+    assert counter.paths == ["/api/method/episteck_home.api.check_access_many"]
+
+
+def test_the_request_carries_the_delegation_and_no_actor():
+    import json
+
+    counter = _Counter(_allow_many)
+    _client(counter).check_access_many("PSN-B", VIEW_CREATE, SESSION)
+
+    request = counter.requests[0]
+    assert request.headers["X-Episteck-Delegation"] == SESSION
+    body = json.loads(request.content)
+    assert body == {
+        "subject_person_id": "PSN-B",
+        "requirements": [
+            {"domain": "NUTRITION", "action": "VIEW"},
+            {"domain": "NUTRITION", "action": "CREATE"},
+        ],
+    }
+    assert "actor" not in request.content.decode().lower()
+
+
+def test_any_denied_requirement_denies_overall():
+    def mixed(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "message": {
+                    "allow": False,
+                    "reason": "no matching active grant (fail closed)",
+                    "decisions": [
+                        {"domain": "NUTRITION", "action": "VIEW", "allow": True, "reason": "g"},
+                        {"domain": "NUTRITION", "action": "CREATE", "allow": False, "reason": "n"},
+                    ],
+                }
+            },
+        )
+
+    decision = _client(mixed).check_access_many("PSN-B", VIEW_CREATE, SESSION)
+    assert decision.allow is False
+
+
+def test_an_allow_contradicted_by_its_own_decisions_is_refused():
+    """Defence in depth: a summary flag never overrides a listed denial."""
+
+    def contradictory(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "message": {
+                    "allow": True,  # claims allow
+                    "reason": "all requirements allowed",
+                    "decisions": [
+                        {"domain": "NUTRITION", "action": "VIEW", "allow": True, "reason": "g"},
+                        {"domain": "NUTRITION", "action": "CREATE", "allow": False, "reason": "n"},
+                    ],
+                }
+            },
+        )
+
+    decision = _client(contradictory).check_access_many("PSN-B", VIEW_CREATE, SESSION)
+    assert decision.allow is False
+
+
+def test_an_allow_covering_fewer_requirements_than_asked_is_refused():
+    """The dangerous shape: allow=True with one decision for a two-permission ask."""
+
+    def short(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "message": {
+                    "allow": True,
+                    "reason": "all requirements allowed",
+                    "decisions": [
+                        {"domain": "NUTRITION", "action": "VIEW", "allow": True, "reason": "g"}
+                    ],
+                }
+            },
+        )
+
+    assert _client(short).check_access_many("PSN-B", VIEW_CREATE, SESSION) == INDETERMINATE
+
+
+def test_an_allow_with_no_decisions_cannot_be_verified():
+    def bare(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"message": {"allow": True, "reason": "ok"}})
+
+    assert _client(bare).check_access_many("PSN-B", VIEW_CREATE, SESSION) == INDETERMINATE
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"message": {"allow": "yes", "decisions": []}},
+        {"message": {"reason": "no allow key"}},
+        {"message": "not-a-mapping"},
+        {"unexpected": "shape"},
+    ],
+    ids=["non-bool-allow", "missing-allow", "not-a-mapping", "wrong-envelope"],
+)
+def test_malformed_many_response_denies(payload):
+    handler = lambda request: httpx.Response(200, json=payload)  # noqa: E731
+    assert _client(handler).check_access_many("PSN-B", VIEW_CREATE, SESSION) == INDETERMINATE
+
+
+def test_unreachable_home_denies_many():
+    def unreachable(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("no route", request=request)
+
+    assert (
+        _client(unreachable).check_access_many("PSN-B", VIEW_CREATE, SESSION)
+        == INDETERMINATE
+    )
+
+
+def test_http_error_denies_many():
+    handler = lambda request: httpx.Response(500, json={})  # noqa: E731
+    assert _client(handler).check_access_many("PSN-B", VIEW_CREATE, SESSION) == INDETERMINATE
+
+
+def test_many_without_session_denies_without_network():
+    counter = _Counter(_allow_many)
+    decision = _client(counter).check_access_many("PSN-B", VIEW_CREATE, None)
+
+    assert decision == AccessDecision(
+        False, "no authenticated human session (fail closed)"
+    )
+    assert counter.requests == [], "a missing session must not reach the network"
+
+
+@pytest.mark.parametrize(
+    "subject,requirements",
+    [
+        ("", VIEW_CREATE),
+        ("PSN-B", []),
+        ("PSN-B", [("", "VIEW")]),
+        ("PSN-B", [("NUTRITION", "")]),
+    ],
+    ids=["no-subject", "no-requirements", "blank-domain", "blank-action"],
+)
+def test_malformed_many_input_denies_without_network(subject, requirements):
+    counter = _Counter(_allow_many)
+    decision = _client(counter).check_access_many(subject, requirements, SESSION)
+
+    assert decision == INDETERMINATE
+    assert counter.requests == []

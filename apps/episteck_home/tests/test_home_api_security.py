@@ -153,10 +153,16 @@ def _make_fake_frappe():
             return []
         raise AssertionError(f"unexpected get_all query: {doctype} {filters}")
 
+    def parse_json(value):
+        import json
+
+        return json.loads(value)
+
     fake.whitelist = whitelist
     fake.throw = throw
     fake.get_doc = get_doc
     fake.get_all = get_all
+    fake.parse_json = parse_json
     fake.log_error = lambda *args, **kwargs: None
     return fake
 
@@ -186,6 +192,7 @@ def home_api(monkeypatch):
 
 WHITELISTED = [
     "check_access",
+    "check_access_many",
     "get_person",
     "list_my_circles",
     "list_circle_members",

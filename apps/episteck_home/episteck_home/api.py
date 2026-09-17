@@ -95,6 +95,103 @@ def check_access(subject_person_id: str, domain: str, action: str):
     return _check_access(actor, subject_person_id, domain, action)
 
 
+#: A business operation needing more permissions than this is not a single operation.
+#: The bound exists so a caller cannot turn one delegated request into an unbounded
+#: permission sweep — ``get_access_to_person`` is the deliberate, discovery-gated way
+#: to enumerate access.
+MAX_REQUIREMENTS = 8
+
+
+def _requirement_error(reason: str) -> dict:
+    """A malformed requirement list is refused as a whole, never partially applied."""
+    return {"allow": False, "reason": reason, "decisions": []}
+
+
+@frappe.whitelist()
+def check_access_many(subject_person_id: str, requirements):
+    """Decide SEVERAL (domain, action) requirements in ONE delegated request.
+
+    WHY THIS EXISTS
+    ---------------
+    Delegations are single-use (``identity/replay.py``): the claim is made once per
+    HTTP request, so a second ``check_access`` on the same token is replay-denied.
+    An operation that genuinely needs two permissions — read a planned meal, then
+    create the actual intake — therefore could not authorize itself at all without
+    either weakening replay protection or asking for less than it does.
+
+    This is the third option: one request, one delegation, one actor resolution, and
+    an exact decision per requirement. Replay protection is untouched, because the
+    number of delegated requests is what it constrains, not the number of decisions.
+
+    CONTRACT
+    --------
+    * The actor is resolved server-side ONCE. There is no actor parameter, here or
+      anywhere else in this module.
+    * Every requirement is validated against the exact ``DOMAINS``/``ACTIONS`` sets.
+      Malformed input refuses the WHOLE call rather than silently skipping an entry —
+      a caller must never receive an overall allow that covered fewer requirements
+      than it asked for.
+    * ``allow`` is True only when EVERY requirement allows. Callers can treat the
+      single boolean as "may I perform this operation".
+    * Per-requirement decisions are returned so a caller can explain a refusal
+      without asking again.
+    * Nothing is cached. Each requirement is decided against grants loaded now, so a
+      grant revoked a moment ago denies here.
+    """
+    actor = resolve_actor()
+
+    # The pure policy also refuses a blank subject, but this API validates its own
+    # input rather than relying on a downstream layer to catch it.
+    if not subject_person_id or not isinstance(subject_person_id, str):
+        return _requirement_error("invalid subject (fail closed)")
+
+    if isinstance(requirements, str):
+        # Frappe passes JSON through the HTTP layer; a body may arrive as a string.
+        try:
+            requirements = frappe.parse_json(requirements)
+        except Exception:
+            return _requirement_error("malformed requirements (fail closed)")
+
+    if not isinstance(requirements, (list, tuple)) or not requirements:
+        return _requirement_error("no requirements supplied (fail closed)")
+    if len(requirements) > MAX_REQUIREMENTS:
+        return _requirement_error(
+            f"too many requirements, maximum {MAX_REQUIREMENTS} (fail closed)"
+        )
+
+    validated = []
+    for requirement in requirements:
+        if not isinstance(requirement, dict):
+            return _requirement_error("malformed requirement (fail closed)")
+        domain = requirement.get("domain")
+        action = requirement.get("action")
+        # Exact membership, not a truthiness check: an unknown domain or action is a
+        # refusal of the whole call, never a requirement quietly dropped.
+        if domain not in DOMAINS or action not in ACTIONS:
+            return _requirement_error("unknown domain or action (fail closed)")
+        validated.append((domain, action))
+
+    decisions = []
+    for domain, action in validated:
+        decision = _check_access(actor, subject_person_id, domain, action)
+        decisions.append(
+            {
+                "domain": domain,
+                "action": action,
+                "allow": bool(decision["allow"]),
+                "reason": decision["reason"],
+            }
+        )
+
+    allow = all(decision["allow"] for decision in decisions)
+    refused = next((d for d in decisions if not d["allow"]), None)
+    return {
+        "allow": allow,
+        "reason": refused["reason"] if refused else "all requirements allowed",
+        "decisions": decisions,
+    }
+
+
 @frappe.whitelist()
 def get_person(person_id: str):
     actor = resolve_actor()

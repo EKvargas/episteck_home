@@ -22,6 +22,18 @@ replay-denied. An earlier ``resolve_actor()`` step made this client issue two re
 per operation; the first succeeded and the second was refused, breaking every
 person-sensitive route. Its result was discarded by every caller, so removing it costs
 nothing and restores the flow.
+
+OPERATIONS NEEDING SEVERAL PERMISSIONS
+--------------------------------------
+Removing the second call is not enough on its own: some operations genuinely need more
+than one permission. ``ate_as_planned`` reads a planned meal (VIEW) and then creates an
+actual intake (CREATE), and it must not create one for a person whose plan it was not
+allowed to read.
+
+``check_access_many`` decides both in ONE delegated request. The constraint replay
+protection imposes is on the number of REQUESTS, not the number of decisions, so this
+satisfies it without weakening it. The alternative — asking for only CREATE, or
+splitting into two requests — would either under-authorize or fail outright.
 """
 from __future__ import annotations
 
@@ -113,6 +125,68 @@ class HomeControlPlaneClient:
             payload = response.json()
             decision = payload["message"]
             if not isinstance(decision, dict) or type(decision.get("allow")) is not bool:
+                return _INDETERMINATE
+            return AccessDecision(
+                decision["allow"],
+                str(decision.get("reason") or "Home Control Plane decision"),
+            )
+        except (httpx.HTTPError, KeyError, TypeError, ValueError):
+            return _INDETERMINATE
+
+    def check_access_many(
+        self,
+        subject_person_id: str,
+        requirements: list[tuple[str, str]],
+        delegation: str | None = None,
+    ) -> AccessDecision:
+        """Authorize SEVERAL (domain, action) requirements in ONE delegated request.
+
+        An operation that needs two permissions — ``ate_as_planned`` reads a plan and
+        then creates intake — cannot make two ``check_access`` calls: the delegation is
+        single-use, so the second is replay-denied. This asks Home once and gets one
+        overall answer, with replay protection unchanged.
+
+        Returns a single ``AccessDecision``: allow only when EVERY requirement allows.
+        The per-requirement detail is used for the refusal reason; callers get a
+        decision, not a permission list to interpret.
+        """
+        if not subject_person_id or not requirements:
+            return _INDETERMINATE
+        if any(not domain or not action for domain, action in requirements):
+            return _INDETERMINATE
+        if not delegation:
+            return _NO_SESSION
+        try:
+            response = self._client.post(
+                "/api/method/episteck_home.api.check_access_many",
+                json={
+                    "subject_person_id": subject_person_id,
+                    "requirements": [
+                        {"domain": domain, "action": action}
+                        for domain, action in requirements
+                    ],
+                },
+                headers={DELEGATION_HEADER: delegation},
+            )
+            response.raise_for_status()
+            payload = response.json()
+            decision = payload["message"]
+            if not isinstance(decision, dict) or type(decision.get("allow")) is not bool:
+                return _INDETERMINATE
+            # The overall allow is authoritative, but it must not be trusted over a
+            # decision list that disagrees with it: if any listed requirement denies,
+            # this is a denial regardless of the summary flag.
+            listed = decision.get("decisions")
+            if isinstance(listed, list) and listed:
+                if len(listed) != len(requirements):
+                    return _INDETERMINATE
+                if any(item.get("allow") is not True for item in listed):
+                    return AccessDecision(
+                        False,
+                        str(decision.get("reason") or "Home Control Plane decision"),
+                    )
+            elif decision["allow"]:
+                # An allow with no per-requirement detail cannot be verified.
                 return _INDETERMINATE
             return AccessDecision(
                 decision["allow"],
