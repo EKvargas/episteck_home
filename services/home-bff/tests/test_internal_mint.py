@@ -262,6 +262,99 @@ def test_create_mint_socket_replaces_owned_stale_socket(tmp_path):
         sock.close()
 
 
+@pytestmark_socket
+def test_create_mint_socket_refuses_and_preserves_live_same_owner_listener(tmp_path):
+    path = tmp_path / "mint.sock"
+    listener = create_mint_socket(path, expected_uid=os.getuid())
+    inode = path.lstat().st_ino
+
+    try:
+        with pytest.raises(RuntimeError, match="active"):
+            create_mint_socket(path, expected_uid=os.getuid())
+
+        assert path.lstat().st_ino == inode
+        assert stat.S_ISSOCK(path.lstat().st_mode)
+    finally:
+        listener.close()
+
+
+@pytestmark_socket
+def test_create_mint_socket_restores_swapped_inode_instead_of_unlinking_it(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "mint.sock"
+    stale = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    stale.bind(str(path))
+    stale.close()
+    original_rename = os.rename
+    swapped_inode = None
+    swapped = False
+
+    def swap_before_capture(src, dst, *args, **kwargs):
+        nonlocal swapped, swapped_inode
+        if not swapped:
+            swapped = True
+            path.unlink()
+            # Consume the immediately reusable directory inode so the
+            # replacement cannot look identical on tmpfs filesystems whose
+            # ctime/ino pair is reused for a new Unix socket.
+            guards = []
+            for index in range(8):
+                guard = tmp_path / f"inode-guard-{index}"
+                guard.write_text("guard", encoding="utf-8")
+                guards.append(guard)
+            replacement = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            replacement.bind(str(path))
+            replacement.close()
+            for guard in guards:
+                guard.unlink()
+            swapped_inode = path.lstat().st_ino
+        return original_rename(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(internal_main.os, "rename", swap_before_capture)
+    created = None
+    try:
+        with pytest.raises(RuntimeError, match="namespace changed"):
+            created = create_mint_socket(path, expected_uid=os.getuid())
+    finally:
+        if created is not None:
+            created.close()
+
+    assert swapped_inode is not None
+    assert path.lstat().st_ino == swapped_inode
+    assert stat.S_ISSOCK(path.lstat().st_mode)
+
+
+@pytestmark_socket
+def test_create_mint_socket_chmod_cannot_follow_a_swapped_symlink(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "mint.sock"
+    victim = tmp_path / "victim"
+    victim.write_text("preserve", encoding="utf-8")
+    victim.chmod(0o600)
+    swapped = False
+
+    original_fchmod = internal_main._fchmodat_empty_path
+
+    def swap_before_chmod(file_descriptor, mode):
+        nonlocal swapped
+        if not swapped:
+            swapped = True
+            path.unlink()
+            path.symlink_to(victim)
+        return original_fchmod(file_descriptor, mode)
+
+    monkeypatch.setattr(internal_main, "_fchmodat_empty_path", swap_before_chmod)
+
+    with pytest.raises(RuntimeError, match="namespace changed"):
+        create_mint_socket(path, expected_uid=os.getuid())
+
+    assert swapped is True
+    assert stat.S_IMODE(victim.stat().st_mode) == 0o600
+    assert path.is_symlink()
+
+
 @pytest.mark.parametrize("kind", ["symlink", "directory", "regular-file"])
 @pytestmark_socket
 def test_create_mint_socket_refuses_non_socket_stale_paths(tmp_path, kind):
