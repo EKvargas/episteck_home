@@ -136,10 +136,16 @@ The final design does not depend on group propagation into the container:
     mode  0660
 ```
 
-The BFF process creates the socket as the directory owner with umask `0007`; no
-privileged post-restart `chown` is required. This mechanism is still a deployment
-gate, not an assumption: the exact final image and Quadlet must prove the observed
-host uid/gid/mode and connectivity before Hermes is switched.
+The internal BFF entry point creates and binds the Unix socket itself before handing
+the open socket to uvicorn. It temporarily uses umask `0117` for `bind()`, restores the
+process umask immediately, applies `chmod(0660)`, and verifies the exact file type,
+owner, group, and mode before uvicorn begins serving. It does **not** use uvicorn's
+plain `uds=` creation path, which applies its own socket permissions. No privileged
+post-restart `chown` is required.
+
+This mechanism is still a deployment gate, not an assumption: the exact final image
+and Quadlet must prove the observed host uid/gid/mode and connectivity before Hermes
+is switched.
 
 ### 2.3 Deployed images are behind the plan baseline
 
@@ -174,7 +180,7 @@ must not describe `fastmcp==4.0.3` as a Hermes client dependency.
 | `services/home-bff/home_bff/app.py` | Public TCP app only; login/callback/logout/session/whoami/existing browser `/delegation`; callback claims binding |
 | `services/home-bff/home_bff/internal_app.py` | Internal mint app only; fixed-runtime mint route and minimal health if operationally necessary |
 | `services/home-bff/home_bff/__main__.py` | Public app entry point; TCP 9933 only |
-| `services/home-bff/home_bff/internal_main.py` | Internal app entry point; Unix socket only, safe stale-socket removal and umask |
+| `services/home-bff/home_bff/internal_main.py` | Internal app entry point; safely creates a pre-bound 0660 Unix socket and passes it to uvicorn |
 | `services/home-bff/home_bff/config.py` | Explicit public/store/socket settings; no insecure defaults |
 | `services/home-bff/tests/test_runtime_binding.py` | Real-file, cross-process binding atomicity tests |
 | `services/home-bff/tests/test_internal_mint.py` | Internal-only route, fixed audience, fresh `jti`, no body/secrets |
@@ -330,9 +336,26 @@ The final BFF image is used by two Quadlets:
   port, mounts the same SQLite directory with shared-label semantics, and mounts the
   setgid socket directory.
 
-The internal entry point serves only the UDS. It removes only its known stale socket,
-never a directory or arbitrary path, sets umask `0007`, and verifies the resulting
-socket mode. Neither entry point serves both apps.
+The internal entry point serves only the UDS. Its startup sequence is explicit:
+
+```python
+sock = create_mint_socket(
+    socket_path,
+    expected_uid=os.getuid(),
+    expected_gid=configured_episteck_gw_gid,
+)
+uvicorn.Server(config).run(sockets=[sock])
+```
+
+`create_mint_socket(path: Path, *, expected_uid: int, expected_gid: int) ->
+socket.socket` performs the bind under umask `0117` (`0777 & ~0117 == 0660`), restores
+the prior umask in `finally`, applies `chmod(0660)`, checks the path with `lstat`, and
+returns only after socket type, uid, gid, and mode match exactly.
+
+It safely removes only its known stale socket after verifying the path is a socket
+owned by `svc-home-bff`; it never removes a directory, symlink, or arbitrary path.
+The socket is not handed to uvicorn until the `0660` assertion passes. Neither entry
+point serves both apps.
 
 ---
 
@@ -437,11 +460,16 @@ Required policy:
 
 127.0.0.1:{9931,9932} direct MCP ports
     meta skuid <numeric svc-home-gateway> accept
-    meta skuid 1003                       reject/drop
+    all other local sender uids           reject/drop
 ```
 
 The rendered file records the numeric gateway uid resolved during provisioning. It
 does not rely on `nft --check` as proof. `nft --check` remains only a syntax precheck.
+No additional admin or health uid is planned: diagnostics use the gateway listener or
+run explicitly as `svc-home-gateway`. If staging discovers a real existing health
+consumer of 9931/9932, its exact uid and necessity must be recorded and narrowly
+allowlisted before cutover; a shared group, `www-data`, and a blanket root/local-user
+exception are forbidden.
 
 After the coordinated runtime is working, apply the table and run real connections:
 
@@ -450,6 +478,8 @@ sudo -u home-agent curl --max-time 3 http://127.0.0.1:9934/gateway/home/
 sudo -u svc-home-mcp curl --max-time 3 http://127.0.0.1:9934/gateway/home/
 sudo -u home-agent curl --max-time 3 http://127.0.0.1:9931/mcp
 sudo -u home-agent curl --max-time 3 http://127.0.0.1:9932/mcp
+sudo -u svc-home-bff curl --max-time 3 http://127.0.0.1:9931/mcp
+sudo -u svc-home-bff curl --max-time 3 http://127.0.0.1:9932/mcp
 sudo -u svc-home-gateway curl --max-time 3 http://127.0.0.1:9931/mcp
 sudo -u svc-home-gateway curl --max-time 3 http://127.0.0.1:9932/mcp
 ```
@@ -459,6 +489,7 @@ Expected network results:
 - uid 1003 reaches 9934;
 - the other ordinary uid cannot reach 9934;
 - uid 1003 cannot reach 9931 or 9932;
+- unrelated ordinary service uid `svc-home-bff` cannot reach 9931 or 9932;
 - `svc-home-gateway` reaches 9931 and 9932 (an MCP HTTP error is acceptable as proof
   of transport reachability; connection refusal/timeout is not).
 
@@ -510,12 +541,16 @@ python -m pytest services/home-bff/tests -q
 - Modify/Create tests listed in §3
 
 **Interfaces:** Consumes Task 1 store methods. Produces one public TCP app and one
-internal UDS app with no shared router registration.
+internal UDS app with no shared router registration, plus
+`create_mint_socket(path: Path, *, expected_uid: int, expected_gid: int) ->
+socket.socket` for the UDS entry point.
 
 - [ ] Write failing tests proving the public app returns 404 for the internal path,
   internal OpenAPI contains no browser routes, the internal route takes no identity or
   audience input, and every success returns 204 plus a fresh header.
 - [ ] Write failing callback/logout tests for binding claim/refusal/clear behavior.
+- [ ] Write failing socket tests for exact `0660` creation and refusal to unlink a
+  stale path that is a symlink, directory, non-socket file, or wrong-owner socket.
 - [ ] Implement the minimum separate app and entry point without changing the existing
   cookie-authenticated `/delegation` route.
 - [ ] Run route inventory, mint, callback, logout, and full BFF tests.
@@ -587,7 +622,7 @@ python -m pytest deploy/gateway/tests -q
 - [ ] Add a render/check step that substitutes and records the numeric
   `svc-home-gateway` uid.
 - [ ] Syntax-check only the dedicated table without loading it.
-- [ ] Document the six real-user connection tests in §8 and their expected results.
+- [ ] Document the eight real-user connection tests in §8 and their expected results.
 - [ ] Document deletion/restoration of only `table inet episteck_gateway`.
 
 Verify before deployment (syntax only):
@@ -746,7 +781,7 @@ Do not prune previous images until the cutover has passed its soak/approval gate
 | Requirement | Required proof |
 | --- | --- |
 | Dedicated identity | Separate nginx service/config; process uid is `svc-home-gateway`; public nginx remains uid 33 |
-| Socket isolation | Exact group list; final socket `svc-home-bff:episteck-gw` 0660; gateway connects; www-data/home-agent denied before HTTP |
+| Socket isolation | Pre-bound socket startup uses umask 0117 + explicit chmod/assert; final socket `svc-home-bff:episteck-gw` 0660 after initial start and restart; gateway connects; www-data/home-agent denied before HTTP |
 | No TCP mint route | Public app route/OpenAPI inventory plus direct `127.0.0.1:9933/internal/mint` 404 |
 | Internal app minimal | Only mint + optional health; no request-selectable identity/runtime/audience |
 | SQLite atomicity | Cross-process, same-file race: exactly one winner; stale replacement atomic; controlled busy failure |
@@ -754,7 +789,7 @@ Do not prune previous images until the cutover has passed its soak/approval gate
 | Header controls | Forged delegation overwritten; Authorization/Cookie absent upstream; Mcp-Session-Id preserved |
 | Protocol behavior | Real FastMCP 4.0.3 rejects batch arrays; one tools/call POST is proxied once; no body parsing |
 | Replay safety | `proxy_next_upstream off`; forced upstream failure causes no second attempt |
-| OUTPUT uid controls | Live calls as uid 1003, another ordinary uid, and `svc-home-gateway` match §8 |
+| OUTPUT uid controls | Gateway listener allows uid 1003 only; direct 9931/9932 allow the dedicated gateway identity and deny uid 1003 plus an unrelated ordinary uid, with a final catch-all deny |
 | Provenance | All three final images carry the same final post-C main SHA and recorded digests |
 | Coordinated cutover | Gateway/mint ready before MCP/Hermes switch; no active half-wired period |
 | Complete rollback | Previous three image states, Quadlets, Hermes URLs, gateway state, and nft state restored and validated |
