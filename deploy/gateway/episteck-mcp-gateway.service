@@ -1,0 +1,26 @@
+[Unit]
+Description=Episteck Home Agent MCP delegation gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=svc-home-gateway
+Group=svc-home-gateway
+SupplementaryGroups=episteck-gw
+RuntimeDirectory=episteck-mcp-gateway
+StateDirectory=episteck-mcp-gateway
+ReadWritePaths=/run/episteck/home-bff-mint
+ExecStartPre=/usr/sbin/nginx -t -c /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf -p /etc/episteck/mcp-gateway/
+ExecStart=/usr/sbin/nginx -c /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf -p /etc/episteck/mcp-gateway/ -g 'daemon off;'
+ExecReload=/usr/sbin/nginx -s reload -c /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf -p /etc/episteck/mcp-gateway/
+ExecStop=/usr/sbin/nginx -s quit -c /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf -p /etc/episteck/mcp-gateway/
+Restart=on-failure
+RestartSec=2s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
