@@ -139,8 +139,10 @@ The final design does not depend on group propagation into the container:
 The internal BFF entry point creates and binds the Unix socket itself before handing
 the open socket to uvicorn. It temporarily uses umask `0117` for `bind()`, restores the
 process umask immediately, applies `chmod(0660)`, and verifies the exact file type,
-owner, group, and mode before uvicorn begins serving. It does **not** use uvicorn's
-plain `uds=` creation path, which applies its own socket permissions. No privileged
+namespace owner, and mode before uvicorn begins serving. It does **not** assume the
+host `episteck-gw` gid is represented inside the rootless user namespace; the host-side
+proof gate verifies the inherited host gid. It also does **not** use uvicorn's plain
+`uds=` creation path, which applies its own socket permissions. No privileged
 post-restart `chown` is required.
 
 This mechanism is still a deployment gate, not an assumption: the exact final image
@@ -342,15 +344,16 @@ The internal entry point serves only the UDS. Its startup sequence is explicit:
 sock = create_mint_socket(
     socket_path,
     expected_uid=os.getuid(),
-    expected_gid=configured_episteck_gw_gid,
 )
 uvicorn.Server(config).run(sockets=[sock])
 ```
 
-`create_mint_socket(path: Path, *, expected_uid: int, expected_gid: int) ->
-socket.socket` performs the bind under umask `0117` (`0777 & ~0117 == 0660`), restores
-the prior umask in `finally`, applies `chmod(0660)`, checks the path with `lstat`, and
-returns only after socket type, uid, gid, and mode match exactly.
+`create_mint_socket(path: Path, *, expected_uid: int) -> socket.socket` performs the
+bind under umask `0117` (`0777 & ~0117 == 0660`), restores the prior umask in
+`finally`, applies `chmod(0660)`, checks the path with `lstat`, and returns only after
+socket type, namespace uid, and mode match exactly. The host-side §7 proof verifies
+the required inherited `episteck-gw` gid without assuming supplementary-group or gid
+mapping into the container.
 
 It safely removes only its known stale socket after verifying the path is a socket
 owned by `svc-home-bff`; it never removes a directory, symlink, or arbitrary path.
@@ -542,8 +545,8 @@ python -m pytest services/home-bff/tests -q
 
 **Interfaces:** Consumes Task 1 store methods. Produces one public TCP app and one
 internal UDS app with no shared router registration, plus
-`create_mint_socket(path: Path, *, expected_uid: int, expected_gid: int) ->
-socket.socket` for the UDS entry point.
+`create_mint_socket(path: Path, *, expected_uid: int) -> socket.socket` for the UDS
+entry point.
 
 - [ ] Write failing tests proving the public app returns 404 for the internal path,
   internal OpenAPI contains no browser routes, the internal route takes no identity or
