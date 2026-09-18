@@ -34,7 +34,8 @@ from .frappe_client import (
     TokenExchangeError,
 )
 from .oauth import authorization_params, new_pkce_pair, new_state
-from .store import SessionStore
+from .runtime import RUNTIME_ID
+from .store import SessionStore, StoreUnavailableError
 
 logger = logging.getLogger("home_bff")
 
@@ -164,7 +165,23 @@ def create_app(
             refresh_token=tokens.refresh_token,
         )
 
-        result = JSONResponse({"status": "authenticated"})
+        try:
+            binding = store.claim_runtime(RUNTIME_ID, session.session_id)
+        except (ValueError, StoreUnavailableError):
+            # A newly created session is not returned to the browser unless its
+            # runtime claim reached a controlled outcome. If cleanup itself is
+            # temporarily unavailable, the unreferenced session simply expires.
+            try:
+                store.delete_session(session.session_id)
+            except StoreUnavailableError:
+                pass
+            raise HTTPException(
+                503, "runtime binding could not be completed"
+            ) from None
+
+        result = JSONResponse(
+            {"status": "authenticated", "runtime_binding": binding.value}
+        )
         _set_session_cookie(result, session.session_id)
         return result
 

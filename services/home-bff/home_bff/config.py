@@ -35,6 +35,7 @@ class Settings:
     delegation_secret: str
     delegation_issuer: str
     store_path: str
+    mint_socket_path: str
     port: int
     scope: str
 
@@ -53,6 +54,7 @@ class Settings:
             delegation_secret=_required("HOME_DELEGATION_SECRET"),
             delegation_issuer=_optional("HOME_DELEGATION_ISSUER", "episteck-home-bff"),
             store_path=_optional("BFF_STORE_PATH", "/data/bff.sqlite"),
+            mint_socket_path=_required("BFF_MINT_SOCKET_PATH"),
             port=int(_optional("BFF_PORT", "9933")),
             scope=_optional("BFF_SCOPE", "all openid"),
         )

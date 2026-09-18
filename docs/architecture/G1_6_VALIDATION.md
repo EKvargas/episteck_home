@@ -1,15 +1,78 @@
 # Stage G1.6 Validation — Trusted Identity / Actor Binding
 
-**Result:** implementation + offline evidence complete · **live validation pending**
+**Result:** BFF/login/replay path live-validated · G1.6 C gateway implementation
+complete offline · **coordinated gateway cutover pending**
 
-⚠️ This stage is **not COMPLETE**. The BFF is built and tested but not yet deployed;
-the OAuth authorization-code round trip and both real-login bindings require the
-live service. See §8.
+⚠️ This stage is **not COMPLETE**. The BFF, OAuth authorization-code flow, real-login
+binding, and replay enforcement were deployed and live-validated after the original
+2026-09-16 snapshot. The remaining deployment gate is the coordinated G1.6 C gateway,
+MCP-service, and Hermes cutover; PR #15 does not perform that cutover. See §0 and the
+historical status notes in §§8–9.
 
-**Validated:** 2026-09-16
+**Validated:** original identity validation 2026-09-16; current status and G1.6 C
+evidence updated 2026-09-18
 
 **Scope:** synthetic identities and synthetic domain data only. G2 was not started.
 No real family, health, or personal data was created, read, or exposed.
+
+## 0. G1.6 C implementation validation (offline, 2026-09-18)
+
+Tasks 1–6 of the approved delegation-gateway plan were implemented on an isolated
+branch from merged PR #14 (`def611f`). No production host, live service, public
+nginx, nftables table, Hermes configuration, or shared/local FastMCP installation
+was changed. Tasks 10–11 (cutover and rollback execution) were not performed.
+
+The repository environment is `.venv-g1-6-c` using Python 3.13.9. The server
+dependency is pinned and installed there as `fastmcp==4.0.3`; its transitive
+packages resolve `mcp 2.2.0` / `mcp-types 2.2.0`. This is separate from the
+observed Hermes client environment documented for deployment (`mcp 2.0.0` /
+`mcp-types 2.0.0`); FastMCP 4.0.3 is not the Hermes client dependency.
+
+The pre-change isolated baseline was 537 passing tests. Implementation evidence:
+
+| Area | Result |
+| --- | ---: |
+| Home Control Plane, contracts, Nutrition domain | 193 passed |
+| Home BFF Windows run | 149 passed, 10 Unix-only skips |
+| Home BFF WSL/Linux run | 159 passed |
+| Gateway config/nft/FastMCP tests | 10 passed, 6 Linux-nginx skips on Windows |
+| Real nginx gateway + lifecycle tests in isolated Linux container | 6 passed, 0 skipped |
+| Real WSL socket tests | 19 passed |
+| Exact rootless Podman BFF mint image lifecycle | initial + restart socket `1000:1000 660 socket` |
+
+The final Windows command matrix totals **582 passed, 16 skipped**. The skips are ten
+Unix ownership/socket tests, five real-nginx gateway tests, and one real-nginx
+lifecycle test; each skipped test was rerun on Linux. The post-fix WSL BFF suite is
+**159 passed**, and the isolated Linux nginx run is **6 passed, 0 skipped**. The exact
+BFF image was rebuilt locally from the implementation checkout for the socket
+lifecycle proof only; no image was published or deployed.
+
+The remaining warnings are upstream Starlette/AnyIO deprecations (and WSL's
+Starlette/httpx compatibility warning); no test failure is hidden by them. The
+gateway integration harness ran against nginx 1.27 in an isolated Linux container as
+the unprivileged `svc-home-gateway` identity (uid 10001). It proved both gateway paths,
+one mint and one upstream request per client request, sequential and concurrent token
+freshness, header controls including response-side delegation suppression, unchanged
+body forwarding, no retry, and no JSON-RPC parsing. The same identity started nginx,
+owned both master and worker processes, reloaded to a replacement worker, and stopped
+cleanly through the dedicated PID path. WSL `nft --check` was not considered proof
+because the unprivileged environment cannot initialize netlink; the rendered table
+was not loaded.
+
+Final verification commands, all directed at the isolated environment, are:
+
+```bash
+python -m pytest services/home-bff/tests services/home-mcp/tests \
+  services/nutrition/tests deploy/home-bff/tests deploy/gateway/tests -q
+python -m compileall -q services/home-bff services/home-mcp services/nutrition
+git diff --check
+```
+
+Before any future cutover, build all three final images from one merged post-C
+SHA, stage without switching runtime, capture the complete previous transport
+stack, and follow the coordinated cutover/complete rollback procedures in the
+approved plan. No such stage, service switch, image deployment, or nftables load
+was executed here.
 
 ---
 
@@ -52,13 +115,18 @@ Nutrition route. Actor substitution is **unrepresentable**, not merely rejected.
 ### Home MCP
 Eight business tools (the original seven plus `whoami`), none accepting an actor or any
 credential. Self-scoped tools take **no parameters at all**. Delegation is read from
-transport context via `ContextVar`, outside model-controlled arguments.
+FastMCP 4.0.3's live per-request HTTP context via narrowly scoped
+`get_http_headers()` access, outside model-controlled arguments. The earlier local
+`ContextVar` design was removed because production never populated it.
 
 ### Nutrition
-Resolves the actor **independently** through Home `whoami` using its own machine
-credential, then calls `check_access`. It never accepts an actor string from the Home
-Agent or Home MCP. Retained unchanged: 3 s timeout, **no authorization caching**, and
-DENY on transport, HTTP, JSON, shape, or decision ambiguity.
+Makes exactly one delegated Home authorization request per person-sensitive business
+operation: `check_access` for one permission or `check_access_many` for a compound
+operation. Home resolves the actor server-side from the machine credential plus the
+single-use delegation; Nutrition neither calls `whoami` first nor accepts an actor
+string from the Home Agent or Home MCP. Retained unchanged: 3 s timeout,
+**no authorization caching**, and DENY on transport, HTTP, JSON, shape, coverage, or
+decision ambiguity.
 
 ### Home BFF (new, Nuremberg EU node — amendment A1)
 An **operational FastAPI service**, not merely a client library. Routes: `/login`,
@@ -222,9 +290,11 @@ client**; the BFF is confidential and always sends S256, so the downgrade path i
 unreachable. **Direct native/mobile OIDC remains deferred**; mobile ships against the
 BFF with no redesign.
 
-Remaining live cases (authorization-code round trip with correct verifier, wrong
-verifier, code reuse, redirect mismatch) require an OAuth client, which is **blocked**
-— see §8.
+**Historical status at the 2026-09-16 inspection:** the authorization-code round-trip
+cases (correct verifier, wrong verifier, code reuse, redirect mismatch) still required
+an OAuth client and were blocked at that time. Subsequent G1.6 work deployed the BFF
+and OAuth client and live-validated the authorization-code/login path; these cases are
+no longer pending. Section 8 preserves the original pre-deployment snapshot.
 
 ---
 
@@ -248,8 +318,10 @@ the new document, permanently suppressing generation. Frappe never asserts
 **Why it matters:** `oauth.py:463-464` resolves an inbound `sub` back to a User. With a
 duplicate, that lookup is ambiguous, and one of the two accounts is a System Manager.
 
-**Status (amendment A5 — remediation gated on a reference audit).** The audit found
-**zero** consumers: no OAuth clients, no bearer tokens, no social login keys.
+**Status at the 2026-09-16 reference audit (amendment A5 — remediation gated on a
+reference audit).** The audit then found **zero** consumers: no OAuth clients, no
+bearer tokens, no social login keys. A confidential BFF OAuth client was created in
+the subsequent live work, so the zero-consumer statement is historical, not current.
 Regeneration is therefore provably safe, but per A5 no irreversible identity-data
 change was made. `sub` is **off the G1.6 critical path** — internal resolution uses the
 authenticated session, never `sub`. Remediation is required before any native/public
@@ -273,7 +345,13 @@ withdrawn on 2026-09-16 and the Control Plane stays in Ashburn.
 
 ---
 
-## 8. Remaining work before G1.6 is COMPLETE
+## 8. Historical pre-deployment snapshot (superseded)
+
+This section records the state on 2026-09-16 and is retained as architecture history.
+Its pending-BFF statements are not current: subsequent G1.6 work deployed and
+live-validated the BFF, OAuth authorization-code/login path, real-login actor binding,
+and shared replay claim. The remaining current deployment work is the coordinated
+G1.6 C gateway/MCP/Hermes cutover described in §0.
 
 ### 8.1 The BFF was a library, now it is a service
 
@@ -283,7 +361,7 @@ correct and well tested, but nothing could log in through it. That gap is now cl
 the service exists, with 71 tests covering login, callback, session, delegation and
 logout, including the adversarial cases.
 
-### 8.2 Still pending, and why
+### 8.2 Items that were pending in the 2026-09-16 snapshot
 
 **DNS is live.** `bff.home.episteck.com` → `91.98.132.9`, created by the operator and
 verified propagated on 2026-09-16 against three independent resolvers (corporate,
@@ -303,7 +381,13 @@ verified propagated on 2026-09-16 against three independent resolvers (corporate
 Everything not dependent on public ingress is done and verified offline, including
 the full delegation matrix on the production runtime and byte-for-byte S256 agreement.
 
-## 9. Deployment status
+## 9. Historical deployment status (2026-09-16 snapshot)
+
+The following paragraphs and preflight table describe the pre-deployment state when
+this document was first written. They are not the current runtime status. PRs #4–#13
+subsequently merged; the BFF/login and replay path were live-validated, while the
+delegation-requiring Home MCP/Nutrition runtime switch remains intentionally held for
+the coordinated G1.6 C cutover.
 
 The feature branch is pushed. The `episteck-deploy` job polls `main` only, so nothing
 has changed in production; `home.episteck.com` still runs G1.5. Verified live:

@@ -1,0 +1,19 @@
+# Dedicated OUTPUT policy for the G1.6 gateway. Render the placeholder with the
+# numeric svc-home-gateway uid before syntax checking/loading. This file never
+# flushes or replaces unrelated nftables tables.
+define HERMES_UID = 1003
+define GATEWAY_UID = __SVC_HOME_GATEWAY_UID__
+
+table inet episteck_gateway {
+    chain output {
+        type filter hook output priority 0; policy accept;
+
+        # Only Hermes may enter the loopback gateway listener.
+        ip daddr 127.0.0.1 tcp dport 9934 meta skuid $HERMES_UID accept
+        ip daddr 127.0.0.1 tcp dport 9934 drop
+
+        # Only the dedicated nginx gateway may call the direct MCP services.
+        ip daddr 127.0.0.1 tcp dport { 9931, 9932 } meta skuid $GATEWAY_UID accept
+        ip daddr 127.0.0.1 tcp dport { 9931, 9932 } drop
+    }
+}
