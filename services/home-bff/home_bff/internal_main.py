@@ -47,13 +47,10 @@ def _same_inode(left: os.stat_result, right: os.stat_result) -> bool:
 
 
 def _same_generation(left: os.stat_result, right: os.stat_result) -> bool:
-    # Include ctime while comparing the pre-quarantine entry. Some tmpfs
-    # filesystems immediately reuse socket inode numbers after unlink.
-    return (left.st_dev, left.st_ino, left.st_ctime_ns) == (
-        right.st_dev,
-        right.st_ino,
-        right.st_ctime_ns,
-    )
+    # Rename updates ctime on the same inode, so generation identity is the
+    # device/inode pair. The mutation test deliberately consumes reused inode
+    # slots before introducing a replacement entry.
+    return (left.st_dev, left.st_ino) == (right.st_dev, right.st_ino)
 
 
 def _path_exists(path: Path) -> bool:
@@ -78,10 +75,21 @@ def _listener_is_active(path: Path) -> bool:
 def _remove_owned_stale_socket(path: Path, expected: os.stat_result) -> None:
     """Atomically quarantine and verify the exact stale inode before unlinking."""
     quarantine = path.with_name(f".{path.name}.stale-{uuid.uuid4().hex}")
-    os.rename(path, quarantine)
+    entry_fd = None
+    pinned = expected
+    if os.name == "posix" and hasattr(os, "O_PATH"):
+        entry_fd = os.open(
+            str(path),
+            os.O_PATH | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+        )
+        pinned = os.fstat(entry_fd)
+        if not _same_inode(pinned, expected) or not stat.S_ISSOCK(pinned.st_mode):
+            os.close(entry_fd)
+            raise RuntimeError("mint socket namespace changed")
     try:
+        os.rename(path, quarantine)
         captured = quarantine.lstat()
-        if not _same_generation(captured, expected):
+        if not _same_inode(captured, pinned):
             raise RuntimeError("mint socket namespace changed")
         if not stat.S_ISSOCK(captured.st_mode) or captured.st_uid != expected.st_uid:
             raise RuntimeError("mint socket namespace changed")
@@ -92,6 +100,9 @@ def _remove_owned_stale_socket(path: Path, expected: os.stat_result) -> None:
         if _path_exists(quarantine) and not _path_exists(path):
             os.rename(quarantine, path)
         raise
+    finally:
+        if entry_fd is not None:
+            os.close(entry_fd)
 
 
 def _fchmodat_empty_path(file_descriptor: int, mode: int) -> None:
@@ -116,7 +127,25 @@ def _chmod_socket_path(path: Path, expected: os.stat_result) -> None:
             pinned = os.fstat(entry_fd)
             if not _same_inode(pinned, expected) or not stat.S_ISSOCK(pinned.st_mode):
                 raise RuntimeError("mint socket namespace changed")
-            _fchmodat_empty_path(entry_fd, _SOCKET_MODE)
+            try:
+                _fchmodat_empty_path(entry_fd, _SOCKET_MODE)
+            except OSError as error:
+                # Some rootless container/seccomp profiles reject
+                # fchmodat(AT_EMPTY_PATH) for socket inodes. Keep the pinned
+                # identity check and use a no-follow pathname operation under
+                # the directory lock as the constrained fallback.
+                if error.errno not in {
+                    errno.EINVAL,
+                    errno.ENOSYS,
+                    errno.EOPNOTSUPP,
+                }:
+                    raise
+                current = path.lstat()
+                if not _same_inode(current, pinned) or not stat.S_ISSOCK(
+                    current.st_mode
+                ):
+                    raise RuntimeError("mint socket namespace changed") from None
+                os.chmod(path, _SOCKET_MODE, follow_symlinks=False)
         finally:
             os.close(entry_fd)
     else:  # pragma: no cover - Unix ownership semantics are tested in WSL.
