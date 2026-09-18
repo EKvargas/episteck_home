@@ -28,6 +28,41 @@ sudo chmod 700 /srv/episteck/services/home-bff/secrets
 `svc-home-bff` gets no sudo and no SSH key, matching `svc-nutrition` and
 `svc-home-mcp`.
 
+Create the dedicated gateway identity and socket directory before starting either
+user unit:
+
+```bash
+sudo groupadd --system episteck-gw
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin svc-home-gateway
+sudo usermod --append --groups episteck-gw svc-home-gateway
+sudo install -D -m 0644 deploy/gateway/home-bff-mint.tmpfiles.conf \
+  /etc/tmpfiles.d/episteck-home-bff-mint.conf
+sudo systemd-tmpfiles --create /etc/tmpfiles.d/episteck-home-bff-mint.conf
+stat -c '%U:%G %a %A' /run/episteck/home-bff-mint
+```
+
+The expected directory proof is `svc-home-bff:episteck-gw 2770` with setgid.
+Only `svc-home-gateway` belongs to `episteck-gw`; public nginx `www-data` and
+`home-agent` must not be added. `GroupAdd=keep-groups` is intentional: rootless
+Podman must retain the host service account's supplementary groups rather than
+assuming a container group mapping. Validate that mapping before cutover:
+
+```bash
+sudo -u svc-home-bff podman run --rm --userns=keep-id --group-add=keep-groups \
+  -v /run/episteck/home-bff-mint:/run/episteck/home-bff-mint:rw \
+  localhost/episteck-home-bff:FINAL_SHA id
+sudo -u svc-home-bff podman run --rm --userns=keep-id --group-add=keep-groups \
+  -v /run/episteck/home-bff-mint:/run/episteck/home-bff-mint:rw \
+  localhost/episteck-home-bff:FINAL_SHA sh -c \
+  'python -c "import os; print(os.getuid(), os.getgroups())"'
+```
+
+The exact isolated container proof must start the mint image with the real SQLite
+and socket-directory mounts, assert socket owner `svc-home-bff`, group
+`episteck-gw`, mode `0660`, and repeat after stopping and starting the mint unit.
+Failure to create/recreate this socket with the host group mapping is a deployment
+blocker; do not compensate with privileged chown.
+
 ## 2. Build the image
 
 ```bash
@@ -71,7 +106,13 @@ sudo -u svc-home-bff mkdir -p /home/svc-home-bff/.config/containers/systemd
 # copy home-bff.container, replacing REPLACE_WITH_COMMIT_SHA
 sudo -u XDG_RUNTIME_DIR=/run/user/1007 systemctl --user daemon-reload
 sudo -u XDG_RUNTIME_DIR=/run/user/1007 systemctl --user start home-bff
+sudo -u XDG_RUNTIME_DIR=/run/user/1007 systemctl --user start home-bff-mint
 ```
+
+Start the mint unit only after the tmpfiles directory exists. The public unit
+publishes only loopback `9933`; `home-bff-mint.container` publishes no TCP port.
+Both units use the same `/data/bff.sqlite` and socket-directory paths, while the
+public ASGI process still has no internal mint route.
 
 ## 5. Reverse proxy
 

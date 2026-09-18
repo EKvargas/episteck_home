@@ -1,0 +1,26 @@
+# Quadlet unit for the private Home BFF delegation mint (G1.6).
+# The internal ASGI app is served only through the mounted Unix socket.
+[Unit]
+Description=Episteck Home BFF internal delegation mint (UDS only)
+After=network-online.target
+
+[Container]
+Image=localhost/episteck-home-bff:REPLACE_WITH_COMMIT_SHA
+ContainerName=home-bff-mint
+Volume=/srv/episteck/services/home-bff/data:/data:Z
+Volume=/run/episteck/home-bff-mint:/run/episteck/home-bff-mint:rw
+EnvironmentFile=/srv/episteck/services/home-bff/secrets/oauth.env
+Environment=BFF_STORE_PATH=/data/bff.sqlite
+Environment=BFF_MINT_SOCKET_PATH=/run/episteck/home-bff-mint/mint.sock
+Environment=BFF_PORT=9933
+GroupAdd=keep-groups
+AddHost=home.episteck.com:100.71.79.33
+PodmanArgs=--memory=384m --memory-swap=384m
+Exec=python -m home_bff.internal_main
+
+[Service]
+Restart=always
+TimeoutStartSec=180
+
+[Install]
+WantedBy=default.target
