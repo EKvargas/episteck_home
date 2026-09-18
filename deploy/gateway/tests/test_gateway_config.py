@@ -8,6 +8,7 @@ SERVICE = (ROOT / "episteck-mcp-gateway.service").read_text(encoding="utf-8")
 
 REQUIRED = (
     "listen 127.0.0.1:9934;",
+    "pid /run/episteck-mcp-gateway/nginx.pid;",
     "proxy_pass http://unix:/run/episteck/home-bff-mint/mint.sock:/internal/mint;",
     "proxy_method POST;",
     "proxy_pass_request_headers off;",
@@ -21,6 +22,14 @@ REQUIRED = (
     "proxy_buffering off;",
     "proxy_request_buffering off;",
     "proxy_read_timeout 300s;",
+)
+
+RUNTIME_PATHS = (
+    "client_body_temp_path /run/episteck-mcp-gateway/client_body;",
+    "proxy_temp_path /run/episteck-mcp-gateway/proxy;",
+    "fastcgi_temp_path /run/episteck-mcp-gateway/fastcgi;",
+    "uwsgi_temp_path /run/episteck-mcp-gateway/uwsgi;",
+    "scgi_temp_path /run/episteck-mcp-gateway/scgi;",
 )
 
 
@@ -37,9 +46,18 @@ def test_both_paths_require_mint_and_use_the_fixed_audience_mint_seam():
     assert CONFIG.count("auth_request /__mint;") == 2
     assert CONFIG.count("auth_request_set $mint_delegation") == 2
     assert CONFIG.count("proxy_set_header X-Episteck-Delegation $mint_delegation;") == 2
+    assert CONFIG.count("proxy_hide_header X-Episteck-Delegation;") == 2
     assert "svc-nutrition" not in CONFIG
     for directive in REQUIRED:
         assert directive in CONFIG, directive
+
+
+def test_all_nginx_runtime_state_uses_the_dedicated_service_directories():
+    assert "RuntimeDirectory=episteck-mcp-gateway" in SERVICE
+    assert "StateDirectory=episteck-mcp-gateway" in SERVICE
+    for directive in RUNTIME_PATHS:
+        assert directive in CONFIG, directive
+    assert "logs/nginx.pid" not in CONFIG
 
 
 def test_mint_subrequest_cannot_receive_client_credentials_or_body():

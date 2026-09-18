@@ -13,9 +13,15 @@ The mint subrequest sends no inbound headers or body, and only its fresh
 
 The upstream request deliberately overwrites `X-Episteck-Delegation`, strips
 `Authorization` and `Cookie`, preserves `Mcp-Session-Id`, disables retries, and
-uses HTTP/1.1 with buffering disabled and a 300-second read timeout. The config
-does not inspect JSON-RPC bodies; a protocol request is one proxied HTTP request.
-Access logs use `$uri`, never the query string or delegation header.
+uses HTTP/1.1 with buffering disabled and a 300-second read timeout. Delegation
+response headers are hidden from the client on both upstream paths. The config does
+not inspect JSON-RPC bodies; a protocol request is one proxied HTTP request. Access
+logs use `$uri`, never the query string or delegation header.
+
+The PID and nginx temporary paths live under the unit's
+`RuntimeDirectory=/run/episteck-mcp-gateway`; access and error logs live under its
+`StateDirectory=/var/lib/episteck-mcp-gateway`. The standalone instance does not need
+write access to the public nginx prefix or default cache paths.
 
 ## Installation staging (no runtime switch)
 
@@ -39,7 +45,10 @@ switching Hermes.
 fake Unix-socket mint plus instrumented upstreams when an isolated nginx binary is
 available. It asserts one mint subrequest and one upstream request per client
 request, fresh distinct delegation values, forged-header overwrite, credential
-stripping, session-header preservation, and no retry after upstream failure.
+stripping, session-header preservation, response-header suppression, opaque body
+forwarding, and no retry after upstream failure. A separate lifecycle test proves
+start, unprivileged master/worker identity, reload, and graceful stop using the
+dedicated PID path.
 The real FastMCP 4.0.3 batch-array rejection test runs in the repository venv and
 is kept separate from the Hermes client (`mcp 2.0.0` / `mcp-types 2.0.0`) environment.
 
