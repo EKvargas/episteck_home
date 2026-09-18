@@ -169,6 +169,22 @@ def test_non_live_candidate_is_rejected_without_changing_binding(tmp_path, expir
     assert _binding_count(path) == 1
 
 
+@pytest.mark.parametrize("expired", [False, True], ids=["absent", "expired"])
+def test_non_live_candidate_cannot_create_empty_binding(tmp_path, expired):
+    path = tmp_path / "bff.sqlite"
+    store = SessionStore(str(path))
+    if expired:
+        candidate_id = _make_session(store, "expired", ttl_seconds=-1).session_id
+    else:
+        candidate_id = "missing-session"
+
+    with pytest.raises(ValueError, match="live session"):
+        store.claim_runtime(RUNTIME_ID, candidate_id)
+
+    assert store.resolve_runtime(RUNTIME_ID) is None
+    assert _binding_count(path) == 0
+
+
 def test_resolve_removes_expired_binding(tmp_path):
     path = tmp_path / "bff.sqlite"
     store = SessionStore(str(path))
@@ -179,6 +195,21 @@ def test_resolve_removes_expired_binding(tmp_path):
             "UPDATE bff_session SET expires_at = ? WHERE session_id = ?",
             (int(time.time()) - 1, owner.session_id),
         )
+
+    assert store.resolve_runtime(RUNTIME_ID) is None
+    assert _binding_count(path) == 0
+
+
+def test_resolve_removes_binding_whose_session_was_deleted(tmp_path):
+    path = tmp_path / "bff.sqlite"
+    store = SessionStore(str(path))
+    owner = _make_session(store, "owner")
+    assert store.claim_runtime(RUNTIME_ID, owner.session_id) is BindResult.BOUND
+    # Simulate an older writer that deleted without enabling foreign keys, leaving
+    # the orphaned state that resolve_runtime must clean up defensively.
+    with sqlite3.connect(path) as db:
+        db.execute("DELETE FROM bff_session WHERE session_id = ?", (owner.session_id,))
+    assert _binding_count(path) == 1
 
     assert store.resolve_runtime(RUNTIME_ID) is None
     assert _binding_count(path) == 0
