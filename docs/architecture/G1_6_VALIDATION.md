@@ -11,6 +11,58 @@ live service. See §8.
 **Scope:** synthetic identities and synthetic domain data only. G2 was not started.
 No real family, health, or personal data was created, read, or exposed.
 
+## 0. G1.6 C implementation validation (offline, 2026-09-18)
+
+Tasks 1–6 of the approved delegation-gateway plan were implemented on an isolated
+branch from merged PR #14 (`def611f`). No production host, live service, public
+nginx, nftables table, Hermes configuration, or shared/local FastMCP installation
+was changed. Tasks 10–11 (cutover and rollback execution) were not performed.
+
+The repository environment is `.venv-g1-6-c` using Python 3.13.9. The server
+dependency is pinned and installed there as `fastmcp==4.0.3`; its transitive
+packages resolve `mcp 2.2.0` / `mcp-types 2.2.0`. This is separate from the
+observed Hermes client environment documented for deployment (`mcp 2.0.0` /
+`mcp-types 2.0.0`); FastMCP 4.0.3 is not the Hermes client dependency.
+
+The pre-change isolated baseline was 537 passing tests. Implementation evidence:
+
+| Area | Result |
+| --- | ---: |
+| Home Control Plane, contracts, Nutrition domain | 193 passed |
+| Home BFF Windows run | 149 passed, 10 Unix-only skips |
+| Home BFF WSL/Linux run | 159 passed |
+| Gateway config/nft/FastMCP tests | 9 passed, 3 nginx-harness skips on Windows |
+| Real WSL socket tests | 19 passed |
+| Exact rootless Podman BFF mint image lifecycle | initial + restart socket `1000:1000 660 socket` |
+
+The final Windows command matrix totals **581 passed, 13 skipped** (the skips are
+the ten Unix ownership/socket tests and three nginx-binary integration tests), and
+the post-fix WSL BFF suite is **159 passed**. The exact image was rebuilt locally
+from the implementation checkout for the socket lifecycle proof only; no image was
+published or deployed.
+
+The remaining warnings are upstream Starlette/AnyIO deprecations (and WSL's
+Starlette/httpx compatibility warning); no test failure is hidden by them. The
+gateway integration harness is present and runs when an isolated nginx binary is
+available. An nginx container syntax check passed for the standalone config. WSL
+`nft --check` was not considered proof because the unprivileged environment cannot
+initialize netlink; the rendered table was not loaded.
+
+Final verification commands, all directed at the isolated environment, are:
+
+```bash
+python -m pytest services/home-bff/tests services/home-mcp/tests \
+  services/nutrition/tests deploy/home-bff/tests deploy/gateway/tests -q
+python -m compileall -q services/home-bff services/home-mcp services/nutrition
+git diff --check
+```
+
+Before any future cutover, build all three final images from one merged post-C
+SHA, stage without switching runtime, capture the complete previous transport
+stack, and follow the coordinated cutover/complete rollback procedures in the
+approved plan. No such stage, service switch, image deployment, or nftables load
+was executed here.
+
 ---
 
 ## 1. Recovered starting state
