@@ -7,7 +7,7 @@ After=network-online.target
 [Container]
 Image=localhost/episteck-home-bff:REPLACE_WITH_COMMIT_SHA
 ContainerName=home-bff-mint
-Volume=/srv/episteck/services/home-bff/data:/data:Z
+Volume=/srv/episteck/services/home-bff/data:/data:z
 Volume=/run/episteck/home-bff-mint:/run/episteck/home-bff-mint:rw
 EnvironmentFile=/srv/episteck/services/home-bff/secrets/oauth.env
 Environment=BFF_STORE_PATH=/data/bff.sqlite

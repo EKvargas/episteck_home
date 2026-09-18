@@ -43,9 +43,10 @@ stat -c '%U:%G %a %A' /run/episteck/home-bff-mint
 
 The expected directory proof is `svc-home-bff:episteck-gw 2770` with setgid.
 Only `svc-home-gateway` belongs to `episteck-gw`; public nginx `www-data` and
-`home-agent` must not be added. `GroupAdd=keep-groups` is intentional: rootless
-Podman must retain the host service account's supplementary groups rather than
-assuming a container group mapping. Validate that mapping before cutover:
+`home-agent` must not be added. `GroupAdd=keep-groups` on the mint unit is
+intentional: rootless Podman must retain the host service account's supplementary
+groups rather than assuming a container group mapping. Validate that mapping before
+cutover:
 
 ```bash
 sudo -u svc-home-bff podman run --rm --userns=keep-id --group-add=keep-groups \
@@ -111,8 +112,9 @@ sudo -u XDG_RUNTIME_DIR=/run/user/1007 systemctl --user start home-bff-mint
 
 Start the mint unit only after the tmpfiles directory exists. The public unit
 publishes only loopback `9933`; `home-bff-mint.container` publishes no TCP port.
-Both units use the same `/data/bff.sqlite` and socket-directory paths, while the
-public ASGI process still has no internal mint route.
+Both units use the same shared-label `/data/bff.sqlite` mount. Only the mint unit
+mounts the socket directory and retains supplementary groups; the public BFF has no
+socket-directory mount and its ASGI process has no internal mint route.
 
 ## 5. Reverse proxy
 

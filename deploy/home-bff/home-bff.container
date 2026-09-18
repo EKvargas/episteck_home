@@ -14,13 +14,11 @@ After=network-online.target
 Image=localhost/episteck-home-bff:REPLACE_WITH_COMMIT_SHA
 ContainerName=home-bff
 PublishPort=127.0.0.1:9933:9933
-Volume=/srv/episteck/services/home-bff/data:/data:Z
-Volume=/run/episteck/home-bff-mint:/run/episteck/home-bff-mint:rw
+Volume=/srv/episteck/services/home-bff/data:/data:z
 EnvironmentFile=/srv/episteck/services/home-bff/secrets/oauth.env
 Environment=BFF_STORE_PATH=/data/bff.sqlite
 Environment=BFF_MINT_SOCKET_PATH=/run/episteck/home-bff-mint/mint.sock
 Environment=BFF_PORT=9933
-GroupAdd=keep-groups
 # The Control Plane is reached over the Tailscale mesh, not the public Internet.
 AddHost=home.episteck.com:100.71.79.33
 PodmanArgs=--memory=384m --memory-swap=384m
