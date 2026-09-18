@@ -1,7 +1,8 @@
-"""Entrypoint: ``python -m home_bff``.
+"""Public TCP entrypoint: ``python -m home_bff``.
 
 Configuration is read once at startup so a missing secret fails loudly here rather
-than at the first login attempt.
+than at the first login attempt. The internal mint app is never imported or served
+by this process.
 """
 from __future__ import annotations
 

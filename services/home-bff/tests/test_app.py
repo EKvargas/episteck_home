@@ -18,7 +18,8 @@ from home_bff import sessions
 from home_bff.app import create_app
 from home_bff.config import ConfigError, Settings
 from home_bff.frappe_client import SessionOpenError, TokenExchangeError, TokenSet
-from home_bff.store import SessionStore
+from home_bff.runtime import RUNTIME_ID, BindResult
+from home_bff.store import SessionStore, StoreUnavailableError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "apps" / "episteck_home"))
 from episteck_home.identity.delegation import verify  # noqa: E402
@@ -35,6 +36,7 @@ def make_settings(**overrides) -> Settings:
         delegation_secret=DELEGATION_SECRET,
         delegation_issuer="episteck-home-bff",
         store_path=":memory:",
+        mint_socket_path="/run/episteck/home-bff-mint/mint.sock",
         port=9933,
         scope="all openid",
     )
@@ -177,6 +179,68 @@ def test_callback_happy_path_sets_opaque_cookie(ctx):
     # The cookie is an opaque key, never a token.
     assert raw != "at-1"
     assert store.get_session(raw) is not None
+
+
+def test_callback_claims_fixed_runtime_and_reports_binding(ctx):
+    http, store, _ = ctx
+
+    state = login_and_get_state(http)
+    response = http.get(
+        f"/callback?code=auth-code&state={state}", follow_redirects=False
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "authenticated",
+        "runtime_binding": BindResult.BOUND.value,
+    }
+    browser_session = store.get_session(http.cookies.get(sessions.COOKIE_NAME))
+    assert browser_session is not None
+    assert store.resolve_runtime(RUNTIME_ID) == browser_session
+
+
+def test_callback_refuses_to_replace_live_runtime_owner(ctx):
+    http, store, _ = ctx
+    owner = store.create_session(
+        home_session_id="HDS-OWNER",
+        access_token="owner-token",
+        refresh_token=None,
+    )
+    assert store.claim_runtime(RUNTIME_ID, owner.session_id) is BindResult.BOUND
+
+    state = login_and_get_state(http)
+    response = http.get(f"/callback?code=c&state={state}", follow_redirects=False)
+
+    assert response.status_code == 200
+    assert response.json()["runtime_binding"] == BindResult.ALREADY_BOUND.value
+    assert store.resolve_runtime(RUNTIME_ID) == owner
+    contender_id = http.cookies.get(sessions.COOKIE_NAME)
+    assert contender_id != owner.session_id
+    assert store.get_session(contender_id) is not None
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        ValueError("runtime binding requires a live session"),
+        StoreUnavailableError("runtime store unavailable: sqlite detail"),
+    ],
+    ids=["invalid-candidate", "store-unavailable"],
+)
+def test_callback_binding_failure_is_a_generic_fail_closed_response(ctx, failure):
+    http, store, _ = ctx
+
+    def fail_claim(runtime_id, session_id):
+        raise failure
+
+    store.claim_runtime = fail_claim
+    state = login_and_get_state(http)
+    response = http.get(f"/callback?code=c&state={state}", follow_redirects=False)
+
+    assert response.status_code == 503
+    assert sessions.COOKIE_NAME not in response.cookies
+    assert "sqlite" not in response.text.lower()
+    assert "live session" not in response.text.lower()
 
 
 def test_callback_uses_the_verifier_minted_for_that_state(ctx):
@@ -458,6 +522,19 @@ def test_logout_invalidates_session_and_clears_cookie(ctx):
     assert http.get("/session").status_code == 401
 
 
+def test_logout_atomically_removes_the_runtime_binding_with_its_session(ctx):
+    http, store, _ = ctx
+    complete_login(http)
+    session_id = http.cookies.get(sessions.COOKIE_NAME)
+    assert store.resolve_runtime(RUNTIME_ID).session_id == session_id
+
+    response = http.post("/logout")
+
+    assert response.status_code == 200
+    assert store.get_session(session_id) is None
+    assert store.resolve_runtime(RUNTIME_ID) is None
+
+
 def test_logout_revokes_upstream_session_and_token(ctx):
     http, _, client = ctx
     complete_login(http)
@@ -541,3 +618,28 @@ def test_config_requires_every_secret():
         for k, v in old.items():
             if v is not None:
                 os.environ[k] = v
+
+
+def test_config_requires_an_explicit_mint_socket_path():
+    import os
+
+    env = {
+        "HOME_BASE_URL": "https://home.invalid",
+        "BFF_CLIENT_ID": "c",
+        "BFF_CLIENT_SECRET": "s",
+        "BFF_REDIRECT_URI": "https://bff.invalid/callback",
+        "HOME_DELEGATION_SECRET": "d",
+    }
+    keys = [*env, "BFF_MINT_SOCKET_PATH"]
+    old = {key: os.environ.get(key) for key in keys}
+    os.environ.update(env)
+    os.environ.pop("BFF_MINT_SOCKET_PATH", None)
+    try:
+        with pytest.raises(ConfigError, match="BFF_MINT_SOCKET_PATH"):
+            Settings.from_env()
+    finally:
+        for key, value in old.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
