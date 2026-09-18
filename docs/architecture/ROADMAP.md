@@ -18,25 +18,19 @@ Home Control Plane model + Knowledge contracts + architecture docs. **No real da
 
 See `G1_5_VALIDATION.md`. Stop here; do not begin G2.
 
-## Stage G1.6 — trusted actor binding (implemented; completion is the current G2 blocker)
+## Stage G1.6 — trusted actor binding (current completion/security gate)
 Actor identity is derived from an authenticated session, never supplied. **No real data.**
-- ✅ `actor_person_id` removed from the Home API, all MCP tools, and Nutrition routes.
-- ✅ Server-side resolution: validated auth → Frappe User → `Person.linked_user` → actor.
-- ✅ Delegated context (opaque session id, single audience, short TTL, replay-resistant).
-- ✅ Dual principal: `machine_caller` + `human_actor`, both retained in audit context.
-- ✅ Nutrition resolves the actor independently; never trusts an asserted actor.
-- ✅ Home BFF: confidential OAuth client on the **EU node**, always S256 PKCE.
-- ✅ Consent semantics unchanged. 199 automated tests pass.
-
-See `adr/0009-trusted-actor-binding.md` and `G1_6_VALIDATION.md`.
+G1.6 implementation/deployment exists and live security validation is still the current
+G2 blocker; use `G1_6_VALIDATION.md` as the canonical evidence rather than stale counts
+or intermediate descriptions in older commits.
 
 ## Gates ahead
 
 ### ~~Stage G1.7 — EU Home Control Plane migration~~ `[WITHDRAWN 2026-09-16]`
 **Not a blocker. Do not create this stage.** `home.episteck.com` is the operator's own
 personal/family deployment, and Ashburn/US hosting for the Home Control Plane is
-accepted. Real family onboarding may proceed on the existing Ashburn instance once G1.6
-is complete. **Do not migrate `home.episteck.com` during this phase.**
+accepted. Real family onboarding may proceed there once G1.6 is complete. **Do not
+migrate `home.episteck.com` during this phase.**
 
 EU data residency is a **future commercialization** concern. Before onboarding external
 EU customers, a regional deployment/data-residency strategy will be designed separately —
@@ -55,23 +49,52 @@ First real Person + explicit consent + real Pregnancy Nutrition Profile + real
 providers + real meal plan + planned→actual + Home Agent with the real user.
 
 Remaining blockers:
-1. **G1.6 completion** — merge to `main`, `bench migrate`, deploy the Home BFF,
-   create the OAuth client, and complete the real-login bindings (A10). DNS for
-   `bff.home.episteck.com` is live. This is the current blocker.
+1. **G1.6 completion** — finish the live trusted-actor/replay/security matrix and final
+   Home Agent/Nutrition acceptance. This is the current blocker.
 2. Explicit user approval for real data.
 3. Real-Person onboarding + real ConsentGrants.
-4. Duplicate OIDC `sub` remediation before any native/public OIDC client (a reference
-   audit found zero current consumers: no OAuth clients, no bearer tokens, no social
-   login keys).
+4. Duplicate OIDC `sub` remediation before any future native/public OIDC client.
 
 EU residency is **not** a blocker — see the withdrawn G1.7 note above.
 
-Trusted actor *design and implementation* are done (G1.6); only its merge/deploy
-steps remain, which is blocker 1.
+## Planned product capabilities after the current gates
+
+### Smart Shopping + Smart Possessions `[ARCHITECTURE APPROVED; NOT IMPLEMENTED]`
+
+ADR-0010 defines two sibling domain services rather than one broad "things" service:
+
+- **`svc-shopping`** — ShoppingNeed, WatchRule/AlertRule, provider-normalized listings,
+  PriceObservation, deterministic explainable DealEvaluation, PurchasePolicy and
+  Purchase.
+- **`svc-inventory`** — OwnedItem, locations/collections, usage/condition/maintenance,
+  disposition, InventoryGap, Wardrobe/outfits and baby/home possession lifecycle.
+
+The first Shopping provider is planned as **Kleinanzeigen Saved Search → official email
+notification → mail adapter → MarketplaceProvider**, explicitly avoiding an architecture
+that depends on direct scraping.
+
+The product must enforce a **Friction Budget**: V1 is useful without special hardware
+(photo-first capture, natural language, grouped items, one-tap feedback). QR/NFC
+container/zone tagging is V2; smart wardrobe/RFID/laundry/Home Assistant is V3 only
+after normal-use adoption is proven.
+
+Initial V1 outcomes:
+
+- baby preparation needs, deals, safety policy, price history, purchase/resale lifecycle
+- inventory-aware shopping so the system does not recommend duplicates
+- wardrobe rationalization (keep/use/sell/donate) and outfit suggestions
+- InventoryGap → proposed ShoppingNeed; PurchaseCompleted → OwnedItem workflow
+- provider/channel abstractions so future eBay/Amazon/Idealo/etc. do not change the Deal
+  Engine
+
+This capability is **not a G2 blocker** and must not interrupt closure of G1.6.
+See `adr/0010-smart-shopping-and-possessions.md` and
+`proposals/SMART_SHOPPING_AND_POSSESSIONS.md`.
 
 ### Later
 Device Gateway/Withings, FHIR, Mind, Calendar, Documents, Finance, reverse proxy +
-public UI, voice, grocery automation.
+public UI, voice, grocery automation, additional Shopping providers, richer style/fashion
+knowledge and ambient inventory automation.
 
 ## Architecture Change Rule (contributors & agents)
 Before architectural changes:
