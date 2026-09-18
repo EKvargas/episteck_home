@@ -1,17 +1,18 @@
 """Server-side store: single-use transactions, durability, expiry (G1.6)."""
 from __future__ import annotations
 
+import sqlite3
 import time
 
 from home_bff.store import SessionStore
 
 
-def make_store() -> SessionStore:
-    return SessionStore(":memory:")
+def make_store(tmp_path) -> SessionStore:
+    return SessionStore(str(tmp_path / "bff.sqlite"))
 
 
-def test_transaction_round_trip():
-    store = make_store()
+def test_transaction_round_trip(tmp_path):
+    store = make_store(tmp_path)
     store.begin_transaction(
         state="s1", code_verifier="v1", nonce="n1", redirect_uri="https://b/cb"
     )
@@ -20,8 +21,8 @@ def test_transaction_round_trip():
     assert transaction.code_verifier == "v1"
 
 
-def test_transaction_is_single_use():
-    store = make_store()
+def test_transaction_is_single_use(tmp_path):
+    store = make_store(tmp_path)
     store.begin_transaction(
         state="s1", code_verifier="v1", nonce="n1", redirect_uri="https://b/cb"
     )
@@ -29,31 +30,32 @@ def test_transaction_is_single_use():
     assert store.consume_transaction("s1") is None
 
 
-def test_unknown_state_returns_nothing():
-    assert make_store().consume_transaction("never-issued") is None
+def test_unknown_state_returns_nothing(tmp_path):
+    assert make_store(tmp_path).consume_transaction("never-issued") is None
 
 
-def test_empty_state_returns_nothing():
-    assert make_store().consume_transaction("") is None
+def test_empty_state_returns_nothing(tmp_path):
+    assert make_store(tmp_path).consume_transaction("") is None
 
 
-def test_expired_transaction_is_denied_and_spent():
-    store = make_store()
+def test_expired_transaction_is_denied_and_spent(tmp_path):
+    path = tmp_path / "bff.sqlite"
+    store = make_store(tmp_path)
     store.begin_transaction(
         state="s1", code_verifier="v1", nonce="n1", redirect_uri="https://b/cb"
     )
-    store._db.execute(
-        "UPDATE oauth_transaction SET expires_at = ? WHERE state = 's1'",
-        (int(time.time()) - 1,),
-    )
-    store._db.commit()
+    with sqlite3.connect(path) as db:
+        db.execute(
+            "UPDATE oauth_transaction SET expires_at = ? WHERE state = 's1'",
+            (int(time.time()) - 1,),
+        )
     assert store.consume_transaction("s1") is None
     # Still consumed: a stale state can never be retried.
     assert store.consume_transaction("s1") is None
 
 
-def test_session_round_trip():
-    store = make_store()
+def test_session_round_trip(tmp_path):
+    store = make_store(tmp_path)
     created = store.create_session(
         home_session_id="HDS-1", access_token="at", refresh_token="rt"
     )
@@ -62,8 +64,8 @@ def test_session_round_trip():
     assert fetched.home_session_id == "HDS-1"
 
 
-def test_session_ids_are_unique_and_opaque():
-    store = make_store()
+def test_session_ids_are_unique_and_opaque(tmp_path):
+    store = make_store(tmp_path)
     ids = {
         store.create_session(
             home_session_id="HDS-1", access_token="at", refresh_token=None
@@ -74,8 +76,8 @@ def test_session_ids_are_unique_and_opaque():
     assert all(len(i) >= 32 and "HDS-1" not in i for i in ids)
 
 
-def test_expired_session_is_denied_and_removed():
-    store = make_store()
+def test_expired_session_is_denied_and_removed(tmp_path):
+    store = make_store(tmp_path)
     created = store.create_session(
         home_session_id="HDS-1", access_token="at", refresh_token=None, ttl_seconds=-1
     )
@@ -83,8 +85,8 @@ def test_expired_session_is_denied_and_removed():
     assert store.delete_session(created.session_id) is False
 
 
-def test_delete_session():
-    store = make_store()
+def test_delete_session(tmp_path):
+    store = make_store(tmp_path)
     created = store.create_session(
         home_session_id="HDS-1", access_token="at", refresh_token=None
     )
@@ -92,22 +94,23 @@ def test_delete_session():
     assert store.get_session(created.session_id) is None
 
 
-def test_missing_session_id_is_denied():
-    assert make_store().get_session(None) is None
+def test_missing_session_id_is_denied(tmp_path):
+    assert make_store(tmp_path).get_session(None) is None
 
 
-def test_purge_expired_removes_both_tables():
-    store = make_store()
+def test_purge_expired_removes_both_tables(tmp_path):
+    path = tmp_path / "bff.sqlite"
+    store = make_store(tmp_path)
     store.begin_transaction(
         state="s1", code_verifier="v1", nonce="n1", redirect_uri="https://b/cb"
     )
     store.create_session(
         home_session_id="HDS-1", access_token="at", refresh_token=None, ttl_seconds=-1
     )
-    store._db.execute(
-        "UPDATE oauth_transaction SET expires_at = ?", (int(time.time()) - 1,)
-    )
-    store._db.commit()
+    with sqlite3.connect(path) as db:
+        db.execute(
+            "UPDATE oauth_transaction SET expires_at = ?", (int(time.time()) - 1,)
+        )
     assert store.purge_expired() == 2
 
 

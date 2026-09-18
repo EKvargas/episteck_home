@@ -5,6 +5,7 @@ session, and logout paths are exercised end to end without touching the network.
 """
 from __future__ import annotations
 
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -88,8 +89,8 @@ class FakeClient:
 
 
 @pytest.fixture
-def ctx():
-    store = SessionStore(":memory:")
+def ctx(tmp_path):
+    store = SessionStore(str(tmp_path / "bff.sqlite"))
     client = FakeClient()
     app = create_app(make_settings(), store=store, client=client)
     # base_url https so the Secure cookie is retained by the test client.
@@ -301,11 +302,11 @@ def test_expired_session_is_denied(ctx):
     http, store, _ = ctx
     complete_login(http)
     raw = http.cookies.get(sessions.COOKIE_NAME)
-    store._db.execute(
-        "UPDATE bff_session SET expires_at = ? WHERE session_id = ?",
-        (int(time.time()) - 1, raw),
-    )
-    store._db.commit()
+    with sqlite3.connect(store._path) as db:
+        db.execute(
+            "UPDATE bff_session SET expires_at = ? WHERE session_id = ?",
+            (int(time.time()) - 1, raw),
+        )
     assert http.get("/session").status_code == 401
 
 

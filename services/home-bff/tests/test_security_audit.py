@@ -13,6 +13,7 @@ build rather than shipping.
 from __future__ import annotations
 
 import logging
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -43,8 +44,8 @@ SECRETS = {
 
 
 @pytest.fixture
-def ctx():
-    store = SessionStore(":memory:")
+def ctx(tmp_path):
+    store = SessionStore(str(tmp_path / "bff.sqlite"))
     client = FakeClient()
     app = create_app(make_settings(), store=store, client=client)
     with TestClient(app, base_url="https://bff.invalid") as http:
@@ -86,11 +87,11 @@ def test_delegation_denied_when_session_expired(ctx):
     http, store, _ = ctx
     complete_login(http)
     raw = http.cookies.get(sessions.COOKIE_NAME)
-    store._db.execute(
-        "UPDATE bff_session SET expires_at = ? WHERE session_id = ?",
-        (int(time.time()) - 1, raw),
-    )
-    store._db.commit()
+    with sqlite3.connect(store._path) as db:
+        db.execute(
+            "UPDATE bff_session SET expires_at = ? WHERE session_id = ?",
+            (int(time.time()) - 1, raw),
+        )
     assert http.post("/delegation").status_code == 401
 
 
@@ -425,7 +426,8 @@ def test_health_requires_no_session_and_creates_none(ctx):
     http, store, _ = ctx
     assert http.get("/health").status_code == 200
     assert http.cookies.get(sessions.COOKIE_NAME) is None
-    assert store._db.execute("SELECT COUNT(*) FROM bff_session").fetchone()[0] == 0
+    with sqlite3.connect(store._path) as db:
+        assert db.execute("SELECT COUNT(*) FROM bff_session").fetchone()[0] == 0
 
 
 def test_health_does_not_reach_the_control_plane(ctx):

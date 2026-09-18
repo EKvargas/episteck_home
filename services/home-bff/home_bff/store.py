@@ -29,9 +29,12 @@ import os
 import secrets
 import sqlite3
 import time
-from contextlib import closing
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+
+from .runtime import BindResult
 
 # An in-flight login should complete in seconds; minutes is already generous.
 TRANSACTION_TTL_SECONDS = 600
@@ -56,9 +59,17 @@ CREATE TABLE IF NOT EXISTS bff_session (
     created_at           INTEGER NOT NULL,
     expires_at           INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS runtime_binding (
+    runtime_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    bound_at   INTEGER NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES bff_session(session_id) ON DELETE CASCADE
+);
 CREATE INDEX IF NOT EXISTS ix_tx_expiry ON oauth_transaction(expires_at);
 CREATE INDEX IF NOT EXISTS ix_session_expiry ON bff_session(expires_at);
 """
+
+_BUSY_TIMEOUT_MS = 1_000
 
 
 @dataclass(frozen=True)
@@ -83,26 +94,66 @@ def _now() -> int:
 
 
 class SessionStore:
-    """SQLite-backed store. Safe for the single-process uvicorn worker we deploy."""
+    """SQLite-backed store shared safely by independent BFF processes."""
 
     def __init__(self, path: str) -> None:
         self._path = path
-        if path != ":memory:":
-            parent = Path(path).parent
-            parent.mkdir(parents=True, exist_ok=True)
-        # check_same_thread=False: uvicorn serves requests from a threadpool, and
-        # every write below is a short, serialized transaction.
-        self._db = sqlite3.connect(path, check_same_thread=False)
-        self._db.row_factory = sqlite3.Row
-        self._db.executescript(_SCHEMA)
-        self._db.commit()
-        if path != ":memory:":
-            # Tokens live here. Keep them unreadable to other service accounts even
-            # if the parent directory is ever loosened.
-            try:
-                os.chmod(path, 0o600)
-            except OSError:
-                pass
+        if path == ":memory:":
+            raise ValueError("SessionStore requires a filesystem database path")
+        parent = Path(path).parent
+        parent.mkdir(parents=True, exist_ok=True)
+        with self._connection() as db:
+            # WAL lets the mint process read the last committed binding while the
+            # public process is preparing a short write transaction.
+            db.execute("PRAGMA journal_mode = WAL")
+            db.executescript(_SCHEMA)
+            db.commit()
+        # Tokens live here. Keep them unreadable to other service accounts even if
+        # the parent directory is ever loosened.
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+
+    def _connect(self) -> sqlite3.Connection:
+        """Open one configured connection for exactly one store operation."""
+        db = sqlite3.connect(
+            self._path,
+            timeout=_BUSY_TIMEOUT_MS / 1_000,
+        )
+        db.row_factory = sqlite3.Row
+        db.execute("PRAGMA foreign_keys = ON")
+        db.execute(f"PRAGMA busy_timeout = {_BUSY_TIMEOUT_MS}")
+        return db
+
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        db = self._connect()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    @contextmanager
+    def _mutation(self) -> Iterator[sqlite3.Connection]:
+        """Serialize a short mutation and translate SQLite failures fail-closed."""
+        db: sqlite3.Connection | None = None
+        try:
+            db = self._connect()
+            db.execute("BEGIN IMMEDIATE")
+            yield db
+            db.commit()
+        except sqlite3.OperationalError:
+            if db is not None:
+                db.rollback()
+            raise StoreUnavailableError("runtime store unavailable") from None
+        except Exception:
+            if db is not None:
+                db.rollback()
+            raise
+        finally:
+            if db is not None:
+                db.close()
 
     # ---------------------------------------------------------------- transactions
 
@@ -110,8 +161,8 @@ class SessionStore:
         self, *, state: str, code_verifier: str, nonce: str, redirect_uri: str
     ) -> None:
         now = _now()
-        with self._db:
-            self._db.execute(
+        with self._mutation() as db:
+            db.execute(
                 "INSERT INTO oauth_transaction"
                 " (state, code_verifier, nonce, redirect_uri, created_at, expires_at)"
                 " VALUES (?,?,?,?,?,?)",
@@ -129,15 +180,15 @@ class SessionStore:
         """Atomically fetch-and-delete. A second call with the same state gets None."""
         if not state:
             return None
-        with self._db:
-            row = self._db.execute(
+        with self._mutation() as db:
+            row = db.execute(
                 "SELECT * FROM oauth_transaction WHERE state = ?", (state,)
             ).fetchone()
             if row is None:
                 return None
             # Delete before validating expiry: a stale state is spent either way, so
             # it can never be retried.
-            self._db.execute("DELETE FROM oauth_transaction WHERE state = ?", (state,))
+            db.execute("DELETE FROM oauth_transaction WHERE state = ?", (state,))
             if row["expires_at"] <= _now():
                 return None
             return Transaction(
@@ -160,8 +211,8 @@ class SessionStore:
         session_id = secrets.token_urlsafe(32)
         now = _now()
         expires_at = now + ttl_seconds
-        with self._db:
-            self._db.execute(
+        with self._mutation() as db:
+            db.execute(
                 "INSERT INTO bff_session"
                 " (session_id, home_session_id, access_token, refresh_token,"
                 "  created_at, expires_at) VALUES (?,?,?,?,?,?)",
@@ -186,9 +237,10 @@ class SessionStore:
         """Return a live session, or nothing. Expiry is a denial, not a warning."""
         if not session_id:
             return None
-        row = self._db.execute(
-            "SELECT * FROM bff_session WHERE session_id = ?", (session_id,)
-        ).fetchone()
+        with self._connection() as db:
+            row = db.execute(
+                "SELECT * FROM bff_session WHERE session_id = ?", (session_id,)
+            ).fetchone()
         if row is None:
             return None
         if row["expires_at"] <= _now():
@@ -205,9 +257,80 @@ class SessionStore:
     def delete_session(self, session_id: str | None) -> bool:
         if not session_id:
             return False
-        with self._db:
-            cursor = self._db.execute(
+        with self._mutation() as db:
+            cursor = db.execute(
                 "DELETE FROM bff_session WHERE session_id = ?", (session_id,)
+            )
+        return cursor.rowcount > 0
+
+    # ------------------------------------------------------------- runtime binding
+
+    def claim_runtime(self, runtime_id: str, session_id: str) -> BindResult:
+        """Atomically bind a live session without replacing another live owner."""
+        now = _now()
+        with self._mutation() as db:
+            candidate = db.execute(
+                "SELECT session_id FROM bff_session"
+                " WHERE session_id = ? AND expires_at > ?",
+                (session_id, now),
+            ).fetchone()
+            if candidate is None:
+                raise ValueError("runtime binding requires a live session")
+
+            binding = db.execute(
+                "SELECT rb.session_id, s.expires_at"
+                " FROM runtime_binding AS rb"
+                " LEFT JOIN bff_session AS s ON s.session_id = rb.session_id"
+                " WHERE rb.runtime_id = ?",
+                (runtime_id,),
+            ).fetchone()
+            if binding is None:
+                db.execute(
+                    "INSERT INTO runtime_binding (runtime_id, session_id, bound_at)"
+                    " VALUES (?, ?, ?)",
+                    (runtime_id, session_id, now),
+                )
+                return BindResult.BOUND
+
+            if binding["session_id"] == session_id:
+                return BindResult.SAME_SESSION
+
+            if binding["expires_at"] is None or binding["expires_at"] <= now:
+                db.execute(
+                    "UPDATE runtime_binding SET session_id = ?, bound_at = ?"
+                    " WHERE runtime_id = ?",
+                    (session_id, now, runtime_id),
+                )
+                return BindResult.REPLACED_STALE
+
+            return BindResult.ALREADY_BOUND
+
+    def resolve_runtime(self, runtime_id: str) -> Session | None:
+        """Return the committed live owner and discard a stale binding."""
+        now = _now()
+        with self._mutation() as db:
+            row = db.execute(
+                "SELECT s.* FROM runtime_binding AS rb"
+                " LEFT JOIN bff_session AS s ON s.session_id = rb.session_id"
+                " WHERE rb.runtime_id = ?",
+                (runtime_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            if row["session_id"] is None or row["expires_at"] <= now:
+                db.execute(
+                    "DELETE FROM runtime_binding WHERE runtime_id = ?", (runtime_id,)
+                )
+                return None
+            return _session_from_row(row)
+
+    def clear_runtime_for_session(self, session_id: str) -> bool:
+        """Remove every runtime binding owned by this browser session."""
+        if not session_id:
+            return False
+        with self._mutation() as db:
+            cursor = db.execute(
+                "DELETE FROM runtime_binding WHERE session_id = ?", (session_id,)
             )
         return cursor.rowcount > 0
 
@@ -216,15 +339,28 @@ class SessionStore:
     def purge_expired(self) -> int:
         """Drop expired rows so the file does not grow without bound."""
         now = _now()
-        with self._db:
-            a = self._db.execute(
+        with self._mutation() as db:
+            a = db.execute(
                 "DELETE FROM oauth_transaction WHERE expires_at <= ?", (now,)
             ).rowcount
-            b = self._db.execute(
+            b = db.execute(
                 "DELETE FROM bff_session WHERE expires_at <= ?", (now,)
             ).rowcount
         return a + b
 
     def close(self) -> None:
-        with closing(self._db):
-            pass
+        """Retained for callers; operations do not keep a connection open."""
+
+
+class StoreUnavailableError(RuntimeError):
+    """The bounded wait for a safe SQLite operation was exhausted."""
+
+
+def _session_from_row(row: sqlite3.Row) -> Session:
+    return Session(
+        session_id=row["session_id"],
+        home_session_id=row["home_session_id"],
+        access_token=row["access_token"],
+        refresh_token=row["refresh_token"],
+        expires_at=row["expires_at"],
+    )
