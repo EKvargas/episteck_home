@@ -282,11 +282,59 @@ def test_a_session_without_a_token_is_unaffected_by_concurrent_tokens(live_serve
 # ======================================================================
 
 
-def test_no_tool_accepts_a_delegation_or_actor_parameter():
-    """The model must be unable to supply either one."""
+#: The business tools this server exposes. Named explicitly so a discovery bug
+#: cannot reduce the checks below to a no-op without failing.
+PRODUCTION_TOOLS = {
+    "whoami",
+    "get_person",
+    "list_my_circles",
+    "list_circle_members",
+    "list_people_i_care_for",
+    "get_access_to_person",
+    "check_access",
+    "get_care_dashboard",
+}
+
+
+def _production_tools() -> dict:
+    """Every production tool function, across fastmcp versions.
+
+    fastmcp 2.x wraps a decorated tool in a FunctionTool exposing ``.fn``; the pinned
+    4.0.3 returns the PLAIN FUNCTION. The original version of this helper only looked
+    for ``.fn`` and skipped anything without it, so on 4.0.3 it found NOTHING and the
+    tests below passed while inspecting zero tools. Measured: "tools reachable via
+    .fn on 4.0.3: 0".
+
+    Callers assert the returned set matches ``PRODUCTION_TOOLS``, so a future
+    discovery failure fails loudly instead of silently covering nothing.
+    """
     import inspect
 
     from home_mcp import server
+
+    tools = {}
+    for name in dir(server):
+        if name.startswith("_"):
+            continue
+        value = getattr(server, name)
+        fn = getattr(value, "fn", None)  # fastmcp 2.x FunctionTool
+        if fn is None and inspect.isfunction(value) and value.__module__ == server.__name__:
+            fn = value  # fastmcp 4.x plain function
+        if fn is not None and callable(fn):
+            tools[name] = fn
+    return tools
+
+
+def test_the_tool_inventory_is_actually_discoverable():
+    """Guard against the vacuous-assertion trap the tests below would fall into."""
+    discovered = set(_production_tools())
+    missing = PRODUCTION_TOOLS - discovered
+    assert not missing, f"tool discovery found nothing for: {sorted(missing)}"
+
+
+def test_no_tool_accepts_a_delegation_or_actor_parameter():
+    """The model must be unable to supply either one."""
+    import inspect
 
     forbidden = {
         "delegation",
@@ -298,11 +346,9 @@ def test_no_tool_accepts_a_delegation_or_actor_parameter():
         "credential",
         "authorization",
     }
-    for name in dir(server):
-        tool = getattr(server, name)
-        fn = getattr(tool, "fn", None)
-        if fn is None or not callable(fn):
-            continue
+    tools = _production_tools()
+    assert PRODUCTION_TOOLS <= set(tools), "not every production tool was inspected"
+    for name, fn in tools.items():
         params = set(inspect.signature(fn).parameters)
         assert not (params & forbidden), f"{name} exposes {params & forbidden}"
 
@@ -315,15 +361,17 @@ def test_context_module_exposes_no_setter():
 
 def test_tool_results_never_echo_the_delegation(live_server):
     """A token in the request must not come back in a model-visible result."""
-    from home_mcp import server
-
     token = "TOKEN-MUST-NOT-ECHO"
     result = _call_peek(live_server, delegation=token)
-    # The probe tool deliberately returns it; production tools must not.
-    for name in dir(server):
-        tool = getattr(server, name)
-        if getattr(tool, "fn", None) is None:
-            continue
-        source_doc = (getattr(tool, "description", "") or "").lower()
-        assert "delegation" not in source_doc, name
     assert result["delegation"] == token  # sanity: the probe did see it
+
+    # The probe tool deliberately returns it; production tools must not mention it
+    # in the docstring the model reads. Previously this loop reached for
+    # `tool.description` on a FunctionTool — absent on 4.0.3, so it inspected
+    # nothing. The docstring IS the description for a plain function.
+    tools = _production_tools()
+    assert PRODUCTION_TOOLS <= set(tools), "not every production tool was inspected"
+    for name, fn in tools.items():
+        doc = (fn.__doc__ or "").lower()
+        assert "delegation" not in doc, name
+        assert token.lower() not in doc, name
