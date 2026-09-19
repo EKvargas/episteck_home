@@ -34,7 +34,7 @@ This is a working decision register, NOT the final Knowledge architecture. The [
 
 Canonical architecture remains in [ARCHITECTURE.md](../ARCHITECTURE.md), [KNOWLEDGE.md](../KNOWLEDGE.md), accepted ADRs, and approved architecture proposals. The existing [Roadmap](../ROADMAP.md) identifies the Knowledge gate. This document does not amend those sources or grant runtime approval.
 
-Only explicit Product Architect decisions may accept, modify, or reject review recommendations. For each future disposition, record the decision owner, date, exact accepted/modified/rejected finding, reasoning, acceptance scenarios, and references to approved architecture changes. All dispositions are currently **NOT DECIDED**; B1–B6 remain **OPEN**. A reviewer recommendation or this document's eventual merge does not itself select technology or close a blocker.
+Only explicit Product Architect decisions may accept, modify, or reject review recommendations. For each future disposition, record the decision owner, date, exact accepted/modified/rejected finding, reasoning, acceptance scenarios, and references to approved architecture changes. All dispositions are currently **NOT DECIDED**. B1 has a working proposal **AWAITING PRODUCT ARCHITECT DECISION** and is not resolved; B2–B6 remain **OPEN**. A reviewer recommendation or this document's eventual merge does not itself select technology or close a blocker.
 
 ## Current five-layer model
 
@@ -58,7 +58,7 @@ This distinction preserves the current conceptual direction; it does not resolve
 
 ## Security partition — design invariant candidate
 
-Status: CANDIDATE — PRODUCT ARCHITECT DECISION REQUIRED (B1/B2/B4/B6 OPEN)
+Status: CANDIDATE — PRODUCT ARCHITECT DECISION REQUIRED (B1 PROPOSED, NOT RESOLVED; B2/B4/B6 OPEN)
 
 **Every durable Knowledge object and every derivative belongs to exactly one security partition.**
 
@@ -80,9 +80,13 @@ The precise enforcement model, physical isolation, key ownership and future comm
 
 ## B1 — Tenant / Person / Circle / multi-subject authorization
 
-Status: OPEN
+Status: PROPOSED — AWAITING PRODUCT ARCHITECT DECISION
 
 Product Architect disposition: NOT DECIDED
+
+Proposal: [Knowledge B1 — Security partition, scope, and subject authorization](KNOWLEDGE_B1_SECURITY_SCOPE.md).
+
+The proposal compares ConsentGrant alternatives and specifies partition/scope/subject invariants, operation authority, Circle transitions and acceptance scenarios A–H. It is review input only: B1 is **NOT RESOLVED**, and no schema, contract, policy implementation, technology or runtime change is approved. B2–B6 remain OPEN.
 
 Questions to resolve:
 
@@ -395,7 +399,9 @@ Immediate suppression must not wait for Flowable. Completion of workflow steps m
 
 Product Architect decision: NOT DECIDED
 
-B1–B6: OPEN
+B1: PROPOSED — AWAITING PRODUCT ARCHITECT DECISION (NOT RESOLVED)
+
+B2–B6: OPEN
 
 Flowable selection: NOT APPROVED
 
@@ -405,7 +411,7 @@ No installation, deployment, replication, configuration, process triggering, or 
 
 The next work is explicit Product Architect disposition of B1–B6 and process requirements. Agreed acceptance scenarios must precede technology selection. Technology selection and runtime implementation require their own approval; persisting this register supplies neither.
 
-This documentation task changes only the independent review artifact and this gate register. It does not modify canonical architecture documents, existing ADRs, `packages/home-contracts/`, `services/`, `deploy/`, or production configuration.
+The original gate-opening task changed only the independent review artifact and this gate register. The B1 follow-up changes only [KNOWLEDGE_B1_SECURITY_SCOPE.md](KNOWLEDGE_B1_SECURITY_SCOPE.md) and B1 status/references in this register. It does not modify canonical architecture documents, existing ADRs, `packages/home-contracts/`, `services/`, `deploy/`, or production configuration.
 
 **NO KNOWLEDGE TECHNOLOGY SELECTED**
 
