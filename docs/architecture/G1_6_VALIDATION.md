@@ -1,19 +1,206 @@
 # Stage G1.6 Validation — Trusted Identity / Actor Binding
 
-**Result:** BFF/login/replay path live-validated · G1.6 C gateway implementation
-complete offline · **coordinated gateway cutover pending**
+**Result:** **G1.6 COMPLETE** — production cutover and final trust-boundary evidence
+validated on 2026-09-19.
 
-⚠️ This stage is **not COMPLETE**. The BFF, OAuth authorization-code flow, real-login
-binding, and replay enforcement were deployed and live-validated after the original
-2026-09-16 snapshot. The remaining deployment gate is the coordinated G1.6 C gateway,
-MCP-service, and Hermes cutover; PR #15 does not perform that cutover. See §0 and the
-historical status notes in §§8–9.
-
-**Validated:** original identity validation 2026-09-16; current status and G1.6 C
-evidence updated 2026-09-18
+**Validated:** original identity validation 2026-09-16; G1.6 C implementation evidence
+2026-09-18; production closeout 2026-09-19
 
 **Scope:** synthetic identities and synthetic domain data only. G2 was not started.
 No real family, health, or personal data was created, read, or exposed.
+
+## G1.6 C production cutover — 2026-09-19
+
+The coordinated BFF, gateway, Home MCP, Nutrition, and Hermes cutover is complete.
+All three active application images were rebuilt from and resolve to the authoritative
+GitHub `main` commit:
+
+`FINAL_MAIN_SHA=ddebab6439c9d68487d180dec6995fc546d3cf68`
+
+No prior image was reused. The running containers, OCI revision labels, Quadlet
+configuration, and source checkout were re-verified after cutover.
+
+### Final image provenance
+
+| Service | Image tag / Quadlet `Image=` / running image | Image ID | Digest | Runtime |
+| --- | --- | --- | --- | --- |
+| Home BFF (`home-bff`, `home-bff-mint`) | `localhost/episteck-home-bff:ddebab6439c9d68487d180dec6995fc546d3cf68` | `88a5734e3d27b91ea8d19a645c8131d67e57fb9821371f28a70bb686208efb58` | `sha256:ee5acacc1af84f1988ff1a36d3b1e44423287f50707bcdb9339edfcff731903d` | active |
+| Home MCP (`home-mcp`) | `localhost/episteck-home-mcp:ddebab6439c9d68487d180dec6995fc546d3cf68` | `384a763ff4cb6b9e06ec29de2c60521b2fd6113db1c1e1862a1b5c5866776156` | `sha256:ffd5dfc29ed9ffcdf9d5cf2308279f024eb8d860a4539655c5b73fd3faabd6b7` | active; FastMCP `4.0.3` |
+| Nutrition (`nutrition`, `nutrition-mcp`) | `localhost/episteck-nutrition:ddebab6439c9d68487d180dec6995fc546d3cf68` | `80740bf79a900ca43c2151c6ac0a22bcd8cd5e73b90f229e8bac49ae397bd0da` | `sha256:bc2e4c72d320c63bd1ad5731dc80faa858b0ecde789b99d6d94f828f6c16e8fa` | active; FastMCP `4.0.3` |
+
+The complete chain for each row is the same `FINAL_MAIN_SHA` → displayed tag → image
+ID → digest → matching Quadlet `Image=` → matching running-container image. OCI
+`org.opencontainers.image.revision` is the final SHA on every image.
+
+### Final Hermes transport and gateway identity
+
+| Property | Live value |
+| --- | --- |
+| Home MCP URL | `http://127.0.0.1:9934/gateway/home/` |
+| Nutrition MCP URL | `http://127.0.0.1:9934/gateway/nutrition/` |
+| Gateway process identity | `svc-home-gateway` (uid `999`) |
+| Hermes Agent | `0.21.2` |
+| Hermes MCP client | `mcp 2.0.0` |
+| Hermes MCP types | `mcp-types 2.0.0` |
+
+Both Hermes endpoints enter through the dedicated gateway on `9934`; neither points
+directly to Home MCP `9932` or Nutrition MCP `9931`. `tools/list` found all 8 Home and
+13 Nutrition tools through the gateway.
+
+### Mint socket proof
+
+`/run/episteck/home-bff-mint/mint.sock` is a Unix socket owned by
+`svc-home-bff:episteck-gw` with mode `0660`. Its directory is owned by the same
+user/group with mode `2770` (setgid).
+
+| Real host identity | Connect to `mint.sock` |
+| --- | --- |
+| `svc-home-gateway` | **CAN** |
+| `www-data` | **CANNOT** |
+| `home-agent` | **CANNOT** |
+
+The public BFF TCP application structurally has no mint route: `/internal/mint`
+returns 404 and the public OpenAPI surface contains only the intended login/session
+routes. Minting remains confined to the separate Unix-socket process.
+
+### Active nftables real-user matrix
+
+The active `table inet episteck_gateway` output chain accepts uid `1003`
+(`home-agent`) only to gateway port `9934`, drops all other local access to `9934`,
+accepts uid `999` (`svc-home-gateway`) to MCP ports `9931`/`9932`, then drops all
+other local direct access to those MCP ports.
+
+| Real host identity | Destination | Result |
+| --- | --- | --- |
+| `home-agent` (uid `1003`) | gateway `9934` | **CAN** |
+| `home-agent` | direct `9931` / `9932` | **CANNOT** |
+| unrelated local service user (`www-data`) | gateway `9934` | **CANNOT** |
+| `svc-home-bff` | direct `9931` / `9932` | **CANNOT** |
+| `svc-home-gateway` (uid `999`) | direct `9931` / `9932` | **CAN** |
+
+The live ruleset was recorded with `sudo nft list table inet episteck_gateway`; it was
+not flushed or redesigned during closeout.
+
+```nft
+table inet episteck_gateway {
+    chain output {
+        type filter hook output priority filter; policy accept;
+        ip daddr 127.0.0.1 tcp dport 9934 meta skuid 1003 accept
+        ip daddr 127.0.0.1 tcp dport 9934 drop
+        ip daddr 127.0.0.1 tcp dport { 9931, 9932 } meta skuid 999 accept
+        ip daddr 127.0.0.1 tcp dport { 9931, 9932 } drop
+    }
+}
+```
+
+### Final Home path proof
+
+All operations used Hermes → gateway → Home MCP → Home Control Plane with synthetic
+Persons only.
+
+- Initialization and `tools/list` succeeded through the final gateway URL.
+- The normal operator binding `home-agent-primary` resolved server-side to
+  `PSN-00001`; `whoami`, a self operation, and an allowed cross-person read succeeded.
+- The dedicated enabled zero-role user claimed the same fixed runtime deliberately
+  after the operator logged out. `whoami` resolved `human_actor=PSN-00002`, retained
+  `machine_caller=home-mcp-service@episteck.invalid`, and `list_my_circles` succeeded
+  without System Manager privileges. Both self tools have empty input schemas.
+- The low-privilege session then logged out. The runtime binding cleared and the next
+  gateway initialization returned 401 immediately. The normal operator subsequently
+  reauthenticated; final-path `whoami` again resolved `PSN-00001` and
+  `home-agent-primary` remains restored.
+- A fresh delegation worked. A forged inbound delegation header could not override the
+  gateway-minted value. Reuse of a delegation failed closed through the shared Redis
+  single-use claim.
+- No actor argument, delegation, bearer token, or credential appeared in any tool
+  schema, result, or model-visible output.
+
+### Final Nutrition path proof
+
+All operations used Hermes → gateway → Nutrition MCP → Nutrition service → Home
+authorization.
+
+- An allowed Nutrition profile read for `PSN-00001` succeeded; a read for synthetic
+  `PSN-00003` was denied fail-closed.
+- `record_planned_meal` followed by compound `ate_as_planned` succeeded for synthetic
+  date `2099-12-31` and marker
+  `G1_6_CLOSEOUT_20260919_SYNTHETIC_EMPTY`. An attempted mutation for `PSN-00003`
+  was denied and created zero rows.
+- No model-supplied actor or delegation was accepted or exposed. Nutrition made no
+  separate `whoami` pre-call.
+- Before cleanup, an exact person/date/marker query returned only the expected one
+  PLANNED and one ACTUAL row. A guarded transaction deleted those two exact IDs only;
+  the marker query and explicit-ID query both returned zero afterward.
+
+Existing secret-free production logs did not provide safe per-call counting, so the
+live evidence establishes final-path success while exact call cardinality is proven by
+the deployed source and its isolated test suite. From checkout
+`ddebab6439c9d68487d180dec6995fc546d3cf68`, with exact source paths forced ahead of
+editable installs and FastMCP `4.0.3`:
+
+```text
+services/nutrition/tests/test_one_request_per_operation.py
+56 passed, 1 upstream deprecation warning
+```
+
+The suite exhaustively discovers every person-sensitive service operation, HTTP route,
+and MCP tool and asserts exactly one Home request per invocation. Replay-aware tests
+pass. `test_ate_as_planned_asks_for_view_and_create_in_one_request` asserts one
+`check_access_many` call whose ordered requirements are `NUTRITION/VIEW` and
+`NUTRITION/CREATE`; the Home request count is exactly one.
+
+The earlier shared-interpreter result (`47 passed, 9 errors`) was an
+**environment/harness failure**, not a product failure. Its nine errors were exactly
+the MCP inventory case and eight parametrized MCP operation cases. Their shared fixture
+failed while importing FastMCP because that interpreter's incompatible package set did
+not provide `mcp.server.request_state`; none reached an authorization assertion. The
+shared interpreter was not modified.
+
+### Final security invariants
+
+| Invariant | Result | Evidence |
+| --- | --- | --- |
+| Browser/model cannot select actor | **PASS** | actor absent from public and tool schemas; resolved from authenticated session |
+| Model cannot supply delegation | **PASS** | delegation is transport context, not a tool argument |
+| Gateway overwrites forged delegation | **PASS** | live forged-header request retained the session-resolved actor |
+| `Authorization` / `Cookie` stripped before MCP upstream | **PASS** | active nginx config and gateway tests |
+| Delegation response header suppressed | **PASS** | active `proxy_hide_header` and gateway tests |
+| Direct `9931` / `9932` bypass blocked | **PASS** | live real-user nftables matrix |
+| Public BFF cannot access mint socket | **PASS** | socket group/mode matrix |
+| Mint endpoint absent from public BFF TCP app | **PASS** | route inventory and live 404 |
+| Replay is single-use | **PASS** | live second-use denial via shared Redis |
+| Logout/revocation immediate and fail-closed | **PASS** | binding cleared; next gateway init 401 |
+| `aud=home-control-plane` on Home path | **PASS** | live Home authorization path |
+| `aud=home-control-plane` on Nutrition path | **PASS** | live Nutrition → Home authorization path |
+| Delegation invisible to tool output | **PASS** | Home and Nutrition results inspected |
+
+### OIDC `sub` ruling
+
+The duplicate `(provider, userid)` historical finding remains present. Approved
+amendment A5 is binding and supersedes the older acceptance wording: G1.6 does not use
+OIDC `sub` for actor resolution. The live actor path is authenticated session → User →
+Person. No `User Social Login` value was regenerated or otherwise changed during
+closeout. Remediation and a uniqueness invariant remain mandatory before any
+native/public OIDC client relies on `(issuer, sub)`; the collision is not a G1.6
+completion blocker.
+
+### Rollback and latency
+
+The unexecuted rollback bundle remains at
+`/root/episteck-rollbacks/g1-6-20260918T203149Z-ddebab6` (`root:root`, mode `0700`)
+with a validated manifest. Previous images remain available as BFF `:3079cd1`, Home
+MCP `:243bede`, and Nutrition `:7af4cd8`. Rollback was not needed; the final cutover
+remains active.
+
+Thirty live final-path samples each produced:
+
+| Path | Success | Median | p95 |
+| --- | ---: | ---: | ---: |
+| Hermes → gateway → Home `whoami` | 30/30 | 130.79 ms | 133.94 ms |
+| Hermes → gateway → Nutrition profile | 30/30 | 131.23 ms | 139.06 ms |
+
+**Final verdict: G1.6 COMPLETE.** Knowledge Technology Gate remains next; no Knowledge
+runtime or G2/Health work was started during this closeout.
 
 ## 0. G1.6 C implementation validation (offline, 2026-09-18)
 
@@ -339,9 +526,10 @@ and JSON** with no network, no database round trip beyond a single indexed sessi
 lookup, and no authorization caching. The expected added cost is well under a
 millisecond against a ~120 ms network-bound baseline.
 
-Post-deploy measurement is deferred to the merge step, since the new path is not yet
-live. The cross-Atlantic hop is a permanent property of this deployment: Stage G1.7 was
-withdrawn on 2026-09-16 and the Control Plane stays in Ashburn.
+This pre-cutover estimate is retained as history. Final post-cutover observations are
+recorded in the 2026-09-19 production closeout section above. The cross-Atlantic hop is
+a permanent property of this deployment: Stage G1.7 was withdrawn on 2026-09-16 and
+the Control Plane stays in Ashburn.
 
 ---
 
@@ -350,8 +538,8 @@ withdrawn on 2026-09-16 and the Control Plane stays in Ashburn.
 This section records the state on 2026-09-16 and is retained as architecture history.
 Its pending-BFF statements are not current: subsequent G1.6 work deployed and
 live-validated the BFF, OAuth authorization-code/login path, real-login actor binding,
-and shared replay claim. The remaining current deployment work is the coordinated
-G1.6 C gateway/MCP/Hermes cutover described in §0.
+shared replay claim, and the coordinated G1.6 C gateway/MCP/Hermes cutover recorded in
+the 2026-09-19 production closeout section.
 
 ### 8.1 The BFF was a library, now it is a service
 
@@ -384,10 +572,9 @@ the full delegation matrix on the production runtime and byte-for-byte S256 agre
 ## 9. Historical deployment status (2026-09-16 snapshot)
 
 The following paragraphs and preflight table describe the pre-deployment state when
-this document was first written. They are not the current runtime status. PRs #4–#13
-subsequently merged; the BFF/login and replay path were live-validated, while the
-delegation-requiring Home MCP/Nutrition runtime switch remains intentionally held for
-the coordinated G1.6 C cutover.
+this document was first written. They are not the current runtime status. PRs #4–#15
+subsequently merged, and the BFF/login, replay, gateway, Home MCP, Nutrition, and Hermes
+paths were live-validated in the final production cutover above.
 
 The feature branch is pushed. The `episteck-deploy` job polls `main` only, so nothing
 has changed in production; `home.episteck.com` still runs G1.5. Verified live:

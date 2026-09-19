@@ -42,8 +42,10 @@ resolved separately and both are retained in audit context.
 
 Revision 2 recommended regenerating both `sub` values during G1.6. **Amended:** first
 prove there are no downstream references, then remediate. Since nothing in the approved
-G1.6 path consumes `sub`, remediation is *prepared and documented* in G1.6 and the
-uniqueness invariant is *asserted*, but the data change itself is not forced.
+G1.6 path consumes `sub`, remediation is *prepared and documented* in G1.6, but neither
+the data change nor a live-data uniqueness migration is a G1.6 completion gate. The
+existing duplicate remains recorded. Remediation and enforcement are mandatory before
+any native/public OIDC client relies on `(issuer, sub)`.
 
 ---
 
@@ -170,17 +172,17 @@ hole with a System Manager on one side.
   resolved server-side from `frappe.session.user` (`User.name`), which is unique by
   primary key. This is the reason revision 2 keeps `sub` off the critical path.
 - **Does it block native/direct OIDC? Yes** — and that path is deferred anyway (§11).
-- **Remediation (G1.6, reversible):** regenerate the `frappe` social-login `userid` for
-  **both** users with `frappe.generate_hash(length=39)`; add a startup/migration
-  assertion that `(provider='frappe', userid)` is unique across Users, failing loudly.
-  Nothing currently consumes `sub`, so regeneration breaks no live integration. Record
-  it in the validation evidence. Do **not** perform it until approval.
+- **Deferred remediation (required before native/public OIDC):** after the required
+  reference audit and approval, regenerate the affected `frappe` social-login `userid`
+  values and enforce `(provider='frappe', userid)` uniqueness across Users. Do **not**
+  perform the identity-data change merely to complete G1.6. The G1.6 actor path uses
+  authenticated session → User → Person and does not consume `sub`.
 
 > Per §17, this is a **correction** to revision 1: revision 1 said "bind on `User.name`,
 > never on `sub`." That conflated two things. The correct statement is: **internal
 > resolution uses the authenticated `frappe.session.user`; `sub` is never accepted from
-> a caller; and `(issuer, sub)` is remediated so it can become the stable external
-> identity tuple when native OIDC is unblocked.**
+> a caller; and `(issuer, sub)` must be remediated before it can become the stable
+> external identity tuple when native OIDC is unblocked.**
 
 ---
 
@@ -601,7 +603,9 @@ G1.6 is complete when **all** hold:
 5. `Person.linked_user` is unique; both violation directions are rejected at write time.
 6. All 20 threat-model rows (§10) pass with their expected failure modes.
 7. PKCE cases 1–4, 7, 8 pass; cases 5–6 documented as known upstream limitations.
-8. Duplicate `sub` remediated; uniqueness assertion in place.
+8. Duplicate `sub` documented and unused by the G1.6 actor path; remediation and a
+   uniqueness invariant remain required before native/public OIDC relies on
+   `(issuer, sub)` (A5).
 9. One real login bound to a synthetic Person resolves end-to-end; a low-privilege
    User does too.
 10. Logout/revocation denies on the **next** call; no authorization caching introduced.
@@ -671,8 +675,10 @@ issuance logic; no extra round trip on the critical path since the BFF is alread
 
 ### Q3. Duplicate `sub` — regenerate for both, or disable the unused account?
 
-**DECISION:** Regenerate for **both** users; keep both accounts. Add a uniqueness
-assertion. Do not disable `aemarchan1@`.
+**DECISION (superseded by binding amendment A5):** keep both accounts and prepare the
+remediation, but do not regenerate identity data as a G1.6 completion action. After the
+reference audit and explicit approval, remediate the affected values and add a
+uniqueness invariant before native/public OIDC relies on `(issuer, sub)`.
 **WHY:** Root cause is a copied child row, not a compromised account (§3), so disabling
 fixes nothing and loses a real account. Both values must change because it is not
 determinable which document is the "original." Nothing consumes `sub` today, so
@@ -680,9 +686,9 @@ regeneration is non-breaking.
 **SECURITY CONSEQUENCE:** Removes a live identity-collision hole in which a System
 Manager and a Desk User are indistinguishable to any `sub`-keyed relying party. The
 assertion prevents silent recurrence.
-**IMPLEMENTATION CONSEQUENCE:** Small, reversible data fix plus a migration assertion.
-Must happen before any native/direct OIDC client. Not on the BFF critical path, so it
-does not gate G1.6 delivery — but it **is** a G1.6 acceptance item (§15.8).
+**IMPLEMENTATION CONSEQUENCE:** No G1.6 identity-data regeneration. The remediation and
+uniqueness invariant remain mandatory before any native/direct OIDC client, but A5
+supersedes the stale statement that made regeneration a G1.6 acceptance item.
 
 ### Q4. Task 5 scope — bind one real human in G1.6 (synthetic data only), or defer all human binding to G2?
 
@@ -740,8 +746,8 @@ identity, and read as "use client-supplied `User.name`," which §4 of the brief
 correctly forbids.
 **Correction:** the caller supplies **neither**. Frappe derives the user from validated
 authentication context (`frappe.session.user`), then maps server-side to
-`Person.linked_user`. `(issuer, sub)` is remediated so it can serve as the stable
-external tuple **later**, for native OIDC only.
+`Person.linked_user`. `(issuer, sub)` must be remediated before it can serve as the
+stable external tuple **later**, for native OIDC only.
 **Tradeoff:** none — this is strictly more correct and matches the intended model.
 
 All other preferred decisions — remove client-supplied `actor_person_id`; no
@@ -765,13 +771,13 @@ Frappe fake; no live site required for unit tests).
 | 3 | **BFF + OAuth client** — confidential client, S256 PKCE always, opaque session cookie, server-side token store | New BFF | P0 |
 | 4 | **Home MCP** — remove `actor_person_id` from all seven tools; forward delegation context; schema assertion tests | `services/home-mcp` | P0→P4 |
 | 5 | **Nutrition** — drop actor from FastAPI routes + MCP tools; independent resolution; keep 3 s timeout, no cache | `services/nutrition` | P0→P4 |
-| 6 | **`sub` remediation** — regenerate both values; uniqueness assertion | Data + migration | P1 |
+| 6 | **`sub` remediation preparation** — document collision and reference audit; defer data regeneration + uniqueness enforcement until before native/public OIDC relies on `(issuer, sub)` (A5) | Documentation; later data + migration | Deferred |
 | 7 | **Validation** — full §10 matrix, §11 PKCE plan, real-login binding, latency delta | `G1_6_VALIDATION.md` | P1–P3 |
 | 8 | **Docs + ADR** — **ADR-0009: Trusted actor binding via Frappe-issued sessions** (records BFF scoping and deferred native OIDC); update `ARCHITECTURE.md` §3.1, `SECURITY_AND_CONSENT.md`, `STATUS.md`, `ROADMAP.md` | Docs | P4–P5 |
 
 **Critical path:** Tasks 1–3 gate everything. Tasks 4–5 must flip **together** at P4.
-Task 6 is independent and can land early. Task 8 lands with the implementation, per the
-Architecture Change Rule.
+Task 6 preparation is independent; the live identity-data change is deferred under A5.
+Task 8 lands with the implementation, per the Architecture Change Rule.
 
 **Effort shape:** Tasks 1–5 are ~70%; the BFF (Task 3) is the only genuinely new
 component. Tasks 6–8 are data, evidence, and documentation.
@@ -798,8 +804,8 @@ was committed or pushed. All live inspection was **read-only**.
 2. **BFF placement** — Ashburn (next to Frappe, lower auth latency) or Nuremberg (next
    to the agent, EU)? *(Resolved by A1: Nuremberg. Residency is settled separately in
    §23 — Ashburn/US is accepted for the personal deployment.)*
-3. **`sub` remediation timing** — during G1.6 as planned, or immediately as a standalone
-   fix given a System Manager is involved? *(Recommend: standalone and soon.)*
+3. **`sub` remediation timing** — *(Resolved by A5: no G1.6 data regeneration;
+   remediation remains mandatory before native/public OIDC relies on the tuple.)*
 4. **Second low-privilege test User** (§14) — approve creating one to prove the path
    does not depend on System Manager privileges? *(Recommend: yes.)*
 5. **Backup coverage** (§16) — confirm whether restic covers the Frappe Home identity

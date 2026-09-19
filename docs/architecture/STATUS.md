@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-09-16
+**Updated:** 2026-09-19
 
 ## Live now
 | Component | State |
@@ -12,8 +12,9 @@
 | Off-box restic backup | ✅ operational + restore validated |
 | home.episteck.com Frappe site | ✅ live (frappe+erpnext) |
 | episteck_home app on home.episteck.com | ✅ actor-aware Control Plane API live |
-| Home MCP | ✅ live, rootless svc-home-mcp, loopback :9932 |
-| Home BFF (confidential OAuth client, EU node) | 🟡 implemented + tested; not yet deployed |
+| Home MCP | ✅ live behind dedicated gateway; direct loopback `:9932` blocked from callers |
+| Home BFF (confidential OAuth client, EU node) | ✅ live; public session app + socket-only mint process |
+| Hermes delegation gateway | ✅ live on `127.0.0.1:9934`; Home and Nutrition paths |
 
 ## G1.5 final state — PASS
 | Item | State |
@@ -32,7 +33,18 @@ Real family/health data (G2, blocked on approval). Knowledge tech install
 (Mem0/Graphiti/RAGFlow/pgvector/Docling). FHIR, Device Gateway, Mind, Calendar,
 Finance, public UI, voice. `svc-home-core` (explicitly rejected — Frappe is the plane).
 
-## G1.6 — trusted actor binding (implemented, awaiting merge + deploy)
+## Stage completion
+
+| Stage | State |
+| --- | --- |
+| G1 | ✅ **COMPLETE** |
+| G1.5 | ✅ **COMPLETE** |
+| G1.6 | ✅ **COMPLETE** — production closeout 2026-09-19 |
+
+Next: **Knowledge Technology Gate**, then **G2 / Health architecture** with explicit
+approval. No G1.7 stage is created.
+
+## G1.6 — trusted actor binding (COMPLETE)
 
 | Item | State |
 | --- | --- |
@@ -45,21 +57,26 @@ Finance, public UI, voice. `svc-home-core` (explicitly rejected — Frappe is th
 | Home BFF (confidential client, always S256 PKCE) | ✅ EU node; browser holds no tokens |
 | `Person.linked_user` unique + ambiguity fails closed | ✅ schema + tests |
 | Consent semantics | ✅ **unchanged** (`policy/access.py` untouched) |
-| Automated tests | ✅ **199 passing** (was 93) |
+| Authorization cardinality suite | ✅ **56 passing** from deployed SHA; service/HTTP/MCP inventory + replay cases |
 | Live delegation matrix on prod runtime | ✅ 10/10 pass |
 | PKCE S256 agreement with Frappe's computation | ✅ byte-for-byte on live box |
+| Final Hermes/gateway actor proof | ✅ operator `PSN-00001`; zero-role synthetic user `PSN-00002` |
+| Nutrition compound proof | ✅ allowed planned→actual; denied synthetic subject created zero rows; test rows removed |
+| Final deployed source | ✅ `ddebab6439c9d68487d180dec6995fc546d3cf68` for BFF, Home MCP, Nutrition |
 
-**Not yet done:** merge to `main`, `bench migrate` on home.episteck.com, OAuth client
-creation (blocked — needs credential-write approval), real-login binding (A10).
+Full runtime, provenance, network, rollback, and trust-boundary evidence is in
+`G1_6_VALIDATION.md`.
 
 ## G2 blockers
 
-1. **G1.6 completion** — merge, `bench migrate`, BFF deployment, OAuth client
-   creation, and real-login binding (A10). DNS for `bff.home.episteck.com` is live.
-   **This is the current blocker.**
-2. Explicit user approval for real family data.
-3. Real-Person onboarding + real ConsentGrants.
-4. Duplicate `sub` remediation (prepared; reference audit found **zero** consumers).
+1. Complete the **Knowledge Technology Gate** before G2 implementation.
+2. Obtain explicit user approval for real family/health data.
+3. Approve the G2 / Health architecture, Real-Person onboarding, and real
+   ConsentGrants.
+
+Duplicate OIDC `sub` remediation is not a G1.6 or G2 actor-binding blocker because the
+live path does not consume `sub`. It remains mandatory before any native/public OIDC
+client relies on `(issuer, sub)`; no identity-data regeneration was performed.
 
 **Not a blocker:** EU data residency. Stage G1.7 (EU Home Control Plane migration) is
 **withdrawn** as of 2026-09-16 — `home.episteck.com` is a personal/family deployment and
