@@ -6,8 +6,10 @@ validated on 2026-09-19.
 **Validated:** original identity validation 2026-09-16; G1.6 C implementation evidence
 2026-09-18; production closeout 2026-09-19
 
-**Scope:** synthetic identities and synthetic domain data only. G2 was not started.
-No real family, health, or personal data was created, read, or exposed.
+**Scope:** No real family/health domain records were created or read. G1.6 exercised
+real authentication/account metadata only as required for the trusted-actor proof;
+all Person/domain records used for authorization and Nutrition validation were
+synthetic. G2 was not started.
 
 ## G1.6 C production cutover — 2026-09-19
 

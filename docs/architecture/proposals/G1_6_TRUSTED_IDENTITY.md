@@ -681,8 +681,9 @@ reference audit and explicit approval, remediate the affected values and add a
 uniqueness invariant before native/public OIDC relies on `(issuer, sub)`.
 **WHY:** Root cause is a copied child row, not a compromised account (§3), so disabling
 fixes nothing and loses a real account. Both values must change because it is not
-determinable which document is the "original." Nothing consumes `sub` today, so
-regeneration is non-breaking.
+determinable which document is the "original." The approved G1.6 actor path does not
+consume `sub`. Remediation remains gated on a fresh reference audit and explicit
+approval before native/public OIDC relies on `(issuer, sub)`.
 **SECURITY CONSEQUENCE:** Removes a live identity-collision hole in which a System
 Manager and a Desk User are indistinguishable to any `sub`-keyed relying party. The
 assertion prevents silent recurrence.
