@@ -30,11 +30,11 @@ PROCESS
 
 Technology must not dictate the Knowledge model.
 
-This is a working decision register, NOT the final Knowledge architecture. The [independent architecture review](../reviews/2026-09-19-knowledge-independent-architecture-review.md) is historical review input, not canonical architecture. Its reviewed baseline was `ddebab6439c9d68487d180dec6995fc546d3cf68`; the G1.6 closeout was merged subsequently. Its B1–B6 findings are recorded below without accepting, modifying, rejecting, or resolving them here.
+This is a working decision register, NOT the final Knowledge architecture. The [independent architecture review](../reviews/2026-09-19-knowledge-independent-architecture-review.md) is historical review input, not canonical architecture. Its reviewed baseline was `ddebab6439c9d68487d180dec6995fc546d3cf68`; the G1.6 closeout was merged subsequently. Its findings were initially recorded without disposition. B1 is now resolved by the explicit Product Architect decision below; B2–B6 remain OPEN.
 
-Canonical architecture remains in [ARCHITECTURE.md](../ARCHITECTURE.md), [KNOWLEDGE.md](../KNOWLEDGE.md), accepted ADRs, and approved architecture proposals. The existing [Roadmap](../ROADMAP.md) identifies the Knowledge gate. This document does not amend those sources or grant runtime approval.
+Canonical architecture remains in [ARCHITECTURE.md](../ARCHITECTURE.md), [KNOWLEDGE.md](../KNOWLEDGE.md), accepted ADRs, and approved architecture proposals. The accepted [B1 security/scope decision](KNOWLEDGE_B1_SECURITY_SCOPE.md) governs B1 where older Knowledge documentation is less precise, until later consolidation. The existing [Roadmap](../ROADMAP.md) identifies the Knowledge gate. Other canonical documents are not rewritten here, and no runtime approval is granted.
 
-Only explicit Product Architect decisions may accept, modify, or reject review recommendations. For each future disposition, record the decision owner, date, exact accepted/modified/rejected finding, reasoning, acceptance scenarios, and references to approved architecture changes. All dispositions are currently **NOT DECIDED**. B1 has a working proposal **AWAITING PRODUCT ARCHITECT DECISION** and is not resolved; B2–B6 remain **OPEN**. A reviewer recommendation or this document's eventual merge does not itself select technology or close a blocker.
+Only explicit Product Architect decisions may accept, modify, or reject review recommendations. For each disposition, record the decision owner, date, exact accepted/modified/rejected finding, reasoning, acceptance scenarios, and references to approved architecture changes. **B1 is RESOLVED** by Product Architect acceptance with amendments on **2026-09-19**. B2–B6 remain **OPEN / NOT DECIDED**. The Knowledge Technology Gate remains **OPEN**. A reviewer recommendation or this document's eventual merge does not itself select technology or close a blocker.
 
 ## Current five-layer model
 
@@ -56,18 +56,18 @@ Knowledge is NOT:
 
 This distinction preserves the current conceptual direction; it does not resolve contested ownership fields such as reusable Nutrition preferences.
 
-## Security partition — design invariant candidate
+## Security partition — accepted B1 invariant
 
-Status: CANDIDATE — PRODUCT ARCHITECT DECISION REQUIRED (B1 PROPOSED, NOT RESOLVED; B2/B4/B6 OPEN)
+Status: ACCEPTED — PRODUCT ARCHITECT B1 DECISION, 2026-09-19 (B2/B4/B6 OPEN)
 
-**Every durable Knowledge object and every derivative belongs to exactly one security partition.**
+**Every durable Knowledge object and every derivative belongs to exactly one trusted security partition.**
 
 The commercial Tenant object does NOT need to be implemented yet.
 
 - **Security partition** = isolation boundary.
 - **PERSON/CIRCLE scope** = semantic context.
 
-Candidate implications to evaluate include partition-bound identifiers and references, originals, claims, chunks, embeddings, summaries, caches, indexes, queued jobs, exports and workflow metadata. Identity must come from trusted context; a caller or model must not choose an arbitrary partition. Cross-partition relationships or sharing need an explicit future policy rather than implicit membership-based access.
+Accepted B1 coverage includes partition-bound identifiers and references, originals, claims, chunks, embeddings, summaries, caches, indexes, queued jobs, exports and workflow metadata. Effective identity conceptually includes `(partition, resource_type, local_id)`. Actor and partition come from trusted server/runtime context, never authoritative model/tool/user payload fields. Partition is distinct from Person, Circle, membership, semantic scope and a commercial Tenant object. Initial cross-partition references, joins, Knowledge sharing, sensitive deduplication and retrieval are forbidden. See the [accepted B1 decision](KNOWLEDGE_B1_SECURITY_SCOPE.md).
 
 Avoid:
 
@@ -76,29 +76,36 @@ Avoid:
 - unpartitioned caches/indexes/jobs
 - global search followed by application post-filtering
 
-The precise enforcement model, physical isolation, key ownership and future commercial representation remain unresolved. This candidate does not approve a Tenant implementation, database layout, or encryption system.
+The B1 logical boundary and pre-retrieval invariant are accepted. Concrete enforcement, physical isolation, key ownership and future commercial representation remain deferred. This decision does not approve a Tenant implementation, database layout, encryption system or technology.
 
 ## B1 — Tenant / Person / Circle / multi-subject authorization
 
-Status: PROPOSED — AWAITING PRODUCT ARCHITECT DECISION
+Status: RESOLVED — PRODUCT ARCHITECT DECISION
 
-Product Architect disposition: NOT DECIDED
+Decision owner: Product Architect
 
-Proposal: [Knowledge B1 — Security partition, scope, and subject authorization](KNOWLEDGE_B1_SECURITY_SCOPE.md).
+Decision date: 2026-09-19
 
-The proposal compares ConsentGrant alternatives and specifies partition/scope/subject invariants, operation authority, Circle transitions and acceptance scenarios A–H. It is review input only: B1 is **NOT RESOLVED**, and no schema, contract, policy implementation, technology or runtime change is approved. B2–B6 remain OPEN.
+Product Architect disposition: ACCEPTED WITH AMENDMENTS
 
-Questions to resolve:
+Authoritative decision: [Knowledge B1 — Security partition, scope, and subject authorization](KNOWLEDGE_B1_SECURITY_SCOPE.md), including section 13's Product Architect disposition and acceptance scenarios A–H.
 
-- What are the security partition semantics, and how is the partition bound to trusted execution?
-- What does PERSON scope mean, including the relation between its scope reference and Person subjects?
-- What does CIRCLE scope mean, including genuine Circle knowledge with no Person subjects?
-- How is Circle authorization represented and checked independently of Person authorization?
-- How do multi-subject restrictions combine, including claims that reveal information about another Person?
-- Who may assert, activate, correct, dispute, share, or remove shared Knowledge?
-- How is the existing rule that membership must not automatically imply access preserved?
+Accepted decisions:
 
-Review concern: the current Person-based authorization contract does not authorize a Circle resource, and the current bundle checks claims by iterating Person subjects. Permitting empty subjects alone would remove those checks. No scope, policy, or contract change is approved here.
+- Partition is trusted isolation; scope is semantic placement; subjects are Persons whose information is revealed. PERSON scope includes its Person; genuinely Circle-only assertions may have empty subjects.
+- Reusable/shared Knowledge requires scope AND every subject AND every required content-domain authorization. Self-access covers only the actor's own Person requirement. Membership, care, authorship, majority agreement, Circle MANAGE and generic KNOWLEDGE relabeling cannot bypass Person restrictions. B2 may relax the conservative intersection only through an explicit approved projection/declassification model.
+- Accept the structure closest to alternative A: one Home authority and one bounded Authorization Grant family/evaluation model with PERSON/CIRCLE targets and separate issuer rules. PERSON represents consent/access authority; CIRCLE represents handling/stewardship authority, not personal consent. Existing ConsentGrant naming may remain; eventual persisted naming is an implementation/migration decision. No arbitrary-resource model, generic policy language or service-local ACL is adopted.
+- Authorized authenticated Circle creation may atomically create the Circle, record the creator's acceptance of initial stewardship and establish bounded Circle MANAGE. Normal consumer onboarding does not require manual system administration. Imported/pre-existing Circles require trusted designation/recovery. Membership/role/AI inference grants nothing; ordinary recipients cannot redelegate, recursive MANAGE delegation is not approved, and root replacement/recovery requires a protected Home process.
+- Actor, assertor, subject, attestor and viewer remain distinct. Stewardship endorsement permits shared Circle use, not everyone's agreement; no family-consensus state. Retain VIEW/CREATE/UPDATE/MANAGE; domain operations compose these with trusted context and operation predicates. Detailed lifecycle effects remain B3/B4.
+- Narrow non-disclosing own-assertion retraction and own-information objection/non-use do not confer VIEW, rewrite others' words or automatically erase independent sources. B4 owns physical erasure and cleanup.
+- Joining grants nothing; exit/removal invalidates Circle-derived grants before completion; rejoining revives none. Dissolution stops ordinary Circle use without Person-scope migration. Authorship gives no perpetual VIEW; independent Person grants are not automatically destroyed by exit. No permanent guardian/representative access is inferred.
+- Trusted partition and authorization constrain the eligible candidate space before sensitive direct/keyword/vector retrieval, chunks, embeddings, summaries, caches, source expansion and reranking. B6 retains concrete protocol, freshness and revalidation decisions.
+
+Explicit amendment/deferral: **PRIVATE THIRD-PARTY ASSERTIONS = DEFERRED PRODUCT/PRIVACY MODEL**, outside the initial Knowledge runtime. “Erick privately says Ana likes blue” is intentionally not solved by B1. It cannot enter active shared Knowledge without normal Ana subject restrictions; this does not permanently prohibit a future separately designed private-personal-assertion model.
+
+Reasoning: the bounded model preserves Home's single authority and fail-closed Person restrictions while supporting genuine subjectless Circle context. The amendments distinguish Circle handling from personal consent, permit explicit consumer stewardship bootstrap, and preserve future private-note design without creating an authorization bypass. Scenarios A–H remain architecture acceptance specifications, not runtime tests; the added private-third-party scenario records a deferral.
+
+Baseline implementation gap remains: current Person-based authorization cannot target a Circle, and simply allowing empty subjects would remove the bundle's subject checks. Resolving B1 defines the required architecture; it does not modify those contracts or authorize implementation. B2–B6 and the Knowledge Technology Gate remain OPEN. No technology is selected.
 
 ## B2 — Sensitivity inheritance
 
@@ -399,7 +406,7 @@ Immediate suppression must not wait for Flowable. Completion of workflow steps m
 
 Product Architect decision: NOT DECIDED
 
-B1: PROPOSED — AWAITING PRODUCT ARCHITECT DECISION (NOT RESOLVED)
+B1: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-19 ([accepted decision](KNOWLEDGE_B1_SECURITY_SCOPE.md))
 
 B2–B6: OPEN
 
@@ -409,7 +416,7 @@ No installation, deployment, replication, configuration, process triggering, or 
 
 ## Gate completion and change boundary
 
-The next work is explicit Product Architect disposition of B1–B6 and process requirements. Agreed acceptance scenarios must precede technology selection. Technology selection and runtime implementation require their own approval; persisting this register supplies neither.
+The next work is explicit Product Architect disposition of B2–B6 and remaining process requirements. B1 is resolved by the accepted decision above; the Knowledge Technology Gate is not complete. Agreed acceptance scenarios must precede technology selection. Technology selection and runtime implementation require their own approval; B1 acceptance supplies neither.
 
 The original gate-opening task changed only the independent review artifact and this gate register. The B1 follow-up changes only [KNOWLEDGE_B1_SECURITY_SCOPE.md](KNOWLEDGE_B1_SECURITY_SCOPE.md) and B1 status/references in this register. It does not modify canonical architecture documents, existing ADRs, `packages/home-contracts/`, `services/`, `deploy/`, or production configuration.
 

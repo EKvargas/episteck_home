@@ -1,6 +1,6 @@
 # Knowledge B1 — Security partition, scope, and subject authorization
 
-Status: PROPOSED — AWAITING PRODUCT ARCHITECT DECISION
+Status: ACCEPTED — B1 ARCHITECTURE DECISION
 
 Date: 2026-09-19
 
@@ -10,13 +10,19 @@ Main baseline: `ba7c2ae8189d22c954591cb16a48c8aaa53b8495` (PR #19 merged; clean 
 
 Gate: [B1 — Tenant / Person / Circle / multi-subject authorization](KNOWLEDGE_TECHNOLOGY_GATE.md#b1--tenant--person--circle--multi-subject-authorization)
 
-Decision owner: Product Architect. Disposition: NOT DECIDED.
+Decision owner: Product Architect
 
-## 1. Purpose and recommendation
+Decision date: 2026-09-19
 
-This proposal supplies B1 process and domain semantics for review. It does not amend accepted ADRs, approve contracts, close B1, select technology, or authorize implementation. B2–B6 remain OPEN. All named people, household statements, and condition X below are synthetic acceptance examples, not records about real people.
+Disposition: ACCEPTED WITH AMENDMENTS — B1 RESOLVED
 
-**Recommend a trusted security-partition invariant plus a bounded PERSON/CIRCLE resource extension of the existing ConsentGrant in Home.** Keep Person consent and Circle authority distinguishable within one grant family and one central policy authority. Compose scope access with every affected Person's domain restrictions using AND. Preserve trusted actor binding and the current four low-level actions. Do not introduce a commercial Tenant entity, a second service ACL, or a general policy language.
+## 1. Purpose and accepted decision
+
+This accepted proposal is the authoritative B1 architecture decision. Where older Knowledge documentation is less precise about B1 semantics, this decision governs until later consolidation. Existing canonical documents and ADR files are not rewritten in this PR. B1 acceptance does not approve contract/schema changes, select technology, authorize implementation, or complete the Knowledge Technology Gate. B2–B6 remain OPEN. All named people, household statements, and condition X below are synthetic acceptance examples, not records about real people.
+
+**Accept a trusted security-partition invariant and one bounded Authorization Grant / authorization decision model in Home, targeting PERSON or CIRCLE only.** PERSON targets represent Person consent/access authority; CIRCLE targets represent Circle handling/stewardship authority. A Circle cannot itself consent. Keep one grant family and one Home policy authority, with separate issuer rules. Existing implementation may retain the ConsentGrant name; eventual persisted naming is an implementation/migration decision, not a rename required here.
+
+For reusable/shared Knowledge, compose scope access with every affected Person's authorization and every required content-domain permission using AND. Preserve trusted actor binding and VIEW/CREATE/UPDATE/MANAGE. Do not introduce a commercial Tenant entity, arbitrary resource types, a second authority, service-local ACLs, or a general policy language. Private third-party assertions are a deferred product/privacy model, not an exception permitting unauthorized shared Knowledge (section 6.5).
 
 The three independent questions are:
 
@@ -24,9 +30,9 @@ The three independent questions are:
 2. **Scope:** to which Person or Circle does the assertion conceptually belong?
 3. **Subjects:** about which people does its content disclose information?
 
-An answer to one never supplies an answer to the others. Circle Knowledge remains unavailable for runtime use until this proposal is decided and the later contracts, authorization path, and other gate requirements are approved and implemented.
+An answer to one never supplies an answer to the others. The Product Architect disposition is recorded in section 13. Knowledge remains unavailable for runtime use until the later contracts, authorization path, and remaining gate requirements are approved and implemented; accepting B1 alone supplies no runtime approval.
 
-## 2. Repository evidence: implemented behavior versus proposed behavior
+## 2. Repository evidence: implemented behavior versus accepted architecture
 
 The six canonical architecture documents, the gate register, the independent review, and ADRs 0001–0009 were read. The following findings come from schema/code at the baseline, not assumptions from prose. Paths are relative to this proposal.
 
@@ -43,7 +49,7 @@ The six canonical architecture documents, the gate register, the independent rev
 | [Knowledge contracts](../../../packages/home-contracts/src/episteck_home_contracts/knowledge.py) | Claims currently require a nonempty subject tuple even for CIRCLE. PERSON scope does not require its scope Person in that tuple. Episode/Claim have no partition field. `author_person_id` is optional except for USER_CONFIRMED; constructors do not authenticate assertion or confirmation authority. |
 | [Context contracts](../../../packages/home-contracts/src/episteck_home_contracts/context.py) and [tests](../../../packages/home-contracts/tests/test_context.py) | Each claim subject requires KNOWLEDGE/VIEW and, if different, its single claim domain/VIEW. MANAGE covers VIEW. Claim scope and `circle_ids` do not authorize a Circle. Authorization records are caller-constructed values; neither their authority nor retrieval ordering is proved. Sources are not independently permission checked. Simply allowing empty subjects would execute zero claim-subject checks. |
 
-The recommendation preserves [ADR-0001](../adr/0001-home-control-plane-is-frappe.md), [ADR-0002](../adr/0002-independent-domain-services.md), [ADR-0006](../adr/0006-family-care-graph.md), [ADR-0008](../adr/0008-consent-fail-closed.md), and [ADR-0009](../adr/0009-trusted-actor-binding.md). It proposes a later, explicit evolution of ADR-0007's contracts and ADR-0008's Person-only resource signature. Neither ADR is changed here. G1.5/G1.6 validation is historical evidence, not a new production inspection in this task.
+The decision preserves the foundations of [ADR-0001](../adr/0001-home-control-plane-is-frappe.md), [ADR-0002](../adr/0002-independent-domain-services.md), [ADR-0006](../adr/0006-family-care-graph.md), [ADR-0008](../adr/0008-consent-fail-closed.md), and [ADR-0009](../adr/0009-trusted-actor-binding.md). It accepts the B1 semantics for a later evolution of ADR-0007's contracts and ADR-0008's Person-only resource signature. This accepted decision governs those B1 clarifications; neither ADR file nor runtime contract is changed here. G1.5/G1.6 validation is historical evidence, not a new production inspection in this task.
 
 ## 3. Terminology
 
@@ -55,17 +61,20 @@ The recommendation preserves [ADR-0001](../adr/0001-home-control-plane-is-frappe
 | Semantic scope | Exactly one PERSON or CIRCLE context for a claim. It is neither ownership nor an automatic audience. |
 | Person subject | A person about whom the content makes or reveals an assertion, including indirect identification. Not every reader or Circle member. |
 | Authorization resource | Typed target against which Home evaluates permission: initially PERSON or CIRCLE. A Circle resource is not a human data subject. |
+| Authorization Grant / authorization decision | Bounded architectural grant family/evaluation model in Home. PERSON means Person consent/access authority; CIRCLE means handling/stewardship authority, never a Circle giving personal consent. The current ConsentGrant implementation name does not determine these semantics. |
 | Actor | Human performing the current operation, resolved from trusted authentication; accompanied by the machine caller when delegated. |
 | Assertor / author | Who made the assertion in its source. May differ from the capturing actor; attribution does not grant access. |
 | Attestor | Person explicitly confirming an exact assertion/version and the capacity in which they confirm it. Reading or acknowledging is not attestation. |
 | Viewer | Actor requesting disclosure now; authorization is evaluated now, not inherited from authorship. |
 | Circle steward | A Person explicitly granted MANAGE on a particular Circle/domain through Home. Not an inferred household head, membership role, or guardian. |
 
-## 4. Proposed invariants
+## 4. Accepted invariants
+
+The content-authorization rules below govern the reusable/shared Knowledge model. They do not design or permanently prohibit a future private-personal-assertion model; that model is deferred and excluded from the initial runtime (section 6.5). Partition and trusted-context invariants are not weakened by this deferral.
 
 1. Every durable Knowledge object and derivative has exactly one nonempty, trusted security partition. No unpartitioned fallback exists.
 2. Trusted infrastructure binds partition and actor; neither is an authoritative model/user payload field. Authentication, deployment binding and reference validation precede content retrieval.
-3. All internal references resolve within that partition, including actors, subjects, scopes, assertors, episodes and authorization targets. Cross-partition references, joins, deduplication and sharing are initially forbidden.
+3. All internal references resolve within that partition, including actors, subjects, scopes, assertors, episodes and authorization targets. Cross-partition references, joins, sensitive deduplication, Knowledge sharing and retrieval are initially forbidden.
 4. Each claim has one typed semantic scope. PERSON scope requires its Person in the complete subject set. CIRCLE scope permits an empty subject set only for content genuinely about no specific Person.
 5. Every scope requires permission, even when subjects are empty. Circle membership, care relationships, authorship and a service credential cannot substitute for grants.
 6. Scope checks and all applicable subject/domain checks compose with AND. Self-access satisfies only the actor's own Person requirement; it never bypasses Circle or other Person requirements.
@@ -91,7 +100,7 @@ G1.6's opaque session, single-use delegation and independent service authorizati
 
 Coverage includes claims, episodes, original/source registrations and locators, chunks, embeddings, summaries, caches, queued jobs, exports, workflow metadata and any retained request/bundle artifacts. A durable derived object may combine inputs only from its own partition. Shared nonsensitive software/configuration is outside this Knowledge-content rule; storing personal content there is not an escape hatch.
 
-An object's effective identity is `(partition, object_type, local_id)`, even if its visible ID happens to be globally unique. Existing names such as `PSN-00001` are local identifiers, not proof of global identity. Resolve direct IDs only inside the trusted partition; never globally locate an object and then inspect its partition. Validate reference type and local existence using protected control metadata before loading content. Outside-partition, nonexistent and undiscoverable references produce a non-enumerating refusal.
+An object's effective identity is conceptually `(partition, resource_type, local_id)`, even if its visible ID happens to be globally unique. This is not implemented by this decision. Existing names such as `PSN-00001` are local identifiers, not proof of global identity. Resolve direct IDs only inside the trusted partition; never globally locate an object and then inspect its partition. Validate reference type and local existence using protected control metadata before loading content. Outside-partition, nonexistent and undiscoverable references produce a non-enumerating refusal.
 
 The same real individual may later have separately governed Person records in different partitions; no automatic global identity merge or cross-partition `linked_user` mapping follows. Initially each referenced Person/Circle belongs to the bound Home authority and partition. Their future explicit partition columns or deployment-level mapping are implementation choices, not changes made here.
 
@@ -107,7 +116,7 @@ Physical stores, encryption keys, placement, provisioning, billing and commercia
 
 For `scope_type=PERSON, scope_id=PSN-X`, X must exist in the trusted partition and appear once in the normalized subject set. The assertion belongs to X's personal context; X does not thereby own facts about every other person it mentions.
 
-Additional subjects are permitted. “Erick prefers eating dinner with Ana” is PERSON/Erick with subjects Erick and Ana because the contextual relationship reveals information involving Ana. Both contribute restrictions. An innocuous external public reference need not become a private Person identity, but ambiguous references to household people cannot be silently omitted or treated as public. Admission must resolve them or refuse durable usable admission.
+Additional subjects are permitted in reusable/shared Knowledge. “Erick prefers eating dinner with Ana” is PERSON/Erick with subjects Erick and Ana because the contextual relationship reveals information involving Ana. Both contribute restrictions. An innocuous external public reference need not become a private Person identity, but ambiguous references to household people cannot be silently omitted or treated as public. Admission to this model must resolve them or refuse durable usable admission. This rule does not settle the separately deferred private-third-party-assertion question in section 6.5.
 
 Self-access allows Erick's own checks, not Ana's checks. Permission to author an assertion about Ana does not mean Ana made or agreed with it.
 
@@ -123,7 +132,7 @@ Who can act is determined by the operation table below, using explicit Circle gr
 
 `subject_person_ids` is the complete set of people actually concerned, not a list chosen to make authorization pass. Trusted admission validates scope, subjects, content domains and provenance. The model may suggest them, but cannot make them authoritative. User confirmation of wording alone cannot declassify content. If completeness cannot be established, deny usable admission/retrieval; do not broaden access by assuming an empty set.
 
-For this proposal, `D(c)` is the nonempty set of required content domains for claim c. KNOWLEDGE is always an additional governance requirement. A single-domain claim retains today's domain plus KNOWLEDGE checks. In a mixed-domain claim, all known domains are required; adding HEALTH or FINANCE can only restrict access. As a conservative B1 default, every subject and the scope must pass every domain in `D(c)`. B2 may propose a more precise subject/domain matrix or approved projections, but no such relaxation is accepted here.
+For this decision, `D(c)` is the nonempty set of required content domains for reusable/shared claim c. KNOWLEDGE is always an additional governance requirement. A single-domain claim retains today's domain plus KNOWLEDGE checks. In a mixed-domain claim, all known domains are required; adding HEALTH or FINANCE can only restrict access. Under accepted B1, every subject and the scope must pass every domain in `D(c)`. B2 may refine the exact subject/domain sensitivity matrix, but may relax this conservative intersection only through an explicit approved projection/declassification model. No such relaxation is accepted here.
 
 This establishes composition, not B2's classification/inheritance algorithm. Source-derived restrictions can add requirements; they cannot be discarded just because the current claim contract has one `domain` string. A diagnosis remains canonical Health/FHIR truth, not a Knowledge diagnosis record.
 
@@ -136,24 +145,32 @@ Preserve distinct, attributable information without a consensus engine:
 - Subject set and typed scope, independent of assertor.
 - Any attestation: attesting Person, exact version/content, time, evidence and capacity (`personal assertion` or `Circle stewardship`). This is conceptual metadata, not a contract schema change.
 
-For direct “Our family eats at 19:00,” Erick is the assertor; Ana is not an assertor or attestor unless she actually confirms. Circle stewardship can endorse shared use while preserving “asserted by Erick; endorsed by [steward].” Do not emit “family consensus.” If a later product needs that label, B3 must define the participant set and individual attestations first. Imported assertions and AI suggestions do not acquire human authorship from the actor who merely uploads them.
+For direct “Our family eats at 19:00,” Erick is the assertor; Ana is not an assertor or attestor unless supported by her own actual assertion or attestation. Circle stewardship can endorse shared use while preserving “asserted by Erick; endorsed by [steward].” That stewardship attestation does not mean every Person agrees that the content is true. Do not create a “family consensus” state or emit that label. Detailed confirmation/lifecycle semantics remain B3. Imported assertions and AI suggestions do not acquire human authorship from the actor who merely uploads them.
 
 An assertor need not automatically be a content subject. Attribution itself is protected metadata: disclose it only under authorized attribution/source rules, and add a Person restriction if it reveals personal content. Neither a bare author ID nor a source pointer grants access to that Person's other data.
 
-## 7. ConsentGrant alternatives and selected recommendation
+### 6.5 Private third-party assertions — deferred product/privacy model
 
-These are architecture alternatives, not implementation choices approved by this document.
+**PRIVATE THIRD-PARTY ASSERTIONS = DEFERRED PRODUCT/PRIVACY MODEL.** They are not part of the initial Knowledge runtime.
+
+Erick privately telling his personal Olin “Ana likes blue” raises a future distinction between Erick's private attributed personal assertion and reusable/shared Knowledge asserted as being about Ana. B1 intentionally does not design that distinction, its permissions, storage or lifecycle. The conservative reusable/shared rule must not become an accidental permanent prohibition on all future private personal notes or observations about another Person.
+
+This deferral supplies no authorization exception. The initial reusable/shared model must not admit that statement as active shared Knowledge without the normal Ana subject restrictions. A private label, PERSON scope, authorship or an LLM inference cannot smuggle it into active reusable/shared Knowledge. A future private-personal-assertion model may be designed separately under an explicit product/privacy decision; none is implemented or approved here.
+
+## 7. ConsentGrant alternatives and accepted authorization model
+
+These alternatives preserve the original tradeoff analysis. The Product Architect accepts the bounded structure closest to A with the terminology and bootstrap amendments below. B's arbitrary-resource generalization is not adopted; no implementation or migration is authorized.
 
 | Alternative | Compatibility and migration impact | Security properties and complexity | Future Health/Finance and Circle effect | Disadvantages |
 |---|---|---|---|---|
-| **A — Bounded extension of ConsentGrant to a typed PERSON or CIRCLE resource (recommended)** | Keep Home authority, domains/actions, Person grantee and existing Person self-access. Existing grants normalize to PERSON resources. Preserve current Person APIs as adapters; later add bounded typed evaluation. Requires schema validation/migration, partition binding and explicit Circle issuance rules. | One grant family/evaluator; AND composition outside any individual grant. Exactly one typed target, no wildcard types, Circle self-access forbidden. Moderate change with a small closed vocabulary. | Health/Finance Person consent stays intact. Circle permission authorizes Circle handling only; it never grants access about an adult. Supports genuine subjectless Circle Knowledge. | “ConsentGrant” now includes Circle authorization, which must not be represented as personal consent. Circle grantor authority is new work. Ambiguous legacy target fields must be rejected, not guessed. |
+| **A — Bounded typed PERSON/CIRCLE evolution of existing ConsentGrant (structure accepted with amendments)** | Keep Home authority, domains/actions, Person grantee and existing Person self-access. Existing grants normalize to PERSON resources. Preserve current Person APIs as adapters; later add bounded typed evaluation. Future schema validation/migration, partition binding and Circle issuance rules remain implementation work; no rename is required now. | One Authorization Grant family/evaluation model; AND composition outside any individual grant. Exactly one typed target, no wildcard types, Circle self-access forbidden. Moderate change with a small closed vocabulary. | Health/Finance Person consent stays intact. Circle permission authorizes Circle handling only; it never grants access about an adult. Supports genuine subjectless Circle Knowledge. | The existing ConsentGrant name can obscure the distinction between personal consent and Circle authority. Persisted naming remains an implementation/migration decision. Circle grantor authority is new work. Ambiguous legacy target fields must be rejected, not guessed. |
 | **B — Replace/generalize with resource-subject AuthorizationGrant for arbitrary resource types** | Home could remain authoritative, with ConsentGrant mapped to one subtype. Broader API/schema migration for all consumers and possible compatibility adapters. | Can separate authorization target, grantor and human data subjects cleanly. High complexity: generic resources, ownership and delegation rules are undefined; careless generic self-access or wildcards could widen rights. | Flexible for future account/document/Health/Finance resources and Circles, but each still needs its own issuer semantics and Person restrictions. | Speculates beyond B1; risks a policy framework with weakly defined resource semantics and a long migration. Renaming alone solves no consent problem. |
 | **C — Keep Person ConsentGrant; add CircleGrant under the same Home authority** | Person consumers unchanged; additive Circle schema and evaluator branch. Shared evaluation utilities can remain central. | Clear personal-consent versus stewardship distinction. Safe only if both results are composed centrally. Moderate complexity, but duplicate grant lifecycle/audit/expiry behavior is likely. | Preserves Person Health/Finance checks and enables subjectless Circle context. | Two grant constructs for almost identical grantee/domain/action/state behavior; services could mistakenly check only one. Justified only if Circle authority needs materially different lifecycle, which is not established. |
 | **D — Keep Person-only ConsentGrant and defer Circle Knowledge** | Zero grant migration; explicitly reject all Circle Knowledge in a future first runtime. | Smallest immediate surface; safe if there is no fake Person household owner and no empty-subject bypass. | Personal Health/Finance remain unchanged; cannot support genuine household context or scenarios B/E as shared Circle claims. | Delays the conceptual question rather than resolving it. Viable rollout limitation, not the target B1 authorization model. |
 
-**Select A for Product Architect consideration.** It expresses the one demonstrated new resource kind without creating overlapping service ACLs or arbitrary-resource infrastructure. Personal consent and Circle stewardship have different issuer rules, but can share target/grantee/domain/action/validity/revocation mechanics and one decision authority. If Circle lifecycle later proves fundamentally different, C is the explicit fallback to reconsider, not a parallel system to create now.
+**Accepted: A's bounded structure, described architecturally as an Authorization Grant / authorization decision.** It expresses the one demonstrated new resource kind without creating overlapping service ACLs or arbitrary-resource infrastructure. Personal consent/access and Circle handling/stewardship have different issuer rules but share one grant family, evaluation model and Home decision authority. A Circle cannot itself consent. Existing implementation may continue to be called ConsentGrant for compatibility during migration; whether the persisted DocType retains that name or evolves to a better one is an implementation/migration decision. No rename or migration is required in this architecture PR. Alternatives B and C are not adopted; D is not the target B1 model.
 
-### 7.1 Proposed grant semantics and authority to issue
+### 7.1 Accepted grant semantics and authority to issue
 
 Conceptually, a grant identifies trusted partition, Person grantee (the existing schema calls this `actor_person`), exactly one typed resource, one domain, actions, active/revoked state, validity and proven issuing authority. A grant's stored grantee is not an actor field a tool may supply to impersonate someone. For PERSON resources the resource Person is the current `subject_person`; for CIRCLE it is a Circle, **not a fabricated Person**.
 
@@ -162,26 +179,27 @@ Keep existing Person grant evaluation compatible. Self-access applies only when 
 Grant mutation is a separate, constrained Home process, not a side effect of Knowledge CRUD:
 
 - Person grants require the subject's authenticated authorization or separately proven representative authority. `CareRelationship=GUARDIAN`, Circle MANAGE, System Manager status, or a populated `granted_by` field is not business proof. No automatic representative model is added. Cross-Person MANAGE permits the existing data actions but is **not permission to issue further Person consent grants**.
-- Circle root stewardship is explicitly designated through an audited, trusted Home administration process recording the human authorizing the designation. Neither Circle creator, first member, oldest adult nor an LLM is automatically steward. No steward designation means no Circle grant issuance and no Circle Knowledge use.
-- A steward may explicitly issue/revoke ordinary Circle VIEW/CREATE/UPDATE grants only in domains for which they hold Circle MANAGE. Issued permissions and validity cannot exceed that authority. Ordinary recipients cannot redelegate. Designating/replacing a MANAGE steward remains the root administration process initially; no recursive delegation hierarchy is proposed.
+- Normal consumer onboarding must not require manual system administration. When an authenticated Person deliberately creates a Circle through an authorized Home **create Circle** process, the operation may atomically create the Circle, explicitly record the creator's acceptance of initial stewardship, and establish initial bounded Circle MANAGE authority. The authority comes from that explicit authenticated creation/stewardship operation, not from Circle or membership-row existence. Its scope is the new Circle and the bounded domains recorded by that operation; it confers no Person consent or arbitrary cross-domain authority. This is an accepted process rule, not an implemented API.
+- First membership, creating a membership row, age, family role, an owner/parent label or an AI inference cannot establish stewardship. No LLM may designate a steward. Imported or pre-existing Circles without a valid steward require an explicit trusted designation/recovery process; no valid designation means no Circle grant issuance or ordinary Circle Knowledge use.
+- A steward may explicitly issue/revoke ordinary Circle VIEW/CREATE/UPDATE grants only in domains for which they hold Circle MANAGE. Issued permissions and validity cannot exceed that authority. Ordinary recipients cannot redelegate. Replacing/recovering root stewardship requires an explicit protected Home process; recursive MANAGE delegation is not approved.
 - Such grants record their authorizing stewardship and cease to be usable when that authority is revoked/expires, unless explicitly reauthorized by a current steward. This is a grant-validity dependency, not a workflow per claim. It prevents stale subordinate grants from outliving their authority.
-- No unrestricted consent mutation is exposed to Home MCP or the model. Authenticated human authorization, authority verification and audit are required even if an administrator performs the mechanical write.
+- No unrestricted authorization-grant mutation is exposed to Home MCP or the model. Authenticated human authorization, authority verification and audit are required; a manual administrator write is not the required consumer onboarding path and does not itself prove business authority.
 
 MANAGE still implies lesser **data** actions on that exact typed resource and domain. It does not imply other domains, another resource, partition administration, or representation of other adults.
 
-### 7.2 Migration boundary, if later approved
+### 7.2 Deferred implementation/migration boundary
 
-Preserve existing grant IDs, actions, state, times and provenance. Treat old `subject_person` records only as PERSON targets, not inferred Circle grants. Establish one unambiguous typed target and reject mixed/missing targets; do not allow old and new fields to be independently authoritative. Review incomplete legacy grantor evidence through an explicit later migration policy rather than silently declaring it verified. No actor-binding or existing Nutrition call behavior changes are authorized by B1's proposal.
+In a separately approved future migration, preserve existing grant IDs, actions, state, times and provenance. Treat old `subject_person` records only as PERSON targets, not inferred Circle grants. Establish one unambiguous typed target and reject mixed/missing targets; do not allow old and new fields to be independently authoritative. Review incomplete legacy grantor evidence through an explicit later migration policy rather than silently declaring it verified. Persisted DocType naming remains an implementation/migration decision. No rename, actor-binding or existing Nutrition call behavior changes are authorized by B1 acceptance.
 
-The future central evaluator must expose a complete bounded compound decision and enforce target existence, partition, issuer validity, grant lifecycle and operation predicates. No domain service may recreate Circle permissions in a local table. Contract design, tests, API rollout and migration are deferred until acceptance; this proposal makes none of them.
+The future central evaluator must expose a complete bounded compound decision and enforce target existence, partition, issuer validity, grant lifecycle and operation predicates. No domain service may recreate Circle permissions in a local table. Contract design, tests, API rollout and migration require separate later approval; B1 architecture acceptance implements none of them.
 
 ## 8. Authorization composition and operation mapping
 
-### 8.1 Exact content rule
+### 8.1 Exact reusable/shared content rule
 
 Let `P` be the trusted partition and `a` the trusted actor. Let `H(P,a,r,d,x)` mean Home currently permits action x on typed resource r in domain d. It includes verified grant authority and the same-domain MANAGE implication; it is conceptual notation, **not an existing callable API**.
 
-For a claim c, define:
+For a reusable/shared claim c, define (the deferred private-third-party-assertion model is not specified by this rule):
 
 ```text
 R(c) = {typed scope of c} UNION {PERSON/s for each s in subjects(c)}
@@ -201,7 +219,7 @@ The result is an **intersection of permissions**, not a maximum numerical sensit
 
 ### 8.2 Domain operations mapped to existing actions
 
-`Q` below includes both Circle/Person scope and all subjects/domains. Reads of old content always require its own VIEW eligibility. Checks on replacement content use the replacement's complete subjects/domains as well as the old ones. No new low-level action enum is needed; a grant is necessary but the operation's ownership/authority predicates must also hold.
+`Q` below includes both Circle/Person scope and all subjects/domains for reusable/shared Knowledge. Reads of old content always require its own VIEW eligibility. Checks on replacement content use the replacement's complete subjects/domains as well as the old ones. Retain exactly VIEW, CREATE, UPDATE and MANAGE as low-level grant actions. DISPUTE, CONFIRM, FORGET and SHARE are domain operations, not new grant actions: compose existing permissions, trusted actor/resource context and operation-specific predicates. Exact lifecycle effects remain B3/B4.
 
 | Operation | Required authorization and authority limits |
 |---|---|
@@ -239,7 +257,7 @@ It can be valid to view a claim while its full source remains unavailable, but o
 
 Membership remains organizational/navigation information. Its transitions can initiate explicit grant invalidation; adding a membership never creates permission. Authorization evaluates actual effective grants and lifecycle state, not a historical membership or a descriptive role.
 
-| Transition | Proposed authorization effect |
+| Transition | Accepted authorization effect |
 |---|---|
 | Person joins Circle | No automatic access, including historical claims. A steward explicitly grants bounded Circle/domain actions; every Person subject still independently controls access about themselves. A grant may explicitly cover retained historical Circle context, but joining does not. |
 | Person leaves / is removed from household | The trusted exit process invalidates **all that Person's Circle grants**, including MANAGE, and any ordinary Circle grants dependent on their lost stewardship pending reauthorization. This applies to future reads of old and new Circle claims. Keep authorship and subject identities intact. The exit must not be reported complete while stale Circle grants can still authorize; an inconsistent/unreconciled transition fails closed. |
@@ -267,7 +285,7 @@ A future repository/provider receives from trusted orchestration, not the model:
 
 An initial protected authorization-metadata lookup inside the trusted boundary is distinct from retrieving claim statements, snippets or vectors. It must itself be partition-bound, minimized and undisclosed to the model. The repository uses it to establish eligibility before content search; unauthorized text must not be fetched to discover how it should have been authorized. Unclassified content cannot enter the usable retrieval set.
 
-Apply constraints to direct-ID reads, query expansion using stored material, candidate selection, reranking, evidence lookup, summaries, caches and final assembly. Do not reuse an earlier bundle's `authorized_domains` as a bearer permission. A deny, missing tuple, unknown state, authority outage or oversized compound request denies as a whole; never truncate requirements to fit today's eight-entry, one-Person API. B6 must define bounded batching and revalidation consistent with single-use delegation. No index/search/storage technology is chosen.
+Apply constraints to direct-ID reads, keyword and vector retrieval, chunks, embeddings, query expansion using stored material, candidate selection, reranking, source expansion/evidence lookup, summaries, caches and final assembly. Do not reuse an earlier bundle's `authorized_domains` as a bearer permission. A deny, missing tuple, unknown state, authority outage or oversized compound request denies as a whole; never truncate requirements to fit today's eight-entry, one-Person API. B6 must define the concrete retrieval protocol, freshness, bounded batching and revalidation consistent with single-use delegation. No index/search/storage technology is chosen.
 
 ## 11. Mandatory acceptance scenarios A–H
 
@@ -288,6 +306,7 @@ These are **conceptual expected results**, not implemented tests or production v
 
 - Shape: P; CIRCLE/H; subjects `{}`; assertor E; D=`{HOUSEHOLD}`.
 - CREATE requires explicit H KNOWLEDGE and HOUSEHOLD CREATE+VIEW; membership or authorship supplies neither. E's self-access is irrelevant to the Circle resource.
+- If E deliberately created H through the authorized authenticated Home process, that operation may have atomically recorded E's acceptance of initial stewardship and established the required bounded Circle MANAGE grants. Those grants can satisfy the corresponding checks; first membership or a role label cannot. Imported H without a valid steward requires trusted designation/recovery.
 - VIEW requires explicit H KNOWLEDGE/VIEW and HOUSEHOLD/VIEW. With zero subjects there are still two resource/domain requirements; no empty authorization loop.
 - Correction requires VIEW+UPDATE and authorized replacement creation. Steward endorsement of shared Circle use requires Circle MANAGE under section 8.2; no invented Ana confirmation. Whole-claim removal requires the steward's required MANAGE; E can separately retract E's assertion without claiming to erase others' sources.
 - Expected: explicit Circle grants enable genuinely subjectless routine Knowledge; membership-only caller denied.
@@ -296,10 +315,10 @@ These are **conceptual expected results**, not implemented tests or production v
 
 “Erick and Ana decided not to move this year,” said by E about their household decision.
 
-- Shape: P; CIRCLE/H; subjects `{E,A}`; assertor E only; D=`{HOUSEHOLD}`. CIRCLE is appropriate for this joint household decision. An explicitly personal account could instead use PERSON/E, but would still include A and preserve A's restrictions.
+- Shape: P; CIRCLE/H; subjects `{E,A}`; assertor E only; D=`{HOUSEHOLD}`. CIRCLE is appropriate for this joint household decision. A reusable/shared assertion placed in E's personal context could instead use PERSON/E, but would still include A and preserve A's restrictions. Private third-party assertions are separately deferred, not authorized by choosing PERSON/E.
 - CREATE: H, E and A each require KNOWLEDGE and HOUSEHOLD CREATE+VIEW. E's self-access covers only E. Without Ana's relevant consent, do not admit the shared claim as usable Knowledge.
 - VIEW by any actor requires all six resource/domain VIEW tuples. Ana is not automatically able to read E's private information; self-access satisfies only her tuples.
-- E can propose correction only with the operation's complete permissions. Ana may record an authorized challenge or use the narrow own-subject objection path; no full joint read is granted just to dispute it. Neither party may overwrite the other's attestation. Steward endorsement does not establish that Ana agreed; no consensus label without her actual attestation and a later B3 policy.
+- E can propose correction only with the operation's complete permissions. Ana may record an authorized challenge or use the narrow own-subject objection path; no full joint read is granted just to dispute it. Neither party may overwrite the other's attestation. Steward endorsement does not establish that Ana agreed; no family-consensus state is created. B3 retains detailed confirmation/lifecycle semantics.
 - Expected: intersection-based disclosure and attributed disagreement; no “newest author wins.”
 
 ### D — Circle wrapper containing private Person data
@@ -348,6 +367,14 @@ LLM/tool payload includes `actor_person_id=someone_else` and `security_partition
 - Resolve actor from validated G1.6 session and bind partition through trusted infrastructure. A missing trusted binding denies even if payload values look valid. A forged header, extracted instruction or job variable is equally inert.
 - Expected: rejection or inert unknown fields, no impersonation/partition switch, no retrieval under forged authority.
 
+### Deferred scenario — Private third-party assertion
+
+Erick privately tells his personal Olin: “Ana likes blue.”
+
+**Intentionally NOT solved by B1: PRIVATE THIRD-PARTY ASSERTIONS = DEFERRED PRODUCT/PRIVACY MODEL.** A possible future distinction between Erick's private attributed personal assertion and reusable/shared Knowledge about Ana requires separate design. It is not part of the initial Knowledge runtime.
+
+The initial reusable/shared Knowledge model must not admit this as active shared Knowledge without the normal Ana subject restrictions. Private wording, authorship or a PERSON scope cannot bypass those checks. This deferral preserves the ability to design private personal notes/assertions later; it is neither a permanent prohibition on them nor authorization to implement that future model now.
+
 ## 12. Rejected alternatives and explicit limits
 
 - **Circle equals Tenant:** confuses overlapping social context with isolation and makes future care/household transitions unsafe.
@@ -361,25 +388,33 @@ LLM/tool payload includes `actor_person_id=someone_else` and `security_partition
 - **Erase provenance when somebody leaves; retain read access because they authored it:** neither follows from membership or authorship.
 - **A workflow per claim or technology-led design:** does not answer who may authorize an operation; no workflow engine is selected.
 
-## 13. Product Architect decisions still required
+## 13. Product Architect disposition
 
-These are genuine approval points with concrete recommendations, not unresolved mechanics disguised as acceptance. Record owner/date/disposition and any amendments in the gate before B1 can close.
+Decision owner: Product Architect
 
-| Decision | Recommended disposition for review |
+Decision date: 2026-09-19
+
+Disposition: ACCEPTED WITH AMENDMENTS — B1 RESOLVED. The Product Architect explicitly accepted the core model and the amendments below. This accepted proposal governs B1 where older Knowledge documentation is less precise, until later consolidation. Acceptance is the Product Architect's decision, not an inference from a PR merge; PR #20 remains unmerged by this task.
+
+| Decision | Accepted disposition and amendments |
 |---|---|
-| Partition invariant and initial boundary | Accept a deployment/authority-bound opaque partition key; no Tenant entity now; no initial cross-partition references or transfer. |
-| ConsentGrant evolution | Accept alternative A, limited to PERSON/CIRCLE, preserving Person self-access and same-domain MANAGE implication. Approve separate issuer rules within the same Home authority. |
-| Circle stewardship and grant bootstrap | Accept explicit human designation of root stewards, bounded ordinary grants, no recursive MANAGE delegation, and invalidation on loss of issuing authority. The Product Architect must approve who may designate a steward; default is trusted human administration with recorded authorization, never inference from membership. |
-| Shared assertions and “confirmed” wording | Accept attributed contributions plus a distinct stewardship endorsement; never infer family consensus. Leave detailed activation/dispute resolution to B3. |
-| Multi-subject and mixed-domain composition | Accept scope AND every Person AND every required domain, conservatively applying all content domains to each subject until B2 approves any finer projection. |
-| Subject/author protection versus whole-record removal | Accept the narrow non-disclosing objection/retraction path and effective subject restriction without unilateral erasure of others' sources. B4 still defines retention and physical deletion promises. |
-| Exit / removal / independence | Accept invalidation of Circle grants on exit, explicit review of independent Person grants, and no automatic guardian/representative continuation. Approve the conservative deny-pending-review boundary; family-law and age-based authority remain future policy. |
+| 1. Security partition | Exactly one trusted partition per durable Knowledge object/derivative, distinct from Person, Circle, scope, membership and commercial Tenant. No Tenant entity now. Effective identity includes `(partition, resource_type, local_id)`. Initial cross-partition references, joins, sharing, sensitive deduplication and retrieval forbidden. Actor/partition are trusted runtime context. |
+| 2. Scope and subjects | PERSON scope includes its Person among subjects. CIRCLE may have no subjects only when genuinely about the Circle; identifiable private Person information still contributes that Person's restrictions. |
+| 3. Authorization composition | For reusable/shared Knowledge, scope AND every Person subject AND every required domain. Self-access covers only one's own Person requirement. No majority, membership, authorship or Circle-MANAGE bypass. B2 may relax only through an explicit approved projection/declassification model. |
+| 4. Private third-party assertions | Deferred product/privacy model, excluded from the initial runtime. Preserve future private-personal-assertion design without permitting unauthorized active shared Knowledge today. |
+| 5. Grant model and terminology | Accept A's bounded PERSON/CIRCLE structure within one Authorization Grant family/evaluation model and one Home authority. PERSON is consent/access authority; CIRCLE is handling/stewardship authority, not personal consent. Existing ConsentGrant name may remain; eventual persisted naming is an implementation/migration decision. Arbitrary-resource B is not adopted. |
+| 6. Stewardship bootstrap | An authorized authenticated create-Circle process may atomically create the Circle, record the creator's acceptance of initial stewardship, and establish bounded Circle MANAGE. No manual administration required for normal consumer onboarding. Imported/pre-existing Circles need trusted designation/recovery. No membership/role inference, LLM designation, ordinary-recipient redelegation or recursive MANAGE delegation. Root replacement/recovery requires a protected Home process. |
+| 7. Assertions and attestations | Actor, assertor, subject, attestor and viewer remain distinct when identities differ. Stewardship endorsement authorizes shared Circle use, not everyone's agreement. No family-consensus state. Detailed confirmation/lifecycle remains B3. |
+| 8. Operations | Retain VIEW/CREATE/UPDATE/MANAGE; DISPUTE/CONFIRM/FORGET/SHARE compose them with trusted context and operation predicates. Lifecycle effects remain B3/B4. |
+| 9. Withdrawal | Narrow non-disclosing retraction, objection and own-information non-use/suppression do not require another Person's private VIEW, grant VIEW, rewrite others' words or automatically erase independent sources. B4 owns physical erasure/cleanup. |
+| 10. Circle transitions | Joining grants nothing; exit/removal invalidates the Person's Circle-derived grants before completion; rejoining revives none. Dissolution stops ordinary Circle use without moving content to Person scope. Authorship gives no perpetual VIEW. Independent Person grants survive membership changes unless separately revoked. No permanent guardian/representative authority; legal representation remains future policy. |
+| 11. Retrieval | Trusted partition and authorization establish the eligible candidate space before sensitive retrieval, including direct/keyword/vector reads, chunks, embeddings, summaries, caches, source expansion and reranking. B6 defines concrete protocol/freshness/revalidation. |
 
-Until disposition, all recommendations remain proposed; a documentation merge alone is not acceptance. Initial runtime scope (for example PERSON-only first) is a later approval, not implicitly chosen by recommending Circle semantics.
+B1 has no remaining Product Architect disposition required for the decisions recorded here. The Knowledge Technology Gate remains OPEN; B2–B6 and their process decisions remain OPEN. Initial runtime scope and implementation/migration approval are later decisions, and private third-party assertions are excluded from the initial runtime. No technology or runtime is approved by this disposition.
 
 ## 14. Boundaries for later blockers and implementation deferrals
 
-| Blocker | B1 input if accepted | Remains open |
+| Blocker | Accepted B1 input | Remains open |
 |---|---|---|
 | B2 — sensitivity | Distinct partition/scope/subjects; all required permissions intersect; Circle/source wrappers cannot discard Person domains; claims and sources separately gated. | Classification, source/excerpt inheritance, per-subject domain precision, approved projections, attribution disclosure. |
 | B3 — lifecycle | Actor/assertor/subject/steward are distinct; operation authority and non-impersonation rules; endorsement is not consensus. | Activation, confirmation evidence/state rules, dispute resolution, atomic correction/supersession and concurrency. |
@@ -387,11 +422,11 @@ Until disposition, all recommendations remain proposed; a documentation merge al
 | B5 — ownership | Home remains identity/grant/policy authority. | Nutrition preference ownership and the Knowledge persistence owner/service boundary; no decisions changed here. |
 | B6 — retrieval | Trusted actor/partition; explicit typed scope and complete subject/domain constraints before sensitive candidates; no stale grant reuse or partial decision coverage. | Repository interface, freshness protocol, race handling, final revalidation, working-memory invalidation and task limits. |
 
-Explicitly deferred: changes to `packages/home-contracts/`, Person/Circle/Membership/Care/Consent DocTypes, authorization engine, Home APIs/MCP, Nutrition, Knowledge/ContextBundle contracts, provisioning and deployment. No `svc-knowledge`, tables, database, vector index, extraction engine, workflow or tool is created. No commercial Tenant/billing/support system, guardian/legal model, generalized policy engine, key-management scheme or technology selection is approved.
+Explicitly deferred: changes to `packages/home-contracts/`, Person/Circle/Membership/Care/Consent DocTypes, authorization engine, Home APIs/MCP, Nutrition, Knowledge/ContextBundle contracts, provisioning and deployment. Persisted grant naming is an implementation/migration decision; no rename is required here. Private third-party assertions remain a deferred product/privacy model outside the initial runtime. No `svc-knowledge`, tables, database, vector index, extraction engine, workflow or tool is created. No commercial Tenant/billing/support system, guardian/legal model, generalized policy engine, key-management scheme or technology selection is approved.
 
 ## 15. Review and verification boundary
 
-This change contains only this proposal and B1 status/reference edits in `KNOWLEDGE_TECHNOLOGY_GATE.md`. Canonical architecture and accepted ADRs retain their current status. Scenarios A–H are reasoned acceptance specifications, not proof of a running implementation.
+This change contains only this accepted proposal and B1 status/reference edits in `KNOWLEDGE_TECHNOLOGY_GATE.md`. Other canonical architecture and accepted ADR files remain unchanged; this accepted proposal governs B1 precision until later consolidation. Scenarios A–H remain architecture acceptance specifications, not runtime tests. The additional private-third-party-assertion scenario records a deferral, not a new runtime behavior.
 
 Verify from the proposal branch:
 
@@ -401,4 +436,4 @@ git diff --name-only origin/main...HEAD
 git status --short --branch
 ```
 
-Expected changed paths: `docs/architecture/proposals/KNOWLEDGE_B1_SECURITY_SCOPE.md` and `docs/architecture/proposals/KNOWLEDGE_TECHNOLOGY_GATE.md`. B1 is **PROPOSED — AWAITING PRODUCT ARCHITECT DECISION**, not resolved; B2–B6 remain OPEN. No technology, runtime or production change is included.
+Expected changed paths: `docs/architecture/proposals/KNOWLEDGE_B1_SECURITY_SCOPE.md` and `docs/architecture/proposals/KNOWLEDGE_TECHNOLOGY_GATE.md`. B1 is **RESOLVED BY PRODUCT ARCHITECT DECISION** dated 2026-09-19; B2–B6 and the Knowledge Technology Gate remain OPEN. No technology, runtime or production change is included.
