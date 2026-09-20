@@ -1,6 +1,6 @@
 # Knowledge B2 — Sensitivity inheritance
 
-Status: PROPOSED — AWAITING PRODUCT ARCHITECT DECISION
+Status: ACCEPTED — B2 ARCHITECTURE DECISION
 
 Date: 2026-09-20
 
@@ -12,7 +12,9 @@ Branch: `docs/knowledge-b2-sensitivity`
 
 Decision owner: Product Architect
 
-Disposition: NOT DECIDED. Merging this proposal would not accept it or resolve B2.
+Decision date: 2026-09-20
+
+Disposition: ACCEPTED WITH CLARIFICATION — B2 RESOLVED
 
 Gate: [B2 — Sensitivity inheritance](KNOWLEDGE_TECHNOLOGY_GATE.md#b2--sensitivity-inheritance)
 
@@ -24,7 +26,7 @@ Preserve [accepted B1](KNOWLEDGE_B1_SECURITY_SCOPE.md) in full: one trusted part
 
 The problem is information flow, not naming. A HEALTH statement does not become less protected when its representation changes from document to text, summary, claim, vector or answer. At the same time, an unrelated private document must not contaminate an independently asserted preference forever merely because the text matches.
 
-All examples are synthetic. Requirements below are proposed architecture, **not behavior implemented by today's contracts**. B3–B6 remain OPEN. No storage, retrieval, parsing, workflow or model technology is selected; no schema, contract, runtime or production change is authorized.
+All examples are synthetic. Requirements below are accepted architecture, **not behavior implemented by today's contracts**. B3–B6 remain OPEN. No storage, retrieval, parsing, workflow or model technology is selected; no schema, contract, runtime or production change is authorized.
 
 ## 2. Repository evidence that affects the design
 
@@ -194,9 +196,21 @@ Within B1 this is a same-partition approved projection, not a public publishing 
 
 ### 8.2 Authority and evidence required
 
-The initiating actor must satisfy B1's old VIEW and Q(old,MANAGE), and proposed new Q(CREATE), Q(VIEW), Q(MANAGE), including applicable inherited restrictions. They must have current access to all source material needed to review the proposed removal and the relevant bounded management authority over each affected source resource/domain. A source custodian means the authority proven by Home for that source's PERSON/CIRCLE handling context, not an uploader, technical administrator or an invented DOCUMENT grant target.
+The initiating actor must satisfy B1's old VIEW and Q(old,MANAGE), and proposed new Q(CREATE), Q(VIEW), Q(MANAGE), including applicable inherited restrictions. They must have current access to all source material needed to review the proposed removal and the relevant bounded management authority over each affected source resource/domain. These operation checks are necessary but do not by themselves supply either affected-Person authority or source-handling authority. The authority needed to reduce protection depends on which of the following two categories applies.
 
-Management permission is necessary, **not sufficient**, to waive another Person's protection. Every affected Person whose protection or audience is relaxed must explicitly authorize that release through their own authenticated authority, or separately proven representation if such a model is later approved. Relevant Circle stewardship and source-use authority must also explicitly approve the changes they control. One actor may fill several roles when proven. A Circle steward, a cross-Person MANAGE grantee, document owner, professional title, or system administrator cannot consent for another adult. Missing or unrepresentable authority means the proposed decrease is unavailable.
+#### 8.2.1 Person / content-sensitivity relaxation
+
+This category applies when the output removes a protected Person subject, removes a content domain such as HEALTH or FINANCE, or broadens the audience for content that still reveals a protected Person or domain. Explicit authority from every affected Person whose protection or audience is relaxed is required through their own authenticated authority, or through separately proven representation if a future legal-representation policy permits it.
+
+Circle stewardship, uploader status, MANAGE, document custody, administrator status, professional title and AI review do not substitute for the affected Person's authority. Relevant Circle stewardship and source-use authority must also approve the changes they independently control. One actor may fill several roles only when each role is separately proven. Future legal representation remains a separate policy. Missing or unrepresentable affected-Person authority means the relaxation is unavailable.
+
+#### 8.2.2 Source / container decoupling
+
+This category applies when an exact projection is separately reviewed and no longer reveals the Person-sensitive material or content domain present elsewhere in the original source. For example, a mixed source may contain private HEALTH information and an exact logistics passage; removing the full-source DOCUMENTS requirement from a projection containing only the logistics information does not automatically require consent from every Person whose information appears elsewhere in the original.
+
+Source/container decoupling requires appropriate source-handling authority, trusted classification/projection approval, evidence that the released output does not reveal the removed Person/domain restriction, exact version and use binding, and retention of every restriction that still applies. A source custodian means authority proven by Home for the source's PERSON/CIRCLE handling context, not an uploader, technical administrator or an invented DOCUMENT grant target.
+
+If the projection still identifies a Person, reveals sensitive content, or broadens the audience for that content, section 8.2.1 applies. Source custody cannot remove a Person's protection. Conversely, Person consent does not automatically permit disclosure of unrelated protected source material. When one projection changes both categories, it must satisfy both independently.
 
 Record, under protection:
 
@@ -291,9 +305,9 @@ Keep three concepts separate:
 
 HEALTH protection on Knowledge is a privacy obligation, not a diagnosis record or a claim of medical authority. FINANCE protection does not create a second balance/transaction ledger. DOCUMENTS access does not authorize all medical or financial content inside a file. KNOWLEDGE governance does not replace those categories. Canonical domain references and fetched values remain independently authorized; material derived from them keeps their protection and attribution. B5 must settle disputed ownership without weakening these rules.
 
-## 13. What B2 settles if accepted; obligations left open
+## 13. What B2 resolves; obligations left open
 
-B2 would settle what carries restrictions, conjunctive inheritance, the ordinary no-downgrade rule, separate independent assertions, conditions for precise spans/projections, source-versus-claim disclosure, protected AI/retrieval artifacts, and immediate ineligibility semantics for changed classification. It does not claim the implementation can enforce these yet.
+B2 resolves what carries restrictions, conjunctive inheritance, the ordinary no-downgrade rule, separate independent assertions, conditions for precise spans/projections, source-versus-claim disclosure, protected AI/retrieval artifacts, and immediate ineligibility semantics for changed classification. It does not claim the implementation can enforce these yet.
 
 | Blocker | Required B2 input | Decision/work explicitly left open |
 |---|---|---|
@@ -302,26 +316,30 @@ B2 would settle what carries restrictions, conjunctive inheritance, the ordinary
 | **B5 — ownership** | Classification and inherited access do not confer canonical ownership; Home remains grant/operation-policy authority. | Nutrition preferences, Knowledge persistence/service boundary, source/document custodianship responsibilities and migration. B2 describes the authority a release must prove; it does not appoint a service custodian or select storage. |
 | **B6 — retrieval** | Complete current requirements before sensitive candidates; protected metadata resolution; exact eligible variants; independently authorized provenance; final disclosure and context reuse must respect reclassification. | Bounded multi-resource decision protocol, single-use delegation integration, freshness/concurrency barriers, repository constraints, cache/index enforcement, final revalidation, model-context isolation and task limits. No concrete retrieval protocol is selected. |
 
-Private third-party assertions, cross-partition transfers and a general public/anonymized publication product remain outside the initial runtime. The overall Knowledge Technology Gate remains OPEN even if B2 is later accepted.
+Private third-party assertions, cross-partition transfers and a general public/anonymized publication product remain outside the initial runtime. The overall Knowledge Technology Gate remains OPEN after B2 acceptance.
 
-## 14. Product Architect decisions required
+## 14. Product Architect disposition
 
-These are actual policy choices, not implementation shopping questions. No decision is inferred from this PR.
+Decision owner: Product Architect
 
-| Decision | Recommendation and consequence |
+Decision date: 2026-09-20
+
+Disposition: ACCEPTED WITH CLARIFICATION — B2 RESOLVED
+
+| Decision | Accepted disposition |
 |---|---|
-| **D1 — Inheritance model** | Accept C with complete conjunctions and actual-influence lineage. Preserve B1's full cross-product; no dynamic any-source permissions. A is a safe restrictive fallback if C is deferred. |
-| **D2 — Source boundary and mixed spans** | Inherit source/container use restrictions by default. Permit narrower versioned spans and claim/full-source asymmetry only as explicit approved projections. This adds review friction but avoids silent DOCUMENTS shedding or permanent whole-document overrestriction. |
-| **D3 — Independent assertion standard** | Permit separately captured, explicitly attributable independent assertions without unrelated source restrictions; keep known derivation/confirmation dependent and ambiguous restatements restricted. Do not automatically merge similar assertions or their evidence. |
-| **D4 — Who can approve decreases** | Require B1 operation permissions, relevant source/Circle authority and explicit affected-Person approval for relaxation. Do not treat MANAGE, uploader status or AI review as personal consent. Defer legal representation and automated declassification categories; absence of authority denies. |
-| **D5 — Release validity and disclosure UX** | Releases remain version/use-bound and revocable; source/classification changes require revalidation. Permit minimal separately authorized explanations and neutral unavailable-detail wording. Do not promise full source visibility merely because a claim is visible. |
-| **D6 — Initial scope and verification bar** | First preference vertical has no downgrade feature. Require trusted complete classification or ineligibility, plus evidence of pre-candidate and stale-artifact enforcement before later runtime approval. Enabling any release category needs its own approved process and acceptance evidence. |
+| **D1 — Inheritance model** | ACCEPTED. Use complete conjunctions and actual-influence lineage. Preserve B1's full cross-product; no dynamic any-source permissions. Whole-ancestry conjunction remains the safe fallback where the approved projection conditions cannot be established. |
+| **D2 — Source boundary and mixed spans** | ACCEPTED. Inherit source/container use restrictions by default. Permit narrower versioned spans and claim/full-source asymmetry only as explicit approved projections. |
+| **D3 — Independent assertion standard** | ACCEPTED. Separately captured, explicitly attributable independent assertions do not inherit unrelated source restrictions; known derivation/confirmation remains dependent and ambiguous restatements remain restricted. Similar assertions and evidence are not automatically merged. |
+| **D4 — Who can approve decreases** | ACCEPTED WITH CLARIFICATION. Person/content-sensitivity relaxation requires explicit affected-Person authority. Source/container decoupling of an exact projection does not automatically require every Person appearing elsewhere in the original; it requires source-handling authority, trusted projection approval, proof of no residual removed Person/domain disclosure, exact version/use binding and all remaining restrictions. If protected content remains, the first category applies. Neither source custody nor Person consent supplies the other's authority. Section 8.2 is authoritative. |
+| **D5 — Release validity and disclosure UX** | ACCEPTED. Releases remain version/use-bound and revocable; source/classification changes require revalidation. Minimal explanations require separate authorization, and unavailable provenance uses neutral wording. Claim visibility does not imply full-source visibility. |
+| **D6 — Initial scope and verification bar** | ACCEPTED. The first preference vertical has no downgrade feature. Trusted complete classification or ineligibility, pre-candidate enforcement and stale-artifact enforcement evidence are required before later runtime approval. Any release category needs a separately approved process and acceptance evidence. |
 
-Acceptance should record owner/date, exact accepted or amended D1–D6 dispositions and scenario outcomes. Only that explicit decision can resolve B2. This document remains PROPOSED pending it.
+Scenarios A–J are accepted as conceptual architecture outcomes and later acceptance specifications, not evidence of implemented enforcement. This decision preserves B1 without amendment. It selects no technology and authorizes no contract, schema, workflow, runtime or production change.
 
 ## 15. Verification and change boundary
 
-Only this new proposal and the B2 entry in the gate register change. Older gate-wide “B2–B6 OPEN” summaries are intentionally untouched: B2 is still unresolved, with a proposal awaiting decision. B1 remains RESOLVED; B3–B6 remain OPEN. Canonical documents, ADRs, contracts, schemas, runtime, deployments and production are unchanged.
+Only this accepted decision and the status/disposition references in the gate register change. B1 and B2 are RESOLVED; B3–B6 and the Knowledge Technology Gate remain OPEN. Canonical documents, ADRs, contracts, schemas, runtime, deployments and production are unchanged.
 
 Investigation result (structured skill output):
 
@@ -331,7 +349,7 @@ Investigation result (structured skill output):
   "baseline_main_sha": "cf34771e6770acc4c91bbd46475f24917a7365fc",
   "baseline_worktree_clean": true,
   "b1": "RESOLVED",
-  "b2": "PROPOSED / AWAITING PRODUCT ARCHITECT DECISION",
+  "b2": "RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-20",
   "b3_b4_b5_b6": "OPEN",
   "recommended_model": "conjunctive artifact requirements, explicit lineage, approved projections",
   "scenarios": "A-J: conceptual expected outcomes; not runtime tests",
@@ -350,9 +368,9 @@ git diff origin/main...HEAD -- docs/architecture/proposals/KNOWLEDGE_TECHNOLOGY_
 git status --short --branch
 ```
 
-Expected changed paths: `docs/architecture/proposals/KNOWLEDGE_B2_SENSITIVITY_INHERITANCE.md` and `docs/architecture/proposals/KNOWLEDGE_TECHNOLOGY_GATE.md`; gate diff limited to B2. Scenarios are a security argument and later acceptance specification, not proof of implemented enforcement.
+Expected changed paths: `docs/architecture/proposals/KNOWLEDGE_B2_SENSITIVITY_INHERITANCE.md` and `docs/architecture/proposals/KNOWLEDGE_TECHNOLOGY_GATE.md`. Scenarios are a security argument and later acceptance specification, not proof of implemented enforcement.
 
-**B2 PROPOSED — NOT RESOLVED**
+**B2 RESOLVED — PRODUCT ARCHITECT DECISION**
 
 **B1 REMAINS RESOLVED**
 
