@@ -30,11 +30,11 @@ PROCESS
 
 Technology must not dictate the Knowledge model.
 
-This is a working decision register, NOT the final Knowledge architecture. The [independent architecture review](../reviews/2026-09-19-knowledge-independent-architecture-review.md) is historical review input, not canonical architecture. Its reviewed baseline was `ddebab6439c9d68487d180dec6995fc546d3cf68`; the G1.6 closeout was merged subsequently. Its findings were initially recorded without disposition. B1 is now resolved by the explicit Product Architect decision below; B2–B6 remain OPEN.
+This is a working decision register, NOT the final Knowledge architecture. The [independent architecture review](../reviews/2026-09-19-knowledge-independent-architecture-review.md) is historical review input, not canonical architecture. Its reviewed baseline was `ddebab6439c9d68487d180dec6995fc546d3cf68`; the G1.6 closeout was merged subsequently. Its findings were initially recorded without disposition. B1 and B2 are now resolved by the explicit Product Architect decisions below; B3–B6 remain OPEN.
 
 Canonical architecture remains in [ARCHITECTURE.md](../ARCHITECTURE.md), [KNOWLEDGE.md](../KNOWLEDGE.md), accepted ADRs, and approved architecture proposals. The accepted [B1 security/scope decision](KNOWLEDGE_B1_SECURITY_SCOPE.md) governs B1 where older Knowledge documentation is less precise, until later consolidation. The existing [Roadmap](../ROADMAP.md) identifies the Knowledge gate. Other canonical documents are not rewritten here, and no runtime approval is granted.
 
-Only explicit Product Architect decisions may accept, modify, or reject review recommendations. For each disposition, record the decision owner, date, exact accepted/modified/rejected finding, reasoning, acceptance scenarios, and references to approved architecture changes. **B1 is RESOLVED** by Product Architect acceptance with amendments on **2026-09-19**. B2–B6 remain **OPEN / NOT DECIDED**. The Knowledge Technology Gate remains **OPEN**. A reviewer recommendation or this document's eventual merge does not itself select technology or close a blocker.
+Only explicit Product Architect decisions may accept, modify, or reject review recommendations. For each disposition, record the decision owner, date, exact accepted/modified/rejected finding, reasoning, acceptance scenarios, and references to approved architecture changes. **B1 is RESOLVED** by Product Architect acceptance with amendments on **2026-09-19**. **B2 is RESOLVED** by Product Architect acceptance with clarification on **2026-09-20**. B3–B6 remain **OPEN / NOT DECIDED**. The Knowledge Technology Gate remains **OPEN**. A reviewer recommendation or this document's eventual merge does not itself select technology or authorize runtime implementation.
 
 ## Current five-layer model
 
@@ -58,7 +58,7 @@ This distinction preserves the current conceptual direction; it does not resolve
 
 ## Security partition — accepted B1 invariant
 
-Status: ACCEPTED — PRODUCT ARCHITECT B1 DECISION, 2026-09-19 (B2/B4/B6 OPEN)
+Status: ACCEPTED — PRODUCT ARCHITECT B1 DECISION, 2026-09-19 (B4/B6 OPEN)
 
 **Every durable Knowledge object and every derivative belongs to exactly one trusted security partition.**
 
@@ -105,24 +105,29 @@ Explicit amendment/deferral: **PRIVATE THIRD-PARTY ASSERTIONS = DEFERRED PRODUCT
 
 Reasoning: the bounded model preserves Home's single authority and fail-closed Person restrictions while supporting genuine subjectless Circle context. The amendments distinguish Circle handling from personal consent, permit explicit consumer stewardship bootstrap, and preserve future private-note design without creating an authorization bypass. Scenarios A–H remain architecture acceptance specifications, not runtime tests; the added private-third-party scenario records a deferral.
 
-Baseline implementation gap remains: current Person-based authorization cannot target a Circle, and simply allowing empty subjects would remove the bundle's subject checks. Resolving B1 defines the required architecture; it does not modify those contracts or authorize implementation. B2–B6 and the Knowledge Technology Gate remain OPEN. No technology is selected.
+Baseline implementation gap remains: current Person-based authorization cannot target a Circle, and simply allowing empty subjects would remove the bundle's subject checks. Resolving B1 defines the required architecture; it does not modify those contracts or authorize implementation. B2 is resolved by the decision below; B3–B6 and the Knowledge Technology Gate remain OPEN. No technology is selected.
 
 ## B2 — Sensitivity inheritance
 
-Status: OPEN
+Status: B2 — RESOLVED — PRODUCT ARCHITECT DECISION
 
-Product Architect disposition: NOT DECIDED
+Decision owner: Product Architect
 
-Questions to resolve:
+Decision date: 2026-09-20
 
-- Which source domain restrictions apply to originals and excerpts?
-- Which restrictions attach directly to claims?
-- How do document access and content-domain restrictions intersect?
-- How do derived claims inherit subject, source, and sensitivity restrictions?
-- How is HEALTH/FINANCE material prevented from being relabeled as generic KNOWLEDGE to broaden access?
-- How does an authorized explanation disclose provenance without exposing unauthorized source titles, excerpts, or other people?
+Product Architect disposition: ACCEPTED WITH CLARIFICATION
 
-Review concern: single domain labels and unchecked source references cannot by themselves preserve restrictions across extraction, summarization, and explanation. The inheritance and projection policy remains undecided.
+Authoritative decision: [Knowledge B2 — Sensitivity inheritance](KNOWLEDGE_B2_SENSITIVITY_INHERITANCE.md), including section 14's Product Architect disposition and scenarios A–J.
+
+Accepted decisions:
+
+- Every information artifact carries complete conjunctive requirements and actual-influence lineage. Ordinary transformations never weaken protection; AI cannot declassify. Independent assertions retain separate lineage.
+- Sources and mixed-source derivatives inherit source/container requirements by default. Approved projections are new, exact, version- and use-bound outputs. Provenance disclosures are separately authorized.
+- Person/content-sensitivity relaxation requires explicit affected-Person authority. Circle stewardship, uploader status, MANAGE, document custody, administrator status, professional title and AI review do not substitute for that Person's authority. Future legal representation remains separate policy.
+- Source/container decoupling for an exact projection does not automatically require every Person whose information occurs elsewhere in the original. It requires source-handling authority, trusted projection approval, proof that removed Person/domain sensitivity is absent from the output, exact version/use binding and preservation of every remaining restriction. If the output still reveals protected content, affected-Person authority is required. Source custody cannot remove Person protection; Person consent cannot disclose unrelated protected source material.
+- Reclassification makes stale derivatives immediately ineligible. Current authorization constrains the candidate space before sensitive retrieval. No technology or runtime is selected or approved.
+
+Scenarios A–J are accepted conceptual outcomes and future acceptance specifications, not runtime tests. B2 resolution changes no schema, contract, service, database, index, workflow, deployment or production system. B3–B6 remain OPEN.
 
 ## B3 — Confirmation and lifecycle
 
@@ -361,7 +366,7 @@ Retryable technical failure is different from business rejection or revoked auth
 
 Prefer opaque request/object identifiers, versions and minimal operational status. Avoid claim text, originals, medical/financial values, ContextBundles, bearer material or credentials in workflow variables, task titles, form fields, comments, attachments and exception messages. Fetch required content through a currently authorized service when needed.
 
-Opaque identifiers and metadata remain protected data. Workflow runtime records, history, logs, backups and exports must participate in retention and deletion rules. Merely choosing IDs does not eliminate the need for tenant isolation or restricted support access. B2/B4 remain OPEN.
+Opaque identifiers and metadata remain protected data. Workflow runtime records, history, logs, backups and exports must participate in retention and deletion rules. Merely choosing IDs does not eliminate the need for tenant isolation or restricted support access. B2's accepted sensitivity rules apply; B4 remains OPEN.
 
 ### 8. How does consent revocation affect an active workflow?
 
@@ -408,7 +413,9 @@ Product Architect decision: NOT DECIDED
 
 B1: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-19 ([accepted decision](KNOWLEDGE_B1_SECURITY_SCOPE.md))
 
-B2–B6: OPEN
+B2: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-20 ([accepted decision](KNOWLEDGE_B2_SENSITIVITY_INHERITANCE.md))
+
+B3–B6: OPEN
 
 Flowable selection: NOT APPROVED
 
@@ -416,7 +423,7 @@ No installation, deployment, replication, configuration, process triggering, or 
 
 ## Gate completion and change boundary
 
-The next work is explicit Product Architect disposition of B2–B6 and remaining process requirements. B1 is resolved by the accepted decision above; the Knowledge Technology Gate is not complete. Agreed acceptance scenarios must precede technology selection. Technology selection and runtime implementation require their own approval; B1 acceptance supplies neither.
+The next work is explicit Product Architect disposition of B3–B6 and remaining process requirements. B1 and B2 are resolved by the accepted decisions above; the Knowledge Technology Gate remains OPEN and is not complete. Agreed acceptance scenarios must precede technology selection. Technology selection and runtime implementation require their own approval; B1/B2 acceptance supplies neither.
 
 The original gate-opening task changed only the independent review artifact and this gate register. The B1 follow-up changes only [KNOWLEDGE_B1_SECURITY_SCOPE.md](KNOWLEDGE_B1_SECURITY_SCOPE.md) and B1 status/references in this register. It does not modify canonical architecture documents, existing ADRs, `packages/home-contracts/`, `services/`, `deploy/`, or production configuration.
 
