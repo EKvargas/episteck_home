@@ -109,9 +109,11 @@ Baseline implementation gap remains: current Person-based authorization cannot t
 
 ## B2 — Sensitivity inheritance
 
-Status: OPEN
+Status: B2 — PROPOSED / AWAITING PRODUCT ARCHITECT DECISION
 
 Product Architect disposition: NOT DECIDED
+
+Proposal: [Knowledge B2 — Sensitivity inheritance](KNOWLEDGE_B2_SENSITIVITY_INHERITANCE.md). The proposal compares inheritance models, recommends conjunctive artifact requirements with explicit lineage and approved projections, and evaluates scenarios A–J. It is review input, not an accepted decision; B2 remains unresolved.
 
 Questions to resolve:
 
