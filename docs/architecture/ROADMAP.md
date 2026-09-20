@@ -56,6 +56,21 @@ first Knowledge use case, and the governance layer (Scope/Episode/Claim) impleme
 in the Home Control Plane. The pure G1.5 contracts are complete but are not a
 Knowledge runtime or persistence implementation.
 
+### LLM Routing & Cost Management Gate `[FUTURE / PARALLEL]`
+Preserve a dedicated architecture gate for inference-provider routing, quota/cost
+management, BYOK/user-owned provider credentials, privacy-aware model eligibility, and
+bounded Episteck-paid fallback. **OmniRoute is a candidate, not selected or deployed.**
+
+Olin must retain ownership of trusted identity, security partition, domain sensitivity,
+provider eligibility, and budget policy; an inference gateway may handle provider
+connections, quota awareness, routing/fallback, and usage metering only within those
+constraints. See
+`proposals/LLM_ROUTING_AND_COST_GATE.md`.
+
+This work may proceed as architecture research in parallel, but it is **not a Knowledge
+Technology Gate blocker** and does not authorize production deployment or provider
+credential onboarding.
+
 ### G2 — Health / real family onboarding `[BLOCKED]`
 First real Person + explicit consent + real Pregnancy Nutrition Profile + real
 providers + real meal plan + planned→actual + Home Agent with the real user.
