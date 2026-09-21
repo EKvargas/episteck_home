@@ -91,7 +91,7 @@ The design target is therefore: **make the prohibition durable and cheap to enfo
 
 **B — Suppression register with bounded derivation families and re-admission barrier (accepted).** Commit a durable suppression entry naming what is prohibited and for which uses. Record derivation family membership at creation. Erasure runs asynchronously against that family with its own receipts. Every path into usable state — retrieval, restore, import, reindex — consults the register first, against control state proven current per §12.1.
 
-*Assessment:* Correctness does not depend on cleanup completeness, so partial cleanup degrades to "still prohibited, not yet erased" rather than to silent exposure. Survives restore by construction, since the register is itself restored and re-consulted. Honest about backups. Costs a permanent small metadata record per suppression and a mandatory check on every use path.
+*Assessment:* Correctness does not depend on cleanup completeness, so partial cleanup degrades to "still prohibited, not yet erased" rather than to silent exposure. Survives restore by construction, since the register is itself restored and re-consulted. Honest about backups. Costs a small durable anti-resurrection metadata record while the prohibition remains in force, plus a mandatory check on every use path.
 
 **C — Crypto-shredding.** Encrypt each erasable unit under its own key; forget by destroying the key. Ciphertext may remain anywhere, including old backups.
 
@@ -109,7 +109,7 @@ The design target is therefore: **make the prohibition durable and cheap to enfo
 | Deletion latency | Bounded by slowest store | Non-use immediate; erasure asynchronous | Immediate on key destruction | Bounded by slowest store |
 | Backup implications | Unsolved | Disclosed expiry + suppression on restore | Genuinely solved | Unsolved |
 | Auditability | Poor — no record survives | Minimal non-sensitive record retained | Good | None |
-| Data minimization | Good on payload, no prohibition record | Small permanent metadata cost | Good | Maximal |
+| Data minimization | Good on payload, no prohibition record | Small durable metadata cost while the prohibition is in force | Good | Maximal |
 | B1/B2/B3 fit | Conflicts with B3 §11.10 retention cutoff | Direct fit with B2 immediate ineligibility and B1 non-disclosing withdrawal | Compatible | Conflicts |
 | Health/Finance readiness | Weak | Bounded per-domain retention | Strong | Unacceptable |
 | Operational complexity | Medium | Medium | High | Low |
