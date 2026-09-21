@@ -173,11 +173,23 @@ Scenarios A–M and the clarification boundary cases are accepted architecture o
 
 ## B5 — Ownership boundaries
 
-Status: OPEN — PROPOSAL SUBMITTED, AWAITING PRODUCT ARCHITECT DECISION
+Status: OPEN — DISPOSITIONS RECORDED, AWAITING FINAL ARCHITECTURE BOARD MERGE REVIEW
 
-Product Architect disposition: NOT DECIDED
+Product Architect disposition: **ACCEPTED IN DIRECTION WITH FIVE REQUIRED CORRECTIONS — NOT YET CLOSED**
 
-Proposal under review: [Knowledge B5 — Ownership boundaries](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md), including its section 7 responsibility matrix, the section 8 domain-fact rule, and the section 18 decisions required (PA-1 … PA-9). Submitting a proposal does not resolve B5; only an explicit Product Architect disposition does.
+Proposal under review: [Knowledge B5 — Ownership boundaries](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md), including its section 7 responsibility matrix, the section 8 domain-fact rule, and the section 18 dispositions. **B5 is not resolved by this entry.** It closes only when the Architecture Board approves merge and this status is changed to RESOLVED.
+
+Accepted core direction:
+
+> **Home decides → Knowledge remembers → Domains own structured operational truth.**
+
+PA dispositions recorded: **PA-1** ACCEPT Model D, subject to the projection clarification · **PA-2** ACCEPT leaving physical deployment/runtime/storage open, with the **logical Knowledge ownership boundary now fixed** — the Technology Gate may choose placement and co-location but may not silently collapse canonical Knowledge ownership into ordinary Home Control Plane persistence or DocTypes · **PA-3** ACCEPT restore-freshness authority under the Knowledge owner, fail-closed when currency cannot be proven · **PA-4** ACCEPT the bounded cleanup **obligation** concept with revised authority wording — an obligation is required work, not a permission, and no concrete authorization-token mechanism is approved · **PA-5** ACCEPT eventual retirement/reconciliation of the dormant Home Nutrition schema and the divergent Care Journey provenance vocabulary through separately approved implementation work · **PA-6** ACCEPT intolerance/allergy-shaped fields as outside B5, deferred to future Health architecture, with ambiguous legacy values not silently reclassified · **PA-7** ACCEPT Nutrition re-capture / explicit review-and-confirm rather than fabricating provenance for existing blob text · **PA-8** ACCEPT the domain-fact-vs-contextual-Knowledge rule after incorporating the process/provenance clarification · **PA-9** ACCEPT reconciliation of canonical documentation when B5 closes.
+
+Five required corrections were issued and incorporated: **(1)** trusted partition binding — Home resolves the partition, Knowledge records it as immutable canonical security metadata; **(2)** a cleanup obligation is not authorization issuance, and KN gains no grant, disclosure or access authority by recording one; **(3)** projection semantic ownership is separated from physical hosting, with no implication that Knowledge writes domain databases and no credential topology implied; **(4)** ownership follows the producing process rather than natural-language wording, so a domain-derived analytic stays domain-owned however it is phrased; **(5)** the logical ownership boundary is fixed even though physical placement stays open. See section 18.1 of the proposal.
+
+No correction demonstrated a contradiction requiring the selected model to change or requiring B1–B4 to reopen.
+
+Canonical documentation reconciliation (PA-9) is deferred and itemized as D-1 … D-7 in section 17.2 of the proposal, following the precedent of accepted B1–B4. **D-1 (the ROADMAP prerequisite placing Knowledge governance implementation "in the Home Control Plane") is the one active contradiction with the accepted ownership boundary and must be corrected when B5 closes.**
 
 Questions to resolve:
 
@@ -423,7 +435,7 @@ B3: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNO
 
 B4: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNOWLEDGE_B4_FORGET_DELETE.md))
 
-B5: OPEN — [proposal submitted 2026-09-21](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md), NOT DECIDED
+B5: OPEN — [proposal](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md) accepted in direction with five required corrections incorporated; PA-1 … PA-9 recorded 2026-09-21; **NOT YET CLOSED** pending Architecture Board merge review
 
 B6: OPEN
 
@@ -433,7 +445,7 @@ No installation, deployment, replication, configuration, process triggering, or 
 
 ## Gate completion and change boundary
 
-The next work is explicit Product Architect disposition of B5–B6 and remaining process requirements. A [B5 ownership proposal](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md) has been submitted for review and is NOT DECIDED; B6 has no proposal. B1–B4 are resolved by the accepted decisions above; the Knowledge Technology Gate remains OPEN and is not complete. Agreed acceptance scenarios must precede technology selection. Technology selection and runtime implementation require their own approval; B1/B2/B3/B4 acceptance supplies neither.
+The next work is Architecture Board merge review of the [B5 ownership proposal](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md) — whose PA-1 … PA-9 dispositions are recorded and whose five required corrections are incorporated, but which is NOT YET CLOSED — followed by explicit disposition of B6 and the remaining process requirements. B6 has no proposal. B1–B4 are resolved by the accepted decisions above; the Knowledge Technology Gate remains OPEN and is not complete. Agreed acceptance scenarios must precede technology selection. Technology selection and runtime implementation require their own approval; B1/B2/B3/B4 acceptance supplies neither.
 
 The original gate-opening task changed only the independent review artifact and this gate register. The B1 follow-up changes only [KNOWLEDGE_B1_SECURITY_SCOPE.md](KNOWLEDGE_B1_SECURITY_SCOPE.md) and B1 status/references in this register. It does not modify canonical architecture documents, existing ADRs, `packages/home-contracts/`, `services/`, `deploy/`, or production configuration.
 

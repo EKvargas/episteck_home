@@ -1,8 +1,10 @@
 # Knowledge B5 — Ownership boundaries
 
-Status: PROPOSED — AWAITING PRODUCT ARCHITECT REVIEW
+Status: PROPOSED — DISPOSITIONS RECORDED, AWAITING FINAL ARCHITECTURE BOARD MERGE REVIEW
 
 Date: 2026-09-21
+
+Revision: 2026-09-21 — Architecture Board review incorporated. Core model accepted in direction (**Home decides → Knowledge remembers → Domains own structured operational truth**); PA-1 … PA-9 dispositions recorded in section 18; required corrections 1–5 incorporated per section 18.1.
 
 Repository: `EKvargas/episteck_home`
 
@@ -14,9 +16,11 @@ Gate: [B5 — Ownership boundaries](KNOWLEDGE_TECHNOLOGY_GATE.md#b5--ownership-b
 
 Decision owner: Product Architect
 
-Disposition: **NOT DECIDED — PROPOSAL ONLY**
+Disposition: **ACCEPTED IN DIRECTION WITH FIVE REQUIRED CORRECTIONS — PENDING FINAL MERGE REVIEW**
 
-This document is an architecture investigation and proposal. It is **not** an accepted decision, and nothing in it is authoritative until the Product Architect records a disposition. It changes no contract, schema, service, runtime, index, deployment or production system, and selects no storage, retrieval, graph, vector, orchestration, messaging or key-management technology. B1–B4 remain RESOLVED and unamended. B5 remains OPEN pending the decisions in section 18. **B6 remains OPEN. The Knowledge Technology Gate remains OPEN.** All named people and household statements are synthetic.
+This document is an architecture proposal whose PA-1 … PA-9 dispositions have been recorded by the Architecture Board (section 18) and whose five required corrections are incorporated (section 18.1). **B5 is not marked RESOLVED by this document.** Its status closes only when the Board approves merge and the gate register records it.
+
+It changes no contract, schema, service, runtime, index, deployment or production system, and selects no storage, retrieval, graph, vector, orchestration, messaging or key-management technology. B1–B4 remain RESOLVED and unamended; no correction demonstrated a contradiction requiring any of them to reopen. **B6 remains OPEN. The Knowledge Technology Gate remains OPEN.** All named people and household statements are synthetic.
 
 ---
 
@@ -86,10 +90,12 @@ These are proposed as the durable, checkable rules B5 contributes. They are deri
 2. **Authority and custody are different.** The component that decides *whether an operation may happen* (Home) is not necessarily the component that *stores the result*. Separating them is legitimate; conflating them is what produces god-services.
 3. **Control state and payload share an owner.** Any state that must be evaluated atomically with a commit — lifecycle revision, replacement-line revision, suppression, admission — belongs to the same transactional owner as the content it governs. Distributing these across owners converts a CAS check into a distributed transaction (section 12).
 4. **Authority is never materialized.** A projection, cache, snapshot, index or `ContextBundle` may exist durably, but may never be the basis of an authorization, lifecycle or suppression decision. Anything materialized is by definition stale until revalidated.
-5. **Reference beats duplication; duplication requires a declared derivation.** A component needing another's fact holds a typed reference (F6). Where a materialized copy is operationally unavoidable, it is explicitly a derived projection with recorded lineage, an invalidation obligation, and no write path of its own.
+5. **Reference beats duplication; duplication requires a declared derivation.** A component needing another's fact holds a typed reference (F6). Where a materialized copy is operationally unavoidable, it is explicitly a derived projection with recorded lineage and an invalidation obligation, whose semantic value no hosting component may independently author or edit (§13.1).
 6. **Suppression binds every owner that holds a representation.** A non-use decision is not satisfied by the canonical owner alone (B4 Scenario A). Any component holding a copy, projection or index inherits the obligation, and the propagation must have a named executor.
 7. **Orchestration is never canonical.** A workflow engine, queue or job may sequence work and may hold opaque identifiers. It may never be the source of truth for admission, lifecycle, authorization or suppression (B4 §17).
 8. **A domain may not grow its own governance vocabulary.** Provenance, confirmation, lifecycle and consent semantics belong to their accepted owners. F5 shows this drifts by default; the rule exists to stop it.
+9. **Partition authority and persisted partition binding are distinct.** Home alone resolves the trusted partition. Every durable Knowledge object and derivative nonetheless carries an immutable persisted binding recording that trusted result, because B1 §4.1 requires every such object to belong to exactly one partition. Recording a trusted result is not re-deriving authority (§7.1).
+10. **Ownership follows the producing process, not the wording.** A proposition produced by measurement, calculation, import or domain derivation remains domain-owned however it is phrased (§8.0).
 
 ---
 
@@ -125,11 +131,11 @@ It fails invariant 3, and the failure is not recoverable by engineering effort. 
 
 ### Alternative D — Split command/control and payload ownership ("Knowledge control plane + domain projections")
 
-A hybrid: a Knowledge owner holds canonical assertion versions, lifecycle, lineage and suppression. Domains hold **read-only derived projections** of the assertions they need for operational use, refreshed from the canonical owner, with no independent write path and an inherited invalidation obligation.
+A hybrid: a Knowledge owner holds canonical assertion versions, lifecycle, lineage and suppression. Domains **host read-only derived projections** of the assertions they need for operational use, materialized from the canonical owner through a controlled path, with no independent authorship of the projection's semantic value and an inherited invalidation obligation.
 
 *Assessment.* This is A plus an explicit, constrained answer to the operational-coupling objection. It preserves the single transactional boundary for everything B3/B4 require (all canonical state stays with one owner), while acknowledging that a domain service legitimately needs fast local access to, say, a dislike when generating a meal plan across a WAN link (F9).
 
-Its risk is that "projection" degrades into "second copy people edit." That risk is manageable only with an explicit, testable rule set — no write path, declared lineage, inherited suppression, never an authorization basis — which section 13 supplies. Without those rules D is strictly worse than A, because it looks like A while behaving like C.
+Its risk is that "projection" degrades into "second copy people edit." That risk is manageable only with an explicit, testable rule set — no independent authorship of the semantic value, declared lineage, inherited suppression, never an authorization basis — which section 13 supplies. Without those rules D is strictly worse than A, because it looks like A while behaving like C.
 
 ---
 
@@ -186,19 +192,20 @@ flowchart TB
   subgraph DOM["Domain services — STRUCTURED TRUTH"]
     NUT["svc-nutrition: targets · intake · calculations"]
     FUT["future: Health · Finance · Calendar · Baby Care"]
-    PROJ["read-only derived projections<br/>no write path · inherited suppression"]
+    PROJ["read-only derived projections<br/>domain-hosted · KN-owned semantics<br/>inherited suppression"]
   end
 
-  CLEAN["Cleanup executors<br/>(bounded, non-disclosing mandate)"]
+  CLEAN["Cleanup executors<br/>per store · bounded obligation<br/>erase + receipt only"]
   ORCH["Optional orchestration<br/>opaque IDs only · NEVER canonical"]
 
   KN -- "authorization decisions<br/>(fresh, per operation)" --> HOME
   DOM -- "authorization decisions" --> HOME
+  HOME -- "trusted partition binding<br/>(recorded immutably by KN)" --> KN
   KN -. "typed reference<br/>StructuredDomainReference" .-> DOM
   DOM -. "typed reference to assertion version" .-> KN
-  KN -- "projection refresh + invalidation" --> PROJ
-  KN -- "suppression propagation (named executor)" --> PROJ
-  SUP --> CLEAN
+  KN -- "canonical version + invalidation<br/>(controlled materialization path;<br/>transport NOT selected)" --> PROJ
+  SUP -- "bounded cleanup obligation<br/>(required work, NOT a permission)" --> CLEAN
+  CLEAN -. "receipts" .-> KN
   KN -. "sequencing only" .-> ORCH
 
   classDef auth fill:#e8f0fe,stroke:#4a86e8;
@@ -217,11 +224,28 @@ B3 §11 requires that a single command validate expected content version, lifecy
 
 So the answer to B5 question 1's "one logical owner or safely separated" is: **assertion versions, lines, lifecycle/control revision, attestations, replacement relations, lineage and suppression must share one transactional owner.** Episodes and source *payloads* may be separated (section 10). Everything else on that list may not.
 
-### 6.2 What is deliberately left open
+### 6.2 What is left open, and what is now fixed
 
-The recommendation names an **accountable owner**, not a deployment. Whether that owner is realized as a new `svc-knowledge`, a bounded module inside an existing service, or something else is an implementation decision that depends on the technology the Knowledge Technology Gate has not yet selected. Fixing deployment now would invert the gate's own `PROCESS → DOMAIN MODEL → SERVICES / APIs` sequence.
+The distinction in this subsection is a condition of B5 acceptance. Leaving physical placement open must not become a route to re-adopting Alternative B after B5 rejected it.
 
-What B5 *does* fix is that the owner is **one** logical owner, distinct from Home, with the responsibilities in section 7. This is sufficient for the gate to proceed and is the minimum needed to make B3/B4 guarantees assignable. Section 18 records this as an explicit Product Architect decision (**PA-2**), because reasonable architects may wish to bind placement earlier.
+**Left open — the Knowledge Technology Gate decides:**
+
+- storage technology and database engine
+- process and container placement
+- physical co-location with any existing component
+- network topology
+- implementation technology and language
+
+**Fixed by accepting B5 — not reopenable at the Technology Gate:**
+
+1. **Knowledge is a distinct logical bounded context and canonical owner**, separate from the Home Control Plane.
+2. **Home cannot later become the canonical owner of contextual assertions** without explicitly reopening this architecture decision. Selecting a technology is not a mechanism for changing ownership.
+3. **Ordinary Home DocTypes and role-based CRUD cannot implicitly become the Knowledge security, lifecycle or transactional model.** F4 shows what that looks like in practice: a `Nutrition Profile` DocType with blanket System Manager CRUD over personal preference fields, no partition binding, no version identity, no suppression. That shape does not satisfy B1 §4.1, B3 §11 or B4 §8, and adopting it for Knowledge would silently discard the accepted decisions.
+4. **Physical co-location is permitted only if the logical ownership, security and transactional boundary remains intact** — meaning: the partition binding of §7.1, the single-owner transactional guarantees of §12, the suppression authority of §11, and the prohibition on Home holding contextual assertions all survive the co-location unchanged. Co-locating storage is an operational choice; merging ownership is an architecture change.
+
+So the recommendation names an **accountable owner with a fixed logical boundary**, and leaves its realization open. Whether that owner runs as a new service, a separately-bounded module, or something co-located with an existing component is an implementation decision that depends on technology not yet selected. Fixing that now would invert the gate's own `PROCESS → DOMAIN MODEL → SERVICES / APIs` sequence; fixing the *ownership boundary* now is precisely what B5 exists to do.
+
+Section 18 records this as **PA-2**.
 
 ---
 
@@ -232,7 +256,8 @@ What B5 *does* fix is that the owner is **one** logical owner, distinct from Hom
 | # | Responsibility | Canonical owner | Allowed writers | Allowed readers / consumers | Authoritative | Duplication / materialization | Governing constraint |
 |---|---|---|---|---|---|---|---|
 | 1 | **Trusted identity / actor resolution** | HOME | HOME only (server-side from session) | All services, via decisions | **Yes** | **Never.** No component caches an actor. | B1 §4.2; ADR-0009; F8 |
-| 2 | **Security partition resolution** | HOME | Trusted server config / HOME | KN, DOM as bound context | **Yes** | **Never.** Not a payload field. | B1 §5.1 |
+| 2 | **Security partition resolution** (deciding which partition applies) | **HOME** | Trusted server config / HOME | KN, DOM as bound context | **Yes** | **Never re-derived or inferred by a consumer.** See §7.1. | B1 §5.1 |
+| 2a | **Persisted trusted partition binding** on Knowledge objects and derivatives | **KN records it; HOME is its authority** | KN, once, at object creation, from trusted context only | Every KN operation: persistence, suppression, lineage, restore, future B6 retrieval | **Yes**, as canonical security metadata | **Immutable.** Not changeable by ordinary payload update; never accepted from browser, model or MCP input. | B1 §4.1, §5.2; §7.1 |
 | 3 | **Authorization (grants + decisions)** | HOME | HOME only, via constrained processes | KN, DOM per operation | **Yes** | **Never.** A prior ALLOW is not reusable. | B1 §7, §11; B3 §11.8 |
 | 4 | **Canonical Knowledge assertion (content)** | **KN** | KN only, via authorized command | Retrieval (B6), projections | **Yes** | Projection allowed (§13) | B3 §4; invariant 1 |
 | 5 | **Assertion Version** | **KN** | KN only | KN, B6 | **Yes** | Reference only | B3 §4 |
@@ -249,11 +274,33 @@ What B5 *does* fix is that the owner is **one** logical owner, distinct from Hom
 | 16 | **Cleanup orchestration** | KN commands it; orchestrator sequences | KN; orchestrator holds opaque IDs | Operators | **No** | N/A | B4 §17; invariant 7 |
 | 17 | **Cleanup execution** | Executor per store, under bounded mandate | Executor within its store | — | **No** (receipts are evidence, not authority) | N/A | B4 §14; B1 §109 |
 | 18 | **Domain canonical state** | **DOM** | DOM only | KN by reference; B6 authorized | **Yes** | **No** second canonical copy | ADR-0002, ADR-0004 |
-| 19 | **Domain Knowledge projection** | **KN** owns it; DOM hosts it | **KN only** — DOM has no write path | DOM operationally | **No** | This *is* the materialization; §13 rules | invariants 4, 5, 6 |
+| 19 | **Domain Knowledge projection** | **Semantic value: KN.** Lineage identity and invalidation obligation: KN. **Physical hosting: DOM.** | **No independent authorship.** Domain business logic may not author or edit the projection's semantic value. Updates arrive only through a controlled replication/materialization path; the physical writer and transport are **not selected by B5**. | DOM operationally | **No** | This *is* the materialization; §13 rules | invariants 4, 5, 6; §13.1 |
 | 20 | **Retrieval / candidate selection** | **RESERVED FOR B6** | — | — | — | — | B6 |
 | 21 | **ContextBundle** | Ephemeral derivative of a request | Assembler | Agent, for that request | **No — never authority** | Must not persist as a cross-domain store | B1 §12; B4 §13; F14 |
 
 Rows 20 and 21 are recorded to fix their *status*, not to design them. B5 states that ContextBundle is not an authority and that retrieval is B6's; it designs neither.
+
+### 7.1 Partition authority versus persisted partition binding
+
+These are two different responsibilities and must not be collapsed. B1 §4.1 requires that *every* durable Knowledge object and derivative have exactly one non-empty trusted partition, with no unpartitioned fallback. That requirement is unsatisfiable unless the binding is actually persisted with the object.
+
+| | Partition **authority / resolution** | Persisted partition **binding** |
+|---|---|---|
+| Owner | **HOME** | **KN records it**; HOME remains its authority |
+| Question answered | "Which partition does this trusted context belong to?" | "Which partition does this stored object belong to?" |
+| Established | Per request, from trusted server-side context | **Once, at object creation**, from the trusted result |
+| Mutable | N/A — re-resolved each time | **No.** Immutable for the object's life |
+
+The persisted binding is **canonical security metadata on Knowledge state**, not an ordinary content field. Specifically:
+
+1. **It originates from trusted server-side/Home context.** It is never accepted from a browser, model, MCP argument, tool payload, job variable or request header. B1 scenario H makes a supplied `security_partition_id` inert; that remains true.
+2. **It is immutable.** No ordinary payload update, correction, supersession, confirmation or projection refresh may change it. B1 §5.2 forbids cross-partition copying or movement initially, so there is no legitimate ordinary path that would alter it.
+3. **It participates in every KN operation** — persistence, suppression matching, lineage/derivation family membership, restore reconciliation, and future B6 retrieval constraints. A derivative inherits its parents' partition and may combine inputs only from that same partition (B1 §5.2).
+4. **KN consumes and records a trusted result; it never re-derives one.** If the trusted binding is absent, ambiguous or unverifiable, KN must refuse the operation rather than infer a partition or fall back to a default. There is no global partition.
+
+Earlier phrasing in this proposal described partition as "not a payload field." That wording is retained only in its B1 sense — *not an authoritative field a caller may supply* — and must not be read as "Knowledge does not store its partition association." **Knowledge does store it, immutably, as trusted security metadata.** The same reading applies to invariant 2 in section 3 and to row 2 of the matrix above.
+
+This distinction does not change B1. It makes explicit which component is accountable for persisting what B1 already requires to exist.
 
 ---
 
@@ -261,22 +308,36 @@ Rows 20 and 21 are recorded to fix their *status*, not to design them. B5 states
 
 This is the rule intended to outlive B5 and let future teams decide without escalation.
 
-> **A fact belongs to a domain service when the system is accountable for its accuracy as a record of what happened or what applies, and it is produced or validated by that domain's own process.**
+### 8.0 The governing invariant: process, not wording
+
+> **Semantic wording alone does not determine ownership. The process and provenance that produced the proposition determine it.**
+>
+> **A measured, calculated, imported or domain-derived proposition remains domain-owned even if it is rendered as natural language. An equivalent proposition explicitly asserted and admitted by a person may independently exist as contextual Knowledge, with its own separate lineage.**
+
+This is the correction that makes the rest of the rule safe. Two propositions can be word-for-word identical and have different owners, because they were produced differently. "Baby usually drinks 140 ml at 03:00" is a Baby Care analytic when the service computed it from feed records, and contextual Knowledge when a parent stated it as their understanding. The sentence is the same; the ownership is not.
+
+The corollary matters as much as the rule: **computation never auto-promotes a domain result into Knowledge.** A domain-derived pattern, score, trend, projection or summary — however conversational its phrasing — stays domain-owned. It may become *evidence or source* for a contextual assertion that a person later explicitly asserts and that passes B3 admission, but the admission event is what creates the Knowledge object, not the rendering. Rendering a number as a sentence is a presentation choice, not a transfer of ownership.
+
+This applies generally to future Health, Finance, Baby Care and Healthy Home analytics, all of which will produce natural-language-shaped outputs.
+
+### 8.1 The ownership rule
+
+> **A fact belongs to a domain service when the system is accountable for its accuracy as a record of what happened or what applies, and it is produced or validated by that domain's own process — including any analytic the domain derives from its own records.**
 >
 > **A fact belongs to Knowledge when it is a durable, reusable expression of a person's or household's meaning — a preference, goal, constraint, routine, decision or rationale — whose value is that someone asserted it, and which is reusable across more than the domain that happens to consume it first.**
 
 Four discriminating questions, applied in order:
 
 1. **Who is accountable if it is wrong?** If a domain's calculations, compliance or operational output would be wrong — it is a domain fact. If the answer is "we recorded what the person said, and they can correct it" — it is contextual Knowledge.
-2. **Is it produced by a domain process or asserted by a person?** Measured, calculated, imported from a provider, or transacted → domain. Stated, preferred, decided, explained → Knowledge.
+2. **What process produced it?** Measured, calculated, imported from a provider, transacted, or **derived by the domain from its own records** → domain. Stated, preferred, decided, explained by a person, and explicitly admitted → Knowledge. Per §8.0, this question governs even when the output reads like a sentence.
 3. **Would it still be meaningful if the domain did not exist?** "I dislike mushrooms" survives the deletion of every meal planner. "Vitamin D target = 20 µg" does not survive the deletion of Nutrition.
-4. **Does it need attribution, attestation, dispute or forgetting?** These are B3/B4 lifecycle facilities. A fact needing them needs Knowledge's machinery; a fact for which they are meaningless does not.
+4. **Does the proposition require Knowledge-style attributed assertion lifecycle** — attestation, dispute, correction-versus-change, stated applicability, contextual forgetting? A fact needing these needs Knowledge's machinery. **Ordinary deletion or retention needs do not qualify:** every domain has its own retention and deletion lifecycle without becoming Knowledge. The test is whether someone's *attributed assertion* is the thing being governed, not whether the record can be removed.
 
-Question 3 is the sharpest single test and should be used first when the others are ambiguous.
+Questions 2 and 3 are the sharpest tests. Use Q2 first when the wording is conversational, and Q3 first when the producing process is ambiguous.
 
-### 8.1 Explicit answers to B5 question 5
+### 8.2 Explicit answers to B5 question 5
 
-- **Nutrition owns the meal plan; Knowledge owns "I dislike mushrooms."** The plan is a domain artifact produced by a domain process (Q1, Q2). The dislike is an attributed assertion, reusable by Nutrition, a future shopping feature, a restaurant suggestion and Ask Olin (Q3), and must support correction and forgetting (Q4).
+- **Nutrition owns the meal plan; Knowledge owns "I dislike mushrooms"** *when the person said it*. The plan is a domain artifact produced by a domain process (Q1, Q2). The dislike is an attributed assertion, reusable by Nutrition, a future shopping feature, a restaurant suggestion and Ask Olin (Q3), and requires attributed-assertion lifecycle (Q4). Had Nutrition instead *inferred* a mushroom aversion from intake history, that inference would be a Nutrition analytic under §8.0 — not Knowledge — until the person explicitly asserted it.
 - **Operational necessity does not confer ownership.** Nutrition *needs* the dislike to plan a meal; a payroll system needs a person's name without owning identity. Necessity creates a read requirement, satisfied by reference or projection (section 13) — never by a second canonical copy. This directly answers "does operational requirement make the domain the canonical owner": **no.**
 - **Knowledge may reference domain state**, via the existing `StructuredDomainReference` (F6). It fetches current values under separate authorization and never persists them as durable Knowledge (KNOWLEDGE.md; B2 §12).
 - **Domains may reference Knowledge**, by exact assertion version. A domain must not store assertion *text* as its own field; if it needs local text it takes a governed projection (§13).
@@ -285,17 +346,18 @@ Question 3 is the sharpest single test and should be used first when the others 
 - **Lineage** is represented by the canonical owner recording, at creation, each derivative's partition, direct inputs by exact version, family root, kind and classification revision (B4 §7). A projection is a derivative and records the same.
 - **What stops Knowledge becoming a shadow database** is Q1 and Q2 together, enforced at admission via B3 §6 canonical-domain routing: content that a domain is accountable for is *routed to that domain and refused durable Knowledge admission*. Knowledge cannot accumulate domain facts, because admitting one is a routing failure, not a storage decision. This is the single most important enforcement point in the proposal.
 
-### 8.2 The rule applied to the brief's future examples
+### 8.3 The rule applied to the brief's future examples
 
-These deliberately do not all have the same answer — that is the test of a real rule.
+These deliberately do not all have the same answer — that is the test of a real rule. The first example deliberately has **two** answers depending on producing process, which is the §8.0 invariant in action.
 
 | Example | Canonical operational fact | Contextual assertion? | Reference direction | Lifecycle | Suppression meaning | Deletion propagation |
 |---|---|---|---|---|---|---|
-| **"Baby usually drinks 140 ml at 03:00"** | None yet. The *observations* (individual feeds) are domain facts of a future Baby Care service. | **Yes** — "usually" is a generalization with applicability, correctable and time-bounded (Q2, Q4). It is not an observation. | Assertion may reference the feed records that motivated it; Baby Care does not reference the assertion for its own records. | Full B3: admission, CHANGE as the baby grows, expiry of applicability. | Stop using the generalization in guidance. Individual feed observations are untouched. | Forgetting the pattern does not delete feeds; deleting feeds suppresses a pattern *derived* from them (B4 §9), but not one independently asserted by a parent. |
-| **"Erick prefers notifications only after 08:00"** | The notification service's **effective configuration** is a domain fact — it must be operationally reliable. | **Yes**, as the stated preference and its rationale. The two are genuinely distinct: the config is what the system will do; the preference is what Erick wants. | Config references the assertion version it was derived from; the assertion does not depend on the config. | Preference: B3 lifecycle. Config: ordinary domain state. | Suppressing the preference stops using it as reusable context and obliges re-derivation or reversion of the config. | Deleting the assertion must propagate to the config's derivation, per invariant 6. A user who forgets the preference but keeps a quiet-hours setting they later set directly is a legitimate outcome. |
+| **"Baby usually drinks 140 ml at 03:00" — Case A: a parent explicitly states this as their understanding/routine** | The individual feed *observations* are Baby Care domain facts. The stated routine is not one of them. | **Yes.** An attributed assertion with applicability, correctable, disputable, forgettable (Q2, Q4). | The assertion may reference the feed records that motivated it; Baby Care does not reference the assertion for its own records. | Full B3: admission, CHANGE as the baby grows, expiry of applicability. | Stop using the stated routine in guidance. Individual feed observations are untouched. | Forgetting the routine does not delete feeds. Deleting feeds suppresses a routine *derived* from them (B4 §9), but not one independently asserted by the parent. |
+| **"Baby usually drinks 140 ml at 03:00" — Case B: Baby Care computes the pattern from feed observations** | **Baby Care.** A domain-derived analytic over its own records (Q1, Q2, §8.0). | **No — not automatically.** Computation never auto-promotes a domain result into Knowledge, however conversational the phrasing. | Knowledge may later reference the analytic as evidence/source for a separately admitted assertion. | Baby Care's own analytic/retention lifecycle. **Not B3** — and needing deletion does not make it Knowledge (Q4). | Not a Knowledge suppression. A retention question for Baby Care. | Deleting the analytic suppresses Knowledge assertions *derived* from it, not a parent's independent assertion of the same routine. |
+| **"Erick prefers notifications only after 08:00"** | The notification service's **effective configuration** is a domain fact — it must be operationally reliable. | **Yes**, as the stated preference and its rationale, *when Erick stated it*. The two are genuinely distinct: the config is what the system will do; the preference is what Erick wants. A quiet-hours window the service *inferred* from dismissal behaviour is a domain analytic, not Knowledge. | Config references the assertion version it was derived from; the assertion does not depend on the config. | Preference: B3 lifecycle. Config: ordinary domain state. | Suppressing the preference stops using it as reusable context and obliges re-derivation or reversion of the config. | Deleting the assertion must propagate to the config's derivation, per invariant 6. A user who forgets the preference but keeps a quiet-hours setting they later set directly is a legitimate outcome. |
 | **"Bedroom CO₂ exceeded a threshold yesterday"** | **Device Gateway / Healthy Home.** A measurement with device provenance (Q1, Q2 — measured, not asserted). | **No.** This is an observation, not meaning. Knowledge must refuse it at admission. | Knowledge may reference it as evidence for an assertion such as "we ventilate the bedroom before bed." | Domain retention, not B3. | Not a Knowledge suppression at all; a data-retention question for the owning domain. | Deleting the measurement suppresses Knowledge assertions *derived* from it (B4 Scenario C), not independently asserted routines. |
 
-The third case is the important one: it shows the rule **refusing** something, which is what prevents shadow-database growth. A rule that admits everything is not a rule.
+Two cases carry the weight. **Case A versus Case B** shows that identical wording resolves differently by producing process — the §8.0 invariant. **The CO₂ case** shows the rule *refusing* something outright. A rule that admits everything is not a rule; a rule that decides by wording is worse, because it can be defeated by rephrasing.
 
 ---
 
@@ -396,7 +458,7 @@ Answering B4 §17's six required assignments explicitly.
 | **Ownership of the anti-resurrection authority and its freshness proof (C1)** | **KN**, as a responsibility distinct from ordinary payload persistence — see 11.3. |
 | **Named executor for cross-owner suppression propagation** (required by Scenario A) | **KN commands; each holder executes within its own store and returns a receipt.** See 11.2. |
 | **Custody authority for source erasure, distinct from Knowledge MANAGE** | **Payload custodian** (section 10), acting on a KN-issued obligation. |
-| **Partition-bound, non-disclosing cleanup mandate** | A bounded mandate issued by KN per obligation: scoped to one partition and one family, capable only of erasure and receipt, never of disclosure or read-for-other-purposes. B1 §109 requires it be separately approved — **PA-4**. |
+| **Partition-bound, non-disclosing cleanup mandate** | KN records a bounded cleanup **obligation** — scoped to one partition and one family, naming only what must be invalidated or erased. It is a statement of required work, **not** a permission: any credential an executor needs must derive from an already-authorized trusted operation or approved policy, never from KN. Capable only of erasure and receipt, never of disclosure. B1 §109 requires the executor authority be separately approved — **PA-4**, §11.2.1. |
 | **Retention ownership for the differentiated elements in §10.1** | **KN** owns both schedules, kept independent: anti-resurrection matching state persists while the prohibition is in force; actor/decision metadata is minimized on its own basis (B4 D3). |
 
 ### 11.1 Why suppression cannot be distributed
@@ -407,13 +469,41 @@ B4's core inversion is that correctness must not depend on the least reliable cl
 
 Verified by F3: Nutrition holds preference text with no delete path. So suppression propagation is mandatory, not optional.
 
-Proposed division:
-- **KN commits suppression immediately** — the authoritative non-use fact, independent of any other owner's cooperation. This is what makes the user-facing promise true at acknowledgement.
-- **KN issues an erasure/invalidation obligation** to every holder of a representation (projections, indexes, caches, legacy domain text).
-- **Each holder executes within its own store** under the bounded mandate and returns a cleanup receipt. A holder cannot refuse the prohibition; it can only be slow, and slowness degrades to "prohibited but not yet erased" (B4 §4).
-- **KN records completion only on evidence from every required store** (B4 §14).
+Proposed division, in strict order:
 
-For an un-migrated Nutrition preference (9.3), this means: suppression commits in KN, Nutrition is obliged to clear the legacy text, and until the receipt returns the state is honestly `ERASURE PENDING`, not `ERASED`.
+1. **HOME (or the trusted authorization context) authorizes the initiating operation.** Forget, delete-source and stop-using are all B1-authorized operations before anything else happens. KN does not authorize them.
+2. **KN commits the authoritative suppression decision** — the durable non-use fact, independent of any other owner's cooperation. This is what makes the user-facing promise true at acknowledgement.
+3. **KN records a bounded cleanup obligation** identifying exactly what must be invalidated or erased: the partition, the derivation family, the target identities, and the affected holders (projections, indexes, caches, legacy domain text).
+4. **Store-specific executors perform only that obligation** within their own store and return evidence/receipts. A holder cannot refuse the prohibition; it can only be slow, and slowness degrades to "prohibited but not yet erased" (B4 §4).
+5. **KN records completion only on evidence from every required store** (B4 §14).
+
+For an un-migrated Nutrition preference (9.3), this means: suppression commits in KN, a cleanup obligation names the legacy text, Nutrition's executor clears it, and until the receipt returns the state is honestly `ERASURE PENDING`, not `ERASED`.
+
+### 11.2.1 A cleanup obligation is not an authorization grant
+
+This distinction is load-bearing, because the obvious phrasing — "KN issues a mandate to an executor" — would quietly make Knowledge an authorization issuer and contradict B1's single-authority boundary.
+
+**KN records what must be cleaned up. It does not decide who may access data.**
+
+| KN does | KN does **not** do |
+|---|---|
+| Commit the authoritative suppression decision | Authorize the operation that triggered it |
+| Identify the bounded target set: partition, family, object identities, affected holders | Grant, issue, delegate or evaluate any permission |
+| Record the obligation durably and track its completion | Confer read, disclosure or cross-store access authority on anyone |
+| Refuse to report completion without evidence | Create a standing service identity or impersonation path |
+
+An obligation is a **statement of required work**, not a capability. It names *what* must be invalidated; it does not by itself entitle any party to reach a store or read anything.
+
+If an executor needs a credential or delegation to act, **that authority must derive from an already-authorized trusted operation or an approved policy — never from KN independently deciding who may access data.** B1 §109 is explicit that any post-revocation erasure executor requires a separately approved, partition-bound, non-disclosing mandate, and that no blanket service self-access or autonomous cleanup identity is approved. B5 does not create one.
+
+Properties the eventual executor authority must have, carried forward from B1 §109 and B4:
+
+- **Partition-bound** — scoped to the one partition the obligation names.
+- **Non-disclosing** — capable of erasure and receipt only, never of reading content for another purpose, and never a discovery oracle.
+- **Bounded to the obligation** — one family, one target set; not a general cleanup capability.
+- **Separately approved** — its existence and shape are not authorized by accepting B5.
+
+**PA-4 approves the bounded-obligation model, not a concrete authorization-token or credential mechanism.** The execution credential and delegation mechanism remain **undecided** and are deliberately not selected here.
 
 ### 11.3 Restore-freshness authority (B4 C1)
 
@@ -432,7 +522,9 @@ Proposed assignment: **KN owns the restore-freshness authority as a responsibili
 
 ### 11.4 What the Knowledge owner must not own
 
-To keep the god-service failure mode closed: KN does not resolve actors, issue or evaluate grants, resolve partitions, own domain structured truth, or execute cleanup inside another owner's store. It commands, records and refuses — it does not authorize.
+To keep the god-service failure mode closed: KN does not resolve actors, issue or evaluate grants, resolve the trusted partition, own domain structured truth, execute cleanup inside another owner's store, or confer any access authority through a cleanup obligation (§11.2.1). It records, refuses and states required work — **it does not authorize.**
+
+Note the boundary in row 2a of §7: KN *persists* the trusted partition binding that Home resolved. Recording a trusted result is not exercising authority over it.
 
 ---
 
@@ -492,10 +584,38 @@ Projection refresh, index updates, cleanup and orchestration notification are al
 | **Snapshot / backup** | Yes | **No** | Restore is a re-admission event subject to §11.3 freshness. |
 | **ContextBundle** | **Should not persist** | **No — never** | Ephemeral, request-bound. Must not become a durable cross-domain store (B6 question). F14: no revalidation hook exists today. |
 
+### 13.1 Semantic ownership versus physical hosting
+
+A projection has a split that must be stated precisely, because the loose version of this rule would imply the Knowledge owner reaches into domain databases — which B5 does **not** propose and does not need.
+
+| Aspect | Owner |
+|---|---|
+| Canonical assertion and its exact version | **KN** |
+| The projection's **semantic value** — what it says | **KN.** It can only ever reflect a KN canonical version. |
+| Lineage / derivation identity | **KN** |
+| Invalidation obligation | **KN** |
+| **Physical hosting** — which store the rows live in | **The domain.** A domain may host the projection in its own database. |
+| **Physical writer and transport** — how the value gets there | **Deliberately not selected by B5.** |
+
+The invariant is **semantic, not topological**:
+
+> **A projection can only reflect a KN canonical version. It can never become independently writable canonical truth.**
+
+What this does and does not imply:
+
+- It does **not** require or imply that the Knowledge service writes directly into domain databases.
+- It does **not** imply any cross-database credential topology, shared schema, direct connection or replication technology. None is selected.
+- It **does** require that projection creation and update occur through a **controlled replication/materialization path**, whose mechanism the Technology Gate and implementation determine.
+- It **does** forbid domain business logic from independently authoring or editing the projection's semantic value. A domain may host, read, cache and serve it; it may not decide what it says.
+
+A domain that needs to record something the projection does not say is not editing a projection — it is asserting something new, which goes through normal Knowledge admission (§8) or is its own domain fact.
+
+### 13.2 The seven conditions
+
 **A derived projection is permitted only when all of the following hold.** These are the rules that keep alternative D from degrading into alternative C:
 
 1. It declares its canonical source owner and the **exact assertion version** it reflects.
-2. It has **no write path** — not through an API, not through an admin UI, not through a direct store write. The hosting service can read it and nothing else.
+2. **Its semantic value has no independent authorship path.** No domain API, admin UI, business rule or direct store write may originate or alter what it says; the only legitimate change is a controlled materialization of a newer KN canonical version (§13.1).
 3. It inherits the source's B2 requirements and restrictions in full.
 4. It is a **recorded derivation-family member**, so B4 cleanup reaches it by construction.
 5. It carries an **invalidation binding** and becomes ineligible on suppression, reclassification or supersession *before* physical removal.
@@ -523,7 +643,7 @@ If a proposed copy cannot satisfy all seven, it is a prohibited duplicate, not a
 
 Two failure modes, both closed by construction:
 
-- **Knowledge as god-service** — prevented because KN holds no authority: it cannot resolve an actor, cannot issue or evaluate a grant, cannot resolve a partition, and cannot admit a domain fact (section 8.1 routing).
+- **Knowledge as god-service** — prevented because KN holds no authority: it cannot resolve an actor, cannot issue or evaluate a grant, cannot resolve the trusted partition, cannot confer access through a cleanup obligation (§11.2.1), and cannot admit a domain fact (§8.2 routing).
 - **Home as universal database** — prevented because Home holds no contextual content and no domain truth. F4 and F5 show Home has drifted in this direction; section 9.4 proposes correcting it.
 
 This preserves ADR-0001 exactly: Home remains the Control Plane for identity, relationships and consent, and **no `svc-home-core` is proposed**. A Knowledge owner is not a second control plane — it holds no control-plane responsibility.
@@ -561,9 +681,11 @@ If accepted, the following work becomes necessary. **None is authorized by this 
 3. **Intolerance fields** (§9.2): deliberately **not** moved. Deferred to Health architecture (**PA-6**).
 4. **Dormant Home DocTypes** (§9.4): `Nutrition Profile` / `Nutrition Intake` retired as superseded by ADR-0004 (**PA-5**).
 5. **Provenance vocabulary alignment** (F5): `Care Journey Item.knowledge_status` reconciled with `KnowledgeProvenance` (**PA-5**).
-6. **Documentation reconciliation** (F11): ROADMAP versus DATA_OWNERSHIP/KNOWLEDGE (§17.1).
+6. **Documentation reconciliation** (F11, **PA-9**): items D-1 … D-7 in §17.2. D-1 (the ROADMAP prerequisite) is the only active contradiction.
 7. **Multi-resource authorization protocol** (§12.1): required before any Knowledge runtime; B6.
-8. **Bounded cleanup mandate** (§11): separately approved per B1 §109 (**PA-4**).
+8. **Bounded cleanup obligation and executor authority** (§11, §11.2.1): the obligation model is approved in concept by **PA-4**; the executor's credential/delegation mechanism is undecided and must be separately approved per B1 §109.
+9. **Projection materialization path** (§13.1): the controlled path by which a projection reflects a KN canonical version. Transport and physical writer are **not selected by B5**; required before any projection exists.
+10. **New ADR** (D-5): record the accepted ownership boundary and the §6.2 fixed points per the ROADMAP Architecture Change Rule.
 
 Explicitly **not** required by acceptance: any new service deployment, any storage selection, any schema change, any data movement, any Nutrition runtime change, any Home runtime change.
 
@@ -574,12 +696,13 @@ Explicitly **not** required by acceptance: any new service deployment, any stora
 | # | Risk | Assessment |
 |---|---|---|
 | R1 | **The commit-time authorization barrier crosses an owner boundary** (§12.1) | The most significant limitation. Inherent to any model where Home authorizes and another owner persists. Mitigated by keeping all other B3 obligations local; resolved only by B6's protocol. Alternative B avoids it at costs stated in §4. |
-| R2 | **Projections degrade into editable copies** | Mitigated by §13's seven testable rules. Residual risk is organizational, not architectural: someone adds a write path. Recommend the rules become an acceptance criterion. |
-| R3 | **Knowledge accumulates domain facts anyway** | Mitigated by §8's routing-at-admission rule. Residual risk is a wrong routing judgment; B3 §6 already fails closed on unknown ownership. |
+| R2 | **Projections degrade into editable copies** | Mitigated by §13.2's seven conditions and the semantic invariant in §13.1. Residual risk is organizational: someone adds an independent authorship path. The conditions are stated as testable so this is detectable in review, and §19 makes them an acceptance criterion. |
+| R3 | **Knowledge accumulates domain facts anyway** | Mitigated by §8.0's process-not-wording invariant and §8.2's routing-at-admission rule. The §8.0 correction closes the specific loophole where a domain analytic phrased conversationally could have been admitted as Knowledge. Residual risk is a wrong routing judgment; B3 §6 already fails closed on unknown ownership. |
 | R4 | **Restore-freshness cannot be satisfied cheaply** (§11.3) | Real. It constrains technology selection more than any other requirement. Unknown freshness failing closed means a restore could leave Knowledge unusable — operationally painful but correct. Must be evaluated by the Technology Gate, not assumed. |
 | R5 | **Legacy Nutrition text is unsuppressible until propagation exists** | Currently true regardless of B5 (F3). Acceptance makes it an explicit obligation with a named executor rather than an unowned gap. |
 | R6 | **Preference fields carry unclassified sensitive content today** (§9.1) | A current-state exposure, not created by B5. Closing it requires B2 classification at admission, which needs an owner — which is what B5 assigns. |
-| R7 | **Deployment placement deferred** (§6.2) | Deliberate, to preserve the gate's sequence. If the Product Architect prefers to bind it now, **PA-2** is the decision point. |
+| R7 | **The Technology Gate collapses ownership into Home while selecting placement** | The specific way an accepted Model D could be undone later. Mitigated by §6.2's four fixed points, which make co-location permissible but ownership-merging an explicit architecture reopening. Watch for a technology proposal that satisfies "co-located" while discarding partition binding, version identity or the single transactional boundary. |
+| R8 | **Executor credential design reintroduces KN as an authorizer** | §11.2.1 separates obligation from permission, but the mechanism is undecided. A future implementation that gives KN a standing credential to reach other stores would breach B1 §109. The executor's authority must derive from an already-authorized trusted operation or approved policy — re-check this at implementation review. |
 
 ### 17.1 Documentation inconsistencies found
 
@@ -591,37 +714,79 @@ Explicitly **not** required by acceptance: any new service deployment, any stora
 
 None of these contradicts B1–B4 in a way that requires reopening them.
 
+### 17.2 Documentation reconciliation required before B5 closes (PA-9)
+
+PA-9 accepts reconciliation of canonical documentation when B5 closes. **This revision does not perform it**, for a reason grounded in repository convention rather than preference: every accepted decision B1 through B4 changed **only** its own proposal file and the gate register, and each stated explicitly that canonical architecture documents and ADRs "remain unchanged" and that its decision "governs where older documentation is less precise, pending later consolidation." Editing canonical docs inside a still-unmerged B5 proposal would break that precedent and would edit documents against a decision the Board has not yet approved for merge.
+
+The exact follow-up set required, listed so it can be scheduled or bundled at the Board's discretion:
+
+| # | Document | Required change | Trigger |
+|---|---|---|---|
+| **D-1** | [ROADMAP.md](../ROADMAP.md) §Knowledge Technology Gate | Remove the prerequisite that the governance layer be "implemented in the Home Control Plane." Under accepted PA-1/PA-2, Knowledge is a distinct logical canonical owner; Home is the authority, not the persistence owner. **This is the one genuine contradiction with the accepted model.** | B5 close |
+| **D-2** | [DATA_OWNERSHIP.md](../DATA_OWNERSHIP.md) | Record the accepted boundary: canonical Knowledge owner for contextual assertions and control state; Home for identity/partition/authorization; domains for structured truth. Add the domain-fact-vs-Knowledge rule reference (§8.0/§8.1). Note that preference ownership is settled and intolerance-shaped fields are deferred to Health. | B5 close |
+| **D-3** | [KNOWLEDGE.md](../KNOWLEDGE.md) | Reconcile the `[CONTRACT-ONLY]` Knowledge-service description with the accepted logical ownership boundary; update the lifecycle summary, which predates accepted B3 (item 5 above). | B5 close, or the later B1–B4 consolidation |
+| **D-4** | [KNOWLEDGE_TECHNOLOGY_GATE.md](KNOWLEDGE_TECHNOLOGY_GATE.md) five-layer model | Layer 3 currently says "exact admission and ownership details remain open," and the section closes by noting it "does not resolve contested ownership fields such as reusable Nutrition preferences." Both become stale on B5 close. | B5 close |
+| **D-5** | [ADR](../adr/) — new ADR | Record the accepted ownership boundary as an ADR, per the ROADMAP Architecture Change Rule ("Create/update an ADR"). It should state the Model D boundary, the §6.2 fixed points, and that it supersedes the ROADMAP's Home-implementation wording. | B5 close |
+| **D-6** | [STATUS.md](../STATUS.md) | Update the Knowledge line to reflect B5 resolved and the remaining B6/Technology Gate work. | B5 close |
+| **D-7** | ADR-0004 / Home DocTypes | Record that the dormant Home `Nutrition Profile` / `Nutrition Intake` DocTypes are superseded and scheduled for retirement (PA-5). Implementation is separate. | Separately approved work |
+
+D-1 is the only item that is an active contradiction with the accepted model; D-2 through D-7 are consolidation. If the Board prefers reconciliation to land inside PR #28 rather than as follow-up, D-1 and D-2 are the minimum set, and this proposal can be revised accordingly on instruction.
+
 ---
 
-## 18. Product Architect decisions required
+## 18. Product Architect dispositions
 
-| # | Decision | Proposal's recommendation |
+The Architecture Board reviewed this proposal and recorded the dispositions below. The core recommendation is **accepted in direction**:
+
+> **Home decides → Knowledge remembers → Domains own structured operational truth.**
+
+Five required corrections were issued and are incorporated in this revision; each is cross-referenced to the section that implements it. This document remains a **proposal pending final merge review** — the dispositions are recorded, but B5 is not marked RESOLVED here. Only the gate register's explicit status, set when the Board approves merge, closes B5.
+
+| # | Decision | Disposition | Where implemented |
+|---|---|---|---|
+| **PA-1** | Ownership model | **ACCEPT Model D**, subject to the projection clarification (Correction 3) | §6, §13.1 |
+| **PA-2** | Deployment placement | **ACCEPT leaving physical deployment/runtime/storage open**, with the **logical Knowledge ownership boundary now fixed**. The Technology Gate may choose placement and co-location, but may **not** silently collapse canonical Knowledge ownership into ordinary Home Control Plane persistence or DocTypes. | §6.2 (four fixed points), R7 |
+| **PA-3** | Restore-freshness authority | **ACCEPT** under the Knowledge owner, including fail-closed behaviour when currency cannot be proven | §11.3 |
+| **PA-4** | Bounded cleanup | **ACCEPT the bounded obligation concept**, with authority wording revised: an obligation is required work, not a permission. Approves the model, **not** a concrete authorization-token mechanism. | §11.2.1 (Correction 2) |
+| **PA-5** | Pre-existing collisions | **ACCEPT** eventual retirement of the dormant Home Nutrition schema and reconciliation of the divergent Care Journey provenance vocabulary, through separately approved implementation work | §9.4, §16 |
+| **PA-6** | Intolerance scope | **ACCEPT** as outside B5, deferred to future Health architecture. **Ambiguous legacy values must not be silently reclassified.** | §9.2 |
+| **PA-7** | Nutrition transition shape | **ACCEPT** re-capture / explicit review-and-confirm rather than fabricating provenance for existing blob text | §9.3 |
+| **PA-8** | Domain fact vs contextual Knowledge rule | **ACCEPT** after incorporating the process/provenance clarification (Correction 4) | §8.0, §8.1 Q2/Q4, §8.3 |
+| **PA-9** | Documentation reconciliation | **ACCEPT** reconciliation of canonical documentation when B5 closes | §17.1, §17.2 |
+
+### 18.1 Required corrections and how each was addressed
+
+| Correction | Requirement | Change made |
 |---|---|---|
-| **PA-1** | **Ownership model.** Accept D (canonical Knowledge owner + Home authority + domain structured truth + governed read-only projections)? Or A (no projections), or B (Knowledge inside Home)? | **Accept D.** A is acceptable if projections are to be forbidden outright; B is viable but concentrates content in the Control Plane (§4, §5). |
-| **PA-2** | **Deployment placement.** Leave "one logical Knowledge owner" without binding it to a service/deployment until the Technology Gate, or bind it now? | **Leave open** (§6.2), to preserve the gate's `PROCESS → DOMAIN MODEL → SERVICES` sequence. |
-| **PA-3** | **Restore-freshness authority.** Accept that KN owns it as a responsibility separable from ordinary persistence, with unknown freshness leaving Knowledge unusable? | **Accept** (§11.3). Constrains technology selection; no mechanism selected. |
-| **PA-4** | **Bounded cleanup mandate.** Approve the concept of a partition-bound, non-disclosing, erase-and-receipt-only mandate issued per obligation? | **Approve in concept**; B1 §109 requires separate approval before implementation. |
-| **PA-5** | **Pre-existing collisions.** Direct retirement of the dormant Home `Nutrition Profile`/`Nutrition Intake` DocTypes and reconciliation of `Care Journey Item.knowledge_status`? | **Direct both**, as separately approved changes (§9.4). |
-| **PA-6** | **Intolerance scope.** Confirm that intolerance/avoidance fields are **out of B5 scope** and deferred to Health architecture? | **Confirm** (§9.2). Moving them under a preference decision would over-reach. |
-| **PA-7** | **Nutrition transition shape.** Accept re-capture with legacy text marked non-admitted, rather than converting existing blob values into admitted assertions? | **Accept** (§9.3). Conversion would fabricate provenance, contradicting B3 §6 and B2 D3. |
-| **PA-8** | **Domain fact vs Knowledge rule.** Accept §8's rule and four questions as the durable, reusable ownership test? | **Accept.** It is the deliverable most likely to outlive the specific model. |
-| **PA-9** | **Documentation reconciliation.** Direct correction of the ROADMAP/DATA_OWNERSHIP contradiction and the gate register's B5 framing on acceptance? | **Direct**, as part of accepting B5 (§17.1). |
+| **1 — Trusted partition binding** | Distinguish partition *authority* (HOME) from *persisted immutable binding* on Knowledge state (KN records the trusted result). Avoid wording implying Knowledge does not store its partition association. | New **§7.1** with a side-by-side table and four properties; new matrix **row 2a**; row 2 reworded; new **invariant 9**; §14 note. The phrase "not a payload field" is explicitly re-scoped to its B1 sense and no longer stands alone. **B1 unchanged.** |
+| **2 — Cleanup obligation ≠ authorization issuance** | KN must not become a grant issuer. Five-step ordering; executor authority must derive from an already-authorized operation or policy. | New **§11.2.1** with a does/does-not table; §11.2 rewritten as an explicit five-step order beginning with Home authorization; §11 mandate row reworded; §11.4 extended. Execution credential/delegation **explicitly undecided**. |
+| **3 — Projection semantic ownership vs physical writer** | Do not imply KN writes domain databases. Separate semantic ownership from physical hosting; no cross-database credential topology implied. | New **§13.1** with an aspect/owner table and the semantic invariant; §13.2 condition 2 rewritten from "no write path" to "no independent authorship path"; matrix **row 19** split into semantic/hosting/writer; invariant 5 reworded. |
+| **4 — Process/provenance, not wording** | Add the invariant; correct the Baby Care example into two cases; refine Q4 so ordinary deletion/retention needs do not imply Knowledge ownership. | New **§8.0** invariant with the auto-promotion corollary; new **invariant 10**; Q2 extended to name domain-derived analytics; **Q4 rewritten** to "Knowledge-style attributed assertion lifecycle" with an explicit carve-out for ordinary retention; §8.3 Baby Care row **split into Case A and Case B**; notification and mushroom examples given their inferred-variant counterparts. |
+| **5 — PA-2 logical boundary** | Clarify that ownership is fixed even though placement is open; prevent the Technology Gate from re-adopting Alternative B. | **§6.2** rewritten into explicit "left open" and "fixed by accepting B5" lists, with four named non-reopenable points including the DocType/role-CRUD prohibition and the conditional-co-location rule; new risk **R7**. |
+
+### 18.2 Decisions explicitly not reopened
+
+Per the Board's direction, this revision does not reconsider: the single canonical owner for assertion versions, lines, lifecycle/control, attestations, replacement and lineage plus suppression; Home as trusted identity/partition/authorization authority; domain services as canonical structured truth; the source payload custodian distinction; Nutrition preference re-capture; suppression register ownership; the restore-freshness requirement; B6's ownership of retrieval/context/freshness protocol design; or the OPEN status of B6 and the Technology Gate.
+
+No correction demonstrated a contradiction requiring the selected model to change, and none required reopening B1–B4.
 
 ---
 
-## 19. Proposed B5 acceptance criteria
+## 19. B5 acceptance criteria
 
-B5 may be considered resolved when the Product Architect has:
+B5 is resolved when the Product Architect has:
 
-1. Recorded a disposition on **PA-1 through PA-9**.
-2. Confirmed that every responsibility in the section 7 matrix has exactly one canonical owner, and that no responsibility is jointly owned.
+1. Recorded a disposition on **PA-1 through PA-9** — **done**, §18.
+2. Confirmed that every responsibility in the section 7 matrix has exactly one canonical owner, and that no responsibility is jointly owned. Note that row 2/2a is a *split of two distinct responsibilities*, not joint ownership of one (§7.1).
 3. Confirmed that all state B3 §11 requires to be validated atomically shares one transactional owner (invariant 3), and accepted §12.1's statement that the commit-time authorization barrier crosses to Home and is B6's protocol to design.
-4. Confirmed that all six B4 §17 ownership requirements are assigned (§11).
-5. Accepted the domain-fact-versus-Knowledge rule (§8) and its application to the three future examples (§8.2), including that they do **not** all resolve the same way.
-6. Accepted the reference/projection/duplication rules (§13), including the seven-condition projection test.
-7. Accepted the Nutrition resolution and transition shape (§9), with intolerances explicitly out of scope.
-8. Directed treatment of the pre-existing collisions (§9.4) and documentation inconsistencies (§17.1).
+4. Confirmed that all six B4 §17 ownership requirements are assigned (§11), with the obligation-not-permission boundary of §11.2.1.
+5. Accepted the domain-fact-versus-Knowledge rule (§8), including the **§8.0 process-not-wording invariant**, and its application to the future examples (§8.3) — including that identical wording resolves differently by producing process.
+6. Accepted the reference/projection/duplication rules (§13), including the §13.1 semantic invariant and the §13.2 seven conditions.
+7. Accepted the Nutrition resolution and transition shape (§9), with intolerances explicitly out of scope and ambiguous legacy values not silently reclassified.
+8. Directed treatment of the pre-existing collisions (§9.4) and documentation inconsistencies (§17.1), with the follow-up set in §17.2.
 9. Confirmed that **B6 remains OPEN** and the **Knowledge Technology Gate remains OPEN**, and that no technology, runtime, schema, migration or deployment is approved.
+
+Criteria 1 is satisfied by §18. Criteria 2–9 are satisfied by this document's content as revised, subject to the Board's final merge review. Acceptance of B5 supplies no runtime approval, no technology selection, and no authorization to implement anything described here.
 
 Acceptance of B5 supplies no runtime approval, no technology selection, and no authorization to implement anything described here.
 
@@ -629,26 +794,36 @@ Acceptance of B5 supplies no runtime approval, no technology selection, and no a
 
 ## 20. Verification and change boundary
 
-This change adds this proposal and updates the B5 entry and status references in the gate register. B1–B4 accepted decisions, canonical architecture documents, ADRs, contracts, services, apps, deployment and production are untouched.
+This change adds this proposal and updates the B5 entry and status references in the gate register. B1–B4 accepted decisions, canonical architecture documents, ADRs, contracts, services, apps, deployment and production are untouched. Canonical documentation reconciliation (PA-9) is deliberately deferred and itemized as D-1 … D-7 in §17.2, following the precedent set by every accepted B1–B4 decision, each of which changed only its own proposal file and this register.
 
 ```json
 {
   "task": "knowledge_b5_architecture_proposal",
+  "revision": "architecture_board_corrections_1_to_5",
   "baseline_main_sha": "90d1b7ad73e9c06482d6bd009623f978ffbfe947",
   "main_moved_since_requested_commit": false,
   "baseline_tracked_worktree_clean": true,
   "existing_contract_tests_passed": 12,
   "recommended_model": "canonical Knowledge owner with Home authority, domain structured truth, and governed read-only projections",
+  "model_changed_by_review": false,
   "alternatives_evaluated": 4,
+  "pa_dispositions_recorded": ["PA-1", "PA-2", "PA-3", "PA-4", "PA-5", "PA-6", "PA-7", "PA-8", "PA-9"],
+  "required_corrections_incorporated": 5,
+  "new_contradiction_found": false,
   "b1": "RESOLVED",
   "b2": "RESOLVED",
   "b3": "RESOLVED",
   "b4": "RESOLVED",
-  "b5": "PROPOSED — AWAITING PRODUCT ARCHITECT DECISION",
+  "b5": "PROPOSED — DISPOSITIONS RECORDED, AWAITING FINAL MERGE REVIEW",
   "b6": "OPEN",
   "knowledge_technology_gate": "OPEN",
+  "logical_ownership_boundary_fixed": true,
   "technology_selected": false,
   "deployment_placement_selected": false,
+  "executor_credential_mechanism_selected": false,
+  "projection_transport_selected": false,
+  "canonical_docs_changed": false,
+  "canonical_doc_followups_listed": ["D-1", "D-2", "D-3", "D-4", "D-5", "D-6", "D-7"],
   "contracts_or_schemas_changed": false,
   "knowledge_runtime_implemented": false,
   "migration_performed": false,
@@ -676,9 +851,11 @@ python -m pytest packages/home-contracts/tests -q -p no:cacheprovider
 
 Passing verifies the inspected baseline only, not enforcement of this proposal.
 
-**B5 PROPOSED — NOT DECIDED**
+**B5 PROPOSED — DISPOSITIONS RECORDED, NOT YET CLOSED**
 
-**B1–B4 REMAIN RESOLVED**
+**LOGICAL KNOWLEDGE OWNERSHIP BOUNDARY FIXED; PHYSICAL PLACEMENT OPEN**
+
+**B1–B4 REMAIN RESOLVED AND UNAMENDED**
 
 **B6 REMAINS OPEN**
 
