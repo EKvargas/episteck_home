@@ -156,9 +156,13 @@ Scenarios and invariants are accepted architecture requirements, not implemented
 
 ## B4 — Dependency / Forget / Delete
 
-Status: OPEN
+Status: B4 — PROPOSED / AWAITING PRODUCT ARCHITECT DECISION
+
+Proposal: [Knowledge B4 — Dependency, Forget, Delete, retention, and resurrection safety](KNOWLEDGE_B4_FORGET_DELETE.md)
 
 Product Architect disposition: NOT DECIDED
+
+Proposed model: a durable suppression register as the authoritative non-use fact, separated from physical erasure, with bounded recorded derivation families and a mandatory pre-use re-admission barrier on retrieval, restore, import and reindex. Non-use commits immediately; erasure is an asynchronous evidenced obligation; existing encrypted backup snapshots are not rewritten and expire on the disclosed retention schedule. Distinct operations (stop using, forget, delete source, delete derived artifacts, forget subject, withdraw assertion, remove shared use, delete partition) carry distinct authority and promises. No technology is selected; Flowable is not selected. B4 remains OPEN until an explicit Product Architect disposition is recorded.
 
 Questions to resolve:
 
