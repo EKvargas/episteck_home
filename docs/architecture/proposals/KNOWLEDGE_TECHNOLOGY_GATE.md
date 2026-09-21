@@ -131,9 +131,11 @@ Scenarios A–J are accepted conceptual outcomes and future acceptance specifica
 
 ## B3 — Confirmation and lifecycle
 
-Status: OPEN
+Status: B3 — PROPOSED / AWAITING PRODUCT ARCHITECT DECISION
 
 Product Architect disposition: NOT DECIDED
+
+Proposal: [Knowledge B3 — Confirmation, admission, and lifecycle](KNOWLEDGE_B3_LIFECYCLE.md). Recommends immutable assertion versions with explicit admission, version-bound attestations, typed replacement relations and independent dispute/non-use/expiry controls. Scenarios A–J and atomicity/idempotency requirements are proposed acceptance criteria, not implemented behavior. B3 is not resolved; B1 and B2 remain RESOLVED, B4–B6 remain OPEN, and the Knowledge Technology Gate remains OPEN. No technology, contract/schema change or runtime implementation is approved.
 
 Questions to resolve:
 
