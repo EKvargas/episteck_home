@@ -1,6 +1,6 @@
 # Knowledge B3 — Confirmation, admission, and lifecycle
 
-Status: PROPOSED — AWAITING PRODUCT ARCHITECT DECISION
+Status: ACCEPTED — B3 ARCHITECTURE DECISION
 
 Date: 2026-09-20
 
@@ -14,19 +14,21 @@ Branch: `docs/knowledge-b3-lifecycle`
 
 Decision owner: Product Architect
 
-Disposition: NOT DECIDED
+Decision date: 2026-09-21
+
+Disposition: ACCEPTED WITH CLARIFICATIONS — B3 RESOLVED
 
 Gate: [B3 — Confirmation and lifecycle](KNOWLEDGE_TECHNOLOGY_GATE.md#b3--confirmation-and-lifecycle)
 
-## 1. Recommendation and authority
+## 1. Accepted decision and authority
 
-Recommend **immutable assertion versions, explicit admission, version-bound attestations, typed replacement relations, and independent use controls**, with an atomic current-state view and a minimal decision history. Lifecycle belongs to an exact assertion version. An assertion line groups explicit replacements; it is not a global identity for everything said about a topic. An Episode records capture/confirmation evidence, not the lifecycle of everything extracted from it.
+Adopt **immutable assertion versions, explicit admission, version-bound attestations, typed replacement relations, and independent use controls**, with an atomic current-state view and a minimal decision history. Lifecycle belongs to an exact assertion version. An assertion line groups explicit replacements; it is not a global identity for everything said about a topic. An Episode records capture/confirmation evidence, not the lifecycle of everything extracted from it.
 
 Do not persist one status that must simultaneously answer whether content was admitted, whether someone agrees, whether it has a successor, whether it is contested, whether it is within its applicable time, and whether this viewer can use it. In particular, ACTIVE must not mean true, universally confirmed, or authorized. Section 5 defines the small admission state machine and the other independent lifecycle facets; the familiar status words are derived descriptions of those facts.
 
 Preserve [accepted B1](KNOWLEDGE_B1_SECURITY_SCOPE.md) and [accepted B2](KNOWLEDGE_B2_SENSITIVITY_INHERITANCE.md) without amendment. No contradiction requiring either to reopen was found. Trusted actor/partition, conjunctive scope/subject/domain authorization, actual-influence lineage, no ordinary sensitivity weakening, independent assertion lines, and immediate ineligibility remain mandatory. AI is never release or declassification authority.
 
-This document proposes architecture and future acceptance criteria. It changes no contract, schema, enum, runtime, or production system; it selects no storage, retrieval, indexing, or workflow technology. Merge is not acceptance. B3 remains unresolved until explicit Product Architect disposition. All scenarios are synthetic.
+This document records the Product Architect's accepted B3 architecture and future acceptance criteria, including the D2 and D4 clarifications in sections 6 and 9. Section 14 records the explicit disposition dated 2026-09-21; acceptance is not inferred from a PR merge. This decision governs B3 where older documentation is less precise, pending later consolidation. It changes no contract, schema, enum, runtime, or production system; it selects no storage, retrieval, indexing, or workflow technology. B1–B3 are RESOLVED; B4–B6 and the Knowledge Technology Gate remain OPEN. All scenarios are synthetic.
 
 ## 2. Repository facts that determine the design
 
@@ -100,7 +102,7 @@ Only an explicit replacement command selects a predecessor. Similarity, a newer 
 | **ADMITTED** | Accepted into durable contextual Knowledge under a recorded admission policy and attribution. This records admission, not truth, present validity, human unanimity or permission for any viewer. | No reversal of the historical admission fact. Subsequent supersession, dispute, revocation and expiry are separate facts. |
 | **REJECTED** | This unadmitted candidate was explicitly declined for admission, for a recorded reason. “Incorrect suggestion” is a reason, not an assertion of the opposite proposition. | Terminal for that candidate. Reconsideration requires a new reviewed version/request linked to the rejected proposal; never a silent retry. |
 
-A direct explicit assertion can be captured and admitted in one atomic operation; no externally visible proposal stage is required. A fulfilled AI proposal remains an unadmitted historical proposal linked to its admitted successor and closed to further decisions. Its derived label is SUPERSEDED, not REJECTED. No proposed version can remain an actionable confirmation target after replacement, revocation, expiry or rejection.
+A direct explicit assertion in an approved admission class can be captured and admitted in one atomic operation when every section 6 gate passes; no externally visible proposal stage is required. A fulfilled AI proposal remains an unadmitted historical proposal linked to its admitted successor and closed to further decisions. Its derived label is SUPERSEDED, not REJECTED. No proposed version can remain an actionable confirmation target after replacement, revocation, expiry or rejection.
 
 Rejecting a shared proposal's admission requires exact proposal VIEW plus B1 Q(UPDATE), with all inherited restrictions and the current decision revision. A person who lacks that authority may decline their own requested attestation without rejecting the proposal for everyone; B1's narrow own-contribution withdrawal and own-subject objection remain available. A pending request's cancellation or technical failure is not a factual rejection and creates no attestation. The model cannot supply a human rejection or clear a pending approval on its own.
 
@@ -110,7 +112,7 @@ Rejecting a shared proposal's admission requires exact proposal VIEW plus B1 Q(U
 |---|---|
 | **CURRENT** | Selected for this line's defined purpose and requested applicable time. There may be historical and scheduled versions, but no two effective successors for the same predecessor/purpose/overlapping interval. Independent lines may coexist and conflict. CURRENT alone conveys no admission or permission. |
 | **SUPERSEDED** | An explicit successor replaces this version for the stated purpose/interval. The old version is excluded from ordinary current use for that interval; its capture, attestations and replacement reason remain protected history. Future-effective change does not suppress the old version before its effective boundary. |
-| **DISPUTED** | At least one authorized, unresolved challenge contests this exact version for the relevant use/interval. It can coexist with ADMITTED, SUPERSEDED or REVOKED. Default ordinary use excludes the contested content. Dispute is not rejection, deletion, or proof of falsity. |
+| **DISPUTED** | At least one authorized, unresolved challenge contests this exact version and proposition for the relevant use/interval/context. It can coexist with ADMITTED, SUPERSEDED or REVOKED. Ordinary use excludes the contested content within that bounded scope. Carryover follows section 9; a challenge is not a permanent Person-level veto, rejection, deletion, or proof of falsity. |
 | **REVOKED** | An authorized durable withdrawal/non-use decision bars the specified version/use. It can coexist with any admission/replacement state. It does not claim the proposition was false and does not erase it. The covered use cannot be restored on that same version; section 10 governs a fresh assertion. |
 | **EXPIRED** | A hard use deadline or the end of applicable validity has been reached for the requested ordinary use. This is evaluated from authoritative time and metadata, even if no timer job has run. It does not imply falsity or erasure. |
 | **HELD / ineligible pending review** | A temporary fail-closed control for uncertain classification, dependencies or required authority. This is distinct from deliberate revocation. A trusted review may clear only the hold it resolves, with version checks; other restrictions remain. |
@@ -140,9 +142,23 @@ Capture does not mean durable admission. A conversation message can exist as sou
 
 For initial admission, require trusted identity/partition, B1 CREATE+VIEW for complete proposed content, separately authorized source use, complete B2 classification and lineage, bounded reusable wording, explicit applicability, the required admission evidence, and no applicable suppression. Unknown authority/classification means no usable admission; any retained proposal still needs protected capture authority. Credentials/secrets are excluded; the current keyword checks are not a complete detector.
 
-| Origin/operation | Proposed admission policy |
+**D2 clarification — approved admission classes.** Direct admission requires an explicitly architecture-approved admission class; “low risk” is not an LLM/model judgment or an admission authority. The model may propose classification and routing, but cannot create or approve an admission class. The direct-admission condition is:
+
+```text
+trusted explicit save intent
+AND approved admission class
+AND canonical-domain routing passed
+AND B1 authorization passed
+AND B2 classification/lineage passed
+AND no applicable suppression
+→ may admit directly
+```
+
+For the approved initial preference class, an authenticated “Remember that I dislike canned tuna” may admit faithful reusable wording atomically without redundant confirmation, once all these gates pass. Class approval does not settle B5 ownership or authorize runtime: unknown canonical ownership means routing has not passed. Incidental conversation, ambiguous inference, an unapproved information class, uncertain B2 classification, or Health/Finance and other consequential domains without approved policy must not be auto-admitted on a model's assessment of risk. Such material remains PROPOSED under authorized protected capture, is routed to its canonical domain process, or is withheld from durable Knowledge as appropriate. Future source/domain-specific auto-admission policies require explicit architecture approval.
+
+| Origin/operation | Accepted admission policy |
 |---|---|
-| Authenticated “Remember that I dislike canned tuna” | Explicit first-person assertion and save intent may admit faithful low-risk wording atomically. Show exactly what was saved. No redundant “yes” is required. Separate independently changing clauses. |
+| Authenticated “Remember that I dislike canned tuna” | Within the approved initial preference admission class, explicit first-person assertion and save intent may admit faithful wording atomically only when canonical routing, B1, B2 and suppression checks pass. Show exactly what was saved. No redundant “yes” is required. Separate independently changing clauses. |
 | Incidental conversation or ambiguous extraction | Source capture is not consent to remember. Present exact candidate wording and save intent; remain PROPOSED until accepted. No autonomous extraction from every conversation. |
 | AI_HYPOTHESIS, AI_SUMMARY, AI-generated DERIVED content | No automatic ordinary use as durable Knowledge initially. Human confirmation of exact content may produce an admitted successor; required authority/classification still applies. Preserve AI origin and input lineage. |
 | Imported/professional/system-origin content | Provenance label alone cannot admit it. A later explicitly approved source-specific admission policy must prove source identity, bounded use, authority and canonical-domain routing. Initially propose/review or route to its owner; no blanket auto-admission. |
@@ -189,20 +205,24 @@ Only one effective successor per predecessor/purpose/overlapping interval may co
 
 ## 9. Dispute without a consensus engine
 
-An authorized challenge records its actor, exact target/version, stated issue, affected applicability, and separately classified evidence. “I disagree” need not create an opposite factual claim. If Ana supplies a replacement proposition, capture it as her separately attributed assertion with its own admission/authorization, and link it as a challenge where authorized. Never edit Erick's words to become Ana's words.
+An authorized challenge binds the exact challenged assertion/version, disputed proposition/use, applicable interval/context, challenge actor and authority, and its own lifecycle/control revision. It also records separately classified evidence where supplied. “I disagree” need not create an opposite factual claim. If Ana supplies a replacement proposition, capture it as her separately attributed assertion with its own admission/authorization, and link it as a challenge where authorized. Never edit Erick's words to become Ana's words.
 
 Under B1, a viewer may challenge when also authorized to CREATE that challenge under its complete requirements. A subject/assertor has B1's narrower non-disclosing objection/retraction route even without joint-content VIEW; a guessed identifier must not reveal existence. A challenge reason that reveals more sensitive information receives its own B2 restrictions. Even the existence or author of a dispute can be protected metadata.
 
-Recommended default: an accepted unresolved challenge excludes the targeted content from ordinary recommendations/answers for the contested use. It stays available only in authorized, explicitly requested review/history with attribution and uncertainty, subject to non-use and B4 retention. If challenge detail is inaccessible, return a neutral unavailable result, not a revealing “Ana disputed your health claim.” Do not substitute the disputed value or use it indirectly through an old summary.
+Accepted default: an accepted unresolved relevant challenge excludes the targeted content from ordinary recommendations/answers for the contested use and applicability. It stays available only in authorized, explicitly requested review/history with attribution and uncertainty, subject to non-use and B4 retention. If challenge detail is inaccessible, return a neutral unavailable result, not a revealing “Ana disputed your health claim.” Do not substitute the disputed value or use it indirectly through an old summary.
+
+**D4 clarification — bounded dispute scope.** A challenge is not a permanent Person-level veto. It may carry to a replacement only when that replacement materially preserves the contested proposition for the same overlapping applicability/use. Determine equivalence conservatively; uncertainty may require review and temporary withholding of that candidate's contested use. Similar words, topic or Person identity alone do not establish carryover. A new assertion about a later non-overlapping period, materially changed circumstances, or a genuinely independent assertion line must be evaluated under its own current B1/B2/B3 requirements. The historical challenge remains attributable history and does not automatically suppress that new proposition. A cosmetic new ID, wording change or falsely claimed independence cannot evade an applicable dispute.
+
+For example, Ana's challenge to “Our household eats at 19:00” in 2026 prevents a cosmetic replacement from restoring the same contested 2026 assertion. It does not automatically block a separately supported 2027 assertion, “Our household now usually eats at 18:30.” The 2027 assertion needs its own admission, Circle endorsement, authorization, classification and lineage checks; acknowledgement of the old challenge is not a prerequisite for this distinct proposition. This boundary does not weaken independently applicable B1 subject non-use or B2 source restrictions, which retain their own scopes.
 
 Resolution is bounded, not a vote:
 
 - The challenger may withdraw their own challenge through a version-checked, attributable decision. Re-enabling ordinary use requires all remaining checks and no other challenge.
 - The original assertor may retract their assertion or accept an authorized correction. The target is retired for ordinary use; the challenge remains a recorded historical disagreement, not a rewritten vote.
-- A replacement may address the issue, but does not automatically clear it. Mark relevant challenges addressed only with explicit challenger acknowledgement tied to the reviewed successor. Otherwise the replacement stays withheld for the contested use. Carrying or resolving the control cannot drop the challenge's protection.
-- A Circle steward may retire shared use and endorse separately attributed new content, but cannot clear another person's unresolved objection by authority, majority, timestamp, or renaming the claim. A materially equivalent successor cannot bypass that dispute. If its relationship to an unresolved challenge is uncertain, withhold ordinary shared use pending review.
+- A replacement that remains within the challenge's bounded proposition/use and overlapping applicability does not automatically clear it. Mark that challenge addressed only with explicit challenger acknowledgement tied to the reviewed successor; otherwise the applicable contested use remains withheld. A new proposition outside that scope is evaluated separately and needs no acknowledgement of the historical challenge. Carrying or resolving the control cannot drop the challenge's protection.
+- A Circle steward may retire shared use and endorse separately attributed new content, but cannot clear another person's unresolved objection by authority, majority, timestamp, or renaming the claim. A materially equivalent successor within the same overlapping applicability/use cannot bypass that dispute. If equivalence or applicability is uncertain, withhold the candidate's contested use pending review; do not expand the old challenge into a blanket veto on future family Knowledge.
 
-No general steward override or adjudication engine is proposed. With unresolved disagreement, Olin may abstain or, in an explicitly authorized comparison, report attributed positions. Mere detection of contradictory independent claims is grounds to withhold a confident combined answer and request clarification; it does not manufacture a person's challenge or merge their assertions. This conservative policy has an availability/UX cost, explicitly for Product Architect decision.
+No general steward override or adjudication engine is adopted. With unresolved relevant disagreement, Olin may abstain or, in an explicitly authorized comparison, report attributed positions. Mere detection of contradictory independent claims is grounds to withhold a confident combined answer and request clarification; it does not manufacture a person's challenge, merge their assertions, or automatically carry an old challenge to an independent line. The Product Architect accepted this conservative policy with the bounded-scope clarification above.
 
 ## 10. Revocation, non-use, expiry, and renewed assertions
 
@@ -246,9 +266,9 @@ Suppression/invalidation must become authoritative as part of the domain outcome
 
 ## 12. Scenarios A–J and expected outcomes
 
-These are proposed acceptance specifications, not implemented B3 tests. Every permitted operation assumes complete current B1/B2 authority; failure means no usable publication and no unauthorized disclosure.
+These are accepted architecture outcomes and future acceptance specifications, not implemented B3 tests. Every permitted operation assumes complete current B1/B2 authority; failure means no usable publication and no unauthorized disclosure.
 
-| Case | Proposed outcome |
+| Case | Accepted outcome |
 |---|---|
 | **A — Vegetarian dinner hypothesis confirmed** | Hypothesis H is PROPOSED. The user reviews exact wording and confirms it as their preference. One atomic command creates distinct admitted V with the human attestation and all H ancestry, closes H with a confirmation replacement edge, and records the result. V is authoritative only as that admitted attributed contextual assertion. H never becomes a user-origin assertion or ordinary usable hypothesis. |
 | **B — “No, that is wrong” to AI suggestion** | Reject the exact unadmitted proposal and record the user's rejection event; do not dispute an admitted claim that does not exist or infer “I prefer meat.” No new positive claim without explicit content. If the target had already been admitted, use an attributed challenge/correction/withdrawal as appropriate; the UI must bind which version was rejected. |
@@ -261,7 +281,7 @@ These are proposed acceptance specifications, not implemented B3 tests. Every pe
 | **I — Erick asserts 19:00; Ana disagrees** | Erick's attributed Circle assertion needs authorized stewardship endorsement for ordinary shared use. Ana's authorized challenge targets its exact version; the unresolved challenge suppresses ordinary use but does not rewrite Erick. Authorized review may show both positions. A separately asserted alternative has Ana's attribution and own admission/lineage. No majority, inferred family agreement or steward truth override. |
 | **J — Authorization revoked while pending** | Invalidate the pending basis and revalidate at commit under an enforceable ordering with revocation. Revocation accepted first prevents confirmation/share/update commit; old approval/workflow state does not override it. If commit occurred first, the later revocation bars future covered use and result disclosure. No automatic retry, relabeling or private-scope fallback. Narrow authorized non-disclosing withdrawal remains available under B1. |
 
-Additional required later tests: dispute and supersession coexist; one attestor withdraws while another remains; hidden challenge metadata is not disclosed; expiry at the exact boundary without a timer; scheduled and retroactive changes; rejection racing with confirmation; classification changes after review but before commit; restriction after content retrieval; two independent equal-text assertions; receipt removal followed by an ancient retry; an unresolved challenge carried to equivalent successor wording; no reactivation through source import or restore.
+Additional required later tests: dispute and supersession coexist; one attestor withdraws while another remains; hidden challenge metadata is not disclosed; expiry at the exact boundary without a timer; scheduled and retroactive changes; rejection racing with confirmation; classification changes after review but before commit; restriction after content retrieval; two independent equal-text assertions; receipt removal followed by an ancient retry; an unresolved challenge carried only to materially equivalent successor wording for overlapping applicability/use; no automatic carryover to a separately supported non-overlapping 2027 routine after a 2026 dispute; materially changed circumstances and genuinely independent lines evaluated on their own requirements; unapproved classes and uncertain ownership/classification cannot auto-admit despite a model's risk assessment; no reactivation through source import or restore.
 
 ## 13. Boundaries for B4, B5, and B6
 
@@ -271,38 +291,44 @@ Additional required later tests: dispute and supersession coexist; one attestor 
 | **B5 — Ownership boundaries** | One accountable canonical command boundary must own atomic lifecycle decisions and receipts while Home remains grant/operation-policy authority. Domain facts remain with their owners; source handling and admission authority must be explicit. | Which service owns Knowledge persistence, Nutrition preferences and migration, source/episode custody, distributed responsibility and implementation placement. B3 appoints no new service and moves no data. |
 | **B6 — Trusted retrieval / ContextBundle** | Separate ordinary use from proposal/history/dispute review. Enforce current lifecycle/time/authority/dependency predicates before sensitive candidates, carry exact versions, revalidate before disclosure and honor immediate invalidation across retained context. Demonstrate commit/disclosure freshness consistent with G1.6. | Concrete bounded multi-resource protocol, authority fences, provider/repository interfaces, search/ranking, cache/index invalidation, context reset, task limits and disclosure mechanisms. B3 specifies outcomes, not a retrieval technology or protocol. |
 
-B4–B6 are not resolved by assigning these obligations. Until their enforcement is designed and the gate closes, even accepted B3 semantics would not authorize Knowledge runtime or technology selection.
+B4–B6 are not resolved by assigning these obligations. Accepted B3 semantics do not authorize Knowledge runtime or technology selection; the remaining gate decisions and separately approved implementation work are still required.
 
-## 14. Genuine Product Architect decisions requested
+## 14. Product Architect disposition
 
-| Decision | Recommendation and tradeoff |
-|---|---|
-| **D1 — Lifecycle unit/model** | Accept exact immutable assertion versions plus explicit replacement lines and separate lifecycle facts (option B). More concepts than one status, but simultaneous dispute/supersession/non-use remain expressible. ACTIVE is derived readiness, not truth or permission. |
-| **D2 — Initial admission** | Allow explicit faithful first-person low-risk save commands without redundant confirmation. All AI-origin durable assertions require exact human confirmation; no blanket imported/professional/system auto-admission. Future source-specific policies require separate approval. This trades automation for explicit authority. |
-| **D3 — Confirmation object semantics** | Confirming an eligible AI proposal creates a distinct admitted successor and atomically closes the proposal; additional attestations to admitted unchanged content do not clone it. Confirmation preserves all lineage/restrictions and never doubles as disclosure permission. |
-| **D4 — Circle use and disagreement** | Require exact-version stewardship endorsement for shared ordinary use. An authorized unresolved challenge suppresses the contested use; no steward/majority adjudication override. Equivalent successors cannot bypass it. This may reduce availability during disagreement; accept explicitly or request a separately specified resolution policy. |
-| **D5 — Temporal meaning** | Distinguish correction from real change using reason, capture time and applicable time; use half-open intervals and explicit unknown precision. Permit scheduled changes without retiring current content early. No universal preference TTL; separate soft reminders from hard use deadlines. |
-| **D6 — Terminal versions and renewed use** | No in-place resurrection of rejected, revoked or expired versions. Permit only fresh reviewed assertions/renewals that satisfy continuing restrictions. This adds a visible renewal step and preserves an auditable distinction. |
-| **D7 — Commit and retry invariants** | Accept exact-version CAS-equivalent checks, atomic replacement/receipts, partition/actor-bound idempotency and enforceable authorization ordering at commit. B5/B6 must prove a mechanism; an earlier ALLOW alone is insufficient. |
+Decision owner: Product Architect
 
-These decisions concern B3 product semantics, not permission to modify contracts or deploy. B1/B2 authority and non-weakening rules are already accepted, not presented for another vote. There is no recorded Product Architect acceptance of D1–D7 in this proposal.
+Decision date: 2026-09-21
+
+Disposition: ACCEPTED WITH CLARIFICATIONS — B3 RESOLVED
+
+| Decision | Disposition | Accepted meaning |
+|---|---|---|
+| **D1 — Lifecycle unit/model** | ACCEPT | Exact immutable assertion versions, explicit replacement lines and separate lifecycle facts (option B). Episodes are evidence. ACTIVE is derived readiness only, never objective truth, universal agreement or authorization for every viewer. |
+| **D2 — Initial admission** | ACCEPT WITH CLARIFICATION | Direct admission requires trusted explicit save intent, an architecture-approved admission class, passed canonical routing and B1/B2 checks, and no applicable suppression. The approved initial preference class avoids redundant confirmation when these conditions hold. Model risk judgments cannot authorize new classes; future source/domain-specific auto-admission policies require explicit architecture approval. Section 6 is authoritative. |
+| **D3 — Confirmation object semantics** | ACCEPT | Exact human confirmation of an eligible AI-origin proposal creates a distinct admitted successor and atomically closes the proposal, preserving AI/source lineage and restrictions. Additional attestations to unchanged admitted wording do not clone content. Circle endorsement, personal agreement and disclosure permission remain separate. |
+| **D4 — Circle use and disagreement** | ACCEPT WITH CLARIFICATION | Preserve attribution and suppress unresolved relevant contested use without majority truth or steward override. Challenges bind exact version, proposition/use, interval/context, actor/authority and control revision. Carryover requires materially preserved contested meaning and overlapping applicability/use. Cosmetic replacements cannot bypass disputes; later periods, changed circumstances and genuinely independent lines receive their own current evaluation, not a permanent Person-level veto. Section 9 is authoritative. |
+| **D5 — Temporal meaning** | ACCEPT | Correction repairs an earlier misrepresentation; change records later changed circumstances. Preserve recorded and applicable time, half-open intervals, unknown precision and scheduled changes. Separate review reminders from hard deadlines; no universal preference TTL. |
+| **D6 — Terminal versions and renewed use** | ACCEPT | No in-place resurrection of REJECTED, REVOKED or EXPIRED versions. Fresh reviewed assertions/renewals require all continuing restrictions to permit them. |
+| **D7 — Commit and retry invariants** | ACCEPT | Exact-version preconditions, CAS-equivalent checks, atomic successor/replacement outcomes, partition/actor/operation-bound idempotency, no content-only semantic deduplication, fresh delegated authentication for retries, no stale receipt as authorization, commit-time authorization barrier and immediate non-use before asynchronous cleanup. B5/B6 must establish the mechanisms. |
+
+The clarifications preserve explicit admission authority and dispute integrity without making an LLM an admission-policy authority or creating a permanent veto over future family Knowledge. Scenarios A–J and the D2/D4 boundary cases are accepted architecture outcomes and future acceptance specifications, not implemented enforcement. B1 and B2 remain unchanged and RESOLVED. B4–B6 and the Knowledge Technology Gate remain OPEN. This disposition authorizes no contracts, schemas, runtime, technology selection, deployment or production changes; PR #25 remains unmerged by this task.
 
 ## 15. Verification and structured investigation result
 
-Only this proposal and the B3 entry of the gate register are changed. General gate text still calls B3 open because it remains unresolved; the B3 entry records the more precise proposed/awaiting-decision status. B1/B2 and B4–B6 entries, canonical architecture, ADRs and all contracts/runtime remain untouched.
+Only this accepted decision and B3 status/disposition references in the gate register change. B1/B2 decisions remain unchanged and RESOLVED; B3 is RESOLVED by the disposition above. B4–B6 and the Knowledge Technology Gate remain OPEN. Canonical architecture files, ADRs and all contracts/runtime remain untouched.
 
 ```json
 {
-  "task": "knowledge_b3_architecture_proposal",
+  "task": "knowledge_b3_architecture_decision",
   "baseline_main_sha": "0a6fc2eb15f805299d732a3b7cdf8f1719a0e902",
   "baseline_worktree_clean": true,
   "pr_24": "MERGED",
-  "recommended_model": "immutable assertion versions with explicit admission, attestations, replacement and use controls",
+  "accepted_model": "immutable assertion versions with explicit admission, attestations, replacement and use controls",
   "existing_contract_tests_passed": 12,
-  "scenarios": "A-J: proposed architecture acceptance criteria, not implemented runtime tests",
+  "scenarios": "A-J and D2/D4 boundary cases: accepted architecture criteria, not implemented runtime tests",
   "b1": "RESOLVED",
   "b2": "RESOLVED",
-  "b3": "PROPOSED — AWAITING PRODUCT ARCHITECT DECISION",
+  "b3": "RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21",
   "b4_b5_b6": "OPEN",
   "knowledge_technology_gate": "OPEN",
   "technology_selected": false,
@@ -331,11 +357,11 @@ $env:PYTHONDONTWRITEBYTECODE = '1'
 python -m pytest packages/home-contracts/tests -q -p no:cacheprovider
 ```
 
-**B3 PROPOSED — NOT RESOLVED**
-
-**B1–B2 REMAIN RESOLVED**
+**B1–B3 RESOLVED BY PRODUCT ARCHITECT DECISION**
 
 **B4–B6 REMAIN OPEN**
+
+**KNOWLEDGE TECHNOLOGY GATE REMAINS OPEN**
 
 **NO TECHNOLOGY SELECTED**
 

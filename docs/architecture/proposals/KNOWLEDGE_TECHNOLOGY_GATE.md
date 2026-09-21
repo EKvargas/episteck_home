@@ -30,11 +30,11 @@ PROCESS
 
 Technology must not dictate the Knowledge model.
 
-This is a working decision register, NOT the final Knowledge architecture. The [independent architecture review](../reviews/2026-09-19-knowledge-independent-architecture-review.md) is historical review input, not canonical architecture. Its reviewed baseline was `ddebab6439c9d68487d180dec6995fc546d3cf68`; the G1.6 closeout was merged subsequently. Its findings were initially recorded without disposition. B1 and B2 are now resolved by the explicit Product Architect decisions below; B3–B6 remain OPEN.
+This is a working decision register, NOT the final Knowledge architecture. The [independent architecture review](../reviews/2026-09-19-knowledge-independent-architecture-review.md) is historical review input, not canonical architecture. Its reviewed baseline was `ddebab6439c9d68487d180dec6995fc546d3cf68`; the G1.6 closeout was merged subsequently. Its findings were initially recorded without disposition. B1–B3 are now resolved by the explicit Product Architect decisions below; B4–B6 remain OPEN.
 
 Canonical architecture remains in [ARCHITECTURE.md](../ARCHITECTURE.md), [KNOWLEDGE.md](../KNOWLEDGE.md), accepted ADRs, and approved architecture proposals. The accepted [B1 security/scope decision](KNOWLEDGE_B1_SECURITY_SCOPE.md) governs B1 where older Knowledge documentation is less precise, until later consolidation. The existing [Roadmap](../ROADMAP.md) identifies the Knowledge gate. Other canonical documents are not rewritten here, and no runtime approval is granted.
 
-Only explicit Product Architect decisions may accept, modify, or reject review recommendations. For each disposition, record the decision owner, date, exact accepted/modified/rejected finding, reasoning, acceptance scenarios, and references to approved architecture changes. **B1 is RESOLVED** by Product Architect acceptance with amendments on **2026-09-19**. **B2 is RESOLVED** by Product Architect acceptance with clarification on **2026-09-20**. B3–B6 remain **OPEN / NOT DECIDED**. The Knowledge Technology Gate remains **OPEN**. A reviewer recommendation or this document's eventual merge does not itself select technology or authorize runtime implementation.
+Only explicit Product Architect decisions may accept, modify, or reject review recommendations. For each disposition, record the decision owner, date, exact accepted/modified/rejected finding, reasoning, acceptance scenarios, and references to approved architecture changes. **B1 is RESOLVED** by Product Architect acceptance with amendments on **2026-09-19**. **B2 is RESOLVED** by Product Architect acceptance with clarification on **2026-09-20**. **B3 is RESOLVED** by Product Architect acceptance with D2/D4 clarifications on **2026-09-21**. B4–B6 remain **OPEN / NOT DECIDED**. The Knowledge Technology Gate remains **OPEN**. A reviewer recommendation or this document's eventual merge does not itself select technology or authorize runtime implementation.
 
 ## Current five-layer model
 
@@ -105,7 +105,7 @@ Explicit amendment/deferral: **PRIVATE THIRD-PARTY ASSERTIONS = DEFERRED PRODUCT
 
 Reasoning: the bounded model preserves Home's single authority and fail-closed Person restrictions while supporting genuine subjectless Circle context. The amendments distinguish Circle handling from personal consent, permit explicit consumer stewardship bootstrap, and preserve future private-note design without creating an authorization bypass. Scenarios A–H remain architecture acceptance specifications, not runtime tests; the added private-third-party scenario records a deferral.
 
-Baseline implementation gap remains: current Person-based authorization cannot target a Circle, and simply allowing empty subjects would remove the bundle's subject checks. Resolving B1 defines the required architecture; it does not modify those contracts or authorize implementation. B2 is resolved by the decision below; B3–B6 and the Knowledge Technology Gate remain OPEN. No technology is selected.
+Baseline implementation gap remains: current Person-based authorization cannot target a Circle, and simply allowing empty subjects would remove the bundle's subject checks. Resolving B1 defines the required architecture; it does not modify those contracts or authorize implementation. B2 and B3 are resolved by the decisions below; B4–B6 and the Knowledge Technology Gate remain OPEN. No technology is selected.
 
 ## B2 — Sensitivity inheritance
 
@@ -127,31 +127,32 @@ Accepted decisions:
 - Source/container decoupling for an exact projection does not automatically require every Person whose information occurs elsewhere in the original. It requires source-handling authority, trusted projection approval, proof that removed Person/domain sensitivity is absent from the output, exact version/use binding and preservation of every remaining restriction. If the output still reveals protected content, affected-Person authority is required. Source custody cannot remove Person protection; Person consent cannot disclose unrelated protected source material.
 - Reclassification makes stale derivatives immediately ineligible. Current authorization constrains the candidate space before sensitive retrieval. No technology or runtime is selected or approved.
 
-Scenarios A–J are accepted conceptual outcomes and future acceptance specifications, not runtime tests. B2 resolution changes no schema, contract, service, database, index, workflow, deployment or production system. B3–B6 remain OPEN.
+Scenarios A–J are accepted conceptual outcomes and future acceptance specifications, not runtime tests. B2 resolution changes no schema, contract, service, database, index, workflow, deployment or production system. B3 is resolved below; B4–B6 remain OPEN.
 
 ## B3 — Confirmation and lifecycle
 
-Status: B3 — PROPOSED / AWAITING PRODUCT ARCHITECT DECISION
+Status: B3 — RESOLVED — PRODUCT ARCHITECT DECISION
 
-Product Architect disposition: NOT DECIDED
+Decision owner: Product Architect
 
-Proposal: [Knowledge B3 — Confirmation, admission, and lifecycle](KNOWLEDGE_B3_LIFECYCLE.md). Recommends immutable assertion versions with explicit admission, version-bound attestations, typed replacement relations and independent dispute/non-use/expiry controls. Scenarios A–J and atomicity/idempotency requirements are proposed acceptance criteria, not implemented behavior. B3 is not resolved; B1 and B2 remain RESOLVED, B4–B6 remain OPEN, and the Knowledge Technology Gate remains OPEN. No technology, contract/schema change or runtime implementation is approved.
+Decision date: 2026-09-21
 
-Questions to resolve:
+Product Architect disposition: ACCEPTED WITH CLARIFICATIONS — D1 ACCEPT; D2 ACCEPT WITH CLARIFICATION; D3 ACCEPT; D4 ACCEPT WITH CLARIFICATION; D5 ACCEPT; D6 ACCEPT; D7 ACCEPT.
 
-- Capture: what qualifies for durable admission, and who initiates it?
-- Activation: which assertions may become active, under which authority?
-- Explicit confirmation: what exact content and provenance does a person attest?
-- Correction: how is a previously incorrect assertion replaced?
-- Change vs correction: how is a newly changed preference distinguished from an inaccurate historical record?
-- Supersession: what is replaced, what history remains, and how are concurrent successors handled?
-- Dispute: who may challenge a claim, and what may be retrieved during a dispute?
-- Rejection: what happens to rejected proposals and their evidence?
-- Expiration: how are validity, freshness and review deadlines interpreted?
-- Atomic state transitions: how are confirmation, activation and predecessor retirement kept consistent?
-- AI_SUMMARY / DERIVED activation policy: which, if any, generated derivatives may be active without individual human confirmation?
+Authoritative decision: [Knowledge B3 — Confirmation, admission, and lifecycle](KNOWLEDGE_B3_LIFECYCLE.md), including section 14's disposition, scenarios A–J and D2/D4 boundary cases.
 
-Review concern: the current confirmation helper does not enforce all state/identity conditions or transactionally supersede the predecessor, and only AI_HYPOTHESIS is prohibited from being ACTIVE. Proposed corrections and a hybrid lifecycle model remain review input.
+Accepted decisions:
+
+- Lifecycle attaches to exact immutable assertion versions; explicit replacement lines are not global topic identities, and Episodes are evidence. PROPOSED/ADMITTED/REJECTED record admission; current selection, supersession, dispute, revocation, expiry and holds remain distinct facts. ACTIVE is derived readiness, never objective truth, universal agreement or authorization for every viewer.
+- **D2 clarification:** direct admission requires trusted explicit save intent, an explicitly approved admission class, passed canonical-domain routing and B1/B2 checks, and no applicable suppression. Faithful wording in the approved initial preference class may be admitted atomically without redundant confirmation when every gate passes. An LLM cannot decide that material is “low risk” and thereby approve a new class. Unknown ownership/classification, incidental conversation, ambiguous inference and unapproved consequential domains must not auto-admit. Future source/domain-specific auto-admission policies require explicit architecture approval; B5 ownership remains open.
+- Confirmation of an AI-origin proposal creates a distinct admitted successor and atomically closes the proposal while retaining AI/source lineage and B2 restrictions. Further attestation to unchanged admitted wording does not clone it. Circle endorsement, personal agreement and disclosure permission remain distinct.
+- **D4 clarification:** challenges bind exact version, disputed proposition/use, applicable interval/context, actor/authority and their own control revision. Unresolved relevant disputes suppress contested ordinary use without majority truth or steward override. Carryover requires materially preserved contested meaning for overlapping applicability/use; cosmetic replacements cannot bypass it. Later non-overlapping periods, materially changed circumstances and genuinely independent lines receive their own current B1/B2/B3 evaluation. Historical disagreement is not a permanent Person-level veto; uncertain equivalence may require review.
+- Correction records an earlier misrepresentation; change records later changed circumstances. Preserve recorded and applicable time, scheduled changes and distinct review reminders/hard expiry. No in-place resurrection of REJECTED/REVOKED/EXPIRED; fresh reviewed assertions require continuing restrictions to permit them.
+- Exact-version preconditions, CAS-equivalent checks, atomic successor/replacement outcomes and partition/actor/operation-bound business idempotency are required. No content-only semantic deduplication, stale-receipt authorization or reused transport delegation. Commit-time authorization needs an enforceable barrier; immediate non-use precedes asynchronous cleanup.
+
+Reasoning: the accepted model separates admission, attribution, temporal meaning and use controls without an expanding exclusive state machine. The clarifications prevent model-created admission authority and unbounded dispute carryover while preserving B1/B2.
+
+Scenarios and invariants are accepted architecture requirements, not implemented behavior. The current confirmation helper and ContextBundle gaps remain until separately approved implementation. B1 and B2 remain unchanged and RESOLVED; B4–B6 and the Knowledge Technology Gate remain OPEN. No technology, contract/schema change or runtime implementation is approved.
 
 ## B4 — Dependency / Forget / Delete
 
@@ -214,6 +215,8 @@ Review concern: the bundle's structural validation does not prove that supplied 
 ## Process register
 
 Status: OPEN — PROCESS SPECIFICATIONS NOT YET APPROVED
+
+B3's lifecycle/admission semantics are accepted by the decision above. The checklist below tracks complete operational process specifications and remaining B4–B6 integration; its OPEN entries do not reopen B1–B3 or authorize runtime work.
 
 - [ ] OPEN — Admission / domain routing
 - [ ] OPEN — Capture
@@ -338,7 +341,7 @@ A single approval, ordinary export, or small background cleanup job does not aut
 
 The current hypothesis is that saving a preference, activating a claim, atomic supersession, revoking a claim, retrieving active claims, and ordinary expiration eligibility remain deterministic transactional domain operations. They should not require BPMN, one workflow instance per claim, or consultation of workflow state to establish whether a claim is active.
 
-Immediate suppression belongs to the domain safety boundary even if subsequent deletion cleanup is orchestrated. This is a proposed runtime boundary; exact transition rules remain B3/B4 OPEN.
+Immediate suppression belongs to the domain safety boundary even if subsequent deletion cleanup is orchestrated. B3's lifecycle/non-use semantics are accepted; B4 cleanup and the concrete runtime/orchestration boundary remain OPEN.
 
 ### 3. Does Flowable create an undesirable basic CRUD dependency?
 
@@ -356,7 +359,7 @@ Engine transactions do not by themselves make remote Knowledge commands atomic w
 
 Knowledge/domain state remains canonical. A completed process flag cannot activate an uncommitted claim or prove that all deletion obligations have finished. Reconcile workflow progress against current domain state and operation receipts; do not overwrite newer domain state to match an old workflow.
 
-If a domain commit succeeds but acknowledgement is lost, recovery should discover the existing result. If the workflow advances without a successful domain command, the domain operation remains incomplete. Detailed reconciliation and completion semantics stay B3/B4/B6 OPEN.
+If a domain commit succeeds but acknowledgement is lost, recovery should discover the existing result. If the workflow advances without a successful domain command, the domain operation remains incomplete. B3's atomic outcome and idempotency requirements are accepted; concrete reconciliation, cleanup and freshness mechanisms remain B4–B6 OPEN.
 
 ### 6. How should retry and idempotency work?
 
@@ -417,7 +420,9 @@ B1: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-19 ([accepted decision](KNO
 
 B2: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-20 ([accepted decision](KNOWLEDGE_B2_SENSITIVITY_INHERITANCE.md))
 
-B3–B6: OPEN
+B3: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNOWLEDGE_B3_LIFECYCLE.md))
+
+B4–B6: OPEN
 
 Flowable selection: NOT APPROVED
 
@@ -425,7 +430,7 @@ No installation, deployment, replication, configuration, process triggering, or 
 
 ## Gate completion and change boundary
 
-The next work is explicit Product Architect disposition of B3–B6 and remaining process requirements. B1 and B2 are resolved by the accepted decisions above; the Knowledge Technology Gate remains OPEN and is not complete. Agreed acceptance scenarios must precede technology selection. Technology selection and runtime implementation require their own approval; B1/B2 acceptance supplies neither.
+The next work is explicit Product Architect disposition of B4–B6 and remaining process requirements. B1–B3 are resolved by the accepted decisions above; the Knowledge Technology Gate remains OPEN and is not complete. Agreed acceptance scenarios must precede technology selection. Technology selection and runtime implementation require their own approval; B1/B2/B3 acceptance supplies neither.
 
 The original gate-opening task changed only the independent review artifact and this gate register. The B1 follow-up changes only [KNOWLEDGE_B1_SECURITY_SCOPE.md](KNOWLEDGE_B1_SECURITY_SCOPE.md) and B1 status/references in this register. It does not modify canonical architecture documents, existing ADRs, `packages/home-contracts/`, `services/`, `deploy/`, or production configuration.
 
