@@ -49,12 +49,21 @@ EU customers, a regional deployment/data-residency strategy will be designed sep
 likely dedicated EU Home instances for those customers rather than migrating the personal
 US instance. No stage is scheduled for it.
 
-### Knowledge Technology Gate `[PENDING]`
+### Knowledge Technology Gate `[PENDING / OPEN]`
 Decide + install the Knowledge stack (candidates: Mem0 + Docling + Postgres/pgvector;
 Graphiti deferred; RAGFlow rejected). Prereqs: capacity check on Nuremberg, a clear
-first Knowledge use case, and the governance layer (Scope/Episode/Claim) implemented
-in the Home Control Plane. The pure G1.5 contracts are complete but are not a
-Knowledge runtime or persistence implementation.
+first Knowledge use case, and **B6 (Trusted Retrieval / ContextBundle) closed**.
+The pure G1.5 contracts are complete but are not a Knowledge runtime or persistence
+implementation.
+
+**Accepted B5 ownership boundary** (`proposals/KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md`):
+Home is the trusted identity, security-partition resolution and authorization
+authority; a **distinct logical Knowledge owner** owns canonical contextual
+assertions and Knowledge control state; domain services own structured
+operational/domain truth. Physical placement, runtime and storage remain
+**undecided** — the gate may choose them, but may not collapse canonical Knowledge
+ownership into ordinary Home Control Plane persistence/DocTypes. B5 acceptance
+approves **no** runtime implementation.
 
 ### LLM Routing & Cost Management Gate `[FUTURE / PARALLEL]`
 Preserve a dedicated architecture gate for inference-provider routing, quota/cost

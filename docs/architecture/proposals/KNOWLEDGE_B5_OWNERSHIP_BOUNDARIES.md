@@ -1,10 +1,10 @@
 # Knowledge B5 — Ownership boundaries
 
-Status: PROPOSED — DISPOSITIONS RECORDED, AWAITING FINAL ARCHITECTURE BOARD MERGE REVIEW
+Status: ACCEPTED — B5 ARCHITECTURE DECISION
 
 Date: 2026-09-21
 
-Revision: 2026-09-21 — Architecture Board review incorporated. Core model accepted in direction (**Home decides → Knowledge remembers → Domains own structured operational truth**); PA-1 … PA-9 dispositions recorded in section 18; required corrections 1–5 incorporated per section 18.1.
+Revision: 2026-09-21 — Architecture Board review incorporated; required corrections 1–5 accepted (section 18.1). Final Board review accepted the model and closed B5.
 
 Repository: `EKvargas/episteck_home`
 
@@ -16,11 +16,17 @@ Gate: [B5 — Ownership boundaries](KNOWLEDGE_TECHNOLOGY_GATE.md#b5--ownership-b
 
 Decision owner: Product Architect
 
-Disposition: **ACCEPTED IN DIRECTION WITH FIVE REQUIRED CORRECTIONS — PENDING FINAL MERGE REVIEW**
+Decision date: 2026-09-21
 
-This document is an architecture proposal whose PA-1 … PA-9 dispositions have been recorded by the Architecture Board (section 18) and whose five required corrections are incorporated (section 18.1). **B5 is not marked RESOLVED by this document.** Its status closes only when the Board approves merge and the gate register records it.
+Disposition: **ACCEPTED WITH CORRECTIONS — B5 RESOLVED**
 
-It changes no contract, schema, service, runtime, index, deployment or production system, and selects no storage, retrieval, graph, vector, orchestration, messaging or key-management technology. B1–B4 remain RESOLVED and unamended; no correction demonstrated a contradiction requiring any of them to reopen. **B6 remains OPEN. The Knowledge Technology Gate remains OPEN.** All named people and household statements are synthetic.
+This document is the authoritative B5 architecture decision. The Architecture Board accepted the ownership model and its five required corrections (section 18.1); the PA-1 … PA-9 dispositions are recorded in section 18. Where older Knowledge documentation is less precise about ownership semantics, this decision governs until later consolidation.
+
+The accepted boundary is:
+
+> **Home decides → Knowledge remembers → Domains own structured operational truth.**
+
+Acceptance changes no contract, schema, service, runtime, index, deployment or production system, and selects no storage, retrieval, graph, vector, orchestration, messaging or key-management technology. It authorizes no runtime implementation. B1–B4 remain RESOLVED and unamended; no correction demonstrated a contradiction requiring any of them to reopen. **B6 remains OPEN. The Knowledge Technology Gate remains OPEN. No deployment placement is selected.** All named people and household statements are synthetic.
 
 ---
 
@@ -681,7 +687,7 @@ If accepted, the following work becomes necessary. **None is authorized by this 
 3. **Intolerance fields** (§9.2): deliberately **not** moved. Deferred to Health architecture (**PA-6**).
 4. **Dormant Home DocTypes** (§9.4): `Nutrition Profile` / `Nutrition Intake` retired as superseded by ADR-0004 (**PA-5**).
 5. **Provenance vocabulary alignment** (F5): `Care Journey Item.knowledge_status` reconciled with `KnowledgeProvenance` (**PA-5**).
-6. **Documentation reconciliation** (F11, **PA-9**): items D-1 … D-7 in §17.2. D-1 (the ROADMAP prerequisite) is the only active contradiction.
+6. **Documentation reconciliation** (F11, **PA-9**): D-1 (the ROADMAP prerequisite) is **resolved with this decision**; D-2 … D-7 remain open follow-up consolidation (§17.2) and do not gate B5.
 7. **Multi-resource authorization protocol** (§12.1): required before any Knowledge runtime; B6.
 8. **Bounded cleanup obligation and executor authority** (§11, §11.2.1): the obligation model is approved in concept by **PA-4**; the executor's credential/delegation mechanism is undecided and must be separately approved per B1 §109.
 9. **Projection materialization path** (§13.1): the controlled path by which a projection reflects a KN canonical version. Transport and physical writer are **not selected by B5**; required before any projection exists.
@@ -706,7 +712,7 @@ Explicitly **not** required by acceptance: any new service deployment, any stora
 
 ### 17.1 Documentation inconsistencies found
 
-1. **ROADMAP vs DATA_OWNERSHIP/KNOWLEDGE** (F11): governance "implemented in the Home Control Plane" versus a separate `Knowledge service [CONTRACT-ONLY]`. **Unresolved on `main`.** The recommendation is consistent with DATA_OWNERSHIP; ROADMAP's wording would need correction on acceptance. Flagged, not edited — correcting canonical documents requires an accepted decision first.
+1. **ROADMAP vs DATA_OWNERSHIP/KNOWLEDGE** (F11): governance "implemented in the Home Control Plane" versus a separate `Knowledge service [CONTRACT-ONLY]`. This was the one active contradiction with the accepted boundary. **Corrected with this decision** — see D-1 in §17.2. DATA_OWNERSHIP already aligns with the accepted model and needs consolidation rather than correction (D-2).
 2. **Gate register B5 framing** (§2.2): says duplicate stores are "a risk to avoid, not an assertion that two stores already exist"; F4 shows two stores with these fields do exist, one dormant.
 3. **Home Nutrition DocTypes vs ADR-0004** (F4): schema contradicts an accepted ADR.
 4. **`Care Journey Item.knowledge_status` vs `KnowledgeProvenance`** (F5): two divergent provenance vocabularies.
@@ -714,33 +720,33 @@ Explicitly **not** required by acceptance: any new service deployment, any stora
 
 None of these contradicts B1–B4 in a way that requires reopening them.
 
-### 17.2 Documentation reconciliation required before B5 closes (PA-9)
+### 17.2 Documentation reconciliation (PA-9)
 
-PA-9 accepts reconciliation of canonical documentation when B5 closes. **This revision does not perform it**, for a reason grounded in repository convention rather than preference: every accepted decision B1 through B4 changed **only** its own proposal file and the gate register, and each stated explicitly that canonical architecture documents and ADRs "remain unchanged" and that its decision "governs where older documentation is less precise, pending later consolidation." Editing canonical docs inside a still-unmerged B5 proposal would break that precedent and would edit documents against a decision the Board has not yet approved for merge.
+PA-9 accepts reconciliation of canonical documentation when B5 closes. The Architecture Board's final decision is to **resolve D-1 with this decision** and to **track D-2 … D-7 as follow-up consolidation that B5 closure does not require**.
 
-The exact follow-up set required, listed so it can be scheduled or bundled at the Board's discretion:
+D-1 is resolved here because it was the one *active contradiction* with the accepted ownership boundary: leaving it on `main` after B5 closed could misdirect B6 and the Technology Gate toward the Home-implementation reading that PA-1/PA-2 rejected. D-2 … D-7 are consolidation and implementation documentation, which the repository has consistently deferred — every accepted decision B1 through B4 changed only its own proposal file and the gate register, each stating that its decision "governs where older documentation is less precise, pending later consolidation."
 
-| # | Document | Required change | Trigger |
+| # | Document | Change | Status |
 |---|---|---|---|
-| **D-1** | [ROADMAP.md](../ROADMAP.md) §Knowledge Technology Gate | Remove the prerequisite that the governance layer be "implemented in the Home Control Plane." Under accepted PA-1/PA-2, Knowledge is a distinct logical canonical owner; Home is the authority, not the persistence owner. **This is the one genuine contradiction with the accepted model.** | B5 close |
-| **D-2** | [DATA_OWNERSHIP.md](../DATA_OWNERSHIP.md) | Record the accepted boundary: canonical Knowledge owner for contextual assertions and control state; Home for identity/partition/authorization; domains for structured truth. Add the domain-fact-vs-Knowledge rule reference (§8.0/§8.1). Note that preference ownership is settled and intolerance-shaped fields are deferred to Health. | B5 close |
-| **D-3** | [KNOWLEDGE.md](../KNOWLEDGE.md) | Reconcile the `[CONTRACT-ONLY]` Knowledge-service description with the accepted logical ownership boundary; update the lifecycle summary, which predates accepted B3 (item 5 above). | B5 close, or the later B1–B4 consolidation |
-| **D-4** | [KNOWLEDGE_TECHNOLOGY_GATE.md](KNOWLEDGE_TECHNOLOGY_GATE.md) five-layer model | Layer 3 currently says "exact admission and ownership details remain open," and the section closes by noting it "does not resolve contested ownership fields such as reusable Nutrition preferences." Both become stale on B5 close. | B5 close |
-| **D-5** | [ADR](../adr/) — new ADR | Record the accepted ownership boundary as an ADR, per the ROADMAP Architecture Change Rule ("Create/update an ADR"). It should state the Model D boundary, the §6.2 fixed points, and that it supersedes the ROADMAP's Home-implementation wording. | B5 close |
-| **D-6** | [STATUS.md](../STATUS.md) | Update the Knowledge line to reflect B5 resolved and the remaining B6/Technology Gate work. | B5 close |
-| **D-7** | ADR-0004 / Home DocTypes | Record that the dormant Home `Nutrition Profile` / `Nutrition Intake` DocTypes are superseded and scheduled for retirement (PA-5). Implementation is separate. | Separately approved work |
+| **D-1** | [ROADMAP.md](../ROADMAP.md) §Knowledge Technology Gate | Remove the prerequisite that the governance layer be "implemented in the Home Control Plane"; state the accepted B5 boundary, that physical placement/runtime/storage remain undecided, that B6 must close before technology selection, and that B5 approves no runtime implementation. | **RESOLVED — changed with this decision** |
+| **D-2** | [DATA_OWNERSHIP.md](../DATA_OWNERSHIP.md) | Record the accepted boundary: canonical Knowledge owner for contextual assertions and control state; Home for identity/partition/authorization; domains for structured truth. Add the domain-fact-vs-Knowledge rule reference (§8.0/§8.1). Note preference ownership settled and intolerance-shaped fields deferred to Health. | **OPEN — follow-up consolidation** |
+| **D-3** | [KNOWLEDGE.md](../KNOWLEDGE.md) | Reconcile the `[CONTRACT-ONLY]` Knowledge-service description with the accepted logical ownership boundary; update the lifecycle summary, which predates accepted B3 (item 5 above). | **OPEN — follow-up consolidation**, may bundle with the later B1–B4 consolidation |
+| **D-4** | [KNOWLEDGE_TECHNOLOGY_GATE.md](KNOWLEDGE_TECHNOLOGY_GATE.md) five-layer model | Layer 3 says "exact admission and ownership details remain open," and the section closes by noting it "does not resolve contested ownership fields such as reusable Nutrition preferences." Both are now stale. | **OPEN — follow-up consolidation** |
+| **D-5** | [ADR](../adr/) — new ADR | Record the accepted ownership boundary as an ADR per the ROADMAP Architecture Change Rule: the Model D boundary and the §6.2 fixed points. | **OPEN — follow-up** |
+| **D-6** | [STATUS.md](../STATUS.md) | Update the Knowledge line to reflect B5 resolved and the remaining B6/Technology Gate work. | **OPEN — follow-up** |
+| **D-7** | ADR-0004 / Home DocTypes | Record that the dormant Home `Nutrition Profile` / `Nutrition Intake` DocTypes are superseded and scheduled for retirement (PA-5). | **OPEN — separate implementation work** |
 
-D-1 is the only item that is an active contradiction with the accepted model; D-2 through D-7 are consolidation. If the Board prefers reconciliation to land inside PR #28 rather than as follow-up, D-1 and D-2 are the minimum set, and this proposal can be revised accordingly on instruction.
+**None of D-2 … D-7 reopens B5.** Until each lands, this accepted decision governs where those documents are less precise, on the same basis B1–B4 already established.
 
 ---
 
 ## 18. Product Architect dispositions
 
-The Architecture Board reviewed this proposal and recorded the dispositions below. The core recommendation is **accepted in direction**:
+The Architecture Board reviewed this proposal and recorded the dispositions below. The core recommendation is **accepted**:
 
 > **Home decides → Knowledge remembers → Domains own structured operational truth.**
 
-Five required corrections were issued and are incorporated in this revision; each is cross-referenced to the section that implements it. This document remains a **proposal pending final merge review** — the dispositions are recorded, but B5 is not marked RESOLVED here. Only the gate register's explicit status, set when the Board approves merge, closes B5.
+Five required corrections were issued and are incorporated; each is cross-referenced to the section that implements it. The Board's final review accepted those corrections, confirmed that no further B5 architecture redesign is required, and **closed B5**. Acceptance is the Product Architect's recorded decision, not an inference from a PR merge.
 
 | # | Decision | Disposition | Where implemented |
 |---|---|---|---|
@@ -772,9 +778,9 @@ No correction demonstrated a contradiction requiring the selected model to chang
 
 ---
 
-## 19. B5 acceptance criteria
+## 19. B5 acceptance criteria — satisfied
 
-B5 is resolved when the Product Architect has:
+B5 is resolved because the Product Architect has:
 
 1. Recorded a disposition on **PA-1 through PA-9** — **done**, §18.
 2. Confirmed that every responsibility in the section 7 matrix has exactly one canonical owner, and that no responsibility is jointly owned. Note that row 2/2a is a *split of two distinct responsibilities*, not joint ownership of one (§7.1).
@@ -786,7 +792,7 @@ B5 is resolved when the Product Architect has:
 8. Directed treatment of the pre-existing collisions (§9.4) and documentation inconsistencies (§17.1), with the follow-up set in §17.2.
 9. Confirmed that **B6 remains OPEN** and the **Knowledge Technology Gate remains OPEN**, and that no technology, runtime, schema, migration or deployment is approved.
 
-Criteria 1 is satisfied by §18. Criteria 2–9 are satisfied by this document's content as revised, subject to the Board's final merge review. Acceptance of B5 supplies no runtime approval, no technology selection, and no authorization to implement anything described here.
+All nine criteria are satisfied: criterion 1 by §18, criteria 2–9 by this document's content as accepted. The Architecture Board confirmed satisfaction at its final review and closed B5. Acceptance of B5 supplies no runtime approval, no technology selection, no deployment placement, and no authorization to implement anything described here.
 
 Acceptance of B5 supplies no runtime approval, no technology selection, and no authorization to implement anything described here.
 
@@ -794,12 +800,14 @@ Acceptance of B5 supplies no runtime approval, no technology selection, and no a
 
 ## 20. Verification and change boundary
 
-This change adds this proposal and updates the B5 entry and status references in the gate register. B1–B4 accepted decisions, canonical architecture documents, ADRs, contracts, services, apps, deployment and production are untouched. Canonical documentation reconciliation (PA-9) is deliberately deferred and itemized as D-1 … D-7 in §17.2, following the precedent set by every accepted B1–B4 decision, each of which changed only its own proposal file and this register.
+This change adds this accepted decision, updates the B5 entry and status references in the gate register, and resolves **D-1** by correcting the Knowledge Technology Gate prerequisite in `ROADMAP.md`. That ROADMAP edit is the only canonical-document change: it removed an active contradiction with the accepted ownership boundary that would otherwise have misdirected B6 and the Technology Gate.
+
+B1–B4 accepted decisions, all other canonical architecture documents, ADRs, contracts, services, apps, deployment and production are untouched. The remaining PA-9 consolidation (D-2 … D-7) is tracked in §17.2 and does not gate B5.
 
 ```json
 {
-  "task": "knowledge_b5_architecture_proposal",
-  "revision": "architecture_board_corrections_1_to_5",
+  "task": "knowledge_b5_architecture_decision",
+  "revision": "architecture_board_final_closure",
   "baseline_main_sha": "90d1b7ad73e9c06482d6bd009623f978ffbfe947",
   "main_moved_since_requested_commit": false,
   "baseline_tracked_worktree_clean": true,
@@ -814,16 +822,18 @@ This change adds this proposal and updates the B5 entry and status references in
   "b2": "RESOLVED",
   "b3": "RESOLVED",
   "b4": "RESOLVED",
-  "b5": "PROPOSED — DISPOSITIONS RECORDED, AWAITING FINAL MERGE REVIEW",
+  "b5": "RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21",
   "b6": "OPEN",
   "knowledge_technology_gate": "OPEN",
   "logical_ownership_boundary_fixed": true,
+  "d1_roadmap_contradiction_resolved": true,
+  "d2_to_d7_followups_open": true,
   "technology_selected": false,
   "deployment_placement_selected": false,
   "executor_credential_mechanism_selected": false,
   "projection_transport_selected": false,
-  "canonical_docs_changed": false,
-  "canonical_doc_followups_listed": ["D-1", "D-2", "D-3", "D-4", "D-5", "D-6", "D-7"],
+  "canonical_docs_changed": ["docs/architecture/ROADMAP.md"],
+  "canonical_doc_followups_open": ["D-2", "D-3", "D-4", "D-5", "D-6", "D-7"],
   "contracts_or_schemas_changed": false,
   "knowledge_runtime_implemented": false,
   "migration_performed": false,
@@ -839,7 +849,7 @@ git diff --name-only origin/main...HEAD
 git status --short --branch
 ```
 
-Expected changed paths: `docs/architecture/proposals/KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md` and `docs/architecture/proposals/KNOWLEDGE_TECHNOLOGY_GATE.md`.
+Expected changed paths: `docs/architecture/proposals/KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md`, `docs/architecture/proposals/KNOWLEDGE_TECHNOLOGY_GATE.md` and `docs/architecture/ROADMAP.md` (D-1 only).
 
 Reproduce the baseline contract check without writing cache files:
 
@@ -851,11 +861,9 @@ python -m pytest packages/home-contracts/tests -q -p no:cacheprovider
 
 Passing verifies the inspected baseline only, not enforcement of this proposal.
 
-**B5 PROPOSED — DISPOSITIONS RECORDED, NOT YET CLOSED**
+**B1–B5 RESOLVED BY PRODUCT ARCHITECT DECISION**
 
 **LOGICAL KNOWLEDGE OWNERSHIP BOUNDARY FIXED; PHYSICAL PLACEMENT OPEN**
-
-**B1–B4 REMAIN RESOLVED AND UNAMENDED**
 
 **B6 REMAINS OPEN**
 

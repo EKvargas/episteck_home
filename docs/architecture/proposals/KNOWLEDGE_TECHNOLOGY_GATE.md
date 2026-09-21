@@ -30,11 +30,11 @@ PROCESS
 
 Technology must not dictate the Knowledge model.
 
-This is a working decision register, NOT the final Knowledge architecture. The [independent architecture review](../reviews/2026-09-19-knowledge-independent-architecture-review.md) is historical review input, not canonical architecture. Its reviewed baseline was `ddebab6439c9d68487d180dec6995fc546d3cf68`; the G1.6 closeout was merged subsequently. Its findings were initially recorded without disposition. B1–B4 are now resolved by the explicit Product Architect decisions below; B5–B6 remain OPEN.
+This is a working decision register, NOT the final Knowledge architecture. The [independent architecture review](../reviews/2026-09-19-knowledge-independent-architecture-review.md) is historical review input, not canonical architecture. Its reviewed baseline was `ddebab6439c9d68487d180dec6995fc546d3cf68`; the G1.6 closeout was merged subsequently. Its findings were initially recorded without disposition. B1–B5 are now resolved by the explicit Product Architect decisions below; B6 remains OPEN.
 
 Canonical architecture remains in [ARCHITECTURE.md](../ARCHITECTURE.md), [KNOWLEDGE.md](../KNOWLEDGE.md), accepted ADRs, and approved architecture proposals. The accepted [B1 security/scope decision](KNOWLEDGE_B1_SECURITY_SCOPE.md) governs B1 where older Knowledge documentation is less precise, until later consolidation. The existing [Roadmap](../ROADMAP.md) identifies the Knowledge gate. Other canonical documents are not rewritten here, and no runtime approval is granted.
 
-Only explicit Product Architect decisions may accept, modify, or reject review recommendations. For each disposition, record the decision owner, date, exact accepted/modified/rejected finding, reasoning, acceptance scenarios, and references to approved architecture changes. **B1 is RESOLVED** by Product Architect acceptance with amendments on **2026-09-19**. **B2 is RESOLVED** by Product Architect acceptance with clarification on **2026-09-20**. **B3 is RESOLVED** by Product Architect acceptance with D2/D4 clarifications on **2026-09-21**. **B4 is RESOLVED** by Product Architect acceptance with C1–C4 clarifications on **2026-09-21**. B5–B6 remain **OPEN / NOT DECIDED**. The Knowledge Technology Gate remains **OPEN**. A reviewer recommendation or this document's eventual merge does not itself select technology or authorize runtime implementation.
+Only explicit Product Architect decisions may accept, modify, or reject review recommendations. For each disposition, record the decision owner, date, exact accepted/modified/rejected finding, reasoning, acceptance scenarios, and references to approved architecture changes. **B1 is RESOLVED** by Product Architect acceptance with amendments on **2026-09-19**. **B2 is RESOLVED** by Product Architect acceptance with clarification on **2026-09-20**. **B3 is RESOLVED** by Product Architect acceptance with D2/D4 clarifications on **2026-09-21**. **B4 is RESOLVED** by Product Architect acceptance with C1–C4 clarifications on **2026-09-21**. **B5 is RESOLVED** by Product Architect acceptance with corrections on **2026-09-21**. B6 remains **OPEN / NOT DECIDED**. The Knowledge Technology Gate remains **OPEN**. A reviewer recommendation or this document's eventual merge does not itself select technology or authorize runtime implementation.
 
 ## Current five-layer model
 
@@ -42,7 +42,7 @@ Only explicit Product Architect decisions may accept, modify, or reject review r
 |---|---|
 | 1. Structured domain truth | Canonical records and calculations owned by domain services: Nutrition intake/targets, future Health measurements/clinical data, Finance transactions, Calendar events. |
 | 2. Relationship / control truth | Person, Circle, CircleMembership, CareRelationship, ConsentGrant, trusted identity and authorization remain Home Control Plane responsibilities. |
-| 3. Durable contextual Knowledge | Reusable contextual assertions such as preferences, goals, routines, constraints, decisions and rationale, with provenance and lifecycle. Exact admission and ownership details remain open. |
+| 3. Durable contextual Knowledge | Reusable contextual assertions such as preferences, goals, routines, constraints, decisions and rationale, with provenance and lifecycle. Owned by the canonical Knowledge owner per accepted B5; admission semantics are accepted in B3. |
 | 4. Source evidence / originals | Conversations, documents, imports, photos, professional material and other originals. Sources are not the same objects as extracted claims. |
 | 5. Agent working memory | Hermes/agent session and execution context. It is not canonical durable personal/family Knowledge. |
 
@@ -54,7 +54,7 @@ Knowledge is NOT:
 - Hermes working memory
 - a vector database abstraction
 
-This distinction preserves the current conceptual direction; it does not resolve contested ownership fields such as reusable Nutrition preferences.
+This distinction preserves the current conceptual direction. Contested ownership, including reusable Nutrition preferences, is resolved by the accepted [B5 decision](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md) below. Broader consolidation of this section is tracked as D-4 in that decision's section 17.2.
 
 ## Security partition — accepted B1 invariant
 
@@ -105,7 +105,7 @@ Explicit amendment/deferral: **PRIVATE THIRD-PARTY ASSERTIONS = DEFERRED PRODUCT
 
 Reasoning: the bounded model preserves Home's single authority and fail-closed Person restrictions while supporting genuine subjectless Circle context. The amendments distinguish Circle handling from personal consent, permit explicit consumer stewardship bootstrap, and preserve future private-note design without creating an authorization bypass. Scenarios A–H remain architecture acceptance specifications, not runtime tests; the added private-third-party scenario records a deferral.
 
-Baseline implementation gap remains: current Person-based authorization cannot target a Circle, and simply allowing empty subjects would remove the bundle's subject checks. Resolving B1 defines the required architecture; it does not modify those contracts or authorize implementation. B2, B3 and B4 are resolved by the decisions below; B5–B6 and the Knowledge Technology Gate remain OPEN. No technology is selected.
+Baseline implementation gap remains: current Person-based authorization cannot target a Circle, and simply allowing empty subjects would remove the bundle's subject checks. Resolving B1 defines the required architecture; it does not modify those contracts or authorize implementation. B2, B3, B4 and B5 are resolved by the decisions below; B6 and the Knowledge Technology Gate remain OPEN. No technology is selected.
 
 ## B2 — Sensitivity inheritance
 
@@ -127,7 +127,7 @@ Accepted decisions:
 - Source/container decoupling for an exact projection does not automatically require every Person whose information occurs elsewhere in the original. It requires source-handling authority, trusted projection approval, proof that removed Person/domain sensitivity is absent from the output, exact version/use binding and preservation of every remaining restriction. If the output still reveals protected content, affected-Person authority is required. Source custody cannot remove Person protection; Person consent cannot disclose unrelated protected source material.
 - Reclassification makes stale derivatives immediately ineligible. Current authorization constrains the candidate space before sensitive retrieval. No technology or runtime is selected or approved.
 
-Scenarios A–J are accepted conceptual outcomes and future acceptance specifications, not runtime tests. B2 resolution changes no schema, contract, service, database, index, workflow, deployment or production system. B3 and B4 are resolved below; B5–B6 remain OPEN.
+Scenarios A–J are accepted conceptual outcomes and future acceptance specifications, not runtime tests. B2 resolution changes no schema, contract, service, database, index, workflow, deployment or production system. B3, B4 and B5 are resolved below; B6 remains OPEN.
 
 ## B3 — Confirmation and lifecycle
 
@@ -144,7 +144,7 @@ Authoritative decision: [Knowledge B3 — Confirmation, admission, and lifecycle
 Accepted decisions:
 
 - Lifecycle attaches to exact immutable assertion versions; explicit replacement lines are not global topic identities, and Episodes are evidence. PROPOSED/ADMITTED/REJECTED record admission; current selection, supersession, dispute, revocation, expiry and holds remain distinct facts. ACTIVE is derived readiness, never objective truth, universal agreement or authorization for every viewer.
-- **D2 clarification:** direct admission requires trusted explicit save intent, an explicitly approved admission class, passed canonical-domain routing and B1/B2 checks, and no applicable suppression. Faithful wording in the approved initial preference class may be admitted atomically without redundant confirmation when every gate passes. An LLM cannot decide that material is “low risk” and thereby approve a new class. Unknown ownership/classification, incidental conversation, ambiguous inference and unapproved consequential domains must not auto-admit. Future source/domain-specific auto-admission policies require explicit architecture approval; B5 ownership remains open.
+- **D2 clarification:** direct admission requires trusted explicit save intent, an explicitly approved admission class, passed canonical-domain routing and B1/B2 checks, and no applicable suppression. Faithful wording in the approved initial preference class may be admitted atomically without redundant confirmation when every gate passes. An LLM cannot decide that material is “low risk” and thereby approve a new class. Unknown ownership/classification, incidental conversation, ambiguous inference and unapproved consequential domains must not auto-admit. Future source/domain-specific auto-admission policies require explicit architecture approval; B5 ownership is resolved below.
 - Confirmation of an AI-origin proposal creates a distinct admitted successor and atomically closes the proposal while retaining AI/source lineage and B2 restrictions. Further attestation to unchanged admitted wording does not clone it. Circle endorsement, personal agreement and disclosure permission remain distinct.
 - **D4 clarification:** challenges bind exact version, disputed proposition/use, applicable interval/context, actor/authority and their own control revision. Unresolved relevant disputes suppress contested ordinary use without majority truth or steward override. Carryover requires materially preserved contested meaning for overlapping applicability/use; cosmetic replacements cannot bypass it. Later non-overlapping periods, materially changed circumstances and genuinely independent lines receive their own current B1/B2/B3 evaluation. Historical disagreement is not a permanent Person-level veto; uncertain equivalence may require review.
 - Correction records an earlier misrepresentation; change records later changed circumstances. Preserve recorded and applicable time, scheduled changes and distinct review reminders/hard expiry. No in-place resurrection of REJECTED/REVOKED/EXPIRED; fresh reviewed assertions require continuing restrictions to permit them.
@@ -152,7 +152,7 @@ Accepted decisions:
 
 Reasoning: the accepted model separates admission, attribution, temporal meaning and use controls without an expanding exclusive state machine. The clarifications prevent model-created admission authority and unbounded dispute carryover while preserving B1/B2.
 
-Scenarios and invariants are accepted architecture requirements, not implemented behavior. The current confirmation helper and ContextBundle gaps remain until separately approved implementation. B1 and B2 remain unchanged and RESOLVED; B4 is resolved below; B5–B6 and the Knowledge Technology Gate remain OPEN. No technology, contract/schema change or runtime implementation is approved.
+Scenarios and invariants are accepted architecture requirements, not implemented behavior. The current confirmation helper and ContextBundle gaps remain until separately approved implementation. B1 and B2 remain unchanged and RESOLVED; B4 and B5 are resolved below; B6 and the Knowledge Technology Gate remain OPEN. No technology, contract/schema change or runtime implementation is approved.
 
 ## B4 — Dependency / Forget / Delete
 
@@ -162,24 +162,28 @@ Authoritative decision: [Knowledge B4 — Dependency, Forget, Delete, retention,
 
 Accepted model: a durable suppression register as the authoritative non-use fact, separated from physical erasure, with bounded recorded derivation families and a mandatory pre-use re-admission barrier on retrieval, restore, import and reindex. Non-use commits immediately; erasure is an asynchronous evidenced obligation; existing encrypted backup snapshots are not rewritten. Independent lineage survives source-specific deletion. Orchestration, Flowable included, is never canonical Knowledge truth and suppression never waits on it. Distinct operations (stop using, forget, delete source, delete derived artifacts, forget subject, withdraw assertion, remove shared use, delete partition) carry distinct authority and promises.
 
-- **C1 — restore freshness is load-bearing:** restored data must not become usable unless the system can prove the suppression/deletion control state used for reconciliation is at least as current as the payload being restored. Unknown freshness fails closed. A monotonic or otherwise current anti-resurrection authority, or an equivalent freshness proof, is required; **B4 selects no persistence or replication mechanism for it**, and B5/B6/implementation determine that later.
+- **C1 — restore freshness is load-bearing:** restored data must not become usable unless the system can prove the suppression/deletion control state used for reconciliation is at least as current as the payload being restored. Unknown freshness fails closed. A monotonic or otherwise current anti-resurrection authority, or an equivalent freshness proof, is required; **B4 selects no persistence or replication mechanism for it**; B5 assigns the owner and B6/implementation determine the mechanism.
 - **C2 — hashing is not canonicalized:** the anti-resurrection state must hold the minimum non-reconstructable, non-disclosing, partition-bound information sufficient for the approved re-admission policy, with no forgotten plaintext or embeddings. Opaque source identities, policy keys, digests, classification metadata and trusted semantic review are possible future mechanisms; **B4 selects none**.
 - **C3 — Forget is not a permanent topic ban:** the legitimate authority may later deliberately reassert. A reassertion never reactivates the erased version; it may create a new reviewed assertion when current authority, explicit save intent, B1/B2/B3 checks and explicit treatment of the prior suppression all hold. Automatic import or re-extraction can never override a suppression.
 - **C4 — external provider deletion is conditional:** local Forget/Delete cannot by itself guarantee provider-side deletion, which depends on the approved provider, contractual retention terms, configured controls and available deletion APIs. Olin must not promise provider-side deletion unless it can verify it. This is an input to the future LLM Routing / Provider Policy architecture. Already displayed output and independently exported files cannot be recalled.
 
 D1 ACCEPT WITH SCOPE CLARIFICATION (current personal-deployment `restic keep 7d/4w/3m` accepted; not a permanent commercial requirement; no fixed duration promised) · D2 DEFER (crypto-shredding retained as a future option, not a B4 prerequisite; no key-management technology selected) · D3 ACCEPT WITH CLARIFICATION (minimal anti-resurrection state; actor/audit metadata minimized independently and not automatically permanent; partition tombstone for whole-partition deletion) · D4 ACCEPT (source-only dependents suppressed and erased with the family; deletion never weakens restrictions) · D5 ACCEPT WITH CLARIFICATION (bounded to covered proposition/use/applicability; no global topic ban; uncertainty fails closed) · D6 DEFER (technical semantics only; no GDPR/right-to-erasure claim either way) · D7 ACCEPT (STOP USING, FORGET / DELETE MEMORY and DELETE SOURCE remain distinct; internal cleanup states need not be primary user actions).
 
-Scenarios A–M and the clarification boundary cases are accepted architecture outcomes and future acceptance specifications, not implemented enforcement. B4 resolution changes no contract, schema, service, database, suppression registry, deletion executor, key management, index, workflow, backup, deployment or production system. B1–B3 remain unchanged and RESOLVED. B5–B6 and the Knowledge Technology Gate remain OPEN. No technology is selected; Flowable is not selected.
+Scenarios A–M and the clarification boundary cases are accepted architecture outcomes and future acceptance specifications, not implemented enforcement. B4 resolution changes no contract, schema, service, database, suppression registry, deletion executor, key management, index, workflow, backup, deployment or production system. B1–B3 remain unchanged and RESOLVED. B5 is resolved below; B6 and the Knowledge Technology Gate remain OPEN. No technology is selected; Flowable is not selected.
 
 ## B5 — Ownership boundaries
 
-Status: OPEN — DISPOSITIONS RECORDED, AWAITING FINAL ARCHITECTURE BOARD MERGE REVIEW
+Status: B5 — RESOLVED — PRODUCT ARCHITECT DECISION
 
-Product Architect disposition: **ACCEPTED IN DIRECTION WITH FIVE REQUIRED CORRECTIONS — NOT YET CLOSED**
+Decision owner: Product Architect
 
-Proposal under review: [Knowledge B5 — Ownership boundaries](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md), including its section 7 responsibility matrix, the section 8 domain-fact rule, and the section 18 dispositions. **B5 is not resolved by this entry.** It closes only when the Architecture Board approves merge and this status is changed to RESOLVED.
+Decision date: 2026-09-21
 
-Accepted core direction:
+Product Architect disposition: **ACCEPTED WITH CORRECTIONS — B5 RESOLVED**
+
+Authoritative decision: [Knowledge B5 — Ownership boundaries](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md), including its section 7 responsibility matrix, the section 8 domain-fact rule, and the section 18 dispositions.
+
+Accepted boundary:
 
 > **Home decides → Knowledge remembers → Domains own structured operational truth.**
 
@@ -189,18 +193,18 @@ Five required corrections were issued and incorporated: **(1)** trusted partitio
 
 No correction demonstrated a contradiction requiring the selected model to change or requiring B1–B4 to reopen.
 
-Canonical documentation reconciliation (PA-9) is deferred and itemized as D-1 … D-7 in section 17.2 of the proposal, following the precedent of accepted B1–B4. **D-1 (the ROADMAP prerequisite placing Knowledge governance implementation "in the Home Control Plane") is the one active contradiction with the accepted ownership boundary and must be corrected when B5 closes.**
+Canonical documentation reconciliation (PA-9): **D-1 is resolved with this decision** — the `ROADMAP.md` Knowledge Technology Gate prerequisite no longer requires the governance layer to be "implemented in the Home Control Plane," and now states the accepted B5 boundary, that physical placement/runtime/storage remain undecided, and that B6 must close before technology selection. **D-2 … D-7** remain open follow-up consolidation tracked in section 17.2 of the decision; none of them gates B5 or reopens it. Until they land, this accepted decision governs where those documents are less precise, on the same basis as B1–B4.
 
-Questions to resolve:
+Questions resolved:
 
-- Who owns reusable Nutrition preferences?
-- How should current Nutrition preference storage and the proposed duplicate Knowledge storage be reconciled? **Corrected by the B5 investigation:** preference-shaped fields exist in **two** stores today — svc-nutrition's live profile blob, and a dormant `Nutrition Profile` DocType in the Home Control Plane carrying `preferences`/`dislikes`/`explicit_intolerances` with System Manager CRUD and no application code referencing it. The second is unused, not un-installed, so this is a latent dual-canonical hazard rather than only a risk to avoid. The earlier wording here understated it.
-- Who is the canonical Knowledge persistence owner?
-- Which responsibilities stay in the Home Control Plane?
-- Does Knowledge become its own service, and what decision justifies that service boundary?
-- How would migration avoid dual canonical ownership and independently editable copies?
+- **Who owns reusable Nutrition preferences?** The canonical Knowledge owner, for reusable taste preferences and dislikes. Nutrition retains all structured Nutrition truth and consumes preferences by reference or a governed projection. Intolerance/allergy-shaped fields are **out of B5 scope**, deferred to future Health architecture, and must not be silently reclassified (PA-6).
+- **How is current Nutrition preference storage reconciled?** By re-capture with explicit review-and-confirm, not by converting existing blob text into admitted assertions — that would fabricate provenance (PA-7). Legacy values are retained as non-admitted domain text, subject to suppression propagation, until properly admitted. The investigation also found preference-shaped fields in **two** stores today: svc-nutrition's live profile blob, and a dormant `Nutrition Profile` DocType in the Home Control Plane with System Manager CRUD and no application code referencing it — a latent dual-canonical hazard, scheduled for retirement under PA-5.
+- **Who is the canonical Knowledge persistence owner?** A distinct logical Knowledge owner, holding canonical assertion versions, lines, lifecycle/control revision, attestations, replacement relations, lineage, Episodes, source custody metadata, the suppression register and the anti-resurrection/restore-freshness authority. These share one transactional owner because B3 §11 requires them to commit atomically together.
+- **Which responsibilities stay in the Home Control Plane?** Trusted identity and actor resolution, security-partition resolution, authorization decisions and grant issuance, and cross-domain policy. Home holds no contextual assertions; Knowledge holds no authority. Knowledge does persist an **immutable trusted partition binding** recording Home's resolved result (section 7.1 of the decision).
+- **Does Knowledge become its own service?** B5 fixes the **logical** ownership boundary, not the deployment. Physical placement, runtime, storage and topology remain undecided and belong to the Technology Gate, which may choose co-location but may not collapse canonical Knowledge ownership into ordinary Home persistence or DocTypes (PA-2).
+- **How would migration avoid dual canonical ownership?** One canonical owner per fact; the domain write path closes once Knowledge is authoritative; any domain-hosted copy is a governed projection whose semantic value no domain may independently author (section 13). No migration is authorized by this decision.
 
-Evidence: the existing [Nutrition profile fields/write path](https://github.com/EKvargas/episteck_home/blob/ddebab6439c9d68487d180dec6995fc546d3cf68/services/nutrition/app/main.py#L43) stores preferences/dislikes. The B5 investigation additionally verified that this applies to the **general** profile endpoint and not only the pregnancy path; that the profile is a single opaque JSON document per person, so an individual preference has no version, provenance or delete path; and that `Care Journey Item` carries a separate `knowledge_status` provenance vocabulary divergent from `KnowledgeProvenance`. The current Roadmap and ownership documents also need an explicit interpretation of governance-in-Home versus Knowledge persistence ownership; that contradiction remains unresolved on `main`. No Nutrition migration, new service, DocType retirement, or ownership transfer is approved here.
+Evidence: the existing [Nutrition profile fields/write path](https://github.com/EKvargas/episteck_home/blob/ddebab6439c9d68487d180dec6995fc546d3cf68/services/nutrition/app/main.py#L43) stores preferences/dislikes. The B5 investigation additionally verified that this applies to the **general** profile endpoint and not only the pregnancy path; that the profile is a single opaque JSON document per person, so an individual preference has no version, provenance or delete path; and that `Care Journey Item` carries a separate `knowledge_status` provenance vocabulary divergent from `KnowledgeProvenance`. The Roadmap's governance-in-Home prerequisite is **corrected with this decision** (D-1); remaining ownership-document consolidation is tracked as D-2 … D-7. No Nutrition migration, new service, DocType retirement, ownership transfer or runtime implementation is approved here.
 
 ## B6 — Trusted retrieval and ContextBundle
 
@@ -227,7 +231,7 @@ Review concern: the bundle's structural validation does not prove that supplied 
 
 Status: OPEN — PROCESS SPECIFICATIONS NOT YET APPROVED
 
-B3's lifecycle/admission semantics and B4's forget/delete semantics are accepted by the decisions above. The checklist below tracks complete operational process specifications and remaining B5–B6 integration; its OPEN entries do not reopen B1–B4 or authorize runtime work.
+B3's lifecycle/admission semantics and B4's forget/delete semantics are accepted by the decisions above. The checklist below tracks complete operational process specifications and remaining B6 integration; its OPEN entries do not reopen B1–B4 or authorize runtime work.
 
 - [ ] OPEN — Admission / domain routing
 - [ ] OPEN — Capture
@@ -284,7 +288,7 @@ The proposed vertical exercises:
 6. Forget a preference according to the future approved policy.
 7. Verify a denied Person cannot retrieve it.
 
-Use synthetic data first. Nutrition preference ownership remains **B5 OPEN**; this example does not create another canonical preference store.
+Use synthetic data first. Nutrition preference ownership is **resolved by B5**: reusable taste preferences and dislikes belong to the canonical Knowledge owner, and this example does not create another canonical preference store.
 
 The historical review notes that “Fresh tuna is fine; I dislike canned tuna” does not contradict a correctly captured canned-tuna dislike. Future acceptance scenarios should separately test an actual mistaken generalization and a preference changing over time; no automatic supersession policy is selected here.
 
@@ -370,7 +374,7 @@ Engine transactions do not by themselves make remote Knowledge commands atomic w
 
 Knowledge/domain state remains canonical. A completed process flag cannot activate an uncommitted claim or prove that all deletion obligations have finished. Reconcile workflow progress against current domain state and operation receipts; do not overwrite newer domain state to match an old workflow.
 
-If a domain commit succeeds but acknowledgement is lost, recovery should discover the existing result. If the workflow advances without a successful domain command, the domain operation remains incomplete. B3's atomic outcome and idempotency requirements and B4's cleanup/anti-resurrection obligations are accepted; the concrete reconciliation, cleanup and freshness **mechanisms** remain B5–B6 OPEN.
+If a domain commit succeeds but acknowledgement is lost, recovery should discover the existing result. If the workflow advances without a successful domain command, the domain operation remains incomplete. B3's atomic outcome and idempotency requirements and B4's cleanup/anti-resurrection obligations are accepted; B5 assigns their owners; the concrete reconciliation, cleanup and freshness **mechanisms** remain B6 OPEN.
 
 ### 6. How should retry and idempotency work?
 
@@ -435,7 +439,7 @@ B3: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNO
 
 B4: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNOWLEDGE_B4_FORGET_DELETE.md))
 
-B5: OPEN — [proposal](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md) accepted in direction with five required corrections incorporated; PA-1 … PA-9 recorded 2026-09-21; **NOT YET CLOSED** pending Architecture Board merge review
+B5: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md))
 
 B6: OPEN
 
@@ -445,7 +449,7 @@ No installation, deployment, replication, configuration, process triggering, or 
 
 ## Gate completion and change boundary
 
-The next work is Architecture Board merge review of the [B5 ownership proposal](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md) — whose PA-1 … PA-9 dispositions are recorded and whose five required corrections are incorporated, but which is NOT YET CLOSED — followed by explicit disposition of B6 and the remaining process requirements. B6 has no proposal. B1–B4 are resolved by the accepted decisions above; the Knowledge Technology Gate remains OPEN and is not complete. Agreed acceptance scenarios must precede technology selection. Technology selection and runtime implementation require their own approval; B1/B2/B3/B4 acceptance supplies neither.
+The next work is explicit Product Architect disposition of **B6** and the remaining process requirements. B6 has no proposal. B1–B5 are resolved by the accepted decisions above; the Knowledge Technology Gate remains OPEN and is not complete. Technology selection additionally requires B6 to close first. Agreed acceptance scenarios must precede technology selection. Technology selection and runtime implementation require their own approval; B1/B2/B3/B4 acceptance supplies neither.
 
 The original gate-opening task changed only the independent review artifact and this gate register. The B1 follow-up changes only [KNOWLEDGE_B1_SECURITY_SCOPE.md](KNOWLEDGE_B1_SECURITY_SCOPE.md) and B1 status/references in this register. It does not modify canonical architecture documents, existing ADRs, `packages/home-contracts/`, `services/`, `deploy/`, or production configuration.
 
