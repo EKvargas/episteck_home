@@ -30,11 +30,11 @@ PROCESS
 
 Technology must not dictate the Knowledge model.
 
-This is a working decision register, NOT the final Knowledge architecture. The [independent architecture review](../reviews/2026-09-19-knowledge-independent-architecture-review.md) is historical review input, not canonical architecture. Its reviewed baseline was `ddebab6439c9d68487d180dec6995fc546d3cf68`; the G1.6 closeout was merged subsequently. Its findings were initially recorded without disposition. B1–B3 are now resolved by the explicit Product Architect decisions below; B4–B6 remain OPEN.
+This is a working decision register, NOT the final Knowledge architecture. The [independent architecture review](../reviews/2026-09-19-knowledge-independent-architecture-review.md) is historical review input, not canonical architecture. Its reviewed baseline was `ddebab6439c9d68487d180dec6995fc546d3cf68`; the G1.6 closeout was merged subsequently. Its findings were initially recorded without disposition. B1–B4 are now resolved by the explicit Product Architect decisions below; B5–B6 remain OPEN.
 
 Canonical architecture remains in [ARCHITECTURE.md](../ARCHITECTURE.md), [KNOWLEDGE.md](../KNOWLEDGE.md), accepted ADRs, and approved architecture proposals. The accepted [B1 security/scope decision](KNOWLEDGE_B1_SECURITY_SCOPE.md) governs B1 where older Knowledge documentation is less precise, until later consolidation. The existing [Roadmap](../ROADMAP.md) identifies the Knowledge gate. Other canonical documents are not rewritten here, and no runtime approval is granted.
 
-Only explicit Product Architect decisions may accept, modify, or reject review recommendations. For each disposition, record the decision owner, date, exact accepted/modified/rejected finding, reasoning, acceptance scenarios, and references to approved architecture changes. **B1 is RESOLVED** by Product Architect acceptance with amendments on **2026-09-19**. **B2 is RESOLVED** by Product Architect acceptance with clarification on **2026-09-20**. **B3 is RESOLVED** by Product Architect acceptance with D2/D4 clarifications on **2026-09-21**. B4–B6 remain **OPEN / NOT DECIDED**. The Knowledge Technology Gate remains **OPEN**. A reviewer recommendation or this document's eventual merge does not itself select technology or authorize runtime implementation.
+Only explicit Product Architect decisions may accept, modify, or reject review recommendations. For each disposition, record the decision owner, date, exact accepted/modified/rejected finding, reasoning, acceptance scenarios, and references to approved architecture changes. **B1 is RESOLVED** by Product Architect acceptance with amendments on **2026-09-19**. **B2 is RESOLVED** by Product Architect acceptance with clarification on **2026-09-20**. **B3 is RESOLVED** by Product Architect acceptance with D2/D4 clarifications on **2026-09-21**. **B4 is RESOLVED** by Product Architect acceptance with C1–C4 clarifications on **2026-09-21**. B5–B6 remain **OPEN / NOT DECIDED**. The Knowledge Technology Gate remains **OPEN**. A reviewer recommendation or this document's eventual merge does not itself select technology or authorize runtime implementation.
 
 ## Current five-layer model
 
@@ -58,7 +58,7 @@ This distinction preserves the current conceptual direction; it does not resolve
 
 ## Security partition — accepted B1 invariant
 
-Status: ACCEPTED — PRODUCT ARCHITECT B1 DECISION, 2026-09-19 (B4/B6 OPEN)
+Status: ACCEPTED — PRODUCT ARCHITECT B1 DECISION, 2026-09-19 (B6 OPEN)
 
 **Every durable Knowledge object and every derivative belongs to exactly one trusted security partition.**
 
@@ -105,7 +105,7 @@ Explicit amendment/deferral: **PRIVATE THIRD-PARTY ASSERTIONS = DEFERRED PRODUCT
 
 Reasoning: the bounded model preserves Home's single authority and fail-closed Person restrictions while supporting genuine subjectless Circle context. The amendments distinguish Circle handling from personal consent, permit explicit consumer stewardship bootstrap, and preserve future private-note design without creating an authorization bypass. Scenarios A–H remain architecture acceptance specifications, not runtime tests; the added private-third-party scenario records a deferral.
 
-Baseline implementation gap remains: current Person-based authorization cannot target a Circle, and simply allowing empty subjects would remove the bundle's subject checks. Resolving B1 defines the required architecture; it does not modify those contracts or authorize implementation. B2 and B3 are resolved by the decisions below; B4–B6 and the Knowledge Technology Gate remain OPEN. No technology is selected.
+Baseline implementation gap remains: current Person-based authorization cannot target a Circle, and simply allowing empty subjects would remove the bundle's subject checks. Resolving B1 defines the required architecture; it does not modify those contracts or authorize implementation. B2, B3 and B4 are resolved by the decisions below; B5–B6 and the Knowledge Technology Gate remain OPEN. No technology is selected.
 
 ## B2 — Sensitivity inheritance
 
@@ -127,7 +127,7 @@ Accepted decisions:
 - Source/container decoupling for an exact projection does not automatically require every Person whose information occurs elsewhere in the original. It requires source-handling authority, trusted projection approval, proof that removed Person/domain sensitivity is absent from the output, exact version/use binding and preservation of every remaining restriction. If the output still reveals protected content, affected-Person authority is required. Source custody cannot remove Person protection; Person consent cannot disclose unrelated protected source material.
 - Reclassification makes stale derivatives immediately ineligible. Current authorization constrains the candidate space before sensitive retrieval. No technology or runtime is selected or approved.
 
-Scenarios A–J are accepted conceptual outcomes and future acceptance specifications, not runtime tests. B2 resolution changes no schema, contract, service, database, index, workflow, deployment or production system. B3 is resolved below; B4–B6 remain OPEN.
+Scenarios A–J are accepted conceptual outcomes and future acceptance specifications, not runtime tests. B2 resolution changes no schema, contract, service, database, index, workflow, deployment or production system. B3 and B4 are resolved below; B5–B6 remain OPEN.
 
 ## B3 — Confirmation and lifecycle
 
@@ -152,27 +152,24 @@ Accepted decisions:
 
 Reasoning: the accepted model separates admission, attribution, temporal meaning and use controls without an expanding exclusive state machine. The clarifications prevent model-created admission authority and unbounded dispute carryover while preserving B1/B2.
 
-Scenarios and invariants are accepted architecture requirements, not implemented behavior. The current confirmation helper and ContextBundle gaps remain until separately approved implementation. B1 and B2 remain unchanged and RESOLVED; B4–B6 and the Knowledge Technology Gate remain OPEN. No technology, contract/schema change or runtime implementation is approved.
+Scenarios and invariants are accepted architecture requirements, not implemented behavior. The current confirmation helper and ContextBundle gaps remain until separately approved implementation. B1 and B2 remain unchanged and RESOLVED; B4 is resolved below; B5–B6 and the Knowledge Technology Gate remain OPEN. No technology, contract/schema change or runtime implementation is approved.
 
 ## B4 — Dependency / Forget / Delete
 
-Status: OPEN
+Status: B4 — RESOLVED — PRODUCT ARCHITECT DECISION
 
-Product Architect disposition: NOT DECIDED
+Authoritative decision: [Knowledge B4 — Dependency, Forget, Delete, retention, and resurrection safety](KNOWLEDGE_B4_FORGET_DELETE.md), including section 16's disposition, the section 1.1 clarifications and scenarios A–M.
 
-Questions to resolve:
+Accepted model: a durable suppression register as the authoritative non-use fact, separated from physical erasure, with bounded recorded derivation families and a mandatory pre-use re-admission barrier on retrieval, restore, import and reindex. Non-use commits immediately; erasure is an asynchronous evidenced obligation; existing encrypted backup snapshots are not rewritten. Independent lineage survives source-specific deletion. Orchestration, Flowable included, is never canonical Knowledge truth and suppression never waits on it. Distinct operations (stop using, forget, delete source, delete derived artifacts, forget subject, withdraw assertion, remove shared use, delete partition) carry distinct authority and promises.
 
-- Which links are evidentiary dependencies, and which are historical or supersession references?
-- How are derived claims invalidated or recomputed when evidence is corrected, withdrawn, or deleted?
-- What does immediate suppression guarantee, independently of cleanup progress?
-- What does durable deletion cover, and what remains under a disclosed retention policy?
-- How are chunks, embeddings, summaries and caches removed or made ineligible?
-- How are queued jobs and stale retries prevented from restoring deleted material?
-- How are deletion obligations reapplied during backup restore?
-- What is included in tenant deletion, and how is completion evidenced?
-- How does working-memory invalidation affect active sessions, prior context and reusable agent caches?
+- **C1 — restore freshness is load-bearing:** restored data must not become usable unless the system can prove the suppression/deletion control state used for reconciliation is at least as current as the payload being restored. Unknown freshness fails closed. A monotonic or otherwise current anti-resurrection authority, or an equivalent freshness proof, is required; **B4 selects no persistence or replication mechanism for it**, and B5/B6/implementation determine that later.
+- **C2 — hashing is not canonicalized:** the anti-resurrection state must hold the minimum non-reconstructable, non-disclosing, partition-bound information sufficient for the approved re-admission policy, with no forgotten plaintext or embeddings. Opaque source identities, policy keys, digests, classification metadata and trusted semantic review are possible future mechanisms; **B4 selects none**.
+- **C3 — Forget is not a permanent topic ban:** the legitimate authority may later deliberately reassert. A reassertion never reactivates the erased version; it may create a new reviewed assertion when current authority, explicit save intent, B1/B2/B3 checks and explicit treatment of the prior suppression all hold. Automatic import or re-extraction can never override a suppression.
+- **C4 — external provider deletion is conditional:** local Forget/Delete cannot by itself guarantee provider-side deletion, which depends on the approved provider, contractual retention terms, configured controls and available deletion APIs. Olin must not promise provider-side deletion unless it can verify it. This is an input to the future LLM Routing / Provider Policy architecture. Already displayed output and independently exported files cannot be recalled.
 
-Review concern: status changes alone do not remove derivatives or source influence. Forgetting, access revocation, historical lifecycle state, live-store deletion and backup expiration require distinct promises. No retention policy or deletion implementation is chosen here.
+D1 ACCEPT WITH SCOPE CLARIFICATION (current personal-deployment `restic keep 7d/4w/3m` accepted; not a permanent commercial requirement; no fixed duration promised) · D2 DEFER (crypto-shredding retained as a future option, not a B4 prerequisite; no key-management technology selected) · D3 ACCEPT WITH CLARIFICATION (minimal anti-resurrection state; actor/audit metadata minimized independently and not automatically permanent; partition tombstone for whole-partition deletion) · D4 ACCEPT (source-only dependents suppressed and erased with the family; deletion never weakens restrictions) · D5 ACCEPT WITH CLARIFICATION (bounded to covered proposition/use/applicability; no global topic ban; uncertainty fails closed) · D6 DEFER (technical semantics only; no GDPR/right-to-erasure claim either way) · D7 ACCEPT (STOP USING, FORGET / DELETE MEMORY and DELETE SOURCE remain distinct; internal cleanup states need not be primary user actions).
+
+Scenarios A–M and the clarification boundary cases are accepted architecture outcomes and future acceptance specifications, not implemented enforcement. B4 resolution changes no contract, schema, service, database, suppression registry, deletion executor, key management, index, workflow, backup, deployment or production system. B1–B3 remain unchanged and RESOLVED. B5–B6 and the Knowledge Technology Gate remain OPEN. No technology is selected; Flowable is not selected.
 
 ## B5 — Ownership boundaries
 
@@ -216,7 +213,7 @@ Review concern: the bundle's structural validation does not prove that supplied 
 
 Status: OPEN — PROCESS SPECIFICATIONS NOT YET APPROVED
 
-B3's lifecycle/admission semantics are accepted by the decision above. The checklist below tracks complete operational process specifications and remaining B4–B6 integration; its OPEN entries do not reopen B1–B3 or authorize runtime work.
+B3's lifecycle/admission semantics and B4's forget/delete semantics are accepted by the decisions above. The checklist below tracks complete operational process specifications and remaining B5–B6 integration; its OPEN entries do not reopen B1–B4 or authorize runtime work.
 
 - [ ] OPEN — Admission / domain routing
 - [ ] OPEN — Capture
@@ -341,7 +338,7 @@ A single approval, ordinary export, or small background cleanup job does not aut
 
 The current hypothesis is that saving a preference, activating a claim, atomic supersession, revoking a claim, retrieving active claims, and ordinary expiration eligibility remain deterministic transactional domain operations. They should not require BPMN, one workflow instance per claim, or consultation of workflow state to establish whether a claim is active.
 
-Immediate suppression belongs to the domain safety boundary even if subsequent deletion cleanup is orchestrated. B3's lifecycle/non-use semantics are accepted; B4 cleanup and the concrete runtime/orchestration boundary remain OPEN.
+Immediate suppression belongs to the domain safety boundary even if subsequent deletion cleanup is orchestrated. B3's lifecycle/non-use semantics and B4's suppression/cleanup separation are accepted; the concrete runtime/orchestration boundary remains OPEN and no orchestration technology is selected.
 
 ### 3. Does Flowable create an undesirable basic CRUD dependency?
 
@@ -359,7 +356,7 @@ Engine transactions do not by themselves make remote Knowledge commands atomic w
 
 Knowledge/domain state remains canonical. A completed process flag cannot activate an uncommitted claim or prove that all deletion obligations have finished. Reconcile workflow progress against current domain state and operation receipts; do not overwrite newer domain state to match an old workflow.
 
-If a domain commit succeeds but acknowledgement is lost, recovery should discover the existing result. If the workflow advances without a successful domain command, the domain operation remains incomplete. B3's atomic outcome and idempotency requirements are accepted; concrete reconciliation, cleanup and freshness mechanisms remain B4–B6 OPEN.
+If a domain commit succeeds but acknowledgement is lost, recovery should discover the existing result. If the workflow advances without a successful domain command, the domain operation remains incomplete. B3's atomic outcome and idempotency requirements and B4's cleanup/anti-resurrection obligations are accepted; the concrete reconciliation, cleanup and freshness **mechanisms** remain B5–B6 OPEN.
 
 ### 6. How should retry and idempotency work?
 
@@ -371,13 +368,13 @@ Retryable technical failure is different from business rejection or revoked auth
 
 Prefer opaque request/object identifiers, versions and minimal operational status. Avoid claim text, originals, medical/financial values, ContextBundles, bearer material or credentials in workflow variables, task titles, form fields, comments, attachments and exception messages. Fetch required content through a currently authorized service when needed.
 
-Opaque identifiers and metadata remain protected data. Workflow runtime records, history, logs, backups and exports must participate in retention and deletion rules. Merely choosing IDs does not eliminate the need for tenant isolation or restricted support access. B2's accepted sensitivity rules apply; B4 remains OPEN.
+Opaque identifiers and metadata remain protected data. Workflow runtime records, history, logs, backups and exports must participate in retention and deletion rules. Merely choosing IDs does not eliminate the need for tenant isolation or restricted support access. B2's accepted sensitivity rules and B4's accepted retention/anti-resurrection rules apply.
 
 ### 8. How does consent revocation affect an active workflow?
 
 A prior assignment or approval request is not continuing permission. Recommend current authorization checks on task display, completion, content fetch and domain mutation. Revocation should suppress access immediately and invalidate or re-evaluate affected tasks/cached views according to the eventual process policy.
 
-Revocation events may accelerate cleanup but cannot replace authoritative checks if event processing is delayed. An authorized erasure process may need to finish under narrowly scoped system authority after user read access ends; whether and how that authority exists is explicitly a B1/B4 decision. No durable impersonation or blanket service authority is approved.
+Revocation events may accelerate cleanup but cannot replace authoritative checks if event processing is delayed. An authorized erasure process may need to finish under narrowly scoped system authority after user read access ends; whether and how that authority exists is explicitly a B1/B4 decision, and B4 requires a partition-bound, non-disclosing cleanup mandate whose owner B5 must assign. No durable impersonation or blanket service authority is approved.
 
 ### 9. How is tenant/security-partition context bound into execution?
 
@@ -399,7 +396,7 @@ Deploy or replicate an engine for Knowledge only if an approved existing remote 
 
 ### Candidate Forget/Delete orchestration boundary
 
-The following is an assessment illustration, not a complete process specification. B4 remains OPEN:
+The following is an assessment illustration, not a complete process specification. B4's semantics are now accepted (see the B4 entry above); the orchestration boundary itself remains OPEN and unselected:
 
 ```text
 Domain commits immediate suppression and a durable deletion request
@@ -422,15 +419,17 @@ B2: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-20 ([accepted decision](KNO
 
 B3: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNOWLEDGE_B3_LIFECYCLE.md))
 
-B4–B6: OPEN
+B4: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNOWLEDGE_B4_FORGET_DELETE.md))
 
-Flowable selection: NOT APPROVED
+B5–B6: OPEN
+
+Flowable selection: NOT APPROVED. B4 confirms orchestration is never canonical Knowledge truth and that immediate suppression must not wait on it.
 
 No installation, deployment, replication, configuration, process triggering, or core Knowledge dependency is authorized by this document.
 
 ## Gate completion and change boundary
 
-The next work is explicit Product Architect disposition of B4–B6 and remaining process requirements. B1–B3 are resolved by the accepted decisions above; the Knowledge Technology Gate remains OPEN and is not complete. Agreed acceptance scenarios must precede technology selection. Technology selection and runtime implementation require their own approval; B1/B2/B3 acceptance supplies neither.
+The next work is explicit Product Architect disposition of B5–B6 and remaining process requirements. B1–B4 are resolved by the accepted decisions above; the Knowledge Technology Gate remains OPEN and is not complete. Agreed acceptance scenarios must precede technology selection. Technology selection and runtime implementation require their own approval; B1/B2/B3/B4 acceptance supplies neither.
 
 The original gate-opening task changed only the independent review artifact and this gate register. The B1 follow-up changes only [KNOWLEDGE_B1_SECURITY_SCOPE.md](KNOWLEDGE_B1_SECURITY_SCOPE.md) and B1 status/references in this register. It does not modify canonical architecture documents, existing ADRs, `packages/home-contracts/`, `services/`, `deploy/`, or production configuration.
 
