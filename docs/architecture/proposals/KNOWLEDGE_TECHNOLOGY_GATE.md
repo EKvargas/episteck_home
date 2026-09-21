@@ -173,20 +173,22 @@ Scenarios A–M and the clarification boundary cases are accepted architecture o
 
 ## B5 — Ownership boundaries
 
-Status: OPEN
+Status: OPEN — PROPOSAL SUBMITTED, AWAITING PRODUCT ARCHITECT DECISION
 
 Product Architect disposition: NOT DECIDED
+
+Proposal under review: [Knowledge B5 — Ownership boundaries](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md), including its section 7 responsibility matrix, the section 8 domain-fact rule, and the section 18 decisions required (PA-1 … PA-9). Submitting a proposal does not resolve B5; only an explicit Product Architect disposition does.
 
 Questions to resolve:
 
 - Who owns reusable Nutrition preferences?
-- How should current Nutrition preference storage and the proposed duplicate Knowledge storage be reconciled? Nutrition already persists preferences/dislikes; Knowledge has no runtime yet, so the duplicate canonical store is a risk to avoid, not an assertion that two stores already exist.
+- How should current Nutrition preference storage and the proposed duplicate Knowledge storage be reconciled? **Corrected by the B5 investigation:** preference-shaped fields exist in **two** stores today — svc-nutrition's live profile blob, and a dormant `Nutrition Profile` DocType in the Home Control Plane carrying `preferences`/`dislikes`/`explicit_intolerances` with System Manager CRUD and no application code referencing it. The second is unused, not un-installed, so this is a latent dual-canonical hazard rather than only a risk to avoid. The earlier wording here understated it.
 - Who is the canonical Knowledge persistence owner?
 - Which responsibilities stay in the Home Control Plane?
 - Does Knowledge become its own service, and what decision justifies that service boundary?
 - How would migration avoid dual canonical ownership and independently editable copies?
 
-Evidence: the existing [Nutrition profile fields/write path](https://github.com/EKvargas/episteck_home/blob/ddebab6439c9d68487d180dec6995fc546d3cf68/services/nutrition/app/main.py#L43) stores preferences/dislikes. The current Roadmap and ownership documents also need an explicit interpretation of governance-in-Home versus Knowledge persistence ownership. No Nutrition migration, new service, or ownership transfer is approved here.
+Evidence: the existing [Nutrition profile fields/write path](https://github.com/EKvargas/episteck_home/blob/ddebab6439c9d68487d180dec6995fc546d3cf68/services/nutrition/app/main.py#L43) stores preferences/dislikes. The B5 investigation additionally verified that this applies to the **general** profile endpoint and not only the pregnancy path; that the profile is a single opaque JSON document per person, so an individual preference has no version, provenance or delete path; and that `Care Journey Item` carries a separate `knowledge_status` provenance vocabulary divergent from `KnowledgeProvenance`. The current Roadmap and ownership documents also need an explicit interpretation of governance-in-Home versus Knowledge persistence ownership; that contradiction remains unresolved on `main`. No Nutrition migration, new service, DocType retirement, or ownership transfer is approved here.
 
 ## B6 — Trusted retrieval and ContextBundle
 
@@ -421,7 +423,9 @@ B3: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNO
 
 B4: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNOWLEDGE_B4_FORGET_DELETE.md))
 
-B5–B6: OPEN
+B5: OPEN — [proposal submitted 2026-09-21](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md), NOT DECIDED
+
+B6: OPEN
 
 Flowable selection: NOT APPROVED. B4 confirms orchestration is never canonical Knowledge truth and that immediate suppression must not wait on it.
 
@@ -429,7 +433,7 @@ No installation, deployment, replication, configuration, process triggering, or 
 
 ## Gate completion and change boundary
 
-The next work is explicit Product Architect disposition of B5–B6 and remaining process requirements. B1–B4 are resolved by the accepted decisions above; the Knowledge Technology Gate remains OPEN and is not complete. Agreed acceptance scenarios must precede technology selection. Technology selection and runtime implementation require their own approval; B1/B2/B3/B4 acceptance supplies neither.
+The next work is explicit Product Architect disposition of B5–B6 and remaining process requirements. A [B5 ownership proposal](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md) has been submitted for review and is NOT DECIDED; B6 has no proposal. B1–B4 are resolved by the accepted decisions above; the Knowledge Technology Gate remains OPEN and is not complete. Agreed acceptance scenarios must precede technology selection. Technology selection and runtime implementation require their own approval; B1/B2/B3/B4 acceptance supplies neither.
 
 The original gate-opening task changed only the independent review artifact and this gate register. The B1 follow-up changes only [KNOWLEDGE_B1_SECURITY_SCOPE.md](KNOWLEDGE_B1_SECURITY_SCOPE.md) and B1 status/references in this register. It does not modify canonical architecture documents, existing ADRs, `packages/home-contracts/`, `services/`, `deploy/`, or production configuration.
 
