@@ -208,9 +208,13 @@ Evidence: the existing [Nutrition profile fields/write path](https://github.com/
 
 ## B6 — Trusted retrieval and ContextBundle
 
-Status: OPEN
+Status: OPEN — PROPOSAL SUBMITTED, AWAITING PRODUCT ARCHITECT DECISION
 
 Product Architect disposition: NOT DECIDED
+
+Proposal under review: [Knowledge B6 — Trusted retrieval and ContextBundle](KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md), including its section 4 trusted-retrieval invariants, the section 8 multi-resource authorization protocol, the section 12 ContextBundle semantics, and the section 23 decisions required (PA-1 … PA-9). Submitting a proposal does not resolve B6; only an explicit Product Architect disposition does.
+
+Recommended model: **authorization-constrained retrieval planning with a mandatory pre-disclosure revalidation barrier** — the authorization decision, suppression register and lifecycle predicates are compiled into the addressable scope of the retrieval operation, so unauthorized or ineligible records are not filtered out but are not addressable. No retrieval, index, vector, graph or storage technology is selected.
 
 Questions to resolve:
 
@@ -225,7 +229,9 @@ Questions to resolve:
 - How is ContextBundle bounded to the current task?
 - How is a persisted universal cross-domain bundle prevented?
 
-Review concern: the bundle's structural validation does not prove that supplied authorization was trusted, current, or checked before retrieval. Its accepted content is broader than normal active/current retrieval. No revised contract, service or retrieval mechanism is approved here.
+Review concern: the bundle's structural validation does not prove that supplied authorization was trusted, current, or checked before retrieval. **Corrected and quantified by the B6 investigation:** its accepted content is broader than *any* retrieval, not merely broader than normal active/current retrieval. In-memory probes on this baseline showed `ContextBundle` accepts all six lifecycle statuses including `REVOKED` and `PROPOSED`, accepts a claim whose stated validity window closed a year earlier, never authorizes the Circle even while carrying `circle_ids`, cannot express a second required content domain, carries no partition binding, no retrieval timestamp, no decision binding and no revalidation member, and deep-copies cleanly into a portable assertion of authorization. The earlier wording understated this.
+
+Additional verified constraints shaping B6: `check_access_many` decides at most 8 `(domain, action)` pairs for exactly **one** subject; the gateway mints exactly one delegation per HTTP POST via `auth_request`; delegations are single-use with atomic replay claiming and a 300-second maximum lifetime; and the pinned MCP runtime rejects JSON-RPC batch arrays outright. One tool call equals one POST equals one delegation, enforced at two layers. No revised contract, service or retrieval mechanism is approved here.
 
 ## Process register
 
@@ -441,7 +447,7 @@ B4: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNO
 
 B5: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md))
 
-B6: OPEN
+B6: OPEN — [proposal submitted 2026-09-22](KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md), NOT DECIDED
 
 Flowable selection: NOT APPROVED. B4 confirms orchestration is never canonical Knowledge truth and that immediate suppression must not wait on it.
 
@@ -449,7 +455,7 @@ No installation, deployment, replication, configuration, process triggering, or 
 
 ## Gate completion and change boundary
 
-The next work is explicit Product Architect disposition of **B6** and the remaining process requirements. B6 has no proposal. B1–B5 are resolved by the accepted decisions above; the Knowledge Technology Gate remains OPEN and is not complete. Technology selection additionally requires B6 to close first. Agreed acceptance scenarios must precede technology selection. Technology selection and runtime implementation require their own approval; B1/B2/B3/B4 acceptance supplies neither.
+The next work is explicit Product Architect disposition of the [submitted B6 proposal](KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md), which is NOT DECIDED, and the remaining process requirements. B1–B5 are resolved by the accepted decisions above; the Knowledge Technology Gate remains OPEN and is not complete. Technology selection additionally requires B6 to close first. Agreed acceptance scenarios must precede technology selection. Technology selection and runtime implementation require their own approval; B1/B2/B3/B4 acceptance supplies neither.
 
 The original gate-opening task changed only the independent review artifact and this gate register. The B1 follow-up changes only [KNOWLEDGE_B1_SECURITY_SCOPE.md](KNOWLEDGE_B1_SECURITY_SCOPE.md) and B1 status/references in this register. It does not modify canonical architecture documents, existing ADRs, `packages/home-contracts/`, `services/`, `deploy/`, or production configuration.
 
