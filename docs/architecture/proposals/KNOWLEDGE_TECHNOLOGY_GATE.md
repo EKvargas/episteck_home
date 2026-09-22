@@ -208,7 +208,7 @@ Evidence: the existing [Nutrition profile fields/write path](https://github.com/
 
 ## B6 — Trusted retrieval and ContextBundle
 
-Status: OPEN — DISPOSITIONS RECORDED, AWAITING FINAL ARCHITECTURE BOARD MERGE REVIEW
+Status: OPEN — FINAL ARCHITECTURE BOARD CLOSURE REVIEW
 
 Product Architect disposition: **ACCEPTED IN DIRECTION WITH FOUR REQUIRED CORRECTIONS — NOT YET CLOSED**
 
@@ -226,7 +226,9 @@ Four required corrections were issued and incorporated: **(1)** each authorizati
 
 No correction exposed a contradiction requiring the selected retrieval model to change or requiring B1–B5 to reopen.
 
-**Performance and latency architecture (§18A of the proposal, PA-10 — NOT DECIDED).** A performance analysis was added after Board review. It concludes the secure architecture **is viable for interactive chat** and **did not change the core recommendation**; no security control was relaxed. Key findings from measured repository evidence: the ~120 ms Home round trip is **network cost, not Home's work** — G1.6 recorded delegation verification adding "well under a millisecond against a ~120 ms network-bound baseline" — and connection reuse is already worth ~195 ms per call (~307 ms cold vs ~111 ms warm). Proposed invariants: no authorization per candidate; ordinary reads ≤ **2** Home authorization round trips; independent domain reads concurrent by default; security predicates composed within owner boundaries rather than as serial network calls; lazy source expansion; revalidation once per disclosure boundary; bounds before execution; p50/p95/p99 measured before technology approval; pre-LLM ordinary-read p95 ≤ 500 ms; LLM TTFT measured separately from orchestration. **This adds performance disqualification criteria to the Technology Gate** (§18A.11) and a benchmark requirement covering scenarios P1–P8 on realistic cross-node topology (§18A.10). No benchmark is implemented and no technology is selected.
+**Performance and latency architecture (§18A of the proposal, PA-10 — dispositions recorded, B6 still OPEN).** A performance analysis was added after Board review. It concludes the secure architecture **is viable for interactive chat** and **did not change the core recommendation**; no security control was relaxed. Key findings from measured repository evidence: the ~120 ms Home round trip is **network cost, not Home's work** — G1.6 recorded delegation verification adding "well under a millisecond against a ~120 ms network-bound baseline" — and connection reuse is already worth ~195 ms per call (~307 ms cold vs ~111 ms warm). Proposed invariants: no authorization per candidate; ordinary reads ≤ **2** Home authorization round trips; independent domain reads concurrent by default; security predicates composed within owner boundaries rather than as serial network calls; lazy source expansion; revalidation once per disclosure boundary; bounds before execution; p50/p95/p99 measured before technology approval; pre-LLM ordinary-read p95 ≤ 500 ms; LLM TTFT measured separately from orchestration. **This adds performance disqualification criteria to the Technology Gate** (§18A.11) and a benchmark requirement covering scenarios P1–P8 on realistic cross-node topology (§18A.10). No benchmark is implemented and no technology is selected.
+
+**Final reconciliation pass (2026-09-22).** Four corrections: protected security-metadata planning now **precedes** authorization, because a request cannot know a record's complete requirement set — demonstrated against B1 scenario D, where a Household record's hidden `{PERSON/A}` + HEALTH restriction would otherwise be discovered only after candidacy; **Authorization Plan**, **Authorization Operation** and **Home network round trip** are separated so several independently complete operations share one crossing without any becoming partial; **downstream execution authority** is stated as a requirement with an explicitly unresolved mechanism, since the measured "domain read" figure already contains a Home crossing; and the **latency accounting is corrected** for that double-count, with raw domain-access cost marked UNKNOWN and benchmark-required. **Two new Technology Gate obligations follow:** benchmarks must report `home_auth_round_trip_count`, `authorization_operation_count`, `domain_call_count` and `source_expansion_count` alongside latency, and must prove that `home_auth_round_trip_count` does not grow with `domain_call_count`. PA-10a ACCEPT WITH CLARIFICATION (the unit is the network crossing), PA-10b MODIFIED (p50 is an aspiration for Gate calibration, not a demonstrated capability), PA-10c/d/e ACCEPT.
 
 Questions to resolve:
 
@@ -459,7 +461,7 @@ B4: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNO
 
 B5: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md))
 
-B6: OPEN — [proposal](KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md) accepted in direction with four required corrections incorporated; PA-1 … PA-9 recorded 2026-09-22; **PA-10 performance architecture (§18A) proposed and NOT DECIDED**; **NOT YET CLOSED** pending Architecture Board merge review
+B6: OPEN — [proposal](KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md) in **final Architecture Board closure review**; PA-1 … PA-10 and sub-items PA-10a … PA-10e recorded 2026-09-22; four Board corrections plus the final reconciliation pass incorporated; **NOT YET CLOSED**
 
 Flowable selection: NOT APPROVED. B4 confirms orchestration is never canonical Knowledge truth and that immediate suppression must not wait on it.
 

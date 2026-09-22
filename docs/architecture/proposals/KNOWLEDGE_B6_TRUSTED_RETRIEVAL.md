@@ -1,12 +1,14 @@
 # Knowledge B6 — Trusted retrieval and ContextBundle
 
-Status: PROPOSED — DISPOSITIONS RECORDED, AWAITING FINAL ARCHITECTURE BOARD MERGE REVIEW
+Status: PROPOSED — FINAL ARCHITECTURE BOARD CLOSURE REVIEW
 
 Date: 2026-09-22
 
 Revision: 2026-09-22 — Architecture Board review incorporated. Core architecture accepted in direction (**authorization-constrained retrieval planning + suppression/lifecycle before candidacy + mandatory pre-disclosure revalidation**); PA-1 … PA-9 dispositions recorded in section 23; required corrections 1–4 incorporated per section 23.1.
 
-Revision: 2026-09-22 — **performance and latency architecture added as section 18A**, with PA-10 and sub-items PA-10a … PA-10e in section 23. PA-1 … PA-9 and all existing section numbers are unchanged; 18A was inserted rather than renumbering to preserve traceability. The analysis changed no security control and did not change the core recommendation (section 18A.16).
+Revision: 2026-09-22 — **performance and latency architecture added as section 18A**, with PA-10 and sub-items PA-10a … PA-10e in section 23. PA-1 … PA-9 and all existing section numbers are unchanged; 18A was inserted rather than renumbering to preserve traceability.
+
+Revision: 2026-09-22 — **final reconciliation pass.** Protected security-metadata planning now precedes authorization (section 9.2, demonstrated against B1 scenario D); Authorization Plan, Authorization Operation and Home network round trip are separated (section 8.3.2); downstream execution authority is stated as a requirement with an unresolved mechanism (section 18A.3a, R13); latency accounting corrected for a double-counted Home crossing (section 18A.3b, R14); PA-10 dispositions recorded. No security control was changed and the retrieval model is unchanged.
 
 Repository: `EKvargas/episteck_home`
 
@@ -103,7 +105,7 @@ These are carried forward unchanged. Where this proposal is less precise than an
 
 Proposed as the durable, checkable rules B6 contributes. Each is traceable to an accepted decision; none is newly invented.
 
-1. **Authorization precedes candidacy.** No record may enter the candidate set — for search, ranking, expansion, scoring or counting — before the authorization that covers it has been decided. Filtering after retrieval is not compliance (B1 §10).
+1. **Authorization precedes candidacy; protected metadata planning precedes authorization.** No record may enter the candidate set — for search, ranking, expansion, scoring or counting — before the authorization covering its *complete* requirement set has been decided. Because a request cannot know that set, a partition-bound protected metadata phase establishes it first, inside the trusted boundary, without content (§9.2). Filtering after retrieval is not compliance (B1 §10).
 2. **Suppression precedes candidacy.** The suppression register is consulted before a record can be a candidate, independently of whether its payload, index entry or cache entry still exists (B4 §8).
 3. **Eligibility is evaluated on an exact version.** Retrieval selects assertion versions, not topics or lines. A version that is superseded, revoked, expired, held or relevantly disputed is not ordinarily eligible (B3 §5).
 4. **Protected metadata resolution is separate from content retrieval.** Establishing what a candidate requires is a distinct, partition-bound, minimized step that never discloses statements, snippets or vectors to the model, and never fetches unauthorized text to discover how it should have been authorized (B1 §10).
@@ -327,7 +329,43 @@ What remains forbidden is decomposing **one** compound question into smaller que
 
 **Why one bounded decision rather than many small ones.** F2, F3 and F4 together mean one tool call yields exactly one delegation, single-use, and batching is rejected at the protocol layer. F14 adds ~120 ms cross-node cost per round trip. A protocol requiring one authorization call per candidate or per subject is therefore not merely slow — it is unimplementable within the accepted delegation model without weakening replay protection, which B1 §5.1 forbids. **One bounded decision per authorization operation is the only shape consistent with the existing trust architecture.**
 
-**Why one bounded decision rather than many small ones.** F2, F3 and F4 together mean one tool call yields exactly one delegation, single-use, and batching is rejected at the protocol layer. F14 adds ~120 ms cross-node cost per round trip. A protocol requiring one authorization call per candidate or per subject is therefore not merely slow — it is unimplementable within the accepted delegation model without weakening replay protection, which B1 §5.1 forbids. **One bounded decision per retrieval operation is the only shape consistent with the existing trust architecture.**
+### 8.3.2 Authorization Plan, Authorization Operation, Home network round trip
+
+Three terms that the earlier draft conflated. Separating them reconciles §8.3's all-or-nothing rule with §18A's two-round-trip budget, **without weakening either**.
+
+| Term | Definition | Unit of |
+|---|---|---|
+| **Authorization Operation** | One complete requirement set that passes entirely or denies entirely | **Authorization semantics** |
+| **Authorization Plan** | A set of *independently complete* operations whose requirement sets are all known before execution | **Batching** |
+| **Home network round trip** | One trusted request crossing to Home | **Latency** |
+
+```text
+AuthorizationPlan                    ← evaluated in ONE bounded Home round trip
+  ├── OP-K  Knowledge retrieval      ← every tuple passes, or OP-K denies
+  ├── OP-N  Nutrition read           ← every tuple passes, or OP-N denies
+  └── OP-D  Device read              ← every tuple passes, or OP-D denies
+```
+
+Home returns **independent outcomes per operation**. The plan is a transport and evaluation grouping; it is **not** an authorization unit and has no combined verdict of its own.
+
+**This is batching of independent decisions, not partial authorization.** The distinction is precise and matters:
+
+| Batching (permitted) | Partial authorization (forbidden) |
+|---|---|
+| Several *separate* complete operations evaluated together | *One* operation's requirements truncated to rescue a subset |
+| Each operation keeps its full requirement set | Requirements dropped to make something pass |
+| A denied operation denies entirely | A denied tuple discarded and the rest returned |
+| OP-N may succeed while OP-K denies — they were always different questions | "Tell me about Erick and Ana" silently answered for Erick only |
+
+Three constraints preserve B1 §10 exactly:
+
+1. **No denied tuple may be discarded.** Denial within an operation denies that operation whole.
+2. **No operation may be weakened** to fit a plan, an interface bound, or a latency target.
+3. **No partial subset may be manufactured** from a single compound question (§8.3).
+
+**Why an operation may not span domains.** OP-K, OP-N and OP-D are separate operations because they are genuinely different questions with different owners and different requirement sets — not because splitting them is convenient. Merging them into one operation would be *worse*: a denied Device permission would then deny the Knowledge answer too, which no accepted decision requires.
+
+**Interface implication.** Today's `check_access_many` cannot express a plan — it is single-subject and decides at most eight tuples (F1). The plan abstraction is one more reason the interface shape must be replaced rather than its bound raised (§8.1).
 
 ### 8.4 The Home-owned request authorization context
 
@@ -382,14 +420,61 @@ Deny the whole operation on: any denied tuple; unknown or unresolvable resource;
 
 "Candidate set" includes anything that influences the outcome: direct-ID reads, lexical or semantic matching, chunk or passage selection, query expansion using stored material, ranking and reranking, scoring, counting, source expansion and cache lookup. B2 §10.2 is explicit that a denied actor must not receive top-k matches, scores, titles or counts influenced by hidden records — so even *counting* unauthorized matches is disclosure.
 
-### 9.2 Protected metadata resolution
+### 9.2 Protected security-metadata planning precedes authorization
 
-B1 §10 requires an initial protected lookup that establishes eligibility **without** retrieving statements, snippets or vectors. B6 formalizes this as a distinct stage with its own rules:
+**Corrected after Board review.** An earlier draft of this proposal ordered the hot path as *authorization → protected metadata → content retrieval*. That ordering is **wrong**, and B1 scenario D demonstrates why.
 
-- it is partition-bound and minimized to security metadata: scope, complete subject set, complete required domains, applicable restrictions, the version those apply to, lifecycle/control revision, suppression status, classification revision
-- it is **never disclosed to the model** in any form
-- it must be resolvable **without** reading content — which is a real design obligation on whatever the Technology Gate selects, because F8 shows today's contract cannot express a second domain and carries no partition or control revision
-- unclassified or unresolvable metadata means **not eligible**; the record is not a candidate, and the caller learns nothing about its existence
+**The demonstration.** A user asks about household routines. A Knowledge record in that Circle reads *"Our family eats early because Ana has health condition X."* Its actual requirement set is `{CIRCLE/H, PERSON/A} × {KNOWLEDGE, HOUSEHOLD, HEALTH}` — six tuples across two resources. **Nothing in the natural-language request reveals that Ana is a subject or that HEALTH is required.** A request-shaped guess would authorize `CIRCLE/H × {KNOWLEDGE, HOUSEHOLD}` and miss both. Discovering the HEALTH restriction *after* that record became a candidate would mean an under-authorized record already participated in matching, ranking or counting — which B1 §10 and B2 §10.2 forbid. B1 scenario D is explicit that "a missing A HEALTH/VIEW denies the **whole inseparable statement**, its revealing snippet and sensitive derivative candidate."
+
+**This is exactly what B1 §10 already permits**, and the corrected ordering is not an exception to it but a direct reading of it:
+
+> "An initial protected authorization-metadata lookup inside the trusted boundary is **distinct from** retrieving claim statements, snippets or vectors… The repository uses it to **establish eligibility before content search**; unauthorized text must not be fetched to discover how it should have been authorized."
+
+So the corrected sequence is:
+
+```text
+trusted actor / partition / use / clock
+        ↓
+untrusted nominations resolved inside the trusted partition
+        ↓
+PROTECTED SECURITY-METADATA PLANNING          ← inside the trusted boundary
+  scope · exact version · complete subjects
+  complete required domains · restrictions
+  classification revision · lifecycle/control revision
+  suppression / lifecycle bindings
+  ── NO statement text · NO snippets · NO embeddings
+  ── NO semantic scores · NO counts · NO model disclosure
+        ↓
+compile bounded, COMPLETE authorization operations
+        ↓
+HOME evaluates authorization
+        ↓
+only authorized exact versions become addressable
+        ↓
+content retrieval · matching · ranking · selection
+```
+
+**The metadata-planning set is not the candidate set.** This distinction carries the whole argument:
+
+| | Security-metadata planning set | Content candidate set |
+|---|---|---|
+| Purpose | Determine *what authorization is required* | Produce the answer |
+| Contents | Security metadata only | Statements, snippets, scores |
+| Visible to model | **Never** | Only after authorization and revalidation |
+| Participates in ranking/scoring/counting | **Never** | Yes, within the authorized set |
+| Membership implies | Nothing — a record may be planned for and then denied | Authorized, eligible, revalidated |
+
+A record appearing in the planning set has **not** been retrieved, matched, ranked, scored or counted. It has only had its *requirements* resolved, inside the trusted boundary, so that a complete authorization operation can be compiled. If the resulting operation denies, that record simply never becomes addressable, and the caller learns nothing about its existence.
+
+**Rules for the planning phase:**
+
+- Partition-bound and minimized to security metadata; no content of any kind.
+- **Never disclosed to the model**, in any form, including as counts or existence signals.
+- Resolvable **without reading content** — a real design obligation on whatever the Technology Gate selects, because F8 shows today's contract cannot express a second domain and carries no partition or control revision.
+- Unclassified or unresolvable metadata means **not eligible**: no operation is compiled for it, it never becomes addressable, and the refusal is non-enumerating.
+- **Bounded** like every other stage (invariant 9): the planning set has a limit decided before execution.
+
+**Does this weaken §9.1?** No — it strengthens it. §9.1 requires that a record enter the candidate set only after a decision covering its *complete* requirement set. Metadata planning is precisely how the complete requirement set becomes knowable. Without it, "complete" would mean "complete as far as the query happened to reveal," which is not complete at all.
 
 ### 9.3 What the retrieval backend receives
 
@@ -689,29 +774,30 @@ sequenceDiagram
 
     U->>T: query text carrying NOMINATIONS (untrusted)
     T->>T: envelope — actor/partition/clock trusted server-side<br/>nominations resolved in-partition to canonical ids
-    T->>H: single-use delegation + ONE complete authorization operation
+    T->>K: PROTECTED SECURITY-METADATA PLANNING<br/>scope · versions · subjects · domains · restrictions
+    K-->>T: complete requirement sets<br/>NO content · NO snippets · NO scores · NO counts
+    Note over T,K: planning set ≠ candidate set (§9.2)
+    T->>T: compile AUTHORIZATION PLAN<br/>OP-K + OP-N + OP-D, each complete
+    T->>H: HOME RT#1 — single-use delegation + the whole plan
     Note over T,H: delegation CONSUMED here, once — never replayed
-    H->>H: evaluate; retain request authorization context<br/>(actor · machine · partition · use · requirements)
-    H-->>T: ONE overall decision + correlation handle + window
-    Note over T,H: ANY denial/unknown → whole operation abstains
-    T->>K: protected metadata + suppression + lifecycle<br/>(NO content, NO snippets, NO vectors)
-    K-->>T: eligible version constraints
-    T->>K: constrained execution — backend can only address eligible versions
-    K-->>T: candidate versions (authorized by construction)
-    T->>T: rank / select WITHIN authorized set only
-    opt domain context needed
-        T->>H: SEPARATE authorization operation (same retained context)
-        H-->>T: fresh decision
-        T->>D: authorized domain read (by reference)
+    H->>H: evaluate EACH operation independently<br/>retain request authorization context
+    H-->>T: per-operation outcomes + correlation handle + window
+    Note over T,H: ANY denial → that operation abstains whole (§8.3)
+    par Knowledge and domains execute concurrently
+        T->>K: constrained execution — authorized exact versions only
+        K-->>T: candidate versions (authorized by construction)
+    and
+        T->>D: domain reads on operations already approved in the plan
         D-->>T: current values + provenance + freshness
     end
-    opt source expansion discovered after selection
-        T->>H: SEPARATE authorization operation (same retained context)
+    T->>T: rank / select WITHIN authorized set only
+    opt source expansion discovered AFTER selection
+        T->>H: extra crossing — separate operation, same retained context
         H-->>T: fresh decision
         T->>K: authorized source expansion
     end
-    T->>H: REVALIDATE — fresh re-evaluation of the operation<br/>against CURRENT grants (not a TTL check)
-    H-->>T: fresh decision + fence
+    T->>H: HOME RT#2 — fresh re-evaluation of EVERY contributing operation<br/>against CURRENT grants (not a TTL check)
+    H-->>T: fresh decisions + fence
     T->>T: re-prove suppression, lifecycle, classification, applicability
     alt all freshly re-proven
         T->>M: request-local ContextBundle (non-authoritative, never persisted)
@@ -723,15 +809,16 @@ sequenceDiagram
 
 **Changes from the brief's candidate ordering, and why:**
 
-1. **Suppression and lifecycle move *before* candidate retrieval, not after.** The brief placed "suppression/lifecycle eligibility" after "authorized Knowledge candidate retrieval." That ordering would let a suppressed record become a candidate and influence ranking before being removed — which B4 §8 forbids ("no path into usable state may bypass the register"). They belong in the same constraint-compilation step as authorization.
-2. **Rank/select is explicitly scoped to the authorized set.** Reranking is a disclosure-influencing operation; B2 §10.2 forbids scores influenced by hidden records. Making the scope explicit prevents a future implementation from "just reranking a bit wider."
-3. **Source expansion sits before the barrier, not after.** Expansion is itself a disclosure decision and must be revalidated along with everything else.
+1. **Protected security-metadata planning precedes authorization.** Corrected after Board review: a request cannot know a record's complete requirement set, so authorizing a request-shaped guess would let an under-authorized record become a candidate. B1 §10 expressly permits this lookup before content search. See §9.2 and the B1 scenario D demonstration.
+2. **Suppression and lifecycle move *before* candidate retrieval, not after.** The brief placed "suppression/lifecycle eligibility" after "authorized Knowledge candidate retrieval." That ordering would let a suppressed record become a candidate and influence ranking before being removed — which B4 §8 forbids ("no path into usable state may bypass the register"). They belong in the same planning step.
+3. **Rank/select is explicitly scoped to the authorized set.** Reranking is a disclosure-influencing operation; B2 §10.2 forbids scores influenced by hidden records. Making the scope explicit prevents a future implementation from "just reranking a bit wider."
+4. **Source expansion sits before the barrier, not after.** Expansion is itself a disclosure decision and must be revalidated along with everything else.
 
 **How the delegation budget is respected.** The single-use delegation is consumed exactly once, at the first authorization operation, and is never replayed. Every later evaluation — the domain read, the expansion, the final revalidation — is a **fresh evaluation by Home against its own retained request authorization context** (§8.4), not a reuse of a consumed token and not a bearer handle presented by the caller. The caller never resupplies a trusted actor or partition. This is why the sequence can contain four Home interactions while the accepted single-use delegation semantics remain completely unchanged.
 
 The retained ordering — authorization before retrieval, fresh revalidation immediately before the model — is correct and is the heart of the protocol.
 
-**On the number of Home interactions.** The `opt` blocks above are *conditional*, not part of every request. §18A.4 establishes that an ordinary read targets **two** Home round trips — the initial authorization operation and the final revalidation — with additional operations appearing only when the request genuinely needs them. Performance analysis, latency budget and the round-trip invariant are in §18A.
+**On the number of Home interactions.** The ordinary path costs **two Home network crossings**: RT#1 evaluates the whole Authorization Plan, RT#2 revalidates. Several complete operations share one crossing (§8.3.2) without any becoming partial. The `opt` block is conditional and skipped on the ordinary path. This holds only if §18A.3a's execution requirement is met; otherwise the honest budget is 2 + N. Performance analysis is in §18A.
 
 ---
 
@@ -783,56 +870,119 @@ So the requirement is: **wherever ownership permits, compose predicates within t
 
 Modelling "What foods does Ana dislike?", "What are my current nutrition preferences?", "How is my weight progressing against my stated goal?"
 
+**Corrected after Board review** for the §9.2 ordering (metadata planning precedes authorization) and for the latency double-counting identified in §18A.3b.
+
 | # | Stage | Local / remote | Sequential? | Concurrent? | Optional? | Dominates? |
 |---|---|---|---|---|---|---|
 | 1 | Trusted envelope: actor, partition, clock; resolve nominations in-partition | Local | Yes | — | No | No |
-| 2 | **Initial authorization operation** | **Remote → Home** | Yes — everything depends on it | — | No | **Yes (~120 ms)** |
-| 3 | Protected metadata + suppression + lifecycle + classification + applicability | Local to Knowledge owner | Yes | Composed in one pass (§18A.2) | No | No |
-| 4 | Constrained Knowledge execution | Local to Knowledge owner | Yes | — | No | Depends on backend |
-| 5 | Domain reads (per owner) | Remote per domain | **No — after prerequisites** | **Yes, by default** (§18A.6) | Often | Only if serialized |
-| 6 | Ranking / selection within the authorized set | Local | Yes | — | No | No |
-| 7 | Source expansion | Remote | — | — | **Yes — lazy** (§18A.7) | Only when invoked |
-| 8 | **Final revalidation** | **Remote → Home** | Yes — must be last | — | No | **Yes (~120 ms)** |
-| 9 | ContextBundle construction | Local | Yes | — | No | No |
-| 10 | LLM request / TTFT | Remote | Yes | — | No | **Yes — but measured separately** (§18A.12) |
+| 2 | **Protected security-metadata planning** (§9.2) — requirements only, no content | Local to Knowledge owner | Yes | Composed in one pass (§18A.2) | No | No |
+| 3 | Compile bounded complete operations into one **Authorization Plan** (§8.3.2) | Local | Yes | — | No | No |
+| 4 | **HOME ROUND TRIP #1** — evaluate every operation in the plan | **Remote → Home** | Yes — everything depends on it | Operations batched in one crossing | No | **Yes (~120 ms)** |
+| 5 | Constrained Knowledge execution over authorized exact versions | Local to Knowledge owner | Yes | — | No | Depends on backend |
+| 6 | Domain reads, on operations already approved in the plan | Remote per domain | **No** | **Yes, by default** (§18A.6) | Often | Only if serialized |
+| 7 | Ranking / selection within the authorized set | Local | Yes | — | No | No |
+| 8 | Source expansion, if discovered late | Remote (+1 crossing) | — | — | **Yes — lazy** (§18A.7) | Only when invoked |
+| 9 | **HOME ROUND TRIP #2** — fresh revalidation of every contributing operation | **Remote → Home** | Yes — must be last | Operations batched in one crossing | No | **Yes (~120 ms)** |
+| 10 | ContextBundle construction | Local | Yes | — | No | No |
+| 11 | LLM request / TTFT | Remote | Yes | — | No | **Yes — but measured separately** (§18A.12) |
 
 ```mermaid
 flowchart LR
-  subgraph N["Normal path — target ≤ 2 Home round trips"]
-    E["1 envelope<br/>local"] --> A1["2 INITIAL AUTH<br/>~120 ms · Ashburn"]
-    A1 --> P["3-4 eligibility + retrieval<br/>ONE pass, one boundary"]
-    P --> DOM{"5 domain reads<br/>CONCURRENT"}
-    DOM --> R["6 rank/select<br/>local"]
-    R --> A2["8 REVALIDATION<br/>~120 ms · Ashburn"]
-    A2 --> CB["9 bundle<br/>local"] --> M["10 LLM TTFT<br/>measured separately"]
+  subgraph N["Normal path — target ≤ 2 Home NETWORK round trips"]
+    E["1 envelope<br/>local"] --> MP["2 metadata PLANNING<br/>requirements only<br/>NO content"]
+    MP --> PL["3 compile PLAN<br/>OP-K · OP-N · OP-D"]
+    PL --> A1["4 HOME RT#1<br/>~120 ms · evaluates ALL ops"]
+    A1 --> K["5 Knowledge execution<br/>authorized versions only"]
+    A1 --> DOM["6 domain reads<br/>CONCURRENT · pre-approved"]
+    K --> R["7 rank/select<br/>local"]
+    DOM --> R
+    R --> A2["9 HOME RT#2<br/>~120 ms · fresh revalidation"]
+    A2 --> CB["10 bundle<br/>local"] --> M["11 LLM TTFT<br/>measured separately"]
   end
   subgraph D["Deep path — exceptional"]
-    R -. "7 lazy, only if needed" .-> SX["source expansion<br/>+1 auth operation"]
+    R -. "8 lazy, only if needed" .-> SX["source expansion<br/>+1 crossing"]
     SX -.-> A2
   end
   classDef hot fill:#fce8e6,stroke:#d93025;
   classDef loc fill:#e6f4ea,stroke:#16a765;
   class A1,A2 hot;
-  class E,P,R,CB loc;
+  class E,MP,PL,K,R,CB loc;
 ```
 
-**Estimated pre-LLM orchestration budget** — engineering estimates, explicitly *not* measurements, except the two Home figures which are measured:
+### 18A.3a Downstream execution without hidden Home crossings
+
+The two-round-trip target holds **only if** executing an operation already approved in plan #1 does not silently cause a third crossing. This section states what must be true, and does not select a mechanism.
+
+**The required invariant:**
+
+> **A domain owner must be able to verify that the exact operation was freshly authorized by Home, without requiring an avoidable additional cross-region authorization round trip on the ordinary path.**
+
+**Why this is not solved today.** F12 and the measured path show Nutrition calls Home itself, per operation, before every repository access. That is correct under the current architecture and must not be weakened — but it means each domain read *is* a Home crossing today (§18A.3b).
+
+**Constraints any mechanism must satisfy.** An execution basis must be:
+
+| Requirement | Why |
+|---|---|
+| Server-side only; never model- or browser-visible | B1 scenario H; F11 transport seam |
+| Partition-bound | B1 §5.2 |
+| Actor- and request-bound | Cannot be lifted into another request or another actor |
+| Operation/resource/domain/action-bound | Proves *this* operation, not general access |
+| Bounded lifetime | Cannot outlive the request |
+| Non-reusable outside its exact purpose | Not a bearer capability (§8.4 item 4) |
+| Revocation and revalidation semantics preserved | B3 §11.8 ordering fence intact; RT#2 still re-evaluates |
+| Domain-side enforcement preserved | The domain still verifies; it does not simply trust a caller |
+
+**What is explicitly forbidden as a solution:** replaying the consumed delegation; treating `decision_id` as bearer authority; trusting a model-supplied claim; weakening domain-side enforcement; bypassing Home as the authorization authority; or lengthening the delegation into reusable authority.
+
+**Is such a mechanism consistent with B1–B5?** **Yes — nothing in the accepted decisions prohibits this shape**, and one accepted passage anticipates it. B1 §5.2 requires background work to "retain trusted partition and operation provenance, then revalidate authority before sensitive work or publication" — a trusted, bounded, server-side basis carried forward and revalidated is exactly that pattern. What B1 forbids is a *bearer* permission (§10) and a *model-supplied* authority (scenario H); a server-side, operation-bound, short-lived proof produced by Home as part of its own decision is neither.
+
+**One plausible shape, not selected:** Home's plan evaluation could produce, per approved operation, a bounded execution basis that the owning domain verifies before acting — audience-scoped to that domain, bound to partition/actor/operation, short-lived, single-purpose. The existing delegation design already demonstrates every one of these properties (audience binding, 300 s maximum lifetime, single-use claiming, fail-closed verification, F3), so the security pattern is proven in this codebase even though its application here is new.
+
+**Honest status.** This is an **architectural requirement with an unresolved mechanism**. B6 states what must be true; the mechanism is a Technology Gate and implementation decision, and §18A.10 requires the benchmark to *prove* no hidden crossings occur. **If no safe mechanism is found, the ≤2 round-trip target must be revised upward rather than the requirement quietly dropped** — a 3-domain query would then cost 5 crossings (~600 ms) and the p95 target would be unreachable. Recorded as **R13**.
+
+### 18A.3b Corrected latency accounting
+
+**The earlier draft double-counted.** It listed "domain reads, concurrent ~120–140 ms" citing the measured G1.6 figure, *and* counted two Home crossings separately. But the measured path
+
+```text
+Hermes → gateway → Nutrition → Home check_access → local SQLite read
+```
+
+**already contains a Home authorization crossing.** Verified in code: `get_profile` calls `_require_access` before the repository read, and the repository read is a single indexed local SQLite `SELECT`. So the ~131 ms median / ~139 ms p95 decomposes roughly as gateway hop + **~120 ms Home crossing** + sub-millisecond local read.
+
+Counting that figure *as well as* two separate Home crossings charged the Home crossing twice.
+
+**What is measured, and what is not:**
+
+| Quantity | Status |
+|---|---|
+| Home authorization crossing | **Measured** ~111–120 ms (G1.5), ~131–134 ms via gateway (G1.6) |
+| Current whole authorized domain path (incl. its own Home crossing) | **Measured** ~131 ms / ~139 ms (G1.6) |
+| **Raw domain data-access cost, excluding authorization** | **UNKNOWN — benchmark required.** No repository evidence isolates it. The one indicator is that Nutrition's own read is a local SQLite query, so the *current* raw cost is likely small — but that is one service with one storage shape and must not be generalized |
+| Future domain access under a pre-authorized plan | **UNKNOWN — benchmark required** (§18A.10) |
+
+**Corrected budget, Knowledge + one domain**, assuming §18A.3a is solved:
 
 | Component | Estimate | Basis |
 |---|---:|---|
-| Initial authorization | ~120 ms | **Measured** (F15) |
-| Eligibility + Knowledge retrieval | ~10–50 ms | Estimate; one local pass, small personal corpus, no network |
-| Domain reads, concurrent | ~120–140 ms | **Measured** per-call (G1.6); concurrent, so ≈ slowest, not sum |
-| Ranking / selection | ~5–20 ms | Estimate; bounded candidate set |
-| Final revalidation | ~120 ms | **Measured** (F15) |
-| Bundle construction | ~5–15 ms | Estimate; local assembly |
-| **Total pre-LLM, Knowledge + one domain** | **~280–370 ms** | Two Home crossings dominate |
+| Envelope + metadata planning | ~10–40 ms | Estimate; local, one pass, no network |
+| **Home RT #1** (plan) | ~120 ms | **Measured** (F15) |
+| Knowledge execution | ~10–50 ms | Estimate; local, small personal corpus |
+| Domain reads, concurrent, **excluding authorization** | **UNKNOWN** | **Benchmark required.** Overlaps Knowledge execution where concurrent |
+| Ranking / selection | ~5–20 ms | Estimate; bounded set |
+| **Home RT #2** (revalidation) | ~120 ms | **Measured** (F15) |
+| Bundle construction | ~5–15 ms | Estimate; local |
+| **Total pre-LLM** | **~270–365 ms + UNKNOWN domain access** | Two Home crossings ≈ 240 ms of it |
 
-Two Home round trips account for ~240 ms of that — roughly 70–85% of orchestration. **This is the architecture's latency shape: it is network-bound on two unavoidable crossings, not compute-bound on security logic.**
+**If §18A.3a is *not* solved**, each domain read adds its own crossing, and the same query costs roughly ~240 ms + N × ~120 ms — about 360 ms for one domain and ~600 ms for three, before any local work. **That is the difference the mechanism buys, and it is the difference between meeting and missing the p95 target.**
+
+Two Home round trips remain ~240 ms — the dominant, irreducible component. **The architecture's latency shape is network-bound on crossings, not compute-bound on security logic.**
 
 ### 18A.4 Round-trip budget — proposed invariant
 
-> **An ordinary read SHOULD require no more than two Home authorization round trips: one bounded initial authorization operation, and one bounded pre-disclosure revalidation.**
+> **An ordinary read SHOULD require no more than two Home authorization NETWORK round trips: one bounded Authorization Plan evaluation, and one bounded fresh revalidation.**
+
+The unit is the **network crossing**, not the authorization operation (§8.3.2). A single plan may carry several independently complete operations, so a 4-operation query can still cost 2 crossings — provided every requirement set is known up front and §18A.3a's execution requirement is satisfied.
 
 **Accept as an architectural invariant**, with exceptions named explicitly:
 
@@ -848,7 +998,9 @@ Two Home round trips account for ~240 ms of that — roughly 70–85% of orchest
 
 **Why two, and not more.** Each extra crossing costs ~120 ms (F15). Three round trips push an ordinary read past 400 ms of orchestration before the model is even invoked. The budget exists to make additional crossings a **deliberate, visible decision** rather than something that accumulates.
 
-**Reconciling with §18's sequence.** That diagram shows up to four Home interactions because it includes two `opt` blocks. On the ordinary path both are skipped: domain reads are authorized within the initial operation where their requirements are known up front, and source expansion does not occur. A domain read whose requirements *cannot* be known until after candidate selection is the exception that justifies a third crossing — and it should be recognised as leaving the ordinary budget.
+**Reconciling with §18's sequence and with §8.3.1.** There is no conflict once the three terms are separated (§8.3.2). Operations stay all-or-nothing individually; the *plan* batches them into one crossing. On the ordinary path both `opt` blocks are skipped: domain operations are carried in plan #1 where their requirements are known up front, and source expansion does not occur. An operation whose requirements *cannot* be known until after candidate selection is the exception that justifies a third crossing — and it should be recognised as leaving the ordinary budget rather than absorbed silently.
+
+**This target is conditional.** It holds only if §18A.3a's execution requirement is satisfied. If it is not, the honest budget is 2 + N crossings for N domains, and this invariant must be revised upward rather than the requirement quietly dropped (R13).
 
 ### 18A.5 Forbidden: authorization per candidate
 
@@ -912,19 +1064,25 @@ Four categories, deliberately distinguished:
 | **Product UX target** | What the experience should feel like | Product decision, not B6's |
 | **Technology benchmark** | What a candidate must demonstrate | Gate criterion (§18A.10) |
 
-**Ordinary read, pre-LLM orchestration:**
+**Ordinary read, pre-LLM orchestration.** Revised after the §18A.3b accounting correction. **The repository does not demonstrate any of these end-to-end**; the only measured components are the Home crossings.
 
-| Metric | Proposed target | Assessment against evidence |
+| Metric | Target | Status and honest assessment |
 |---|---:|---|
-| p50 | **≤ 300 ms** | Realistic. Estimated ~280–370 ms for Knowledge + one domain; two Home crossings are ~240 ms of it |
-| p95 | **≤ 500 ms** | Realistic but **not generous**. Two measured p95 crossings alone are ~240–270 ms, leaving ~230–260 ms for everything else |
-| p99 | **≤ 800 ms** | Proposed addition. p99 is where connection re-establishment (F16, ~307 ms) and retries appear; without a p99 target those costs stay invisible |
+| p50 | **≤ 300 ms** | **Aspiration, not a demonstrated capability.** Achievable only if §18A.3a is solved *and* raw domain access proves small. Two measured crossings are ~225–240 ms at p50, leaving ~60–75 ms for metadata planning, Knowledge execution, concurrent domain access, ranking and assembly. Plausible for **Knowledge-only** (P1); **for Knowledge + domain it is contingent on an UNKNOWN**, so it is marked **for Technology Gate calibration** rather than asserted |
+| p95 | **≤ 500 ms** | Useful ordinary-read architecture target, **explicitly subject to Technology Gate measurement**. Two measured p95 crossings are ~240–270 ms, leaving ~230–260 ms |
+| p99 | **≤ 800 ms** | Initial Technology Gate target, revisable from real measurements. p99 is where cold connection re-establishment (~307 ms, F16) and retries surface |
 
-I propose the suggested p50 of "250–300 ms" be recorded as **≤ 300 ms** rather than 250 ms. On the measured evidence, 250 ms leaves ~10 ms for all non-Home work at p50, which is not achievable once a domain read is involved. **300 ms is honest; 250 ms would be a target the architecture cannot meet on this topology.**
+**Differentiated by path**, since one number cannot honestly cover both:
 
-**Time to first token:** p50 < 1.5 s, p95 < 2.5 s — accepted as reasonable, contingent on orchestration hitting the above and on model TTFT being measured separately (§18A.12).
+| Path | p50 | p95 | Confidence |
+|---|---:|---:|---|
+| **P1 — Knowledge only** | ≤ 300 ms | ≤ 500 ms | Reasonable: two measured crossings plus local work only |
+| **P2/P3 — Knowledge + domains** | ≤ 300 ms **aspirational** | ≤ 500 ms | **Contingent** on §18A.3a and on unmeasured domain access. Calibrate at the Gate |
+| **P4 — deep / expansion** | — | 1–2 s orchestration | A third crossing plus source fetches; user-initiated, so a visible pause is acceptable |
 
-**Deep path** (expansion, history, multi-domain review): 1–2 s orchestration is acceptable. A third Home crossing plus source fetches makes sub-500 ms unrealistic, and this path is user-initiated, so a visible pause is acceptable.
+**Why not simply lower the p50 target.** Lowering it to match uncertainty would be as dishonest as keeping an unsupported number. The correct treatment is to state the target, name the unknown that gates it, and require the Gate to measure it. **If measurement shows Knowledge + domain cannot reach 300 ms at p50, the target changes — not the accounting.**
+
+**Time to first token:** p50 < 1.5 s, p95 < 2.5 s — reasonable, contingent on orchestration hitting the above and on TTFT being measured separately (§18A.12).
 
 **These are not SLAs.** They are architecture targets for the Technology Gate to test against, revisable on measured evidence.
 
@@ -932,16 +1090,18 @@ I propose the suggested p50 of "250–300 ms" be recorded as **≤ 300 ms** rath
 
 Future benchmark specifications. **No benchmark is implemented by this proposal.**
 
-| # | Scenario | Home RTs | Concurrent | Expansion | Posture | Expected dominant cost |
-|---|---|---:|---|---|---|---|
-| **P1** | Knowledge only, single Person | 2 | — | No | Fail closed on any denial | Two Home crossings (~240 ms) ≈ 80–90% of orchestration |
-| **P2** | Knowledge + Nutrition | 2 | Knowledge ∥ Nutrition | No | Fail closed | Two Home crossings; domain read overlaps Knowledge work |
-| **P3** | Knowledge + 3 independent domains | 2 | All 4 in parallel | No | Fail closed; optional domains may degrade (P8) | Two Home crossings + **slowest** domain, not the sum |
-| **P4** | Base retrieval + source expansion | **3** | Base reads parallel; expansion after selection | Yes | Expansion denial ≠ base failure (§14) | Third crossing + source fetch; deep-path budget applies |
-| **P5** | Denied request | **1** | None | No | **Fail closed** — no candidates, no scores, no counts | Single crossing; should be the *fastest* path |
-| **P6** | Suppressed record still in index/cache | 2 | Normal | No | **Fail closed** — not addressable | Register consultation inside the owner boundary; no extra crossing (§18A.2) |
-| **P7** | Authorization/lifecycle changes after selection | 2 | Normal | No | **Fail closed** at the barrier | Revalidation crossing detects the change — the round trip earning its cost |
-| **P8** | Optional domain slow or unavailable | 2 | Yes, with per-domain timeout | No | **Explicit bounded/degraded result**, never silently smaller (§17) | Timeout budget, not the domain itself |
+| # | Scenario | Auth **operations** | Home **network RTs** | Concurrent | Expansion | Posture | Expected dominant cost |
+|---|---|---:|---:|---|---|---|---|
+| **P1** | Knowledge only, single Person | 1 (OP-K) | **2** | — | No | Fail closed on any denial | Two crossings (~240 ms) ≈ 80–90% of orchestration |
+| **P2** | Knowledge + Nutrition | 2 (OP-K, OP-N) | **2** | — | Yes: Knowledge ∥ Nutrition | No | Fail closed | Two crossings; domain access overlaps Knowledge work |
+| **P3** | Knowledge + 3 independent domains | **4** (OP-K, OP-N, OP-D, OP-B) | **2** | — | All four in parallel | No | Fail closed; optional domains may degrade (P8) | Two crossings + **slowest** domain, not the sum. **This row is the headline claim of the plan abstraction and must be measured** |
+| **P4** | Base retrieval + source expansion | 2–3 | **3** | Base reads parallel; expansion after selection | Yes | Expansion denial ≠ base failure (§14) | Third crossing + source fetch; deep-path budget |
+| **P5** | Denied request | 1, denied | **1** | None | No | **Fail closed** — no candidates, scores or counts | Single crossing; should be the *fastest* path |
+| **P6** | Suppressed record still in index/cache | 1 | **2** | Normal | No | **Fail closed** — not addressable | Register consulted inside the owner boundary; **no extra crossing** (§18A.2) |
+| **P7** | Authorization/lifecycle changes after selection | 1–N | **2** | Normal | No | **Fail closed** at the barrier | RT#2 detects the change — the crossing earning its cost |
+| **P8** | Optional domain slow or unavailable | 2+ | **2** | Yes, with per-domain timeout | No | **Explicit bounded/degraded result**, never silently smaller (§17) | Timeout budget, not the domain itself |
+
+**P3 is the decisive benchmark.** Four authorization operations in **two** network crossings is the entire claim of the plan abstraction (§8.3.2) and of §18A.3a. If measurement shows four operations costing four or five crossings, the abstraction has not been implemented and the p95 target is unreachable. **This is precisely the case §18A.10's instrumentation must detect** — a candidate can pass a small latency test while still having an N-domain → N-crossing architecture.
 
 **P5 deserves attention:** a denied request should be the *fastest* outcome, not the slowest. If a denial is slower than an allow, the timing itself becomes an oracle — a side channel that would undermine §17's anti-oracle rule. **Denial-path timing should not be distinguishable in a way that reveals whether data exists.**
 
@@ -957,6 +1117,29 @@ Conditions:
 - **Realistic cross-node topology.** Localhost benchmarks are misleading when ~120 ms of the budget is a cross-Atlantic hop (F15, F17). A localhost measurement would understate orchestration by roughly 240 ms.
 - **Scenarios P1–P8**, so scaling and failure behaviour are measured, not assumed.
 - **Orchestration and TTFT reported separately** (§18A.12).
+
+**Required: measure Home crossings independently from domain-service latency, and prove that an ordinary pre-authorized domain execution introduces no hidden Home authorization round trips.**
+
+This is a *correctness* measurement expressed as instrumentation, not a nicety. §18A.3b showed that the one measured "domain read" figure already contains a Home crossing; a benchmark that reports only latency would repeat exactly that conflation. Instrumentation must therefore report, per scenario, alongside latency:
+
+```text
+home_auth_round_trip_count       ← network crossings to Home
+authorization_operation_count    ← complete operations evaluated
+domain_call_count                ← calls to domain owners
+source_expansion_count           ← expansions performed
+```
+
+**Expected relationships on the ordinary path**, which the benchmark must assert rather than assume:
+
+| Assertion | Meaning |
+|---|---|
+| `home_auth_round_trip_count == 2` for P1, P2, P3, P6, P7, P8 | The plan abstraction works |
+| `authorization_operation_count >= domain_call_count + 1` for P2, P3 | Every domain call was covered by an approved operation |
+| `home_auth_round_trip_count` **does not grow with** `domain_call_count` | **The decisive test.** Growth reveals an N-domain → N-crossing architecture |
+| `source_expansion_count == 0` on ordinary paths | Expansion stayed lazy (§18A.7) |
+| `home_auth_round_trip_count == 1` for P5 | Denial short-circuits before retrieval |
+
+A candidate may meet a latency threshold during a small test while still crossing to Home per domain — the counts expose that; the timings alone would not.
 
 ### 18A.11 Technology disqualification criteria
 
@@ -989,13 +1172,25 @@ Without this separation, a 2 s TTFT hides whether orchestration took 300 ms or 1
 
 **Desired shape: adding independent domains increases total work but not critical-path latency, because concurrent reads cost the slowest rather than the sum.**
 
-| Domains | Serial (rejected) | Concurrent (required) | Critical path |
-|---|---:|---:|---|
-| 1 | ~130 ms | ~130 ms | Two Home crossings dominate |
-| 3 | ~390 ms | **~140 ms** | Slowest domain |
-| 5 | ~650 ms | **~150 ms** | Slowest domain |
+Two distinct effects must not be conflated — the earlier draft did conflate them (§18A.3b):
 
-Under concurrency, orchestration stays roughly flat as domains are added; under serialization it grows linearly and the architecture stops being interactive at around four or five domains.
+**Effect 1 — Home crossings.** Governed by the plan abstraction (§8.3.2) plus §18A.3a:
+
+| Domains | If §18A.3a is solved | If it is not |
+|---|---:|---:|
+| 1 | **2 crossings** (~240 ms) | 3 (~360 ms) |
+| 3 | **2 crossings** (~240 ms) | 5 (~600 ms) |
+| 5 | **2 crossings** (~240 ms) | 7 (~840 ms) |
+
+**Effect 2 — domain data access.** Governed by concurrency (§18A.6). The per-domain cost is **UNKNOWN** and benchmark-required (§18A.3b), so it is expressed as multiples of an unmeasured `d`:
+
+| Domains | Serial (rejected) | Concurrent (required) |
+|---|---:|---:|
+| 1 | `d` | `d` |
+| 3 | `3d` | **≈ slowest `d`** |
+| 5 | `5d` | **≈ slowest `d`** |
+
+**Combined, with both mechanisms working:** orchestration ≈ 240 ms + max(`d`) + local work, roughly **flat** as domains are added. **With either broken** it grows linearly: crossings at ~120 ms each, or domain access at `d` each. Two independent mechanisms must both hold, and §18A.10's counters test both.
 
 Required supporting mechanisms:
 
@@ -1019,7 +1214,7 @@ holds regardless of whether the policy authority is Home or a future adapter. En
 | # | Invariant | Disposition | Rationale |
 |---|---|---|---|
 | 1 | No authorization per candidate | **ACCEPT** | Security and performance failure on four grounds (§18A.5) |
-| 2 | Ordinary reads ≤ 2 Home round trips | **ACCEPT** | With exceptions named (§18A.4); two is the floor given B3 §11.8 |
+| 2 | Ordinary reads ≤ 2 Home **network** round trips | **ACCEPT WITH CLARIFICATION** | The unit is the network crossing, not the operation; a plan batches several complete operations into one crossing (§8.3.2). Two is the floor given B3 §11.8. **Conditional on §18A.3a** (R13) |
 | 3 | Independent domain reads concurrent by default | **ACCEPT** | The difference between flat and linear scaling (§18A.13) |
 | 4 | Predicates composed within owner boundaries | **ACCEPT** | B5's co-location decision makes this natural (§18A.2) |
 | 5 | Source expansion lazy/conditional | **ACCEPT** | Security-positive as well as faster (§18A.7) |
@@ -1035,14 +1230,20 @@ holds regardless of whether the policy authority is Home or a future adapter. En
 
 ### 18A.16 Does performance analysis change the B6 recommendation?
 
-**No.** The security architecture is viable for interactive chat, and the analysis strengthened rather than weakened it:
+**No.** The security architecture remains viable for interactive chat. The reconciliation pass corrected the *ordering* of metadata planning and the *accounting* of domain latency, but changed no security control and no retrieval model:
 
 - The dominant cost is **network crossings, not security logic** (F15). Security predicates are essentially free; it is geography that is expensive.
 - **B5's single-owner decision is what makes B6 fast.** Co-locating versions, lifecycle, lineage and suppression for transactional correctness also makes them evaluable in one local pass.
 - **The bounded-decision protocol (§8) was already the fast design.** The shape B1's single-use delegation forced is also the shape that minimizes crossings.
 - **No security control had to be relaxed.** Every latency improvement came from removing unnecessary round trips or adding concurrency.
+- **The §9.2 ordering correction made the model both safer and no slower.** Metadata planning is local to the Knowledge owner, so moving it before authorization costs nothing in crossings while closing a real gap: authorizing a request-shaped guess could have let an under-authorized record reach candidacy (B1 scenario D).
 
-**Residual risk.** The p95 ≤ 500 ms target has roughly 230–260 ms of headroom after two measured Home crossings. That is workable but not comfortable, and it is the number most likely to need revision on measured evidence. If a future deployment adds a third mandatory crossing, the target becomes unreachable without changing the topology — which G1.7's withdrawal (F17) makes a deliberate constraint rather than an oversight.
+**Residual risk, restated after the reconciliation pass.** Two items are genuinely open and neither is hidden by the targets:
+
+- **R13 — downstream execution authority.** §18A.3a states what must be true; no mechanism is selected. If none is found, the budget becomes 2 + N crossings and the p95 target is unreachable for multi-domain queries. This is the largest open item.
+- **R14 — raw domain access is unmeasured.** §18A.3b showed the one available figure already contains a Home crossing, so it could not be reused as a domain-access estimate.
+
+The p95 ≤ 500 ms target retains ~230–260 ms of headroom after two measured crossings — workable, not comfortable, and explicitly subject to Gate measurement. **The reconciliation made the model less flattering and more honest: one estimate was withdrawn as double-counted, one number became UNKNOWN, and one target became conditional.** None of that changed the architecture; it changed what the architecture is allowed to claim.
 
 ---
 
@@ -1128,6 +1329,8 @@ No Enterprise profile is designed, proposed or approved here.
 | R9 | **The p95 ≤ 500 ms target has thin headroom** | Two measured Home crossings consume ~240–270 ms at p95, leaving ~230–260 ms for eligibility, retrieval, concurrent domain reads, ranking and assembly. Workable but not comfortable. This is the number most likely to need revision on measured evidence, and a third mandatory crossing would make it unreachable on this topology (§18A.8) |
 | R10 | **Cross-Atlantic hop is permanent and dominates** | F15/F17: ~120 ms per Home crossing is network, not Home's work, and G1.7's withdrawal makes it a deliberate constraint. No amount of Home-side optimization helps; only reducing crossings does. A future commercial deployment with co-located authority would see materially different numbers |
 | R11 | **Concurrency is required, not optional** | §18A.13: serial domain reads grow linearly and stop being interactive at roughly four or five domains. If a future implementation serializes for simplicity, the architecture silently stops meeting its targets as Olin grows |
+| R13 | **Downstream execution authority is an unresolved mechanism** | §18A.3a states what must be true for a pre-authorized domain operation to execute without another Home crossing, and confirms B1–B5 permit such a mechanism — but none is selected. **If no safe mechanism is found, the ≤2 crossing target must be revised upward to 2 + N**, making the p95 target unreachable for multi-domain queries. This is the single largest open item in the performance model and §18A.10's counters exist to detect it |
+| R14 | **Raw domain access latency is unmeasured** | §18A.3b: the one measured "domain read" figure already contains a Home crossing, so the raw cost is UNKNOWN. Nutrition's own read is a local SQLite query and so is likely small, but that is one service with one storage shape and must not be generalized to future Health, Finance or Device services |
 | R12 | **Denial-path timing as a side channel** | §18A.9 P5: if a denial is measurably slower than an allow, timing reveals whether data exists, undermining §17's anti-oracle rule. Requires acceptance testing, not just intent |
 
 ### 22.1 Inconsistencies found in current docs
@@ -1159,17 +1362,19 @@ Four required corrections were issued and are incorporated; §23.1 maps each to 
 | **PA-7** | Bounds | **ACCEPT** — architectural bounds with concrete values deferred | §17 |
 | **PA-8** | Abstention model | **ACCEPT** cites-or-abstains with the anti-oracle and confidence-is-not-authority corrections | §17, §20.B |
 | **PA-9** | Backend neutrality | **ACCEPT** — no semantic/vector/hybrid retrieval assumption | §20.E |
-| **PA-10** | **Performance and latency architecture** *(added after the performance review; PA-1 … PA-9 are unchanged)*. Accept the §18A latency model, the ten performance invariants as assessed in §18A.15, the round-trip budget, the concurrency requirement, lazy source expansion, the proposed targets, the benchmark requirement and the disqualification criteria? | **NOT DECIDED — proposed** | §18A |
+| **PA-10** | **Performance and latency architecture** *(added after the performance review; PA-1 … PA-9 unchanged)* | **ACCEPTED IN DIRECTION, sub-items below** | §18A |
 
-**PA-10 sub-items requiring explicit disposition:**
+**PA-10 sub-item dispositions**, recorded by the Board after the reconciliation pass:
 
-| Sub-item | Proposal |
-|---|---|
-| **PA-10a** — Round-trip budget | Adopt "ordinary reads ≤ 2 Home authorization round trips" as an invariant, with source expansion, history/review, writes and declared multi-step workflows as named exceptions (§18A.4) |
-| **PA-10b** — p50 target | Record **≤ 300 ms**, not 250–300 ms. On measured evidence, 250 ms leaves ~10 ms for all non-Home work once a domain read is involved (§18A.8) |
-| **PA-10c** — p99 target | **Add p99 ≤ 800 ms.** Not in the original set; p99 is where connection re-establishment (~307 ms cold vs ~111 ms warm) and retries surface (§18A.8) |
-| **PA-10d** — Denial timing | Accept that **denial-path timing must not become a side channel**. A denial that is measurably slower than an allow reveals existence, undermining §17's anti-oracle rule (§18A.9, P5) |
-| **PA-10e** — Benchmark conditions | Accept that benchmarks must include a cold-ish path and realistic cross-node topology; localhost-only measurement would understate orchestration by roughly 240 ms (§18A.10) |
+| Sub-item | Disposition | Meaning |
+|---|---|---|
+| **PA-10a** — Round-trip budget | **ACCEPT WITH CLARIFICATION** | Ordinary reads target **≤ 2 Home authorization NETWORK round trips**: one bounded Authorization Plan evaluation, one bounded fresh revalidation. A single plan may contain several independently complete operations (§8.3.2). Named exceptions: late-discovered source expansion, history/review needing additional operations, writes, declared dynamic workflows. **Conditional on §18A.3a** (R13) |
+| **PA-10b** — p50 target | **MODIFIED — target, not claim** | `p50 ≤ 300 ms` remains an architecture **aspiration**. The repository does **not** demonstrate it, and §18A.3b shows the earlier estimate double-counted a Home crossing. Targets are now differentiated by path: reasonable for Knowledge-only; **contingent and marked for Technology Gate calibration** for Knowledge + domain, since raw domain access is UNKNOWN. `p95 ≤ 500 ms` remains a useful ordinary-read target, explicitly subject to Gate measurement |
+| **PA-10c** — p99 target | **ACCEPT** | `p99 ≤ 800 ms` retained as an initial Gate target, revisable from real measurements |
+| **PA-10d** — Denial timing | **ACCEPT** | Denial-path timing must not become an existence oracle |
+| **PA-10e** — Benchmark conditions | **ACCEPT** | Realistic cross-node topology plus warm and cold-ish paths, **and** the §18A.10 counter instrumentation proving no hidden Home crossings |
+
+**Retained unchanged:** logical security layers ≠ network calls · no authorization per candidate · independent domain reads concurrent by default · lazy source expansion · one final bounded revalidation rather than per item · p50/p95/p99 required at the Technology Gate · orchestration latency measured separately from LLM TTFT.
 
 ### 23.1 Required corrections and how each was addressed
 
@@ -1232,7 +1437,7 @@ This change adds this proposal and updates the B6 entry and status references in
   "b3": "RESOLVED",
   "b4": "RESOLVED",
   "b5": "RESOLVED",
-  "b6": "PROPOSED — DISPOSITIONS RECORDED, PA-10 PERFORMANCE PENDING, AWAITING FINAL MERGE REVIEW",
+  "b6": "PROPOSED — FINAL ARCHITECTURE BOARD CLOSURE REVIEW",
   "required_corrections_incorporated": 4,
   "performance_section_added": "18A",
   "performance_invariants_assessed": 10,
@@ -1242,6 +1447,15 @@ This change adds this proposal and updates the B6 entry and status references in
   "core_recommendation_changed_by_performance_analysis": false,
   "security_control_relaxed_for_latency": false,
   "benchmark_implemented": false,
+  "reconciliation_pass": {
+    "metadata_planning_precedes_authorization": true,
+    "plan_vs_operation_vs_round_trip_separated": true,
+    "downstream_execution_authority": "REQUIREMENT STATED, MECHANISM UNRESOLVED (R13)",
+    "latency_double_counting_corrected": true,
+    "raw_domain_access_latency": "UNKNOWN — benchmark required (R14)",
+    "duplicate_paragraph_removed": true,
+    "pa10_dispositions_recorded": true
+  },
   "retrieval_model_changed_by_review": false,
   "new_contradiction_found": false,
   "bounded_partial_retrieval": "WITHDRAWN — conflicted with B1 section 10",
@@ -1279,7 +1493,7 @@ python -m pytest packages/nutrition-domain/tests -q -p no:cacheprovider
 
 Passing verifies the inspected baseline only, not enforcement of this proposal.
 
-**B6 PROPOSED — DISPOSITIONS RECORDED, NOT YET CLOSED**
+**B6 PROPOSED — FINAL ARCHITECTURE BOARD CLOSURE REVIEW**
 
 **B1–B5 REMAIN RESOLVED**
 
