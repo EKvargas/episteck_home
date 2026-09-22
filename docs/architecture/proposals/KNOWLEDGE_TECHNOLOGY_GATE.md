@@ -1,14 +1,20 @@
 # Knowledge Technology Gate
 
-Status: OPEN
-
-Phase: PROCESS / ARCHITECTURE
+Status: **OPEN — PHASE 1 COMPLETE / EMPIRICAL SPIKE AUTHORIZED**
 
 Runtime implementation: NOT APPROVED
 
 Technology selection: NOT APPROVED
 
+Benchmark: **AUTHORIZED (TG-PA-7), NOT IMPLEMENTED**
+
 Date opened: 2026-09-19
+
+**Phase 1 — COMPLETE, accepted 2026-09-22.** See [Knowledge Technology Gate Phase 1](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md): candidate classifications, spike candidates, an R13 mechanism family and experimental realization, a placement recommendation and an isolated synthetic spike design. The Architecture Board required **twelve corrections**, all incorporated (Phase-1 §22), then **accepted the investigation and the corrections**.
+
+Final dispositions: **TG-PA-1** ACCEPT WITH CORRECTIONS · **TG-PA-2** MODIFIED / ACCEPTED AS REVISED · **TG-PA-3** ACCEPT · **TG-PA-4** ACCEPT WITH BENCHMARK-ENVIRONMENT CLARIFICATION · **TG-PA-5** ACCEPT WITH EXPERIMENTAL REALIZATION · **TG-PA-6** ACCEPT WITH MODIFICATIONS · **TG-PA-7** **APPROVED — isolated synthetic spike authorized** (scope and exclusions in Phase-1 §18.1).
+
+**The Technology Gate itself is NOT resolved.** Selection requires the spike's empirical evidence plus the acceptance criteria in Phase-1 §17. **No technology is selected, the spike is not implemented, and no runtime, production schema, migration or deployment is approved.** B1–B6 remain RESOLVED and unamended.
 
 Repository: EKvargas/episteck_home
 
@@ -355,6 +361,8 @@ All entries are **UNSELECTED**. The hypotheses below preserve review input; they
 
 The historical review contains the supporting technology analysis and primary-source references. Existing accepted decisions, including the rejection of adopting a turnkey RAG stack now, are not reversed by keeping candidates visible in this register. Any later selection requires explicit Product Architect disposition and version-specific verification.
 
+**Phase 1 investigation (2026-09-22, Board-reviewed).** [KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md) re-derives these hypotheses against accepted B1–B6 and current primary sources. After Board review it classifies candidates in **three distinct categories**: **HARD ELIMINATED as canonical owner** (Mem0, RAGFlow) · **NOT SHORTLISTED for the first vertical** (Graphiti, graph databases — a weaker claim than elimination) · **DEFERRED / RE-ENTERABLE** (exact vector, ANN, dedicated search engines, Docling). Spike candidates are **S1-SQLite, S1-PostgreSQL and S2 full-text (conditional)**; **ANN is deferred** because static index partitioning cannot express dynamic intra-partition authorization. **No entry above is selected**, and this table is unchanged until the Product Architect closes TG-PA-1 … TG-PA-7.
+
 ## Workflow Orchestration / Flowable
 
 Status: OPEN — NOT SELECTED
@@ -511,6 +519,8 @@ The Gate must evaluate candidates against the accepted B1–B6 requirements, inc
 | The ten performance disqualification criteria | B6 §18A.11 |
 
 **No candidate is selected by this closure.** Technology selection and runtime implementation require their own separate approval; B1–B6 acceptance supplies neither. Agreed acceptance scenarios (B6 §19, P1–P8) must precede technology selection.
+
+**Gate progress.** Phase 1 — candidate investigation and benchmark/spike design — is **COMPLETE and accepted**, recorded in [KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md) with final dispositions TG-PA-1 … TG-PA-7. **TG-PA-7 authorizes an isolated synthetic spike** (scope and exclusions in Phase-1 §18.1). Phase 2 is that spike, followed by selection against Phase-1 §17's acceptance criteria. **The Gate remains OPEN; no technology is selected and the spike is not implemented.**
 
 The original gate-opening task changed only the independent review artifact and this gate register. The B1 follow-up changes only [KNOWLEDGE_B1_SECURITY_SCOPE.md](KNOWLEDGE_B1_SECURITY_SCOPE.md) and B1 status/references in this register. It does not modify canonical architecture documents, existing ADRs, `packages/home-contracts/`, `services/`, `deploy/`, or production configuration.
 
