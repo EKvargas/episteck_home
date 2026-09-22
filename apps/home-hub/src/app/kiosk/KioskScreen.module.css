@@ -1,0 +1,813 @@
+/* ==========================================================================
+   KioskScreen.module.css
+   Olin Family OS — Ambient Wall Appliance
+   Strict zero-scroll: every rule enforces height: 100vh, overflow: hidden
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   ROOT SHELL — The entire display is this one fixed frame
+   -------------------------------------------------------------------------- */
+.kioskRoot {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  overflow: hidden;
+  touch-action: none;
+  background: var(--olin-bg-canvas);
+  background-image: var(--olin-bg-gradient);
+  color: var(--olin-text-main);
+  font-family: var(--olin-font-body, sans-serif);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Subtle ambient background glow layer */
+.ambientBg {
+  position: absolute;
+  inset: 0;
+  background: var(--olin-ambient-overlay, transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Everything above the background */
+.kioskShell {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  padding: 24px 36px 16px;
+  gap: 0;
+  box-sizing: border-box;
+}
+
+/* ==========================================================================
+   PERMANENT LAYER — Clock + Presence (Never rotates, always on screen)
+   ========================================================================== */
+
+.permanentLayer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--olin-surface-border);
+  margin-bottom: 20px;
+}
+
+/* Clock block */
+.clockGroup {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.clock {
+  font-family: var(--olin-font-headline, sans-serif);
+  font-size: clamp(3.5rem, 7vw, 6rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--olin-kiosk-time-color, var(--olin-accent));
+  font-variant-numeric: tabular-nums;
+}
+
+.clockMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-left: 2px solid var(--olin-surface-border);
+  padding-left: 20px;
+}
+
+.dateText {
+  font-family: var(--olin-font-headline, sans-serif);
+  font-size: clamp(1rem, 1.8vw, 1.4rem);
+  font-weight: 600;
+  color: var(--olin-text-main);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.weatherPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--olin-text-muted);
+  background: var(--olin-badge-bg);
+  padding: 2px 10px;
+  border-radius: 9999px;
+}
+
+.kioskLabel {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--olin-text-muted);
+  font-weight: 500;
+}
+
+/* Presence chips row */
+.presenceGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 16px;
+  border-radius: 9999px;
+  background: var(--olin-badge-bg);
+  border: 1px solid var(--olin-surface-border);
+  transition: border-color 0.3s ease;
+}
+
+.chip:hover {
+  border-color: var(--olin-accent);
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dotGreen {
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+}
+
+.dotAmber {
+  background: #f59e0b;
+  box-shadow: 0 0 8px #f59e0b;
+  animation: pulseDot 2.5s ease-in-out infinite;
+}
+
+.dotSky {
+  background: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8;
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+.chipLabel {
+  font-size: clamp(0.78rem, 1.1vw, 0.95rem);
+  font-weight: 600;
+  color: var(--olin-text-main);
+  white-space: nowrap;
+}
+
+.chipSub {
+  font-size: 0.72rem;
+  color: var(--olin-text-muted);
+  font-weight: 400;
+}
+
+/* Theme cycler button */
+.themeCycler {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 9999px;
+  background: transparent;
+  border: 1px solid var(--olin-surface-border);
+  color: var(--olin-text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.themeCycler:hover, .exitKioskBtn:hover {
+  background: var(--olin-badge-bg);
+  color: var(--olin-text-main);
+  border-color: var(--olin-accent);
+}
+
+.themeCycler:active, .exitKioskBtn:active {
+  transform: scale(0.95);
+}
+
+.exitKioskBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: var(--olin-pill-radius, 9999px);
+  border: 1px solid var(--olin-surface-border);
+  background: var(--olin-surface-card);
+  color: var(--olin-text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+/* Security alert (when door is unlocked) */
+.alertBanner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 20px;
+  border-radius: 12px;
+  background: rgba(245, 142, 42, 0.10);
+  border: 1px solid #f58e2a;
+  border-left: 5px solid #f58e2a;
+  margin-bottom: 12px;
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.alertText {
+  font-size: clamp(0.85rem, 1.2vw, 1rem);
+  font-weight: 600;
+  color: #f58e2a;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.alertBtn {
+  background: #f58e2a;
+  color: #fff;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 9999px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: opacity 0.2s ease;
+  flex-shrink: 0;
+}
+
+.alertBtn:hover { opacity: 0.88; }
+
+/* ==========================================================================
+   ROTATION LAYER — 4 slides, crossfade transition
+   ========================================================================== */
+
+.rotationLayer {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Each slide is absolutely positioned, cross-faded via opacity */
+.slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  gap: 20px;
+  opacity: 0;
+  transform: translateY(15px);
+  pointer-events: none;
+  transition: opacity 0.9s cubic-bezier(0.4, 0, 0.2, 1), transform 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.slideActive {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* ==========================================================================
+   SLIDE 1 — FAMILY STATUS (Next Up + Tonight)
+   ========================================================================== */
+
+.statusSlide {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: stretch;
+}
+
+.glanceCard {
+  background: var(--olin-surface-card);
+  backdrop-filter: var(--olin-surface-blur, none);
+  -webkit-backdrop-filter: var(--olin-surface-blur, none);
+  border: 1px solid var(--olin-surface-border);
+  border-left: 5px solid var(--olin-accent);
+  border-radius: var(--olin-card-radius, 16px);
+  box-shadow: var(--olin-shadow-elevation, 0 4px 24px rgba(0,0,0,0.10));
+  padding: clamp(18px, 2.5vw, 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.glanceCard:hover {
+  transform: scale(0.985);
+  box-shadow: var(--olin-accent-glow, 0 10px 30px rgba(0,0,0,0.1));
+  border-color: var(--olin-surface-border-strong);
+}
+
+.cardEyebrow {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  color: var(--olin-accent);
+}
+
+.cardMilestone {
+  font-family: var(--olin-font-headline, sans-serif);
+  font-size: clamp(1.5rem, 3vw, 2.6rem);
+  font-weight: 700;
+  color: var(--olin-text-main);
+  line-height: 1.1;
+  margin: 0;
+}
+
+.cardMeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: clamp(0.85rem, 1.3vw, 1.05rem);
+  color: var(--olin-text-muted);
+}
+
+.countdownBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--olin-accent);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.cardDivider {
+  width: 100%;
+  height: 1px;
+  background: var(--olin-surface-border);
+}
+
+.dinnerRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.dinnerEmoji {
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.dinnerMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dinnerTitle {
+  font-family: var(--olin-font-headline, sans-serif);
+  font-size: clamp(1.1rem, 2vw, 1.7rem);
+  font-weight: 700;
+  color: var(--olin-text-main);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dinnerSub {
+  font-size: 0.9rem;
+  color: var(--olin-text-muted);
+}
+
+/* ==========================================================================
+   SLIDE 2 — PHOTO MOMENT (ambient full-frame photo)
+   ========================================================================== */
+
+.photoSlide {
+  position: relative;
+  border-radius: var(--olin-card-radius, 16px);
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+.photoImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 14s ease;
+}
+
+.photoImage:hover {
+  transform: scale(1.03);
+}
+
+/* Gradient overlay for text readability */
+.photoOverlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.72) 0%,
+    rgba(0, 0, 0, 0.10) 50%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+.photoCaption {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: clamp(20px, 3vw, 40px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.photoCaptionText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.photoTitle {
+  font-family: var(--olin-font-headline, sans-serif);
+  font-size: clamp(1.4rem, 3vw, 2.6rem);
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.5);
+  margin: 0;
+}
+
+.photoDate {
+  font-size: clamp(0.8rem, 1.2vw, 1rem);
+  color: rgba(255,255,255,0.75);
+  font-weight: 500;
+}
+
+.familyTag {
+  background: rgba(255,255,255,0.15);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.25);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 8px 18px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   SLIDE 3 — HOME PULSE (IoT status grid)
+   ========================================================================== */
+
+.homeSlide {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+
+.homeSlideHeader {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  color: var(--olin-accent);
+}
+
+.homeGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+.homeTile {
+  background: var(--olin-surface-card);
+  border: 1px solid var(--olin-surface-border);
+  border-radius: var(--olin-card-radius, 16px);
+  box-shadow: var(--olin-shadow-elevation, 0 4px 24px rgba(0,0,0,0.10));
+  padding: clamp(16px, 2vw, 28px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: default;
+  transition: border-color 0.2s ease;
+  overflow: hidden;
+}
+
+.homeTileInteractive {
+  cursor: pointer;
+}
+
+.homeTileInteractive:hover {
+  border-color: var(--olin-accent);
+}
+
+.tileIcon {
+  font-size: clamp(1.6rem, 3vw, 2.4rem);
+  line-height: 1;
+}
+
+.tileLabel {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 600;
+  color: var(--olin-text-muted);
+}
+
+.tileValue {
+  font-family: var(--olin-font-headline, sans-serif);
+  font-size: clamp(1.4rem, 2.8vw, 2.2rem);
+  font-weight: 700;
+  color: var(--olin-text-main);
+  margin: 0;
+  line-height: 1.1;
+}
+
+.tileValueGreen {
+  color: #22c55e;
+}
+
+.tileValueAmber {
+  color: #f59e0b;
+}
+
+.tileSub {
+  font-size: 0.85rem;
+  color: var(--olin-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tapHint {
+  font-size: 0.7rem;
+  color: var(--olin-accent);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ==========================================================================
+   SLIDE 4 — WELLNESS PULSE ("Better Family" reminder)
+   ========================================================================== */
+
+.wellnessSlide {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+  width: 100%;
+}
+
+.wellnessCard {
+  flex: 1;
+  background: var(--olin-surface-card);
+  border: 1px solid var(--olin-surface-border);
+  border-radius: var(--olin-card-radius, 16px);
+  box-shadow: var(--olin-shadow-elevation, 0 4px 24px rgba(0,0,0,0.10));
+  padding: clamp(16px, 2.2vw, 28px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.wellnessAvatar {
+  width: clamp(40px, 5vw, 64px);
+  height: clamp(40px, 5vw, 64px);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--olin-font-headline, sans-serif);
+  font-size: clamp(1.2rem, 2vw, 1.8rem);
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.avatarErick  { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
+.avatarAna    { background: linear-gradient(135deg, #ec4899, #be185d); }
+.avatarIsabel { background: linear-gradient(135deg, #f59e0b, #d97706); }
+
+.wellnessName {
+  font-family: var(--olin-font-headline, sans-serif);
+  font-size: clamp(1rem, 1.6vw, 1.4rem);
+  font-weight: 700;
+  color: var(--olin-text-main);
+  margin: 0;
+}
+
+.wellnessStat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.statRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--olin-badge-bg);
+  border-radius: 10px;
+}
+
+.statLabel {
+  font-size: 0.8rem;
+  color: var(--olin-text-muted);
+  font-weight: 500;
+}
+
+.statValue {
+  font-size: clamp(0.9rem, 1.4vw, 1.1rem);
+  font-weight: 700;
+  color: var(--olin-text-main);
+}
+
+.statValueGood { color: #22c55e; }
+.statValueMid  { color: #f59e0b; }
+
+.streakBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--olin-accent);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  margin-top: 4px;
+  align-self: flex-start;
+}
+
+/* ==========================================================================
+   FOOTER — Rotation dots + Ask Olin trigger (always visible)
+   ========================================================================== */
+
+.footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 14px;
+  border-top: 1px solid var(--olin-surface-border);
+  margin-top: 14px;
+  gap: 16px;
+}
+
+.rotationDots {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rotDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--olin-surface-border);
+  transition: all 0.4s ease;
+}
+
+.rotDotActive {
+  width: 24px;
+  border-radius: 9999px;
+  background: var(--olin-accent);
+}
+
+.footerPrivacy {
+  font-size: 0.72rem;
+  color: var(--olin-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  justify-content: center;
+}
+
+.privacyDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+}
+
+.askOlinBtn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--olin-accent);
+  color: #fff;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 9999px;
+  font-size: clamp(0.9rem, 1.3vw, 1.1rem);
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--olin-accent-glow, 0 0 20px rgba(0,0,0,0.2));
+  transition: transform 0.18s ease, opacity 0.18s ease;
+  flex-shrink: 0;
+  animation: pulseGlow 3s ease-in-out infinite;
+}
+
+.askOlinBtn:hover  { transform: translateY(-2px) scale(1.03); opacity: 0.92; }
+.askOlinBtn:active { transform: scale(0.97); }
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: var(--olin-accent-glow, 0 0 16px rgba(0,0,0,0.15)); }
+  50%       { box-shadow: 0 0 32px color-mix(in srgb, var(--olin-accent) 60%, transparent); }
+}
+
+/* ==========================================================================
+   RESPONSIVE BREAKPOINTS (All maintain zero scroll)
+   ========================================================================== */
+
+/* Compact tablets: 1024×768 */
+@media (max-width: 1100px) {
+  .kioskShell {
+    padding: 16px 20px 12px;
+  }
+  .clock {
+    font-size: clamp(2.8rem, 8vw, 4rem);
+  }
+  .statusSlide {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+  .homeGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .wellnessSlide {
+    flex-direction: column;
+  }
+  .permanentLayer {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .presenceGroup {
+    flex-wrap: wrap;
+  }
+}
+
+/* Large wall displays: 1920×1080 */
+@media (min-width: 1600px) {
+  .kioskShell {
+    padding: 36px 56px 24px;
+  }
+  .permanentLayer {
+    margin-bottom: 28px;
+    padding-bottom: 24px;
+  }
+  .footer {
+    padding-top: 20px;
+    margin-top: 20px;
+  }
+}

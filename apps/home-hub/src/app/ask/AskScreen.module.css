@@ -1,0 +1,164 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  flex: 1;
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  padding: var(--ep-space-6) var(--ep-space-6) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ep-space-2);
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 600;
+  font-family: var(--olin-font-headline);
+  color: var(--olin-text-main);
+  margin: 0;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+}
+
+.contextSubtitle {
+  font-size: 0.95rem;
+  font-family: var(--olin-font-body);
+  color: var(--olin-text-muted);
+  font-weight: 500;
+}
+
+.threadContainer {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--ep-space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ep-space-8);
+}
+
+.composerContainer {
+  padding: var(--ep-space-4) var(--ep-space-6);
+  background: transparent;
+  border-top: 1px solid var(--olin-surface-border);
+}
+
+.messageRow {
+  display: flex;
+  width: 100%;
+}
+
+.messageUser {
+  justify-content: flex-end;
+}
+
+.messageAssistant {
+  justify-content: flex-start;
+}
+
+.messageBubble {
+  max-width: 80%;
+  padding: var(--ep-space-4) var(--ep-space-5);
+  border-radius: var(--olin-card-radius);
+  font-family: var(--olin-font-body);
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+
+.messageBubbleUser {
+  background-color: var(--olin-accent);
+  color: var(--olin-bg-canvas);
+  border-bottom-right-radius: 4px;
+}
+
+.messageBubbleAssistant {
+  background-color: var(--olin-surface-card);
+  color: var(--olin-text-main);
+  box-shadow: var(--olin-shadow-elevation);
+  border: 1px solid var(--olin-surface-border);
+  border-bottom-left-radius: 4px;
+  backdrop-filter: var(--olin-surface-blur);
+}
+
+.composerForm {
+  display: flex;
+  background: var(--olin-surface-card);
+  border: 1px solid var(--olin-surface-border);
+  border-radius: var(--olin-pill-radius);
+  padding: 4px 4px 4px 16px;
+  align-items: center;
+  box-shadow: var(--olin-shadow-elevation);
+  backdrop-filter: var(--olin-surface-blur);
+}
+
+.composerInput {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 12px 0;
+  font-size: 1rem;
+  color: var(--olin-text-main);
+  font-family: var(--olin-font-body);
+  outline: none;
+  resize: none;
+  max-height: 120px;
+}
+
+.composerInput::placeholder {
+  color: var(--olin-text-muted);
+}
+
+.composerSubmit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: var(--olin-accent);
+  color: var(--olin-bg-canvas);
+  border: none;
+  cursor: pointer;
+  transition: opacity var(--ep-transition-fast);
+}
+
+.composerSubmit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Tool UI */
+.toolNutrition {
+  background-color: transparent;
+  border: 1px solid var(--olin-surface-border);
+  border-radius: var(--olin-card-radius);
+  padding: var(--ep-space-5);
+  margin-top: var(--ep-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ep-space-3);
+}
+
+.toolNutritionTitle {
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: var(--olin-font-headline);
+  color: var(--olin-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.toolNutritionData {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--olin-text-main);
+}
+
+.toolNutritionDetail {
+  font-size: 1rem;
+  color: var(--olin-text-muted);
+}

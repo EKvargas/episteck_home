@@ -1,0 +1,76 @@
+/* src/components/slots/editorial/EditorialTodayHeader.module.css */
+.headerNav {
+  position: relative;
+  z-index: 20;
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.greetingBlock {
+  display: flex;
+  flex-direction: column;
+}
+
+.timeIndicator {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #595959;
+}
+
+.greetingText {
+  margin: 0;
+  font-family: var(--olin-font-headline);
+  font-size: 1.85rem;
+  font-weight: 700;
+  color: #141414;
+  letter-spacing: -0.02em;
+}
+
+.rightArea {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.homePill {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 0.25rem;
+  background-color: #ffffff;
+  border: 1px solid #141414;
+  box-shadow: 2px 2px 0px #141414;
+  font-family: var(--olin-font-body);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #141414;
+}
+
+.pulseDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 0.1rem;
+  background-color: #1d7335;
+}
+
+.privacyBadge {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 0.25rem;
+  background-color: #eee9dc;
+  color: #141414;
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.7rem;
+  font-weight: 700;
+  border: 1px solid #141414;
+  box-shadow: 2px 2px 0px #141414;
+}

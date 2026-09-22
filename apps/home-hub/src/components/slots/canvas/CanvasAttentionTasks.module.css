@@ -1,0 +1,139 @@
+/* src/components/slots/canvas/CanvasAttentionTasks.module.css */
+.card {
+  background-color: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(225, 215, 198, 0.85);
+  border-radius: var(--olin-card-radius);
+  box-shadow: 0 14px 34px -8px rgba(35, 52, 90, 0.12);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card:hover {
+  border-color: #ff5c38;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.titleArea {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bellIcon {
+  color: #ff5c38;
+}
+
+.titleText {
+  margin: 0;
+  font-family: var(--olin-font-headline);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--olin-text-main);
+}
+
+.pendingTag {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #f97316;
+  background-color: #fff7ed;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(249, 115, 22, 0.25);
+}
+
+.taskList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.taskItem {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 1rem;
+  background-color: #faf7f0;
+  border: 1px solid rgba(225, 215, 198, 0.6);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.taskItem:hover {
+  background-color: #ffffff;
+  border-color: #2e66f6;
+  transform: translateY(-1px);
+}
+
+.taskItemDoorAlert {
+  background-color: #fff7ed;
+  border-color: rgba(249, 115, 22, 0.35);
+}
+
+.taskCheckbox {
+  appearance: none;
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 9999px;
+  border: 2px solid #2e66f6;
+  background-color: #ffffff;
+  cursor: pointer;
+  display: grid;
+  place-content: center;
+  transition: all 0.2s ease;
+  margin: 0;
+}
+
+.taskCheckbox:checked {
+  background: linear-gradient(135deg, #2e66f6 0%, #6366f1 100%);
+  border-color: #2e66f6;
+}
+
+.taskCheckbox:checked::before {
+  content: "✓";
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.taskText {
+  flex: 1;
+  font-family: var(--olin-font-body);
+  font-size: 0.85rem;
+  color: var(--olin-text-main);
+  font-weight: 500;
+  transition: opacity 0.2s ease;
+}
+
+.taskTextDone {
+  text-decoration: line-through;
+  opacity: 0.45;
+}
+
+.taskTag {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.68rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  background-color: #e2e8f0;
+  color: #475569;
+  font-weight: 600;
+}
+
+.taskTagDoor {
+  background-color: #ffedd5;
+  color: #c2410c;
+  font-weight: 700;
+}

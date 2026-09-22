@@ -1,0 +1,61 @@
+/* DefaultSlots.module.css */
+.defaultSwitcher {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem;
+  border-radius: 9999px;
+  background: var(--olin-surface-card);
+  border: 1px solid var(--olin-surface-border);
+}
+
+.defaultChip {
+  padding: 0.35rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--olin-text-muted);
+  cursor: pointer;
+  border: none;
+  background: none;
+  transition: all 0.2s ease;
+}
+
+.defaultChipActive {
+  background: var(--olin-accent);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.defaultChipActive[data-mode="CARE_FOR_ANOTHER_PERSON"] {
+  background: #8b5cf6; /* Distinct purple to indicate care context */
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.3);
+}
+
+.defaultChipActive[data-mode="FAMILY"] {
+  background: var(--olin-surface-border-strong); /* Grounded slate for family */
+  color: var(--olin-text-main);
+}
+
+.defaultCard {
+  background: var(--olin-surface-card);
+  border: 1px solid var(--olin-surface-border);
+  border-radius: var(--olin-card-radius);
+  padding: 1.25rem;
+  box-shadow: var(--olin-shadow-elevation);
+}
+
+.defaultHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.defaultTitle {
+  font-family: var(--olin-font-headline);
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--olin-text-main);
+}

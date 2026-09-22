@@ -1,0 +1,134 @@
+/* src/components/slots/organic/OrganicRelationshipSwitcher.module.css */
+.container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0.5rem 1.4rem;
+  border-radius: 1.5rem;
+  background-color: #f5faf4;
+  border: 1px solid #cbd9cb;
+  box-shadow: 0 4px 14px rgba(34, 54, 37, 0.05);
+}
+
+/* Trailing Vine Runner connecting the potted plants */
+.vineRunner {
+  position: absolute;
+  left: 1.5rem;
+  right: 1.5rem;
+  top: 50%;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(73, 113, 76, 0.25) 0%, rgba(73, 113, 76, 0.5) 50%, rgba(73, 113, 76, 0.25) 100%);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.potButton {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.potButton:hover {
+  transform: translateY(-2px);
+}
+
+.potTile {
+  border-radius: 0.85rem;
+  border: 1px solid #cbd8c7;
+  background-color: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+.potTileSmall {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+.potTileLarge {
+  width: 2.75rem;
+  height: 2.75rem;
+}
+
+.potEmoji {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.potEmojiSmall {
+  font-size: 0.95rem;
+}
+
+.potEmojiLarge {
+  font-size: 1.25rem;
+}
+
+/* Active Botanical Pot */
+.activePot {
+  border-color: #49714c;
+  background-color: #dfecde;
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(73, 113, 76, 0.2);
+}
+
+.activePotLarge {
+  border-color: #49714c;
+  background-color: #dfecde;
+  transform: scale(1.15);
+  box-shadow: 0 6px 16px rgba(73, 113, 76, 0.25), 0 0 0 4px rgba(73, 113, 76, 0.12);
+}
+
+.potLabel {
+  font-family: var(--olin-font-body);
+  font-size: 0.68rem;
+  margin-top: 0.25rem;
+  color: #546656;
+  font-weight: 500;
+  transition: color 0.2s ease, font-weight 0.2s ease;
+}
+
+.activeLabel {
+  font-weight: 700;
+  color: #2c5330;
+}
+
+@media (max-width: 640px) {
+  .container {
+    gap: 0.85rem;
+    padding: 0.35rem 1rem;
+  }
+  .vineRunner {
+    left: 1.15rem;
+    right: 1.15rem;
+  }
+  .potTileSmall {
+    width: 2rem;
+    height: 2rem;
+  }
+  .potTileLarge {
+    width: 2.35rem;
+    height: 2.35rem;
+  }
+  .potEmojiSmall {
+    font-size: 0.85rem;
+  }
+  .potEmojiLarge {
+    font-size: 1.1rem;
+  }
+  .potLabel {
+    font-size: 0.62rem;
+  }
+}

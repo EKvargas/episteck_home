@@ -1,0 +1,57 @@
+/* src/components/slots/editorial/EditorialAskOlinTrigger.module.css */
+.triggerButton {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1.15rem;
+  border-radius: 0.35rem;
+  background-color: #ffffff;
+  border: 2px solid #141414;
+  box-shadow: 3px 3px 0px #141414;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.triggerButton:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0px #141414;
+}
+
+.iconSquare {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.2rem;
+  background-color: #781c22;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--olin-font-headline);
+  font-weight: 700;
+  font-size: 0.95rem;
+  border: 1px solid #141414;
+}
+
+.textColumn {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.title {
+  font-family: var(--olin-font-headline);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #141414;
+  line-height: 1.1;
+}
+
+.subtitle {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.65rem;
+  color: #595959;
+}

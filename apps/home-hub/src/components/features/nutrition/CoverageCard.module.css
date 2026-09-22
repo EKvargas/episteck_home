@@ -1,0 +1,152 @@
+.card {
+  background: var(--olin-surface-card);
+  border-radius: var(--olin-card-radius);
+  padding: 1.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.titleGroup h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--olin-text-primary);
+}
+
+.titleGroup p {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.9rem;
+  color: var(--olin-text-secondary);
+}
+
+.completeness {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+}
+
+.completenessHigh {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+}
+
+.completenessMedium {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+}
+
+.completenessLow {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.metrics {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.currentAmount {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--olin-text-primary);
+}
+
+.targetAmount {
+  font-size: 1rem;
+  color: var(--olin-text-secondary);
+}
+
+.progressBarContainer {
+  height: 12px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 999px;
+  overflow: hidden;
+  display: flex;
+}
+
+.progressSegment {
+  height: 100%;
+}
+
+.progressMeasured {
+  background: var(--olin-accent-color);
+}
+
+.progressEstimated {
+  background: rgba(var(--olin-accent-rgb, 99, 102, 241), 0.5);
+}
+
+.contributions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.contributionItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.contributionItem:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.contributionLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--olin-text-primary);
+}
+
+.contributionAmount {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--olin-text-primary);
+}
+
+.badge {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.badgeMeasured {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+}
+
+.badgeEstimated {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+}
+
+.badgeUnknown {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.sourceIcon {
+  width: 16px;
+  height: 16px;
+  opacity: 0.6;
+}

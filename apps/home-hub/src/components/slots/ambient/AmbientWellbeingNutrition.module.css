@@ -1,0 +1,450 @@
+/* AmbientWellbeingNutrition.module.css */
+.card {
+  background: var(--olin-surface-card);
+  backdrop-filter: var(--olin-surface-blur);
+  -webkit-backdrop-filter: var(--olin-surface-blur);
+  border: 1px solid var(--olin-surface-border);
+  border-radius: var(--olin-card-radius);
+  box-shadow: var(--olin-shadow-elevation);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card:hover {
+  border-color: var(--olin-surface-border-strong);
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.titleArea {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.iconBadge {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--olin-badge-bg);
+  color: var(--olin-accent);
+}
+
+.titleText {
+  font-family: var(--olin-font-headline);
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--olin-text-main);
+  margin: 0;
+  line-height: 1.25;
+}
+
+.subtitleText {
+  font-family: var(--olin-font-body);
+  font-size: 0.75rem;
+  color: var(--olin-text-muted);
+  margin: 0;
+}
+
+.targetTag {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--olin-font-mono);
+  font-size: 0.75rem;
+  color: var(--olin-text-muted);
+}
+
+.targetDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--olin-accent);
+  box-shadow: 0 0 8px var(--olin-accent);
+}
+
+/* Erick: Caloric Gauge & Macros Grid */
+.erickGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  align-items: center;
+}
+
+@media (min-width: 640px) {
+  .erickGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.gaugeContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  position: relative;
+}
+
+.svgWrapper {
+  position: relative;
+  width: 11rem;
+  height: 11rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gaugeSvg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.gaugeCenter {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.calorieNumber {
+  font-family: var(--olin-font-headline);
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: var(--olin-text-main);
+  line-height: 1;
+}
+
+.calorieTarget {
+  font-family: var(--olin-font-mono);
+  font-size: 0.6875rem;
+  color: var(--olin-text-muted);
+  opacity: 0.8;
+  margin-top: 0.125rem;
+}
+
+.fuelBadge {
+  font-family: var(--olin-font-body);
+  font-size: 0.625rem;
+  font-weight: 600;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  background: rgba(16, 210, 144, 0.2);
+  color: #10d290;
+  margin-top: 0.375rem;
+}
+
+.gaugeStats {
+  margin-top: 0.75rem;
+  text-align: center;
+  font-size: 0.75rem;
+  font-family: var(--olin-font-body);
+  color: var(--olin-text-muted);
+}
+
+.macrosCol {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.macroHeader {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-bottom: 0.375rem;
+  color: var(--olin-text-main);
+}
+
+.macroTrack {
+  width: 100%;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.macroBarProtein {
+  height: 100%;
+  border-radius: 9999px;
+  background: var(--olin-accent);
+  box-shadow: 0 0 10px var(--olin-accent);
+  transition: width 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.macroBarCarbs {
+  height: 100%;
+  border-radius: 9999px;
+  background: #38bdf8;
+  box-shadow: 0 0 10px #38bdf8;
+  transition: width 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.quickLogBox {
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.logBtn {
+  font-family: var(--olin-font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  border-radius: 9999px;
+  background: var(--olin-badge-bg);
+  color: var(--olin-accent);
+  border: 1px solid rgba(94, 178, 248, 0.3);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.logBtn:hover {
+  background: rgba(94, 178, 248, 0.25);
+  transform: translateY(-1px);
+}
+
+/* Ana: Care for Ana */
+.anaCareCol {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.careAlertCard {
+  padding: 1rem 1.25rem;
+  border-radius: 1rem;
+  background: rgba(246, 171, 99, 0.1);
+  border: 1px solid rgba(246, 171, 99, 0.25);
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.careIconBadge {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  background: rgba(246, 171, 99, 0.2);
+  color: #f6ab63;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.careContent {
+  flex: 1;
+}
+
+.careCardTitle {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #fed7aa;
+  margin: 0;
+}
+
+.careCardDesc {
+  font-size: 0.75rem;
+  color: rgba(254, 215, 170, 0.85);
+  margin: 0.25rem 0 0 0;
+  line-height: 1.4;
+}
+
+.careActionsRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.chimeBtn {
+  font-family: var(--olin-font-mono);
+  font-size: 0.75rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 0.5rem;
+  background: rgba(246, 171, 99, 0.25);
+  color: #ffedd5;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chimeBtn:hover {
+  background: rgba(246, 171, 99, 0.35);
+}
+
+.nextCheckupText {
+  font-family: var(--olin-font-mono);
+  font-size: 0.75rem;
+  color: rgba(246, 171, 99, 0.7);
+}
+
+.anaStatsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.statTile {
+  padding: 0.875rem 1rem;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.statTileLabel {
+  font-size: 0.75rem;
+  color: var(--olin-text-muted);
+}
+
+.statTileValue {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0.25rem 0 0 0;
+}
+
+.statTileSub {
+  font-family: var(--olin-font-mono);
+  font-size: 0.625rem;
+  color: #10d290;
+  margin-top: 0.25rem;
+  display: block;
+}
+
+.statTileSubSky {
+  font-family: var(--olin-font-mono);
+  font-size: 0.625rem;
+  color: #38bdf8;
+  margin-top: 0.25rem;
+  display: block;
+}
+
+/* Family: Dining & Nourishment */
+.familyMealCard {
+  padding: 1.25rem 1.5rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+@media (min-width: 640px) {
+  .familyMealCard {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.familyMealLeft {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.potIconBox {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  background: var(--olin-badge-bg);
+}
+
+.mealTag {
+  font-family: var(--olin-font-mono);
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #10d290;
+  font-weight: 600;
+}
+
+.dishTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--olin-text-main);
+  margin: 0.125rem 0 0 0;
+}
+
+.dishDesc {
+  font-size: 0.75rem;
+  color: var(--olin-text-muted);
+  margin: 0.25rem 0 0 0;
+}
+
+.familyActions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.groceryBtn {
+  font-family: var(--olin-font-mono);
+  font-size: 0.75rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--olin-text-main);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.groceryBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.countdownBtn {
+  font-family: var(--olin-font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.75rem;
+  background: var(--olin-accent);
+  color: #02070f;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(94, 178, 248, 0.4);
+  transition: all 0.2s ease;
+}
+
+.countdownBtn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}

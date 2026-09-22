@@ -1,0 +1,236 @@
+/* src/styles/tokens.css */
+
+/* Core Spacing and Typography (Theme-agnostic primitives) */
+:root {
+  --ep-font-sans: var(--ep-font-sans);
+  --ep-font-serif: var(--ep-font-serif, var(--ep-font-sans));
+  
+  --ep-space-1: 4px;
+  --ep-space-2: 8px;
+  --ep-space-3: 12px;
+  --ep-space-4: 16px;
+  --ep-space-6: 24px;
+  --ep-space-8: 32px;
+  --ep-space-10: 40px;
+  --ep-space-12: 48px;
+  --ep-space-16: 64px;
+  
+  --ep-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --ep-transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* =====================================================================
+   THEME DEFINITIONS
+   ===================================================================== */
+
+/* 1. DEFAULT: WARM HOUSEHOLD */
+:root, [data-olin-theme="warm-household"] {
+  --olin-font-headline: var(--ep-font-serif);
+  --olin-font-body: var(--ep-font-sans);
+  
+  --olin-bg-canvas: #f5ede4;
+  --olin-bg-gradient: linear-gradient(135deg, #e8dacb 0%, #f6eee5 45%, #ebdcd0 100%);
+  --olin-ambient-overlay: radial-gradient(circle at 80% 10%, rgba(214, 127, 85, 0.14) 0%, transparent 60%);
+  
+  --olin-surface-card: #fffdfa;
+  --olin-surface-card-hover: #ffffff;
+  --olin-surface-border: #e0d0bf;
+  --olin-surface-border-strong: #c26941;
+  --olin-surface-blur: none;
+  
+  --olin-text-main: #2b1f1a;
+  --olin-text-muted: #79675b;
+  
+  --olin-accent: #c4643c;
+  --olin-accent-glow: 0 10px 25px -4px rgba(196, 100, 60, 0.28);
+  --olin-accent-secondary: #57704e;
+  
+  --olin-badge-bg: #fae7db;
+  --olin-badge-text: #923f1e;
+  
+  --olin-card-radius: 1.6rem;
+  --olin-pill-radius: 1.4rem;
+  --olin-shadow-elevation: 0 10px 30px -5px rgba(78, 48, 25, 0.08), 0 2px 8px rgba(0,0,0,0.02);
+
+  /* Semantic UI Colors (Ensuring high contrast/accessibility) */
+  --olin-status-success: #3c7849;
+  --olin-status-attention: #c4643c;
+  --olin-status-error: #a83232;
+  --olin-kiosk-time-color: #2b1f1a;
+}
+
+/* 2. AMBIENT FUTURE OS */
+[data-olin-theme="ambient-future"] {
+  --olin-font-headline: var(--ep-font-dm-sans, var(--ep-font-sans));
+  --olin-font-body: var(--ep-font-dm-sans, var(--ep-font-sans));
+  --olin-font-mono: var(--ep-font-mono, monospace);
+  
+  --olin-bg-canvas: #02070f;
+  --olin-bg-gradient: radial-gradient(135% 125% at 75% 15%, #10263f 0%, #071322 45%, #02070f 100%);
+  --olin-ambient-overlay: radial-gradient(ellipse at 70% 25%, rgba(94, 178, 248, 0.14), transparent 60%), radial-gradient(circle at 20% 80%, rgba(246, 171, 99, 0.08), transparent 50%);
+  
+  --olin-surface-card: rgba(16, 38, 64, 0.42);
+  --olin-surface-card-hover: rgba(26, 56, 92, 0.55);
+  --olin-surface-border: rgba(94, 178, 248, 0.18);
+  --olin-surface-border-strong: rgba(94, 178, 248, 0.45);
+  --olin-surface-blur: blur(28px);
+  
+  --olin-text-main: #f0f7ff;
+  --olin-text-muted: #8ba9cb;
+  
+  --olin-accent: #5eb2f8;
+  --olin-accent-glow: 0 0 32px rgba(94, 178, 248, 0.4);
+  --olin-accent-secondary: #f6ab63;
+  
+  --olin-badge-bg: rgba(94, 178, 248, 0.12);
+  --olin-badge-text: #a4d4ff;
+  
+  --olin-card-radius: 1.85rem;
+  --olin-pill-radius: 9999px;
+  --olin-shadow-elevation: 0 20px 45px -15px rgba(0, 5, 20, 0.7);
+
+  --olin-status-success: #10d290;
+  --olin-status-attention: #f6ab63;
+  --olin-status-error: #ef4444;
+  --olin-kiosk-time-color: #ffffff;
+}
+
+/* 3. NORDIC PREMIUM HARDWARE */
+[data-olin-theme="premium-hardware"] {
+  --olin-font-headline: var(--ep-font-outfit, var(--ep-font-sans));
+  --olin-font-body: var(--ep-font-outfit, var(--ep-font-sans));
+  
+  --olin-bg-canvas: #08090b;
+  --olin-bg-gradient: radial-gradient(ellipse at 60% 40%, #1e2227 0%, #121417 55%, #08090b 100%);
+  --olin-ambient-overlay: radial-gradient(circle at 45% 15%, rgba(245, 142, 42, 0.08), transparent 65%);
+  
+  --olin-surface-card: rgba(38, 44, 51, 0.8);
+  --olin-surface-card-hover: rgba(46, 54, 63, 0.88);
+  --olin-surface-border: rgba(255, 255, 255, 0.08);
+  --olin-surface-border-strong: rgba(245, 142, 42, 0.65);
+  --olin-surface-blur: blur(20px);
+  
+  --olin-text-main: #f1f4f8;
+  --olin-text-muted: #828c9b;
+  
+  --olin-accent: #f58e2a;
+  --olin-accent-glow: 0 0 28px rgba(245, 142, 42, 0.55);
+  --olin-accent-secondary: #10d290;
+  
+  --olin-badge-bg: rgba(245, 142, 42, 0.12);
+  --olin-badge-text: #ffb773;
+  
+  --olin-card-radius: 1.25rem;
+  --olin-pill-radius: 0.75rem;
+  --olin-shadow-elevation: 0 16px 40px -8px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
+  --olin-status-success: #10d290;
+  --olin-status-attention: #f58e2a;
+  --olin-status-error: #ef4444;
+  --olin-kiosk-time-color: #f58e2a;
+}
+
+/* 4. EDITORIAL LIFE LEDGER */
+[data-olin-theme="editorial-ledger"] {
+  --olin-font-headline: var(--ep-font-serif);
+  --olin-font-body: var(--ep-font-sans);
+  
+  --olin-bg-canvas: #f7f5ed;
+  --olin-bg-gradient: none;
+  --olin-ambient-overlay: none;
+  
+  --olin-surface-card: #ffffff;
+  --olin-surface-card-hover: #faf9f5;
+  --olin-surface-border: #1a1a1a;
+  --olin-surface-border-strong: #1a1a1a;
+  --olin-surface-blur: none;
+  
+  --olin-text-main: #141414;
+  --olin-text-muted: #595959;
+  
+  --olin-accent: #781c22;
+  --olin-accent-glow: none;
+  --olin-accent-secondary: #141414;
+  
+  --olin-badge-bg: #eee9dc;
+  --olin-badge-text: #141414;
+  
+  --olin-card-radius: 0.35rem;
+  --olin-pill-radius: 0.35rem;
+  --olin-shadow-elevation: 4px 4px 0px #141414;
+
+  --olin-status-success: #1d7335;
+  --olin-status-attention: #9e641c;
+  --olin-status-error: #781c22;
+  --olin-kiosk-time-color: #141414;
+}
+
+/* 5. COLORFUL FAMILY CANVAS */
+[data-olin-theme="colorful-canvas"] {
+  --olin-font-headline: var(--ep-font-sans);
+  --olin-font-body: var(--ep-font-sans);
+  
+  --olin-bg-canvas: #fcf9f2;
+  --olin-bg-gradient: linear-gradient(130deg, #fef4e6 0%, #fdf8ed 40%, #e9f5f2 100%);
+  --olin-ambient-overlay: radial-gradient(circle at 15% 20%, rgba(255, 92, 56, 0.09), transparent 45%), radial-gradient(circle at 88% 75%, rgba(46, 102, 246, 0.09), transparent 45%);
+  
+  --olin-surface-card: rgba(255, 255, 255, 0.92);
+  --olin-surface-card-hover: #ffffff;
+  --olin-surface-border: rgba(225, 215, 198, 0.85);
+  --olin-surface-border-strong: #ff5c38;
+  --olin-surface-blur: blur(10px);
+  
+  --olin-text-main: #16202e;
+  --olin-text-muted: #5a6575;
+  
+  --olin-accent: #2e66f6;
+  --olin-accent-glow: 0 12px 28px -5px rgba(46, 102, 246, 0.38);
+  --olin-accent-secondary: #0bb579;
+  
+  --olin-badge-bg: #e6effe;
+  --olin-badge-text: #1a56db;
+  
+  --olin-card-radius: 2.1rem;
+  --olin-pill-radius: 9999px;
+  --olin-shadow-elevation: 0 14px 34px -8px rgba(35, 52, 90, 0.12);
+
+  --olin-status-success: #0bb579;
+  --olin-status-attention: #f58e2a;
+  --olin-status-error: #ff5c38;
+  --olin-kiosk-time-color: #16202e;
+}
+
+/* 6. ORGANIC CALM */
+[data-olin-theme="organic-calm"] {
+  --olin-font-headline: var(--ep-font-serif);
+  --olin-font-body: var(--ep-font-dm-sans, var(--ep-font-sans));
+  
+  --olin-bg-canvas: #eef4ed;
+  --olin-bg-gradient: linear-gradient(145deg, #e2ece1 0%, #edf3eb 55%, #e1ebe3 100%);
+  --olin-ambient-overlay: radial-gradient(circle at 85% 15%, rgba(143, 119, 165, 0.12), transparent 50%);
+  
+  --olin-surface-card: rgba(252, 254, 251, 0.84);
+  --olin-surface-card-hover: rgba(255, 255, 255, 0.96);
+  --olin-surface-border: #cad8c7;
+  --olin-surface-border-strong: #517a54;
+  --olin-surface-blur: blur(14px);
+  
+  --olin-text-main: #1d2d20;
+  --olin-text-muted: #546656;
+  
+  --olin-accent: #49714c;
+  --olin-accent-glow: 0 8px 24px -4px rgba(73, 113, 76, 0.26);
+  --olin-accent-secondary: #8f77a5;
+  
+  --olin-badge-bg: #dfecde;
+  --olin-badge-text: #2c5330;
+  
+  --olin-card-radius: 1.85rem;
+  --olin-pill-radius: 9999px;
+  --olin-shadow-elevation: 0 12px 28px -5px rgba(34, 54, 37, 0.08);
+
+  --olin-status-success: #49714c;
+  --olin-status-attention: #d97742;
+  --olin-status-error: #b54545;
+  --olin-kiosk-time-color: #1d2d20;
+}

@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Olin Family OS — Multi-Theme Design Lab</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts for diverse art directions -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&family=Fira+Code:wght@400;500;600&family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..800&family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,700;1,500&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* =====================================================================
+       RADICAL ART DIRECTION THEMES (CSS TOKENS)
+       ===================================================================== */
+
+    /* 1. AMBIENT FUTURE OS */
+    :root, [data-theme="ambient-future"] {
+      --font-headline: 'DM Sans', sans-serif;
+      --font-body: 'DM Sans', sans-serif;
+      --font-mono: 'Fira Code', monospace;
+      --bg-canvas: radial-gradient(135% 125% at 75% 15%, #10263f 0%, #071322 45%, #02070f 100%);
+      --surface-card: rgba(16, 38, 64, 0.42);
+      --surface-card-hover: rgba(26, 56, 92, 0.55);
+      --surface-border: rgba(94, 178, 248, 0.18);
+      --surface-border-strong: rgba(94, 178, 248, 0.45);
+      --surface-blur: blur(28px);
+      --text-main: #f0f7ff;
+      --text-muted: #8ba9cb;
+      --accent: #5eb2f8;
+      --accent-glow: 0 0 32px rgba(94, 178, 248, 0.4);
+      --accent-secondary: #f6ab63;
+      --card-radius: 1.85rem;
+      --pill-radius: 9999px;
+      --shadow-elevation: 0 20px 45px -15px rgba(0, 5, 20, 0.7);
+      --ambient-overlay: radial-gradient(ellipse at 70% 25%, rgba(94, 178, 248, 0.14), transparent 60%),
+                                radial-gradient(circle at 20% 80%, rgba(246, 171, 99, 0.08), transparent 50%);
+      --kiosk-time-color: #ffffff;
+      --badge-bg: rgba(94, 178, 248, 0.12);
+      --badge-text: #a4d4ff;
+    }
+
+    /* 2. WARM HUMAN HOUSEHOLD */
+    [data-theme="warm-household"] {
+      --font-headline: 'Fraunces', Georgia, serif;
+      --font-body: 'Plus Jakarta Sans', sans-serif;
+      --font-mono: 'Fira Code', monospace;
+      --bg-canvas: #f5ede4 linear-gradient(135deg, #e8dacb 0%, #f6eee5 45%, #ebdcd0 100%);
+      --surface-card: #fffdfa;
+      --surface-card-hover: #ffffff;
+      --surface-border: #e0d0bf;
+      --surface-border-strong: #c26941;
+      --surface-blur: none;
+      --text-main: #2b1f1a;
+      --text-muted: #79675b;
+      --accent: #c4643c; /* Warm Terracotta */
+      --accent-glow: 0 10px 25px -4px rgba(196, 100, 60, 0.28);
+      --accent-secondary: #57704e; /* Olive garden */
+      --card-radius: 1.6rem;
+      --pill-radius: 1.4rem;
+      --shadow-elevation: 0 10px 30px -5px rgba(78, 48, 25, 0.08), 0 2px 8px rgba(0,0,0,0.02);
+      --ambient-overlay: radial-gradient(circle at 80% 10%, rgba(214, 127, 85, 0.14) 0%, transparent 60%);
+      --kiosk-time-color: #2b1f1a;
+      --badge-bg: #fae7db;
+      --badge-text: #923f1e;
+    }
+
+    /* 3. NORDIC PREMIUM HARDWARE */
+    [data-theme="premium-hardware"] {
+      --font-headline: 'Outfit', sans-serif;
+      --font-body: 'Outfit', sans-serif;
+      --font-mono: 'Fira Code', monospace;
+      --bg-canvas: radial-gradient(ellipse at 60% 40%, #1e2227 0%, #121417 55%, #08090b 100%);
+      --surface-card: linear-gradient(170deg, rgba(38, 44, 51, 0.8) 0%, rgba(20, 23, 28, 0.9) 100%);
+      --surface-card-hover: linear-gradient(170deg, rgba(46, 54, 63, 0.88) 0%, rgba(25, 29, 36, 0.96) 100%);
+      --surface-border: rgba(255, 255, 255, 0.08);
+      --surface-border-strong: rgba(245, 142, 42, 0.65);
+      --surface-blur: blur(20px);
+      --text-main: #f1f4f8;
+      --text-muted: #828c9b;
+      --accent: #f58e2a; /* Milled Instrument Orange */
+      --accent-glow: 0 0 28px rgba(245, 142, 42, 0.55);
+      --accent-secondary: #10d290;
+      --card-radius: 1.25rem;
+      --pill-radius: 0.75rem;
+      --shadow-elevation: 0 16px 40px -8px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      --ambient-overlay: radial-gradient(circle at 45% 15%, rgba(245, 142, 42, 0.08), transparent 65%);
+      --kiosk-time-color: #f58e2a;
+      --badge-bg: rgba(245, 142, 42, 0.12);
+      --badge-text: #ffb773;
+    }
+
+    /* 4. EDITORIAL LIFE LEDGER */
+    [data-theme="editorial-ledger"] {
+      --font-headline: 'Fraunces', 'Times New Roman', serif;
+      --font-body: 'Plus Jakarta Sans', sans-serif;
+      --font-mono: 'Fira Code', monospace;
+      --bg-canvas: #f7f5ed;
+      --surface-card: #ffffff;
+      --surface-card-hover: #faf9f5;
+      --surface-border: #1a1a1a;
+      --surface-border-strong: #1a1a1a;
+      --surface-blur: none;
+      --text-main: #141414;
+      --text-muted: #595959;
+      --accent: #781c22; /* Editorial Oxblood / Burgundy */
+      --accent-glow: none;
+      --accent-secondary: #141414;
+      --card-radius: 0.35rem;
+      --pill-radius: 0.35rem;
+      --shadow-elevation: 4px 4px 0px #141414;
+      --ambient-overlay: none;
+      --kiosk-time-color: #141414;
+      --badge-bg: #eee9dc;
+      --badge-text: #141414;
+    }
+
+    /* 5. COLORFUL FAMILY CANVAS */
+    [data-theme="colorful-canvas"] {
+      --font-headline: 'DM Sans', sans-serif;
+      --font-body: 'Plus Jakarta Sans', sans-serif;
+      --font-mono: 'Fira Code', monospace;
+      --bg-canvas: #fcf9f2 linear-gradient(130deg, #fef4e6 0%, #fdf8ed 40%, #e9f5f2 100%);
+      --surface-card: rgba(255, 255, 255, 0.92);
+      --surface-card-hover: #ffffff;
+      --surface-border: rgba(225, 215, 198, 0.85);
+      --surface-border-strong: #ff5c38;
+      --surface-blur: blur(10px);
+      --text-main: #16202e;
+      --text-muted: #5a6575;
+      --accent: #2e66f6; /* Electric Ultramarine */
+      --accent-glow: 0 12px 28px -5px rgba(46, 102, 246, 0.38);
+      --accent-secondary: #0bb579;
+      --card-radius: 2.1rem;
+      --pill-radius: 9999px;
+      --shadow-elevation: 0 14px 34px -8px rgba(35, 52, 90, 0.12);
+      --ambient-overlay: radial-gradient(circle at 15% 20%, rgba(255, 92, 56, 0.09), transparent 45%),
+                                radial-gradient(circle at 88% 75%, rgba(46, 102, 246, 0.09), transparent 45%);
+      --kiosk-time-color: #16202e;
+      --badge-bg: #e6effe;
+      --badge-text: #1a56db;
+    }
+
+    /* 6. ORGANIC CALM */
+    [data-theme="organic-calm"] {
+      --font-headline: 'Fraunces', Georgia, serif;
+      --font-body: 'DM Sans', sans-serif;
+      --font-mono: 'Fira Code', monospace;
+      --bg-canvas: #eef4ed linear-gradient(145deg, #e2ece1 0%, #edf3eb 55%, #e1ebe3 100%);
+      --surface-card: rgba(252, 254, 251, 0.84);
+      --surface-card-hover: rgba(255, 255, 255, 0.96);
+      --surface-border: #cad8c7;
+      --surface-border-strong: #517a54;
+      --surface-blur: blur(14px);
+      --text-main: #1d2d20;
+      --text-muted: #546656;
+      --accent: #49714c; /* Sage Leaf */
+      --accent-glow: 0 8px 24px -4px rgba(73, 113, 76, 0.26);
+      --accent-secondary: #8f77a5; /* Gentle Lavender */
+      --card-radius: 1.85rem;
+      --pill-radius: 9999px;
+      --shadow-elevation: 0 12px 28px -5px rgba(34, 54, 37, 0.08);
+      --ambient-overlay: radial-gradient(circle at 85% 15%, rgba(143, 119, 165, 0.12), transparent 50%);
+      --kiosk-time-color: #1d2d20;
+      --badge-bg: #dfecde;
+      --badge-text: #2c5330;
+    }
+
+    /* Utility Mapping */
+    .olin-bg {
+      background: var(--bg-canvas);
+      transition: background 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .olin-card {
+      background: var(--surface-card);
+      backdrop-filter: var(--surface-blur);
+      -webkit-backdrop-filter: var(--surface-blur);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--card-radius);
+      box-shadow: var(--shadow-elevation);
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .olin-card:hover {
+      border-color: var(--surface-border-strong);
+    }
+    .olin-pill {
+      border-radius: var(--pill-radius);
+    }
+    .font-olin-headline {
+      font-family: var(--font-headline);
+    }
+    .font-olin-body {
+      font-family: var(--font-body);
+    }
+    .font-olin-mono {
+      font-family: var(--font-mono);
+    }
+
+    .ambient-light-field {
+      position: absolute;
+      inset: 0;
+      background: var(--ambient-overlay);
+      pointer-events: none;
+      transition: background 0.6s ease;
+      z-index: 1;
+    }
+
+    /* Viewport Simulator Shell Styles */
+    .device-shell-desktop {
+      width: 100%;
+      min-height: 100vh;
+      border-radius: 0;
+      box-shadow: none;
+    }
+    .device-shell-kiosk {
+      max-width: 1280px;
+      height: 800px;
+      border-radius: 28px;
+      border: 14px solid #1c1e22;
+      box-shadow: 0 30px 70px -15px rgba(0,0,0,0.65);
+      overflow-y: auto;
+    }
+    .device-shell-mobile {
+      max-width: 390px;
+      height: 844px;
+      border-radius: 46px;
+      border: 12px solid #191b1f;
+      box-shadow: 0 25px 65px -10px rgba(0,0,0,0.55), inset 0 0 0 2px rgba(255,255,255,0.1);
+      overflow-y: auto;
+    }
+
+    /* Pulse and Glowing Animations */
+    @keyframes stellarGlow {
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 0 12px var(--accent)); opacity: 0.9; }
+      50% { transform: scale(1.08); filter: drop-shadow(0 0 22px var(--accent)); opacity: 1; }
+    }
+    .stellar-active {
+      animation: stellarGlow 3.5s infinite ease-in-out;
+    }
+
+    /* Hand-drawn ink ring for Editorial Ledger */
+    .ledger-ink-circle {
+      border: 2px solid var(--accent);
+      border-radius: 54% 46% 60% 40% / 45% 55% 45% 55%;
+      box-shadow: 0 0 0 1px rgba(120, 28, 34, 0.2);
+    }
+
+    /* Rotary Switch Physical Marks */
+    .rotary-knob {
+      background: conic-gradient(from 180deg at 50% 50%, #202328 0deg, #373e46 90deg, #1b1e22 180deg, #373e46 270deg, #202328 360deg);
+      box-shadow: inset 0 2px 3px rgba(255,255,255,0.2), 0 8px 18px rgba(0,0,0,0.7);
+    }
+  </style>
+</head>
+
+<body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen flex flex-col items-center select-none overflow-x-hidden">
+
+  <!-- TOP WORKSPACE BAR (Episteck Design Lab Controls) -->
+  <header class="w-full bg-slate-900/95 backdrop-blur-md border-b border-slate-800/80 px-4 py-2.5 sticky top-0 z-50 flex flex-wrap items-center justify-between gap-3 shadow-md">
+    
+    <!-- Brand / Working Name Identity -->
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-lg bg-gradient-to-tr from-sky-500 to-indigo-500 flex items-center justify-center font-bold text-white text-sm shadow-sm">
+          O
+        </div>
+        <div class="flex flex-col">
+          <span class="font-bold tracking-tight text-white text-base leading-none">OLIN</span>
+          <span class="text-[9px] text-slate-400 font-mono">by Episteck</span>
+        </div>
+      </div>
+      <span class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono hidden sm:inline-block">Design-Lab · Sprint Artifact</span>
+    </div>
+
+    <!-- Center: Dynamic Theme Switcher (6 Territories) -->
+    <div class="flex items-center gap-1.5 bg-slate-800/90 p-1 rounded-xl border border-slate-700/60 overflow-x-auto max-w-full">
+      <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 px-2 flex items-center gap-1 shrink-0">
+        <i data-lucide="palette" class="w-3.5 h-3.5"></i> Style:
+      </span>
+      <button onclick="setTheme('ambient-future')" data-theme-btn="ambient-future" class="text-xs px-2.5 py-1 rounded-lg font-medium transition-all bg-sky-500/20 text-sky-300 border border-sky-500/40 shrink-0">
+        1. Ambient Future
+      </button>
+      <button onclick="setTheme('warm-household')" data-theme-btn="warm-household" class="text-xs px-2.5 py-1 rounded-lg font-medium text-slate-400 hover:text-white transition-all shrink-0">
+        2. Warm Household
+      </button>
+      <button onclick="setTheme('premium-hardware')" data-theme-btn="premium-hardware" class="text-xs px-2.5 py-1 rounded-lg font-medium text-slate-400 hover:text-white transition-all shrink-0">
+        3. Nordic Hardware
+      </button>
+      <button onclick="setTheme('editorial-ledger')" data-theme-btn="editorial-ledger" class="text-xs px-2.5 py-1 rounded-lg font-medium text-slate-400 hover:text-white transition-all shrink-0">
+        4. Life Ledger
+      </button>
+      <button onclick="setTheme('colorful-canvas')" data-theme-btn="colorful-canvas" class="text-xs px-2.5 py-1 rounded-lg font-medium text-slate-400 hover:text-white transition-all shrink-0">
+        5. Family Canvas
+      </button>
+      <button onclick="setTheme('organic-calm')" data-theme-btn="organic-calm" class="text-xs px-2.5 py-1 rounded-lg font-medium text-slate-400 hover:text-white transition-all shrink-0">
+        6. Organic Calm
+      </button>
+    </div>
+
+    <!-- Right: Viewport Simulator (Desktop, Ambient Kiosk, Mobile) -->
+    <div class="flex items-center gap-1 bg-slate-800/90 p-1 rounded-xl border border-slate-700/60">
+      <button onclick="setViewMode('desktop')" data-view-btn="desktop" title="Desktop Canvas (Full width / 1440x900)" class="p-1.5 rounded-lg text-xs flex items-center gap-1.5 font-medium bg-slate-700 text-white shadow-sm transition-all">
+        <i data-lucide="monitor" class="w-4 h-4"></i>
+        <span class="hidden md:inline">Desktop</span>
+      </button>
+      <button onclick="setViewMode('kiosk')" data-view-btn="kiosk" title="Ambient Family Kiosk Display (1280x800 - 3m glanceable)" class="p-1.5 rounded-lg text-xs flex items-center gap-1.5 font-medium text-slate-400 hover:text-white transition-all">
+        <i data-lucide="tablet" class="w-4 h-4"></i>
+        <span class="hidden md:inline">Kiosk (3m)</span>
+      </button>
+      <button onclick="setViewMode('mobile')" data-view-btn="mobile" title="Mobile Smartphone View (390x844)" class="p-1.5 rounded-lg text-xs flex items-center gap-1.5 font-medium text-slate-400 hover:text-white transition-all">
+        <i data-lucide="smartphone" class="w-4 h-4"></i>
+        <span class="hidden md:inline">Mobile (390)</span>
+      </button>
+    </div>
+
+  </header>
+
+  <!-- MAIN WORKSPACE CANVAS -->
+  <main class="w-full flex-1 flex justify-center items-start p-0 md:p-6 transition-all duration-300 relative bg-slate-950">
+    
+    <!-- Target Prototype Container -->
+    <div id="olin-viewport-container" class="olin-bg device-shell-desktop w-full relative flex flex-col text-slate-900 transition-all duration-500" data-theme="ambient-future">
+      
+      <!-- Ambient Dynamic Field Overlay -->
+      <div class="ambient-light-field"></div>
+
+      <!-- TOP APP HEADER & RELATIONSHIP CONTEXT SWITCHER -->
+      <nav class="relative z-20 w-full px-6 py-4 flex flex-wrap items-center justify-between gap-4 border-b border-white/5">
+        
+        <!-- Left Greeting & Relationship Context Indicator -->
+        <div class="flex items-center gap-4">
+          <div class="flex flex-col">
+            <span class="text-xs font-olin-mono tracking-wider uppercase opacity-75" style="color: var(--text-muted);" id="olin-time-indicator">
+              Friday, Sep 18 · 14:32
+            </span>
+            <h1 class="text-2xl sm:text-3xl font-bold font-olin-headline tracking-tight" style="color: var(--text-main);" id="olin-greeting-text">
+              Good afternoon, Erick
+            </h1>
+          </div>
+        </div>
+
+        <!-- CENTER: DYNAMIC THEME-SPECIFIC RELATIONSHIP SWITCHER CONTAINER -->
+        <!-- This container morphs into radical designs (Constellation, Hand-drawn woven, Rotary dial, Letterpress, Fluid canvas, Botanical) -->
+        <div id="dynamic-relationship-switcher" class="relative flex items-center justify-center p-1 transition-all duration-500">
+          <!-- Populated by renderDynamicRelationshipSwitcher() in JavaScript -->
+        </div>
+
+        <!-- Right: Privacy / State Tag -->
+        <div class="flex items-center gap-3">
+          <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 olin-card olin-pill text-xs font-olin-body font-medium" style="color: var(--text-muted);">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Home Secure · 21.4°C</span>
+          </div>
+
+          <div id="privacy-level-badge" class="px-3 py-1.5 rounded-md text-[11px] font-olin-mono font-medium flex items-center gap-1.5 shadow-sm transition-all" style="background: var(--badge-bg); color: var(--badge-text);">
+            <i data-lucide="shield" class="w-3.5 h-3.5" id="privacy-icon"></i>
+            <span id="privacy-text">Personal Space</span>
+          </div>
+        </div>
+
+      </nav>
+
+      <!-- KIOSK AMBIENT GLANCE BANNER (Active in Kiosk Mode) -->
+      <div id="kiosk-hero-banner" class="hidden relative z-10 w-full px-8 pt-6 pb-2">
+        <div class="olin-card p-6 flex flex-wrap items-center justify-between gap-6 border-l-4" style="border-left-color: var(--accent);">
+          <div class="flex items-center gap-6">
+            <div class="text-6xl sm:text-7xl font-bold font-olin-headline tracking-tighter" style="color: var(--kiosk-time-color);">
+              14:32
+            </div>
+            <div class="border-l border-white/10 pl-6 flex flex-col">
+              <span class="text-lg font-medium" style="color: var(--text-main);">Friday, September 18</span>
+              <span class="text-sm font-olin-body opacity-80" style="color: var(--text-muted);">Glanceable Family Board · 2–4m Distance View</span>
+            </div>
+          </div>
+
+          <!-- Live Presence Indicators for the Family Members -->
+          <div class="flex items-center gap-3.5 flex-wrap">
+            <div class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+              <span class="text-sm font-medium" style="color: var(--text-main);">Erick: Home (Desk)</span>
+            </div>
+            <div class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+              <span class="text-sm font-medium" style="color: var(--text-main);">Ana: Clinic Appointment</span>
+            </div>
+            <div class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10">
+              <span class="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
+              <span class="text-sm font-medium" style="color: var(--text-main);">Isabella: School Bus (16:15)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MAIN OPERATING SYSTEM CONTENT GRID -->
+      <div class="relative z-10 w-full flex-1 p-6 md:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 overflow-y-auto">
+        
+        <!-- LEFT COLUMN: Today Schedule & Relationship Timeline (5 Cols) -->
+        <section class="lg:col-span-5 flex flex-col gap-5">
+          
+          <!-- Schedule Card -->
+          <div class="olin-card p-6 flex flex-col gap-4">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl flex items-center justify-center" style="background: var(--badge-bg); color: var(--accent);">
+                  <i data-lucide="calendar" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <h2 class="text-lg font-bold font-olin-headline" style="color: var(--text-main);" id="schedule-title">
+                    Today's Flow
+                  </h2>
+                  <p class="text-xs font-olin-body" style="color: var(--text-muted);" id="schedule-subtitle">
+                    Synchronized household calendar
+                  </p>
+                </div>
+              </div>
+              <span class="text-xs font-olin-mono px-2 py-0.5 rounded" style="background: var(--badge-bg); color: var(--badge-text);" id="schedule-count-tag">
+                3 events
+              </span>
+            </div>
+
+            <!-- Dynamic Timeline List -->
+            <div class="flex flex-col gap-3 pt-2" id="timeline-container">
+              <!-- Rendered dynamically by updateContextData() -->
+            </div>
+          </div>
+
+          <!-- Attention & Quick Action Tasks -->
+          <div class="olin-card p-6 flex flex-col gap-4">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <i data-lucide="bell" class="w-4 h-4" style="color: var(--accent);"></i>
+                <h2 class="text-base font-bold font-olin-headline" style="color: var(--text-main);">Attention & Tasks</h2>
+              </div>
+              <span class="text-[11px] font-olin-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded" id="tasks-count-tag">
+                2 Pending
+              </span>
+            </div>
+
+            <div class="flex flex-col gap-2.5" id="tasks-list">
+              <!-- Rendered dynamically by updateContextData() -->
+            </div>
+          </div>
+
+        </section>
+
+        <!-- RIGHT COLUMN: Wellbeing / Nutrition / Care Truth & Home Assistant (7 Cols) -->
+        <section class="lg:col-span-7 flex flex-col gap-5">
+          
+          <!-- Wellbeing & Nutrition / Care Truth Module -->
+          <div class="olin-card p-6 flex flex-col gap-5 relative overflow-hidden" id="wellbeing-module">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl flex items-center justify-center" style="background: var(--badge-bg); color: var(--accent);">
+                  <i data-lucide="heart-pulse" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <h2 class="text-lg font-bold font-olin-headline" style="color: var(--text-main);" id="wellbeing-card-title">
+                    Nutrition & Daily Rhythm
+                  </h2>
+                  <p class="text-xs font-olin-body" style="color: var(--text-muted);" id="wellbeing-card-subtitle">
+                    Domain Service: Nutrition Truth & Metabolic Balance
+                  </p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 font-olin-mono text-xs" style="color: var(--text-muted);">
+                <span class="w-2 h-2 rounded-full" style="background: var(--accent);"></span>
+                <span id="nutrition-target-tag">Target: 2,000 kcal</span>
+              </div>
+            </div>
+
+            <!-- Content Area for Wellbeing (Swaps between Erick Private, Ana Care, and Family Shared) -->
+            <div id="wellbeing-dynamic-content" class="w-full">
+              <!-- Rendered by updateWellbeingView() -->
+            </div>
+          </div>
+
+          <!-- Physical Home & Devices (Home Assistant Gateway) -->
+          <div class="olin-card p-6 flex flex-col gap-4">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl flex items-center justify-center" style="background: var(--badge-bg); color: var(--accent);">
+                  <i data-lucide="home" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <h2 class="text-base font-bold font-olin-headline" style="color: var(--text-main);">Physical Home</h2>
+                  <p class="text-xs font-olin-body" style="color: var(--text-muted);">Gateway: 4 online nodes · Atmosphere stable</p>
+                </div>
+              </div>
+              <span class="text-xs font-olin-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400" id="home-status-tag">Everything Good</span>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <!-- Living Room -->
+              <div class="p-3.5 rounded-xl bg-white/5 border border-white/5 flex flex-col gap-1 hover:border-white/20 transition-all">
+                <div class="flex items-center justify-between text-xs" style="color: var(--text-muted);">
+                  <span>Living</span>
+                  <i data-lucide="thermometer" class="w-3.5 h-3.5"></i>
+                </div>
+                <span class="text-lg font-bold font-olin-headline" style="color: var(--text-main);">21.4°C</span>
+                <span class="text-[10px] font-olin-mono text-emerald-400">45% Humidity</span>
+              </div>
+
+              <!-- Climate HVAC -->
+              <div class="p-3.5 rounded-xl bg-white/5 border border-white/5 flex flex-col gap-1 hover:border-white/20 transition-all">
+                <div class="flex items-center justify-between text-xs" style="color: var(--text-muted);">
+                  <span>Climate</span>
+                  <i data-lucide="wind" class="w-3.5 h-3.5"></i>
+                </div>
+                <span class="text-lg font-bold font-olin-headline" style="color: var(--text-main);">Eco Auto</span>
+                <span class="text-[10px] font-olin-mono" style="color: var(--text-muted);">Target 21.0°</span>
+              </div>
+
+              <!-- Perimeter Security Door Lock -->
+              <div id="door-status-card" class="p-3.5 rounded-xl bg-white/5 border border-white/5 flex flex-col gap-1 hover:border-white/20 transition-all">
+                <div class="flex items-center justify-between text-xs" style="color: var(--text-muted);">
+                  <span>Front Door</span>
+                  <i data-lucide="lock-open" id="door-lock-icon" class="w-3.5 h-3.5 text-amber-400"></i>
+                </div>
+                <span class="text-lg font-bold font-olin-headline text-amber-400" id="door-text-val">Unlocked</span>
+                <button onclick="lockDoor(event)" class="text-[10px] font-olin-mono text-left text-amber-300 hover:underline">Tap to Lock</button>
+              </div>
+
+              <!-- Ambiance Lighting Mode -->
+              <div onclick="cycleHomeScene()" class="p-3.5 rounded-xl bg-white/5 border border-white/5 flex flex-col gap-1 hover:border-white/20 transition-all cursor-pointer">
+                <div class="flex items-center justify-between text-xs" style="color: var(--text-muted);">
+                  <span>Ambiance</span>
+                  <i data-lucide="sun" class="w-3.5 h-3.5 text-amber-300"></i>
+                </div>
+                <span class="text-lg font-bold font-olin-headline" style="color: var(--text-main);" id="ambiance-scene-name">Afternoon Calm</span>
+                <span class="text-[10px] font-olin-mono" style="color: var(--accent);">Cycle scene</span>
+              </div>
+            </div>
+          </div>
+
+        </section>
+      </div>
+
+      <!-- FLOATING 'ASK OLIN' ASSISTANT MOTIF (Adaptive by theme) -->
+      <div class="fixed bottom-6 right-6 z-40" id="ask-olin-trigger-container">
+        <!-- Rendered by renderAskOlinButton() -->
+      </div>
+
+      <!-- ASK OLIN ASSISTANT MODAL DIALOGUE -->
+      <div id="ask-olin-modal" class="fixed bottom-24 right-6 w-96 max-w-[calc(100vw-3rem)] olin-card p-5 z-50 shadow-2xl hidden flex-col gap-4 border border-white/10" style="background: var(--surface-card); backdrop-filter: blur(32px);">
+        <div class="flex items-center justify-between border-b border-white/10 pb-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold" style="background: var(--accent);">
+              O
+            </div>
+            <div>
+              <h4 class="text-sm font-bold font-olin-headline" style="color: var(--text-main);">Ask Olin</h4>
+              <span class="text-[10px] font-olin-mono" style="color: var(--text-muted);">Hermes Multi-Domain Orchestrator</span>
+            </div>
+          </div>
+          <button onclick="toggleAskOlinModal()" class="text-slate-400 hover:text-white p-1">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div class="flex flex-col gap-2.5 max-h-64 overflow-y-auto pr-1 text-xs" id="chat-stream">
+          <div class="p-3 rounded-xl bg-white/5 border border-white/5" style="color: var(--text-main);" id="chat-initial-greeting">
+            Good afternoon. I'm monitoring the Vargas home context, Ana's upcoming clinic return at 15:00, and your nutrition logs. How can I help?
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-1.5 pt-1" id="chat-quick-prompts">
+          <button onclick="sendQuickPrompt('When does Ana arrive home?')" class="text-[11px] px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 transition-colors" style="color: var(--accent);">
+            Ana arrival time
+          </button>
+          <button onclick="sendQuickPrompt('Lock the front door')" class="text-[11px] px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 transition-colors" style="color: var(--text-muted);">
+            Lock front door
+          </button>
+          <button onclick="sendQuickPrompt('Log lunch bowl (420 kcal)')" class="text-[11px] px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 transition-colors" style="color: var(--text-muted);">
+            Log lunch (420 kcal)
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2 pt-1">
+          <input type="text" id="ask-olin-input" placeholder="Ask about schedule, family, home..." class="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-400" onkeydown="if(event.key==='Enter') submitOlinQuery()">
+          <button onclick="submitOlinQuery()" class="p-2 rounded-xl text-white font-bold hover:brightness-110" style="background: var(--accent);">
+            <i data-lucide="arrow-up" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    /* =====================================================================
+       STATE MANAGEMENT & ARCHITECTURAL LOGIC
+       ===================================================================== */
+    let currentTheme = 'ambient-future';
+    let currentViewMode = 'desktop';
+    let currentPersonContext = 'erick'; // 'erick' | 'ana' | 'family'
+    let isDoorLocked = false;
+    let ambianceSceneIndex = 0;
+    const ambianceScenes = ['Afternoon Calm', 'Golden Hour', 'Focus State', 'Evening Warmth'];
+
+    // Data Store for the 3 Context Modes
+    const contextData = {
+      erick: {
+        greeting: "Good afternoon, Erick",
+        subtitle: "Friday, Sep 18 · 14:32",
+        privacyTag: "Personal Space",
+        privacyIcon: "user",
+        scheduleTitle: "Erick's Flow",
+        scheduleSubtitle: "Personal syncs & appointments",
+        scheduleCount: "3 events",
+        events: [
+          { time: "10:00", title: "Work Sync with Architecture Core", subtitle: "Virtual Room · Episteck Home Core", status: "Completed", statusColor: "emerald" },
+          { time: "14:00", title: "Doctor Appointment (Care for Ana)", subtitle: "Dr. Weber · Maternal & Wellness Clinic", status: "Now Active", statusColor: "amber", isCareLink: true },
+          { time: "18:30", title: "Family Dinner & Prep", subtitle: "Mealie: Baked Salmon & Asparagus", status: "In 4h", statusColor: "sky" }
+        ],
+        tasks: [
+          { title: "Log lunch nutrition (Mediterranean Bowl)", done: true, tag: "Erick" },
+          { title: "Check front door latch (Reported open 12m ago)", done: false, tag: "Alert", isDoorAlert: true },
+          { title: "Water Monstera & living room ferns", done: false, tag: "Home" }
+        ]
+      },
+      ana: {
+        greeting: "Good afternoon, Ana",
+        subtitle: "Care & Support Sharing Context",
+        privacyTag: "Care Circle Access",
+        privacyIcon: "heart",
+        scheduleTitle: "Ana's Agenda & Care",
+        scheduleSubtitle: "Appointments and shared wellness",
+        scheduleCount: "2 events",
+        events: [
+          { time: "14:00", title: "Doctor Appointment with Dr. Weber", subtitle: "Maternal & Wellness Clinic · Room 304", status: "In Progress", statusColor: "amber" },
+          { time: "15:00", title: "Transit Return Home", subtitle: "Estimated arrival 15:25", status: "Upcoming", statusColor: "sky" }
+        ],
+        tasks: [
+          { title: "Review prenatal vitamin schedule", done: true, tag: "Care" },
+          { title: "Rest & Hydration pause at 16:00", done: false, tag: "Wellness" },
+          { title: "Review weekend nursery checklist with Erick", done: false, tag: "Shared" }
+        ]
+      },
+      family: {
+        greeting: "Good afternoon, Vargas Household",
+        subtitle: "Shared Family Surface · Living Room Glance",
+        privacyTag: "Shared Household",
+        privacyIcon: "users",
+        scheduleTitle: "Household Agenda",
+        scheduleSubtitle: "Glanceable coordination for everyone",
+        scheduleCount: "4 events",
+        events: [
+          { time: "14:00", title: "Ana at Clinic (Dr. Weber)", subtitle: "Returning at 15:25", status: "Away", statusColor: "amber" },
+          { time: "16:15", title: "Isabella arrives home from School", subtitle: "Bus 4 · Keypad PIN ready", status: "In 1h 45m", statusColor: "emerald" },
+          { time: "18:30", title: "Family Dinner Together", subtitle: "Baked Salmon with lemon potatoes", status: "Scheduled", statusColor: "sky" },
+          { time: "20:00", title: "Bedtime Story & Reading", subtitle: "Isabella bedroom", status: "Evening", statusColor: "slate" }
+        ],
+        tasks: [
+          { title: "Front door latch check", done: false, tag: "Security", isDoorAlert: true },
+          { title: "Water houseplants & living room fern", done: false, tag: "Chores" },
+          { title: "Unload dishwasher before dinner", done: false, tag: "Household" }
+        ]
+      }
+    };
+
+    /* =====================================================================
+       THEME-SPECIFIC RELATIONSHIP SWITCHER RENDERING
+       Morphs between:
+       1. Ambient Future: Celestial Constellation Star Cluster
+       2. Warm Household: Hand-drawn portraits with woven thread
+       3. Nordic Hardware: Machined rotary knob switch
+       4. Editorial Ledger: Letterpress paper with inked ring marks
+       5. Family Canvas: Fluid dynamic chromatic nodes
+       6. Organic Calm: Potted terracotta botanical plants with runners
+       ===================================================================== */
+    function renderDynamicRelationshipSwitcher() {
+      const container = document.getElementById('dynamic-relationship-switcher');
+      
+      if (currentTheme === 'ambient-future') {
+        // CELESTIAL CONSTELLATION
+        container.innerHTML = `
+          <div class="relative flex items-center gap-6 px-6 py-2 rounded-full border border-sky-400/20 bg-sky-950/30 backdrop-blur-xl shadow-lg">
+            <!-- Connecting orbital constellation fiber -->
+            <div class="absolute left-10 right-10 top-1/2 h-[1px] bg-gradient-to-r from-sky-400/20 via-sky-300/40 to-sky-400/20 pointer-events-none -translate-y-1/2"></div>
+            
+            <!-- Family Node -->
+            <button onclick="setPersonContext('family')" class="group relative flex flex-col items-center gap-1 transition-all">
+              <div class="w-8 h-8 rounded-full flex items-center justify-center transition-all ${currentPersonContext === 'family' ? 'bg-sky-400 text-slate-950 scale-125 stellar-active shadow-[0_0_20px_#5eb2f8]' : 'bg-sky-950/80 border border-sky-400/40 text-sky-200 group-hover:scale-110'}">
+                <span class="w-2.5 h-2.5 rounded-full ${currentPersonContext === 'family' ? 'bg-white' : 'bg-sky-400/80'}"></span>
+              </div>
+              <span class="text-[11px] font-olin-mono tracking-wider ${currentPersonContext === 'family' ? 'text-sky-300 font-bold' : 'text-slate-400 group-hover:text-slate-200'}">Family</span>
+            </button>
+
+            <!-- Erick Node (Primary) -->
+            <button onclick="setPersonContext('erick')" class="group relative flex flex-col items-center gap-1 transition-all">
+              <div class="w-11 h-11 rounded-full flex items-center justify-center transition-all ${currentPersonContext === 'erick' ? 'bg-amber-400 text-slate-950 scale-125 stellar-active shadow-[0_0_28px_#f4ab64]' : 'bg-sky-950/80 border border-sky-400/40 text-sky-200 group-hover:scale-110'}">
+                <div class="w-4 h-4 rounded-full ${currentPersonContext === 'erick' ? 'bg-white' : 'bg-amber-400'}"></div>
+              </div>
+              <span class="text-xs font-olin-mono tracking-wider ${currentPersonContext === 'erick' ? 'text-amber-300 font-bold scale-110' : 'text-slate-400 group-hover:text-slate-200'}">Erick</span>
+            </button>
+
+            <!-- Ana Node -->
+            <button onclick="setPersonContext('ana')" class="group relative flex flex-col items-center gap-1 transition-all">
+              <div class="w-8 h-8 rounded-full flex items-center justify-center transition-all ${currentPersonContext === 'ana' ? 'bg-sky-300 text-slate-950 scale-125 stellar-active shadow-[0_0_20px_#7dd3fc]' : 'bg-sky-950/80 border border-sky-400/40 text-sky-200 group-hover:scale-110'}">
+                <span class="w-2.5 h-2.5 rounded-full ${currentPersonContext === 'ana' ? 'bg-white' : 'bg-sky-300/80'}"></span>
+              </div>
+              <span class="text-[11px] font-olin-mono tracking-wider ${currentPersonContext === 'ana' ? 'text-sky-200 font-bold' : 'text-slate-400 group-hover:text-slate-200'}">Ana</span>
+            </button>
+          </div>
+        `;
+      } 
+      else if (currentTheme === 'warm-household') {
+        // HAND-DRAWN WOVEN FAMILY EMBROIDERY
+        container.innerHTML = `
+          <div class="relative flex items-center gap-5 px-6 py-2 rounded-2xl bg-[#fdf8f3] border-2 border-[#e6d6c6] shadow-sm">
+            <!-- Stitched Yarn Runner -->
+            <div class="absolute left-8 right-8 top-1/2 h-[2px] border-b-2 border-dashed border-[#c4643c]/40 pointer-events-none -translate-y-1/2"></div>
+            
+            <!-- Family Portrait -->
+            <button onclick="setPersonContext('family')" class="group relative flex flex-col items-center transition-all z-10">
+              <div class="w-10 h-10 rounded-full border-2 p-0.5 transition-transform ${currentPersonContext === 'family' ? 'border-[#c4643c] bg-[#fae8dc] scale-115 shadow-md' : 'border-[#d4c2b0] bg-[#f9f3ec] group-hover:scale-105'} flex items-center justify-center">
+                <span class="text-sm">👨‍👩‍👧</span>
+              </div>
+              <span class="text-[11px] font-olin-headline mt-1 ${currentPersonContext === 'family' ? 'font-bold text-[#c4643c]' : 'text-[#7d6a5d]'}">Family</span>
+            </button>
+
+            <!-- Erick Portrait -->
+            <button onclick="setPersonContext('erick')" class="group relative flex flex-col items-center transition-all z-10">
+              <div class="w-12 h-12 rounded-full border-2 p-0.5 transition-transform ${currentPersonContext === 'erick' ? 'border-[#c4643c] bg-[#fae8dc] scale-120 shadow-md ring-4 ring-[#c4643c]/15' : 'border-[#d4c2b0] bg-[#f9f3ec] group-hover:scale-105'} flex items-center justify-center">
+                <span class="text-lg">🧔</span>
+              </div>
+              <span class="text-xs font-olin-headline mt-1 ${currentPersonContext === 'erick' ? 'font-bold text-[#c4643c]' : 'text-[#7d6a5d]'}">Erick</span>
+            </button>
+
+            <!-- Ana Portrait -->
+            <button onclick="setPersonContext('ana')" class="group relative flex flex-col items-center transition-all z-10">
+              <div class="w-10 h-10 rounded-full border-2 p-0.5 transition-transform ${currentPersonContext === 'ana' ? 'border-[#c4643c] bg-[#fae8dc] scale-115 shadow-md' : 'border-[#d4c2b0] bg-[#f9f3ec] group-hover:scale-105'} flex items-center justify-center">
+                <span class="text-sm">👩</span>
+              </div>
+              <span class="text-[11px] font-olin-headline mt-1 ${currentPersonContext === 'ana' ? 'font-bold text-[#c4643c]' : 'text-[#7d6a5d]'}">Ana</span>
+            </button>
+          </div>
+        `;
+      }
+      else if (currentTheme === 'premium-hardware') {
+        // NORDIC MACHINED ROTARY SELECTOR
+        const rotationDeg = currentPersonContext === 'family' ? -35 : (currentPersonContext === 'erick' ? 0 : 35);
+        container.innerHTML = `
+          <div class="flex items-center gap-4 bg-slate-900/90 p-2 px-4 rounded-xl border border-white/10 shadow-2xl">
+            <span class="text-[10px] font-olin-mono tracking-widest text-slate-400 uppercase">Context Rotary</span>
+            
+            <div class="flex items-center gap-3">
+              <button onclick="setPersonContext('family')" class="text-xs font-olin-mono px-2 py-1 rounded transition-colors ${currentPersonContext === 'family' ? 'text-amber-400 font-bold bg-amber-500/15' : 'text-slate-400 hover:text-slate-200'}">
+                FAMILY
+              </button>
+
+              <!-- Tactile Center Knob -->
+              <div class="relative w-12 h-12 rounded-full rotary-knob border-2 border-slate-700/60 flex items-center justify-center transition-transform duration-500" style="transform: rotate(${rotationDeg}deg);">
+                <div class="w-1 h-3 rounded-full bg-amber-400 shadow-[0_0_8px_#f58e2a] -translate-y-3.5"></div>
+              </div>
+
+              <button onclick="setPersonContext('erick')" class="text-xs font-olin-mono px-2 py-1 rounded transition-colors ${currentPersonContext === 'erick' ? 'text-amber-400 font-bold bg-amber-500/15' : 'text-slate-400 hover:text-slate-200'}">
+                ERICK
+              </button>
+
+              <button onclick="setPersonContext('ana')" class="text-xs font-olin-mono px-2 py-1 rounded transition-colors ${currentPersonContext === 'ana' ? 'text-amber-400 font-bold bg-amber-500/15' : 'text-slate-400 hover:text-slate-200'}">
+                ANA
+              </button>
+            </div>
+          </div>
+        `;
+      }
+      else if (currentTheme === 'editorial-ledger') {
+        // INKED LETTERPRESS INDEX WITH HAND DRAWN OVAL MARK
+        container.innerHTML = `
+          <div class="flex items-center gap-6 px-4 py-1.5 border-b-2 border-black bg-white">
+            <button onclick="setPersonContext('family')" class="relative px-2 py-1 text-xs font-olin-headline uppercase tracking-wider ${currentPersonContext === 'family' ? 'ledger-ink-circle text-black font-bold' : 'text-slate-600 hover:text-black'}">
+              Family
+            </button>
+            <button onclick="setPersonContext('erick')" class="relative px-3 py-1 text-sm font-olin-headline uppercase tracking-wider ${currentPersonContext === 'erick' ? 'ledger-ink-circle text-black font-bold' : 'text-slate-600 hover:text-black'}">
+              Erick
+            </button>
+            <button onclick="setPersonContext('ana')" class="relative px-2 py-1 text-xs font-olin-headline uppercase tracking-wider ${currentPersonContext === 'ana' ? 'ledger-ink-circle text-black font-bold' : 'text-slate-600 hover:text-black'}">
+              Ana
+            </button>
+          </div>
+        `;
+      }
+      else if (currentTheme === 'colorful-canvas') {
+        // FLUID CHROMATIC CANVAS NODES
+        container.innerHTML = `
+          <div class="flex items-center gap-3 p-1.5 rounded-full bg-white/90 border border-slate-200 shadow-md">
+            <button onclick="setPersonContext('family')" class="px-3.5 py-1.5 rounded-full text-xs font-medium transition-all ${currentPersonContext === 'family' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg scale-105' : 'text-slate-600 hover:text-slate-900'}">
+              Family
+            </button>
+            <button onclick="setPersonContext('erick')" class="px-4 py-1.5 rounded-full text-xs font-medium transition-all ${currentPersonContext === 'erick' ? 'bg-gradient-to-r from-orange-500 to-rose-500 text-white shadow-lg scale-105' : 'text-slate-600 hover:text-slate-900'}">
+              Erick
+            </button>
+            <button onclick="setPersonContext('ana')" class="px-3.5 py-1.5 rounded-full text-xs font-medium transition-all ${currentPersonContext === 'ana' ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg scale-105' : 'text-slate-600 hover:text-slate-900'}">
+              Ana
+            </button>
+          </div>
+        `;
+      }
+      else if (currentTheme === 'organic-calm') {
+        // POTTED TERRACOTTA BOTANICAL PLANTS WITH RUNNERS
+        container.innerHTML = `
+          <div class="relative flex items-center gap-5 px-5 py-2 rounded-3xl bg-[#f5faf4] border border-[#cbd9cb] shadow-sm">
+            <!-- Trailing Vine Line -->
+            <div class="absolute left-6 right-6 top-1/2 h-[2px] bg-gradient-to-r from-emerald-600/30 via-emerald-700/50 to-emerald-600/30 -translate-y-1/2 pointer-events-none"></div>
+
+            <!-- Family Pot -->
+            <button onclick="setPersonContext('family')" class="group relative flex flex-col items-center transition-all z-10">
+              <div class="w-9 h-9 rounded-2xl flex items-center justify-center transition-all ${currentPersonContext === 'family' ? 'bg-[#dfecde] border-2 border-[#49714c] scale-110 shadow-md' : 'bg-white/80 border border-slate-300 group-hover:scale-105'}">
+                <span class="text-sm">🌿</span>
+              </div>
+              <span class="text-[10px] font-olin-body mt-0.5 ${currentPersonContext === 'family' ? 'font-bold text-[#2f5633]' : 'text-slate-500'}">Family</span>
+            </button>
+
+            <!-- Erick Pot -->
+            <button onclick="setPersonContext('erick')" class="group relative flex flex-col items-center transition-all z-10">
+              <div class="w-11 h-11 rounded-2xl flex items-center justify-center transition-all ${currentPersonContext === 'erick' ? 'bg-[#dfecde] border-2 border-[#49714c] scale-115 shadow-md ring-4 ring-emerald-500/15' : 'bg-white/80 border border-slate-300 group-hover:scale-105'}">
+                <span class="text-base">🪴</span>
+              </div>
+              <span class="text-xs font-olin-body mt-0.5 ${currentPersonContext === 'erick' ? 'font-bold text-[#2f5633]' : 'text-slate-500'}">Erick</span>
+            </button>
+
+            <!-- Ana Pot -->
+            <button onclick="setPersonContext('ana')" class="group relative flex flex-col items-center transition-all z-10">
+              <div class="w-9 h-9 rounded-2xl flex items-center justify-center transition-all ${currentPersonContext === 'ana' ? 'bg-[#dfecde] border-2 border-[#49714c] scale-110 shadow-md' : 'bg-white/80 border border-slate-300 group-hover:scale-105'}">
+                <span class="text-sm">🌸</span>
+              </div>
+              <span class="text-[10px] font-olin-body mt-0.5 ${currentPersonContext === 'ana' ? 'font-bold text-[#2f5633]' : 'text-slate-500'}">Ana</span>
+            </button>
+          </div>
+        `;
+      }
+    }
+
+    /* =====================================================================
+       CONTEXT STATE CONTROLLER (Erick vs Ana vs Family)
+       Updates text, schedule timelines, privacy states, and cards
+       ===================================================================== */
+    function setPersonContext(personKey) {
+      currentPersonContext = personKey;
+      const data = contextData[personKey];
+
+      // Update Navigation & Greeting
+      document.getElementById('olin-greeting-text').innerText = data.greeting;
+      document.getElementById('olin-time-indicator').innerText = data.subtitle;
+      document.getElementById('privacy-text').innerText = data.privacyTag;
+      
+      const privacyBadge = document.getElementById('privacy-level-badge');
+      const privacyIcon = document.getElementById('privacy-icon');
+      privacyIcon.setAttribute('data-lucide', data.privacyIcon);
+
+      // Update Schedule card
+      document.getElementById('schedule-title').innerText = data.scheduleTitle;
+      document.getElementById('schedule-subtitle').innerText = data.scheduleSubtitle;
+      document.getElementById('schedule-count-tag').innerText = data.scheduleCount;
+
+      // Populate Timeline items
+      const timelineContainer = document.getElementById('timeline-container');
+      timelineContainer.innerHTML = data.events.map(event => `
+        <div class="p-3.5 rounded-xl transition-all border border-white/5 hover:border-white/20 flex items-start justify-between gap-3 bg-white/5">
+          <div class="flex items-start gap-3">
+            <div class="font-olin-mono text-xs font-semibold px-2 py-1 rounded mt-0.5" style="background: var(--badge-bg); color: var(--accent);">
+              ${event.time}
+            </div>
+            <div>
+              <div class="flex items-center gap-1.5">
+                <h3 class="text-sm font-semibold" style="color: var(--text-main);">${event.title}</h3>
+                ${event.isCareLink ? `<span class="text-[10px] px-1.5 py-0.2 rounded font-olin-mono bg-amber-500/20 text-amber-300">Care Link</span>` : ''}
+              </div>
+              <p class="text-xs" style="color: var(--text-muted);">${event.subtitle}</p>
+            </div>
+          </div>
+          <span class="text-[11px] px-2 py-0.5 rounded font-olin-mono bg-${event.statusColor}-500/10 text-${event.statusColor}-400">
+            ${event.status}
+          </span>
+        </div>
+      `).join('');
+
+      // Populate Task list
+      const tasksList = document.getElementById('tasks-list');
+      tasksList.innerHTML = data.tasks.map(task => `
+        <label class="flex items-center gap-3 p-3 rounded-xl transition-colors cursor-pointer ${task.isDoorAlert ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-white/5 hover:bg-white/10'}">
+          <input type="checkbox" ${task.done ? 'checked' : ''} onchange="toggleTask(this)" class="w-4 h-4 rounded text-sky-500 focus:ring-0">
+          <div class="flex-1">
+            <span class="text-xs sm:text-sm ${task.done ? 'line-through opacity-60' : 'font-medium'}" style="color: var(--text-main);">${task.title}</span>
+          </div>
+          <span class="text-[10px] font-olin-mono px-1.5 py-0.5 rounded ${task.isDoorAlert ? 'bg-amber-500/20 text-amber-300' : 'bg-white/10'}" style="color: var(--text-muted);">${task.tag}</span>
+        </label>
+      `).join('');
+
+      // Update Wellbeing / Nutrition / Care Module
+      updateWellbeingView();
+
+      // Refresh Relationship Switcher Visuals
+      renderDynamicRelationshipSwitcher();
+
+      // Refresh Lucide Icons
+      lucide.createIcons();
+    }
+
+    /* =====================================================================
+       WELLBEING & HEALTH DATA ADAPTATION
+       Erick: Full nutritional macros & calorie ring
+       Ana: Care context, appointment notes, vitals schedule
+       Family / Kiosk: Aggregated household meals (redacting individual calories)
+       ===================================================================== */
+    function updateWellbeingView() {
+      const container = document.getElementById('wellbeing-dynamic-content');
+      const cardTitle = document.getElementById('wellbeing-card-title');
+      const cardSubtitle = document.getElementById('wellbeing-card-subtitle');
+      const targetTag = document.getElementById('nutrition-target-tag');
+
+      if (currentPersonContext === 'erick') {
+        cardTitle.innerText = "Nutrition & Metabolic Truth";
+        cardSubtitle.innerText = "Domain Service: Nutrition & Physical Truth";
+        targetTag.innerText = "Target: 2,000 kcal";
+
+        container.innerHTML = `
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+            <!-- Caloric Gauge Visualization -->
+            <div class="md:col-span-6 flex flex-col items-center justify-center p-4 rounded-2xl bg-white/5 relative">
+              <div class="relative w-44 h-44 flex items-center justify-center" id="theme-dynamic-viz">
+                <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="40" stroke="currentColor" stroke-width="8" class="text-white/10" fill="transparent" />
+                  <circle cx="50" cy="50" r="40" stroke="currentColor" stroke-width="8" stroke-dasharray="251.2" stroke-dashoffset="100.48" stroke-linecap="round" style="color: var(--accent); filter: drop-shadow(0 0 10px var(--accent));" fill="transparent" />
+                </svg>
+                <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                  <span class="text-3xl font-bold font-olin-headline" style="color: var(--text-main);">1,200</span>
+                  <span class="text-[11px] font-olin-mono opacity-70" style="color: var(--text-muted);">/ 2,000 kcal</span>
+                  <span class="text-[10px] font-olin-body px-2 py-0.5 rounded-full mt-1 font-medium bg-emerald-500/20 text-emerald-400">60% Fuel</span>
+                </div>
+              </div>
+              <div class="mt-2 text-center text-xs font-olin-body" style="color: var(--text-muted);">
+                Burn: 1,840 kcal · Hydration: 1.8 L
+              </div>
+            </div>
+
+            <!-- Macros -->
+            <div class="md:col-span-6 flex flex-col gap-3.5">
+              <div>
+                <div class="flex justify-between text-xs font-medium mb-1" style="color: var(--text-main);">
+                  <span>Protein Remaining</span>
+                  <span class="font-olin-mono" style="color: var(--accent);">42 g left (98g consumed)</span>
+                </div>
+                <div class="w-full h-2 rounded-full bg-white/10 overflow-hidden">
+                  <div class="h-full rounded-full transition-all duration-700" style="width: 70%; background: var(--accent);"></div>
+                </div>
+              </div>
+
+              <div>
+                <div class="flex justify-between text-xs font-medium mb-1" style="color: var(--text-main);">
+                  <span>Complex Carbohydrates</span>
+                  <span class="font-olin-mono text-sky-400">145 g / 210 g</span>
+                </div>
+                <div class="w-full h-2 rounded-full bg-white/10 overflow-hidden">
+                  <div class="h-full rounded-full bg-sky-400 transition-all duration-700" style="width: 65%;"></div>
+                </div>
+              </div>
+
+              <div class="p-3 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between text-xs mt-1">
+                <span style="color: var(--text-muted);">Quick Logging Engine</span>
+                <button onclick="openAskOlin('Log dinner nutrition')" class="font-olin-mono text-xs px-3 py-1 rounded olin-pill font-semibold hover:opacity-90 transition-all" style="background: var(--badge-bg); color: var(--accent);">
+                  + Log Nutrition
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      } 
+      else if (currentPersonContext === 'ana') {
+        cardTitle.innerText = "Care for Ana · Clinical & Wellness";
+        cardSubtitle.innerText = "Care Relationship Circle · Consent Granted";
+        targetTag.innerText = "Active Care Link";
+
+        container.innerHTML = `
+          <div class="flex flex-col gap-4 p-2">
+            <div class="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-4">
+              <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center shrink-0">
+                <i data-lucide="stethoscope" class="w-5 h-5"></i>
+              </div>
+              <div class="flex-1">
+                <h4 class="text-sm font-bold text-amber-200">14:00 Consultation — Dr. Weber</h4>
+                <p class="text-xs text-amber-300/80 mt-1">
+                  Maternal & Wellness Clinic, Room 304. Erick authorized to receive appointment completion chimes.
+                </p>
+                <div class="flex items-center gap-3 mt-3">
+                  <button onclick="openAskOlin('Send Ana a supportive note')" class="text-xs font-olin-mono px-3 py-1 rounded-lg bg-amber-500/20 text-amber-200 hover:bg-amber-500/30">
+                    Send Supportive Chime
+                  </button>
+                  <span class="text-xs text-amber-400/60 font-olin-mono">Next checkup: Oct 02</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div class="p-3.5 rounded-xl bg-white/5 border border-white/5">
+                <span class="text-xs text-slate-400">Rest Rhythm</span>
+                <p class="text-base font-bold text-white mt-1">8h 12m Quality Sleep</p>
+                <span class="text-[10px] text-emerald-400 font-olin-mono">Optimal Recovery</span>
+              </div>
+              <div class="p-3.5 rounded-xl bg-white/5 border border-white/5">
+                <span class="text-xs text-slate-400">Hydration Goal</span>
+                <p class="text-base font-bold text-white mt-1">2.2 L / 2.5 L</p>
+                <span class="text-[10px] text-sky-400 font-olin-mono">88% of daily target</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      else if (currentPersonContext === 'family') {
+        cardTitle.innerText = "Family Dining & Nourishment";
+        cardSubtitle.innerText = "Mealie Recipe Domain · Shared Household Ledger";
+        targetTag.innerText = "Meal Planned";
+
+        container.innerHTML = `
+          <div class="p-5 rounded-2xl bg-white/5 border border-white/5 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div class="flex items-center gap-4">
+              <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl" style="background: var(--badge-bg);">
+                🍲
+              </div>
+              <div>
+                <span class="text-[11px] font-olin-mono uppercase tracking-wider text-emerald-400">18:30 Dinner Ready</span>
+                <h4 class="text-base font-bold" style="color: var(--text-main);">Wild Baked Salmon & Roasted Asparagus</h4>
+                <p class="text-xs mt-0.5" style="color: var(--text-muted);">Mealie Plan · High omega-3 · Isabella-friendly portions</p>
+              </div>
+            </div>
+            
+            <div class="flex items-center gap-3">
+              <button onclick="openAskOlin('Show dinner grocery checklist')" class="text-xs font-olin-mono px-3 py-2 rounded-xl border border-white/10 hover:bg-white/10 transition-all" style="color: var(--text-main);">
+                Grocery List (3 items)
+              </button>
+              <button onclick="openAskOlin('Set dinner countdown timer')" class="text-xs font-olin-mono px-3 py-2 rounded-xl text-white font-semibold shadow-md" style="background: var(--accent);">
+                Prep Countdown
+              </button>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    /* =====================================================================
+       THEME & VIEWPORT SWITCHERS
+       ===================================================================== */
+    function setTheme(themeKey) {
+      currentTheme = themeKey;
+      const viewport = document.getElementById('olin-viewport-container');
+      viewport.setAttribute('data-theme', themeKey);
+
+      // Highlight active theme button
+      document.querySelectorAll('[data-theme-btn]').forEach(btn => {
+        const key = btn.getAttribute('data-theme-btn');
+        if (key === themeKey) {
+          btn.className = "text-xs px-2.5 py-1 rounded-lg font-medium transition-all bg-sky-500/20 text-sky-300 border border-sky-500/40 shrink-0";
+        } else {
+          btn.className = "text-xs px-2.5 py-1 rounded-lg font-medium text-slate-400 hover:text-white transition-all shrink-0";
+        }
+      });
+
+      // Render theme-specific widgets
+      renderDynamicRelationshipSwitcher();
+      renderAskOlinButton();
+      updateWellbeingView();
+      lucide.createIcons();
+    }
+
+    function setViewMode(mode) {
+      currentViewMode = mode;
+      const container = document.getElementById('olin-viewport-container');
+      const kioskBanner = document.getElementById('kiosk-hero-banner');
+
+      document.querySelectorAll('[data-view-btn]').forEach(btn => {
+        const btnMode = btn.getAttribute('data-view-btn');
+        if (btnMode === mode) {
+          btn.className = "p-1.5 rounded-lg text-xs flex items-center gap-1.5 font-medium bg-slate-700 text-white shadow-sm transition-all";
+        } else {
+          btn.className = "p-1.5 rounded-lg text-xs flex items-center gap-1.5 font-medium text-slate-400 hover:text-white transition-all";
+        }
+      });
+
+      container.classList.remove('device-shell-desktop', 'device-shell-kiosk', 'device-shell-mobile');
+
+      if (mode === 'desktop') {
+        container.classList.add('device-shell-desktop');
+        kioskBanner.classList.add('hidden');
+      } else if (mode === 'kiosk') {
+        container.classList.add('device-shell-kiosk');
+        kioskBanner.classList.remove('hidden');
+        if (currentPersonContext === 'erick') {
+          setPersonContext('family');
+        }
+      } else if (mode === 'mobile') {
+        container.classList.add('device-shell-mobile');
+        kioskBanner.classList.add('hidden');
+      }
+
+      lucide.createIcons();
+    }
+
+    /* =====================================================================
+       ASK OLIN ADAPTIVE TRIGGER (Theme Morphs)
+       ===================================================================== */
+    function renderAskOlinButton() {
+      const container = document.getElementById('ask-olin-trigger-container');
+      
+      if (currentTheme === 'ambient-future') {
+        container.innerHTML = `
+          <button onclick="toggleAskOlinModal()" class="olin-card olin-pill px-4 py-3 flex items-center gap-3 shadow-2xl transition-all duration-300 hover:scale-105 group border border-sky-400/30" style="background: rgba(16, 38, 64, 0.7); box-shadow: var(--accent-glow);">
+            <div class="w-7 h-7 rounded-full flex items-center justify-center transition-transform group-hover:rotate-12 bg-sky-400">
+              <i data-lucide="sparkles" class="w-4 h-4 text-slate-950"></i>
+            </div>
+            <div class="flex flex-col text-left">
+              <span class="text-xs font-bold font-olin-headline tracking-wide text-white">Ask Olin</span>
+              <span class="text-[10px] font-olin-mono text-sky-300 opacity-80">Hermes Orchestration</span>
+            </div>
+            <i data-lucide="chevron-up" class="w-4 h-4 ml-1 text-sky-200"></i>
+          </button>
+        `;
+      } 
+      else if (currentTheme === 'premium-hardware') {
+        container.innerHTML = `
+          <button onclick="toggleAskOlinModal()" class="bg-slate-900 border border-amber-500/40 px-4 py-2.5 rounded-xl flex items-center gap-3 shadow-[0_0_20px_rgba(245,142,42,0.35)] hover:scale-105 transition-all">
+            <div class="w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center text-slate-950">
+              <i data-lucide="mic" class="w-3.5 h-3.5"></i>
+            </div>
+            <span class="text-xs font-bold font-olin-mono text-amber-400 tracking-wider">ASK OLIN</span>
+          </button>
+        `;
+      }
+      else {
+        container.innerHTML = `
+          <button onclick="toggleAskOlinModal()" class="olin-card olin-pill px-4 py-3 flex items-center gap-3 shadow-xl hover:scale-105 transition-all" style="background: var(--surface-card); border-color: var(--surface-border-strong);">
+            <div class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold" style="background: var(--accent);">
+              O
+            </div>
+            <div class="flex flex-col text-left">
+              <span class="text-xs font-bold font-olin-headline" style="color: var(--text-main);">Ask Olin</span>
+              <span class="text-[10px] font-olin-mono opacity-70" style="color: var(--text-muted);">Family Assistant</span>
+            </div>
+          </button>
+        `;
+      }
+      lucide.createIcons();
+    }
+
+    /* =====================================================================
+       INTERACTIVE TASKS, HARDWARE GATEWAY & HERMES SIMULATION
+       ===================================================================== */
+    function toggleTask(checkbox) {
+      const textSpan = checkbox.parentElement.querySelector('span');
+      if (checkbox.checked) {
+        textSpan.classList.add('line-through', 'opacity-60');
+      } else {
+        textSpan.classList.remove('line-through', 'opacity-60');
+      }
+    }
+
+    function lockDoor(e) {
+      if (e) e.stopPropagation();
+      isDoorLocked = true;
+      const doorText = document.getElementById('door-text-val');
+      const doorIcon = document.getElementById('door-lock-icon');
+      doorText.innerText = 'Locked';
+      doorText.className = 'text-lg font-bold font-olin-headline text-emerald-400';
+      doorIcon.className = 'w-3.5 h-3.5 text-emerald-400';
+      doorIcon.setAttribute('data-lucide', 'lock');
+      lucide.createIcons();
+    }
+
+    function cycleHomeScene() {
+      ambianceSceneIndex = (ambianceSceneIndex + 1) % ambianceScenes.length;
+      document.getElementById('ambiance-scene-name').innerText = ambianceScenes[ambianceSceneIndex];
+    }
+
+    function toggleAskOlinModal() {
+      const modal = document.getElementById('ask-olin-modal');
+      modal.classList.toggle('hidden');
+      modal.classList.toggle('flex');
+    }
+
+    function openAskOlin(initialPrompt) {
+      const modal = document.getElementById('ask-olin-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      if (initialPrompt) {
+        document.getElementById('ask-olin-input').value = initialPrompt;
+      }
+    }
+
+    function submitOlinQuery() {
+      const input = document.getElementById('ask-olin-input');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const chatStream = document.getElementById('chat-stream');
+      
+      const userMsg = document.createElement('div');
+      userMsg.className = 'p-2.5 rounded-xl bg-sky-500/20 text-sky-200 self-end max-w-[85%] text-right font-medium';
+      userMsg.innerText = text;
+      chatStream.appendChild(userMsg);
+
+      input.value = '';
+
+      setTimeout(() => {
+        const agentMsg = document.createElement('div');
+        agentMsg.className = 'p-3 rounded-xl bg-white/10 border border-white/10 text-white animate-fadeIn';
+        
+        if (text.toLowerCase().includes('lock')) {
+          lockDoor();
+          agentMsg.innerHTML = "I have commanded the Home Assistant gateway to lock the smart deadbolt. Front door is now <strong>Locked</strong>.";
+        } else if (text.toLowerCase().includes('ana') || text.toLowerCase().includes('appointment')) {
+          agentMsg.innerHTML = "Ana's appointment with Dr. Weber is underway. Estimated departure is 15:00. I'll ping the Family display when her car departs.";
+        } else if (text.toLowerCase().includes('nutrition') || text.toLowerCase().includes('lunch')) {
+          agentMsg.innerHTML = "Logged Mediterranean lunch (+420 kcal, 28g protein) to Erick's health ledger via Nutrition domain service.";
+        } else {
+          agentMsg.innerHTML = `Context noted in Vargas Household state. Hermes has synchronized this with your daily schedule.`;
+        }
+
+        chatStream.appendChild(agentMsg);
+        chatStream.scrollTop = chatStream.scrollHeight;
+      }, 450);
+    }
+
+    function sendQuickPrompt(promptText) {
+      document.getElementById('ask-olin-input').value = promptText;
+      submitOlinQuery();
+    }
+
+    // Initialize application on load
+    window.addEventListener('DOMContentLoaded', () => {
+      setPersonContext('erick');
+      setTheme('ambient-future');
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

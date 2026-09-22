@@ -1,0 +1,156 @@
+/* src/components/slots/editorial/EditorialPhysicalHome.module.css */
+.card {
+  background-color: #ffffff;
+  border: 1px solid #141414;
+  border-radius: 0.35rem;
+  box-shadow: 4px 4px 0px #141414;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0px #141414;
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1.5px solid #141414;
+  padding-bottom: 0.75rem;
+}
+
+.titleArea {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.iconBadge {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #eee9dc;
+  color: #141414;
+  border: 1px solid #141414;
+}
+
+.titleText {
+  margin: 0;
+  font-family: var(--olin-font-headline);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #141414;
+}
+
+.subtitleText {
+  margin: 0;
+  font-family: var(--olin-font-body);
+  font-size: 0.75rem;
+  color: #595959;
+}
+
+.statusPill {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.2rem;
+  background-color: #eee9dc;
+  color: #1d7335;
+  border: 1px solid #141414;
+}
+
+.tilesGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+}
+
+.tile {
+  padding: 0.85rem 1rem;
+  border-radius: 0.25rem;
+  background-color: #faf9f5;
+  border: 1px solid #141414;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  transition: all 0.15s ease;
+}
+
+.tile:hover {
+  background-color: #ffffff;
+  box-shadow: 2px 2px 0px #141414;
+  transform: translate(-1px, -1px);
+}
+
+.tileClickable {
+  cursor: pointer;
+}
+
+.tileTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #595959;
+  font-family: var(--olin-font-body);
+}
+
+.tileValue {
+  font-family: var(--olin-font-headline);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #141414;
+  line-height: 1.2;
+}
+
+.tileValueEmerald {
+  color: #1d7335;
+}
+
+.tileValueAmber {
+  color: #781c22;
+}
+
+.tileSub {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.68rem;
+  color: #595959;
+}
+
+.tileSubEmerald {
+  color: #1d7335;
+  font-weight: 700;
+}
+
+.tileSubLink {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.68rem;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  color: #781c22;
+  font-weight: 700;
+}
+
+.tileSubAccent {
+  color: #781c22;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .tilesGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

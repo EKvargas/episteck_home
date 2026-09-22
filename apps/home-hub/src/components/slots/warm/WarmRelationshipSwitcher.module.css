@@ -1,0 +1,143 @@
+/* src/components/slots/warm/WarmRelationshipSwitcher.module.css */
+.container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0.5rem 1.5rem;
+  border-radius: 1rem;
+  background-color: #fdf8f3;
+  border: 2px solid #e6d6c6;
+  box-shadow: 0 4px 12px rgba(78, 48, 25, 0.05);
+}
+
+/* Stitched yarn runner connecting the portraits */
+.stitchedRunner {
+  position: absolute;
+  left: 2rem;
+  right: 2rem;
+  top: 50%;
+  height: 2px;
+  border-bottom: 2px dashed rgba(196, 100, 60, 0.45);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.portraitButton {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.portraitButton:hover {
+  transform: translateY(-2px);
+}
+
+.portraitCircle {
+  border-radius: 9999px;
+  border: 2px solid #d4c2b0;
+  background-color: #f9f3ec;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+.portraitCircleSmall {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.portraitCircleLarge {
+  width: 3rem;
+  height: 3rem;
+}
+
+.portraitEmoji {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.portraitEmojiSmall {
+  font-size: 1rem;
+}
+
+.portraitEmojiLarge {
+  font-size: 1.35rem;
+}
+
+/* Active Stitched State */
+.activeCircle {
+  border-color: #c4643c;
+  background-color: #fae8dc;
+  transform: scale(1.15);
+  box-shadow: 0 6px 14px rgba(196, 100, 60, 0.22);
+}
+
+.activeCircleLarge {
+  border-color: #c4643c;
+  background-color: #fae8dc;
+  transform: scale(1.2);
+  box-shadow: 0 8px 18px rgba(196, 100, 60, 0.25), 0 0 0 4px rgba(196, 100, 60, 0.12);
+}
+
+.portraitLabel {
+  font-family: var(--olin-font-headline);
+  font-size: 0.72rem;
+  margin-top: 0.3rem;
+  color: #7d6a5d;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  transition: color 0.2s ease, font-weight 0.2s ease;
+}
+
+.activeLabel {
+  font-weight: 700;
+  color: #c4643c;
+}
+
+/* Responsive Adaptation for Mobile */
+@media (max-width: 640px) {
+  .container {
+    gap: 0.85rem;
+    padding: 0.4rem 1rem;
+  }
+
+  .stitchedRunner {
+    left: 1.25rem;
+    right: 1.25rem;
+  }
+
+  .portraitCircleSmall {
+    width: 2.1rem;
+    height: 2.1rem;
+  }
+
+  .portraitCircleLarge {
+    width: 2.45rem;
+    height: 2.45rem;
+  }
+
+  .portraitEmojiSmall {
+    font-size: 0.85rem;
+  }
+
+  .portraitEmojiLarge {
+    font-size: 1.1rem;
+  }
+
+  .portraitLabel {
+    font-size: 0.65rem;
+  }
+}

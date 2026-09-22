@@ -1,0 +1,155 @@
+/* src/components/slots/canvas/CanvasPhysicalHome.module.css */
+.card {
+  background-color: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(225, 215, 198, 0.85);
+  border-radius: var(--olin-card-radius);
+  box-shadow: 0 14px 34px -8px rgba(35, 52, 90, 0.12);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card:hover {
+  border-color: #ff5c38;
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.titleArea {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.iconBadge {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #e6effe 0%, #ecfdf5 100%);
+  color: #2e66f6;
+  border: 1px solid rgba(46, 102, 246, 0.2);
+}
+
+.titleText {
+  margin: 0;
+  font-family: var(--olin-font-headline);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--olin-text-main);
+}
+
+.subtitleText {
+  margin: 0;
+  font-family: var(--olin-font-body);
+  font-size: 0.75rem;
+  color: var(--olin-text-muted);
+}
+
+.statusPill {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  background-color: #ecfdf5;
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.tilesGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+}
+
+.tile {
+  padding: 0.85rem 1rem;
+  border-radius: 1.25rem;
+  background-color: #faf7f0;
+  border: 1px solid rgba(225, 215, 198, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  transition: all 0.2s ease;
+}
+
+.tile:hover {
+  background-color: #ffffff;
+  border-color: #2e66f6;
+  transform: translateY(-1px);
+}
+
+.tileClickable {
+  cursor: pointer;
+}
+
+.tileTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--olin-text-muted);
+  font-family: var(--olin-font-body);
+}
+
+.tileValue {
+  font-family: var(--olin-font-headline);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--olin-text-main);
+  line-height: 1.2;
+}
+
+.tileValueEmerald {
+  color: #059669;
+}
+
+.tileValueAmber {
+  color: #ff5c38;
+}
+
+.tileSub {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.68rem;
+  color: var(--olin-text-muted);
+}
+
+.tileSubEmerald {
+  color: #059669;
+  font-weight: 600;
+}
+
+.tileSubLink {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.68rem;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  color: #ff5c38;
+  font-weight: 600;
+}
+
+.tileSubAccent {
+  color: #2e66f6;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .tilesGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

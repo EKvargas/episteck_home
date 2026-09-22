@@ -1,0 +1,85 @@
+/* AppShell.module.css */
+.layout {
+  display: flex;
+  min-height: 100vh;
+  background-color: transparent;
+  position: relative;
+  z-index: 10;
+}
+
+.sidebar {
+  display: none;
+  width: 240px;
+  background-color: transparent;
+  flex-direction: column;
+  padding-top: var(--ep-space-4);
+  border-right: 1px solid var(--olin-surface-border);
+  transition: width var(--ep-transition-normal);
+  backdrop-filter: var(--olin-surface-blur);
+}
+
+.collapsed {
+  width: 80px;
+}
+
+.sidebarLogo {
+  padding: var(--ep-space-6) var(--ep-space-8);
+  font-family: var(--olin-font-headline);
+  font-weight: 700;
+  font-size: 1.5rem;
+  letter-spacing: -0.03em;
+  color: var(--olin-text-main);
+  display: flex;
+  align-items: center;
+  gap: var(--ep-space-3);
+  margin-bottom: var(--ep-space-6);
+}
+
+.brandMotif {
+  display: flex;
+  align-items: center;
+}
+
+.motifCircle {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2.5px solid var(--olin-accent);
+  background-color: transparent;
+}
+
+.mainContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 60px; /* Space for mobile nav */
+  max-width: 100vw;
+  z-index: 10;
+}
+
+.bottomNav {
+  display: flex;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background-color: var(--olin-surface-card);
+  backdrop-filter: var(--olin-surface-blur);
+  border-top: 1px solid var(--olin-surface-border);
+  justify-content: space-around;
+  align-items: center;
+  z-index: 50;
+}
+
+@media (min-width: 768px) {
+  .sidebar {
+    display: flex;
+  }
+  .bottomNav {
+    display: none;
+  }
+  .mainContent {
+    padding-bottom: 0;
+  }
+}

@@ -1,0 +1,461 @@
+/* src/components/slots/canvas/CanvasWellbeingNutrition.module.css */
+.card {
+  background-color: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(225, 215, 198, 0.85);
+  border-radius: var(--olin-card-radius);
+  box-shadow: 0 14px 34px -8px rgba(35, 52, 90, 0.12);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card:hover {
+  border-color: #ff5c38;
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.titleArea {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.iconBadge {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #e6effe 0%, #fef4e6 100%);
+  color: #2e66f6;
+  border: 1px solid rgba(46, 102, 246, 0.2);
+}
+
+.titleText {
+  margin: 0;
+  font-family: var(--olin-font-headline);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--olin-text-main);
+  letter-spacing: -0.01em;
+}
+
+.subtitleText {
+  margin: 0;
+  font-family: var(--olin-font-body);
+  font-size: 0.75rem;
+  color: var(--olin-text-muted);
+}
+
+.targetTag {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.75rem;
+  color: var(--olin-text-muted);
+}
+
+.targetDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background-color: #2e66f6;
+}
+
+/* Erick Mode Grid */
+.erickGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  align-items: center;
+}
+
+.gaugeContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  border-radius: 1.6rem;
+  background-color: #faf7f0;
+  border: 1px solid rgba(225, 215, 198, 0.6);
+}
+
+.svgWrapper {
+  position: relative;
+  width: 11rem;
+  height: 11rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gaugeSvg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.gaugeCenter {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.calorieNumber {
+  font-family: var(--olin-font-headline);
+  font-size: 1.85rem;
+  font-weight: 700;
+  color: var(--olin-text-main);
+  line-height: 1;
+}
+
+.calorieTarget {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.72rem;
+  color: var(--olin-text-muted);
+  margin-top: 0.2rem;
+}
+
+.fuelBadge {
+  font-family: var(--olin-font-body);
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.55rem;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%);
+  color: #ffffff;
+  margin-top: 0.35rem;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.gaugeStats {
+  margin-top: 0.65rem;
+  font-family: var(--olin-font-body);
+  font-size: 0.75rem;
+  color: var(--olin-text-muted);
+  text-align: center;
+}
+
+/* Macros Area */
+.macrosCol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.macroItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.macroHeader {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--olin-text-main);
+  font-family: var(--olin-font-body);
+}
+
+.macroRemaining {
+  font-family: var(--ep-font-mono, monospace);
+  color: #2e66f6;
+  font-weight: 600;
+}
+
+.progressBarTrack {
+  width: 100%;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background-color: #e2e8f0;
+  overflow: hidden;
+}
+
+.progressBarFillProtein {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #2e66f6 0%, #6366f1 100%);
+  transition: width 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.progressBarFillCarbs {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #10b981 0%, #06b6d4 100%);
+  transition: width 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.quickLogBanner {
+  padding: 0.75rem 1rem;
+  border-radius: 1.25rem;
+  background-color: #faf7f0;
+  border: 1px solid rgba(225, 215, 198, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--olin-text-muted);
+  margin-top: 0.25rem;
+}
+
+.quickLogButton {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.35rem 0.85rem;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #2e66f6 0%, #6366f1 100%);
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(46, 102, 246, 0.3);
+}
+
+.quickLogButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(46, 102, 246, 0.4);
+}
+
+/* Ana Care Mode */
+.anaCareArea {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.anaAppointmentBanner {
+  padding: 1.15rem;
+  border-radius: 1.5rem;
+  background: linear-gradient(135deg, #fff7ed 0%, #fef2f2 100%);
+  border: 1px solid #fed7aa;
+  display: flex;
+  gap: 1rem;
+}
+
+.anaIconBox {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  background-color: #ffedd5;
+  color: #ea580c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.anaDetails {
+  flex: 1;
+}
+
+.anaTitle {
+  margin: 0;
+  font-family: var(--olin-font-headline);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #9a3412;
+}
+
+.anaSubtitle {
+  margin: 0.25rem 0 0;
+  font-family: var(--olin-font-body);
+  font-size: 0.78rem;
+  color: #c2410c;
+  line-height: 1.4;
+}
+
+.anaActionRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.anaButton {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.35rem 0.85rem;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #f97316 0%, #f43f5e 100%);
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+}
+
+.anaButton:hover {
+  transform: translateY(-1px);
+}
+
+.anaNextCheckup {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.72rem;
+  color: #9a3412;
+}
+
+.anaVitalsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.anaVitalCard {
+  padding: 0.9rem;
+  border-radius: 1.25rem;
+  background-color: #faf7f0;
+  border: 1px solid rgba(225, 215, 198, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.anaVitalLabel {
+  font-size: 0.72rem;
+  color: var(--olin-text-muted);
+}
+
+.anaVitalVal {
+  margin: 0;
+  font-family: var(--olin-font-headline);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--olin-text-main);
+}
+
+.anaVitalSub {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.68rem;
+  color: #059669;
+  font-weight: 600;
+}
+
+/* Family Dining Mode */
+.familyDiningCard {
+  padding: 1.25rem;
+  border-radius: 1.6rem;
+  background-color: #faf7f0;
+  border: 1px solid rgba(225, 215, 198, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+}
+
+.familyLeft {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.familyPotIcon {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 1.25rem;
+  background: linear-gradient(135deg, #e6effe 0%, #ecfdf5 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.75rem;
+  flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(46, 102, 246, 0.1);
+}
+
+.mealTimeTag {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #059669;
+  letter-spacing: 0.04em;
+}
+
+.mealName {
+  margin: 0.2rem 0 0;
+  font-family: var(--olin-font-headline);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--olin-text-main);
+}
+
+.mealDesc {
+  margin: 0.2rem 0 0;
+  font-family: var(--olin-font-body);
+  font-size: 0.78rem;
+  color: var(--olin-text-muted);
+}
+
+.familyActionRow {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.familyListBtn {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.5rem 0.85rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(225, 215, 198, 0.85);
+  background-color: #ffffff;
+  color: var(--olin-text-main);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.familyListBtn:hover {
+  background-color: #e6effe;
+  border-color: #2e66f6;
+}
+
+.familyCountdownBtn {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.5rem 0.95rem;
+  border-radius: 9999px;
+  border: none;
+  background: linear-gradient(135deg, #2e66f6 0%, #6366f1 100%);
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px rgba(46, 102, 246, 0.35);
+}
+
+.familyCountdownBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(46, 102, 246, 0.45);
+}
+
+@media (max-width: 768px) {
+  .erickGrid {
+    grid-template-columns: 1fr;
+  }
+  .familyDiningCard {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .familyActionRow {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

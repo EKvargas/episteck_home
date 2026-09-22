@@ -1,0 +1,468 @@
+/* src/components/slots/editorial/EditorialWellbeingNutrition.module.css */
+.card {
+  background-color: #ffffff;
+  border: 1px solid #141414;
+  border-radius: 0.35rem;
+  box-shadow: 4px 4px 0px #141414;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0px #141414;
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1.5px solid #141414;
+  padding-bottom: 0.75rem;
+}
+
+.titleArea {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.iconBadge {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #eee9dc;
+  color: #781c22;
+  border: 1px solid #141414;
+}
+
+.titleText {
+  margin: 0;
+  font-family: var(--olin-font-headline);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #141414;
+  letter-spacing: -0.01em;
+}
+
+.subtitleText {
+  margin: 0;
+  font-family: var(--olin-font-body);
+  font-size: 0.75rem;
+  color: #595959;
+}
+
+.targetTag {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.75rem;
+  color: #141414;
+  font-weight: 700;
+}
+
+.targetDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  background-color: #781c22;
+  border-radius: 0.1rem;
+}
+
+/* Erick Mode Grid */
+.erickGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  align-items: center;
+}
+
+.gaugeContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  border-radius: 0.25rem;
+  background-color: #faf9f5;
+  border: 1px solid #141414;
+}
+
+.svgWrapper {
+  position: relative;
+  width: 10.5rem;
+  height: 10.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gaugeSvg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.gaugeCenter {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.calorieNumber {
+  font-family: var(--olin-font-headline);
+  font-size: 2rem;
+  font-weight: 700;
+  color: #141414;
+  line-height: 1;
+}
+
+.calorieTarget {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.72rem;
+  color: #595959;
+  margin-top: 0.2rem;
+}
+
+.fuelBadge {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 0.2rem;
+  background-color: #eee9dc;
+  color: #781c22;
+  margin-top: 0.35rem;
+  border: 1px solid #141414;
+}
+
+.gaugeStats {
+  margin-top: 0.65rem;
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.72rem;
+  color: #595959;
+  text-align: center;
+}
+
+/* Macros Area */
+.macrosCol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.macroItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.macroHeader {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #141414;
+  font-family: var(--olin-font-headline);
+}
+
+.macroRemaining {
+  font-family: var(--ep-font-mono, monospace);
+  color: #781c22;
+  font-weight: 700;
+}
+
+.progressBarTrack {
+  width: 100%;
+  height: 0.45rem;
+  border-radius: 0.15rem;
+  background-color: #eee9dc;
+  border: 1px solid #d4cfc3;
+  overflow: hidden;
+}
+
+.progressBarFillProtein {
+  height: 100%;
+  background-color: #781c22;
+  transition: width 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.progressBarFillCarbs {
+  height: 100%;
+  background-color: #141414;
+  transition: width 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.quickLogBanner {
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.25rem;
+  background-color: #faf9f5;
+  border: 1px solid #141414;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #595959;
+  margin-top: 0.25rem;
+}
+
+.quickLogButton {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.35rem 0.85rem;
+  border-radius: 0.2rem;
+  background-color: #781c22;
+  color: #ffffff;
+  border: 1px solid #141414;
+  cursor: pointer;
+  box-shadow: 2px 2px 0px #141414;
+  transition: all 0.15s ease;
+}
+
+.quickLogButton:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0px #141414;
+}
+
+/* Ana Care Mode */
+.anaCareArea {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.anaAppointmentBanner {
+  padding: 1.15rem;
+  border-radius: 0.25rem;
+  background-color: #faf9f5;
+  border: 1.5px solid #141414;
+  box-shadow: 3px 3px 0px #141414;
+  display: flex;
+  gap: 1rem;
+}
+
+.anaIconBox {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.25rem;
+  background-color: #eee9dc;
+  color: #781c22;
+  border: 1px solid #141414;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.anaDetails {
+  flex: 1;
+}
+
+.anaTitle {
+  margin: 0;
+  font-family: var(--olin-font-headline);
+  font-size: 1rem;
+  font-weight: 700;
+  color: #141414;
+}
+
+.anaSubtitle {
+  margin: 0.25rem 0 0;
+  font-family: var(--olin-font-body);
+  font-size: 0.78rem;
+  color: #595959;
+  line-height: 1.4;
+}
+
+.anaActionRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.anaButton {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.35rem 0.85rem;
+  border-radius: 0.2rem;
+  background-color: #781c22;
+  color: #ffffff;
+  border: 1px solid #141414;
+  cursor: pointer;
+  box-shadow: 2px 2px 0px #141414;
+  transition: all 0.15s ease;
+}
+
+.anaButton:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0px #141414;
+}
+
+.anaNextCheckup {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.72rem;
+  color: #595959;
+}
+
+.anaVitalsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.anaVitalCard {
+  padding: 0.9rem;
+  border-radius: 0.25rem;
+  background-color: #faf9f5;
+  border: 1px solid #141414;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.anaVitalLabel {
+  font-size: 0.72rem;
+  color: #595959;
+  font-family: var(--olin-font-body);
+}
+
+.anaVitalVal {
+  margin: 0;
+  font-family: var(--olin-font-headline);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #141414;
+}
+
+.anaVitalSub {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.68rem;
+  color: #1d7335;
+  font-weight: 700;
+}
+
+/* Family Dining Mode */
+.familyDiningCard {
+  padding: 1.25rem;
+  border-radius: 0.25rem;
+  background-color: #faf9f5;
+  border: 1.5px solid #141414;
+  box-shadow: 3px 3px 0px #141414;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+}
+
+.familyLeft {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.familyPotIcon {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 0.25rem;
+  background-color: #eee9dc;
+  border: 1px solid #141414;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.75rem;
+  flex-shrink: 0;
+}
+
+.mealTimeTag {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #1d7335;
+  letter-spacing: 0.04em;
+}
+
+.mealName {
+  margin: 0.2rem 0 0;
+  font-family: var(--olin-font-headline);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #141414;
+}
+
+.mealDesc {
+  margin: 0.2rem 0 0;
+  font-family: var(--olin-font-body);
+  font-size: 0.78rem;
+  color: #595959;
+}
+
+.familyActionRow {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.familyListBtn {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.5rem 0.85rem;
+  border-radius: 0.2rem;
+  border: 1px solid #141414;
+  background-color: #ffffff;
+  color: #141414;
+  cursor: pointer;
+  box-shadow: 2px 2px 0px #141414;
+  transition: all 0.15s ease;
+}
+
+.familyListBtn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0px #141414;
+}
+
+.familyCountdownBtn {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.5rem 0.95rem;
+  border-radius: 0.2rem;
+  border: 1px solid #141414;
+  background-color: #781c22;
+  color: #ffffff;
+  cursor: pointer;
+  box-shadow: 2px 2px 0px #141414;
+  transition: all 0.15s ease;
+}
+
+.familyCountdownBtn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0px #141414;
+}
+
+@media (max-width: 768px) {
+  .erickGrid {
+    grid-template-columns: 1fr;
+  }
+  .familyDiningCard {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .familyActionRow {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
