@@ -30,11 +30,11 @@ PROCESS
 
 Technology must not dictate the Knowledge model.
 
-This is a working decision register, NOT the final Knowledge architecture. The [independent architecture review](../reviews/2026-09-19-knowledge-independent-architecture-review.md) is historical review input, not canonical architecture. Its reviewed baseline was `ddebab6439c9d68487d180dec6995fc546d3cf68`; the G1.6 closeout was merged subsequently. Its findings were initially recorded without disposition. B1–B5 are now resolved by the explicit Product Architect decisions below; B6 remains OPEN.
+This is a working decision register, NOT the final Knowledge architecture. The [independent architecture review](../reviews/2026-09-19-knowledge-independent-architecture-review.md) is historical review input, not canonical architecture. Its reviewed baseline was `ddebab6439c9d68487d180dec6995fc546d3cf68`; the G1.6 closeout was merged subsequently. Its findings were initially recorded without disposition. B1–B6 are now resolved by the explicit Product Architect decisions below.
 
 Canonical architecture remains in [ARCHITECTURE.md](../ARCHITECTURE.md), [KNOWLEDGE.md](../KNOWLEDGE.md), accepted ADRs, and approved architecture proposals. The accepted [B1 security/scope decision](KNOWLEDGE_B1_SECURITY_SCOPE.md) governs B1 where older Knowledge documentation is less precise, until later consolidation. The existing [Roadmap](../ROADMAP.md) identifies the Knowledge gate. Other canonical documents are not rewritten here, and no runtime approval is granted.
 
-Only explicit Product Architect decisions may accept, modify, or reject review recommendations. For each disposition, record the decision owner, date, exact accepted/modified/rejected finding, reasoning, acceptance scenarios, and references to approved architecture changes. **B1 is RESOLVED** by Product Architect acceptance with amendments on **2026-09-19**. **B2 is RESOLVED** by Product Architect acceptance with clarification on **2026-09-20**. **B3 is RESOLVED** by Product Architect acceptance with D2/D4 clarifications on **2026-09-21**. **B4 is RESOLVED** by Product Architect acceptance with C1–C4 clarifications on **2026-09-21**. **B5 is RESOLVED** by Product Architect acceptance with corrections on **2026-09-21**. B6 remains **OPEN / NOT DECIDED**. The Knowledge Technology Gate remains **OPEN**. A reviewer recommendation or this document's eventual merge does not itself select technology or authorize runtime implementation.
+Only explicit Product Architect decisions may accept, modify, or reject review recommendations. For each disposition, record the decision owner, date, exact accepted/modified/rejected finding, reasoning, acceptance scenarios, and references to approved architecture changes. **B1 is RESOLVED** by Product Architect acceptance with amendments on **2026-09-19**. **B2 is RESOLVED** by Product Architect acceptance with clarification on **2026-09-20**. **B3 is RESOLVED** by Product Architect acceptance with D2/D4 clarifications on **2026-09-21**. **B4 is RESOLVED** by Product Architect acceptance with C1–C4 clarifications on **2026-09-21**. **B5 is RESOLVED** by Product Architect acceptance with corrections on **2026-09-21**. **B6 is RESOLVED** by Product Architect acceptance with corrections on **2026-09-22**. The Knowledge Technology Gate remains **OPEN** and is now authorized to begin. A reviewer recommendation or this document's eventual merge does not itself select technology or authorize runtime implementation.
 
 ## Current five-layer model
 
@@ -58,7 +58,7 @@ This distinction preserves the current conceptual direction. Contested ownership
 
 ## Security partition — accepted B1 invariant
 
-Status: ACCEPTED — PRODUCT ARCHITECT B1 DECISION, 2026-09-19 (B6 OPEN)
+Status: ACCEPTED — PRODUCT ARCHITECT B1 DECISION, 2026-09-19
 
 **Every durable Knowledge object and every derivative belongs to exactly one trusted security partition.**
 
@@ -127,7 +127,7 @@ Accepted decisions:
 - Source/container decoupling for an exact projection does not automatically require every Person whose information occurs elsewhere in the original. It requires source-handling authority, trusted projection approval, proof that removed Person/domain sensitivity is absent from the output, exact version/use binding and preservation of every remaining restriction. If the output still reveals protected content, affected-Person authority is required. Source custody cannot remove Person protection; Person consent cannot disclose unrelated protected source material.
 - Reclassification makes stale derivatives immediately ineligible. Current authorization constrains the candidate space before sensitive retrieval. No technology or runtime is selected or approved.
 
-Scenarios A–J are accepted conceptual outcomes and future acceptance specifications, not runtime tests. B2 resolution changes no schema, contract, service, database, index, workflow, deployment or production system. B3, B4 and B5 are resolved below; B6 remains OPEN.
+Scenarios A–J are accepted conceptual outcomes and future acceptance specifications, not runtime tests. B2 resolution changes no schema, contract, service, database, index, workflow, deployment or production system. B3, B4, B5 and B6 are resolved below.
 
 ## B3 — Confirmation and lifecycle
 
@@ -208,11 +208,17 @@ Evidence: the existing [Nutrition profile fields/write path](https://github.com/
 
 ## B6 — Trusted retrieval and ContextBundle
 
-Status: OPEN — FINAL ARCHITECTURE BOARD CLOSURE REVIEW
+Status: B6 — RESOLVED — PRODUCT ARCHITECT DECISION
 
-Product Architect disposition: **ACCEPTED IN DIRECTION WITH FOUR REQUIRED CORRECTIONS — NOT YET CLOSED**
+Decision owner: Product Architect
 
-Proposal under review: [Knowledge B6 — Trusted retrieval and ContextBundle](KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md), including its section 4 trusted-retrieval invariants, the section 8 multi-resource authorization protocol, the section 12 ContextBundle semantics, and the section 23 dispositions. **B6 is not resolved by this entry.** It closes only when the Architecture Board approves merge and this status is changed to RESOLVED.
+Decision date: 2026-09-22
+
+Product Architect disposition: **ACCEPTED WITH CORRECTIONS — B6 RESOLVED**
+
+Authoritative decision: [Knowledge B6 — Trusted retrieval and ContextBundle](KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md), including its section 4 trusted-retrieval invariants, the section 8 multi-resource authorization protocol, the section 12 ContextBundle semantics, the section 18A performance architecture, the section 19 scenarios and the section 23 dispositions.
+
+**Acceptance of B6 authorizes the Knowledge Technology Gate to begin. It does not authorize implementation.**
 
 Accepted core architecture:
 
@@ -394,7 +400,7 @@ Engine transactions do not by themselves make remote Knowledge commands atomic w
 
 Knowledge/domain state remains canonical. A completed process flag cannot activate an uncommitted claim or prove that all deletion obligations have finished. Reconcile workflow progress against current domain state and operation receipts; do not overwrite newer domain state to match an old workflow.
 
-If a domain commit succeeds but acknowledgement is lost, recovery should discover the existing result. If the workflow advances without a successful domain command, the domain operation remains incomplete. B3's atomic outcome and idempotency requirements and B4's cleanup/anti-resurrection obligations are accepted; B5 assigns their owners; the concrete reconciliation, cleanup and freshness **mechanisms** remain B6 OPEN.
+If a domain commit succeeds but acknowledgement is lost, recovery should discover the existing result. If the workflow advances without a successful domain command, the domain operation remains incomplete. B3's atomic outcome and idempotency requirements and B4's cleanup/anti-resurrection obligations are accepted; B5 assigns their owners and B6 defines the retrieval, freshness and revalidation protocol; concrete **mechanisms** remain Technology Gate work.
 
 ### 6. How should retry and idempotency work?
 
@@ -461,7 +467,7 @@ B4: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNO
 
 B5: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md))
 
-B6: OPEN — [proposal](KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md) in **final Architecture Board closure review**; PA-1 … PA-10 and sub-items PA-10a … PA-10e recorded 2026-09-22; four Board corrections plus the final reconciliation pass incorporated; **NOT YET CLOSED**
+B6: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-22 ([accepted decision](KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md))
 
 Flowable selection: NOT APPROVED. B4 confirms orchestration is never canonical Knowledge truth and that immediate suppression must not wait on it.
 
@@ -469,7 +475,29 @@ No installation, deployment, replication, configuration, process triggering, or 
 
 ## Gate completion and change boundary
 
-The next work is Architecture Board merge review of the [B6 proposal](KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md) — whose PA-1 … PA-9 dispositions are recorded and whose four required corrections are incorporated, but which is NOT YET CLOSED — and the remaining process requirements. B1–B5 are resolved by the accepted decisions above; the Knowledge Technology Gate remains OPEN and is not complete. Technology selection additionally requires B6 to close first. Agreed acceptance scenarios must precede technology selection. Technology selection and runtime implementation require their own approval; B1/B2/B3/B4 acceptance supplies neither.
+**The B1–B6 architecture prerequisites are now closed.** The next work is the **Knowledge Technology Gate** itself, which remains OPEN and is now authorized to begin.
+
+The Gate must evaluate candidates against the accepted B1–B6 requirements, including at minimum:
+
+| Requirement | Source |
+|---|---|
+| Protected security-metadata planning **before** authorization and content candidacy | B6 §9.2, §6 |
+| Authorization-constrained retrieval — no retrieve-then-filter, in any form | B1 §10; B6 §9.1 |
+| Suppression enforced **before** candidacy, and again before disclosure | B4 §8; B6 §10.1 |
+| Exact-version lifecycle evaluation | B3 §5; B6 §10.3 |
+| Fresh pre-disclosure revalidation — a re-evaluation, not a TTL check | B3 §11.8; B6 §11.1 |
+| Materialization bindings that prove currency without a rebuild | B6 §15.2 |
+| Restore-freshness proof; unknown freshness fails closed | B4 C1; B6 §16 |
+| ContextBundle never persisted | B6 §12.4 |
+| **R13** — downstream pre-authorized execution satisfying the non-bearer boundary | B6 §18A.3a |
+| **R14** — raw domain access latency measured | B6 §18A.3b |
+| p50/p95/p99 benchmarks, warm and cold, on realistic cross-node topology | B6 §18A.10 |
+| Home-crossing counters proving crossings do not grow with domain calls | B6 §18A.10 |
+| Independent domain reads concurrent by default | B6 §18A.6 |
+| Lazy source expansion | B6 §18A.7 |
+| The ten performance disqualification criteria | B6 §18A.11 |
+
+**No candidate is selected by this closure.** Technology selection and runtime implementation require their own separate approval; B1–B6 acceptance supplies neither. Agreed acceptance scenarios (B6 §19, P1–P8) must precede technology selection.
 
 The original gate-opening task changed only the independent review artifact and this gate register. The B1 follow-up changes only [KNOWLEDGE_B1_SECURITY_SCOPE.md](KNOWLEDGE_B1_SECURITY_SCOPE.md) and B1 status/references in this register. It does not modify canonical architecture documents, existing ADRs, `packages/home-contracts/`, `services/`, `deploy/`, or production configuration.
 

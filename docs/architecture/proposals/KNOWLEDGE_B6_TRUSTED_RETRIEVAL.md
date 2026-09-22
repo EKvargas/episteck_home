@@ -1,14 +1,16 @@
 # Knowledge B6 — Trusted retrieval and ContextBundle
 
-Status: PROPOSED — FINAL ARCHITECTURE BOARD CLOSURE REVIEW
+Status: ACCEPTED — B6 ARCHITECTURE DECISION
 
 Date: 2026-09-22
 
-Revision: 2026-09-22 — Architecture Board review incorporated. Core architecture accepted in direction (**authorization-constrained retrieval planning + suppression/lifecycle before candidacy + mandatory pre-disclosure revalidation**); PA-1 … PA-9 dispositions recorded in section 23; required corrections 1–4 incorporated per section 23.1.
+Revision: 2026-09-22 — Architecture Board review incorporated. Core architecture accepted; PA-1 … PA-9 dispositions recorded in section 23; required corrections 1–4 incorporated per section 23.1.
 
 Revision: 2026-09-22 — **performance and latency architecture added as section 18A**, with PA-10 and sub-items PA-10a … PA-10e in section 23. PA-1 … PA-9 and all existing section numbers are unchanged; 18A was inserted rather than renumbering to preserve traceability.
 
-Revision: 2026-09-22 — **final reconciliation pass.** Protected security-metadata planning now precedes authorization (section 9.2, demonstrated against B1 scenario D); Authorization Plan, Authorization Operation and Home network round trip are separated (section 8.3.2); downstream execution authority is stated as a requirement with an unresolved mechanism (section 18A.3a, R13); latency accounting corrected for a double-counted Home crossing (section 18A.3b, R14); PA-10 dispositions recorded. No security control was changed and the retrieval model is unchanged.
+Revision: 2026-09-22 — **final reconciliation pass.** Protected security-metadata planning now precedes authorization (section 9.2, demonstrated against B1 scenario D); Authorization Plan, Authorization Operation and Home network round trip are separated (section 8.3.2); downstream execution authority is stated as a requirement with a deferred mechanism (section 18A.3a, R13); latency accounting corrected for a double-counted Home crossing (section 18A.3b, R14); PA-10 dispositions recorded.
+
+Revision: 2026-09-22 — **closure pass.** Section 6's recommended-protocol diagram aligned with the accepted section 9.2 / section 18 ordering; R13's non-bearer boundary made explicit; the P5 denial-timing contradiction resolved. **B6 accepted and closed by the Product Architect.** No security control was changed at any point and the retrieval model is unchanged from the original proposal.
 
 Repository: `EKvargas/episteck_home`
 
@@ -20,9 +22,17 @@ Gate: [B6 — Trusted retrieval and ContextBundle](KNOWLEDGE_TECHNOLOGY_GATE.md#
 
 Decision owner: Product Architect
 
-Disposition: **ACCEPTED IN DIRECTION WITH FOUR REQUIRED CORRECTIONS — PENDING FINAL MERGE REVIEW**
+Decision date: 2026-09-22
 
-This document is an architecture proposal whose PA-1 … PA-9 dispositions have been recorded by the Architecture Board (section 23) and whose four required corrections are incorporated (section 23.1). **B6 is not marked RESOLVED by this document.** Its status closes only when the Board approves merge and the gate register records it. It changes no contract, schema, service, runtime, index, deployment or production system, and selects no storage, retrieval, search, index, vector, graph, embedding, cache, queue, orchestration or messaging technology. B1–B5 remain RESOLVED and unamended. **B6 remains OPEN. The Knowledge Technology Gate remains OPEN.** All named people, household statements and scenarios are synthetic.
+Disposition: **ACCEPTED WITH CORRECTIONS — B6 RESOLVED**
+
+This document is the authoritative B6 architecture decision. The Architecture Board accepted the trusted retrieval architecture, the four required corrections (section 23.1), the performance architecture in section 18A, and the closure corrections above. Where older Knowledge documentation is less precise about retrieval semantics, this decision governs until later consolidation.
+
+The accepted architecture is:
+
+> **authorization-constrained retrieval planning + protected security-metadata planning before authorization + suppression and lifecycle before candidacy + mandatory pre-disclosure revalidation.**
+
+**Acceptance of B6 authorizes the Knowledge Technology Gate to begin. It does NOT authorize implementation.** It changes no contract, schema, service, runtime, index, deployment or production system, and selects no storage, retrieval, search, index, vector, graph, embedding, cache, queue, orchestration or messaging technology. B1–B5 remain RESOLVED and unamended; **B6 is RESOLVED by this decision**. **The Knowledge Technology Gate remains OPEN**, no technology or runtime is selected, and no benchmark, schema, migration or deployment is approved. All named people, household statements and scenarios are synthetic.
 
 ---
 
@@ -173,45 +183,68 @@ Issue a short-lived capability describing what may be retrieved; the retrieval b
 
 **Adopt authorization-constrained retrieval planning with a mandatory pre-disclosure revalidation barrier.**
 
-Five stages, each with one owner and one failure mode:
+The authoritative sequence, consistent with §9.2 and §18:
+
+```text
+trusted envelope / nomination resolution
+→ protected security-metadata planning
+→ compile complete Authorization Plan
+→ Home authorization
+→ constrained Knowledge/domain execution
+→ selection
+→ fresh revalidation
+→ ContextBundle
+```
+
+Seven stages, each with one owner and one failure mode:
 
 ```mermaid
 flowchart TB
   subgraph T["Trusted runtime (server-side)"]
     ENV["1. Trusted Request Envelope<br/>actor · partition · clock · use TRUSTED<br/>subjects · domains · interval NOMINATED<br/>resolved in-partition before use"]
   end
-  subgraph H["Home — decides"]
-    DEC["2. Authorization operation<br/>conjunctive · multi-resource · ALL-OR-NOTHING<br/>Home retains request authorization context"]
+  subgraph K1["Knowledge owner — remembers"]
+    META["2. PROTECTED SECURITY-METADATA PLANNING<br/>scope · exact versions · complete subjects<br/>complete domains · restrictions · revisions<br/>NO text · NO snippets · NO embeddings<br/>NO scores · NO counts · never model-visible"]
   end
-  subgraph K["Knowledge owner — remembers"]
-    PLAN["3. Constrained Candidate Plan<br/>decision + suppression + lifecycle<br/>compiled into addressable scope"]
-    EXEC["4. Constrained execution<br/>backend can only address eligible versions"]
+  subgraph T2["Trusted runtime"]
+    PLAN["3. Compile AUTHORIZATION PLAN<br/>OP-K · OP-N · OP-D<br/>each independently COMPLETE"]
+  end
+  subgraph H["Home — decides"]
+    DEC["4. Authorization<br/>each operation ALL-OR-NOTHING<br/>Home retains request authorization context"]
+  end
+  subgraph K2["Knowledge owner"]
+    EXEC["5. Constrained execution<br/>only authorized exact versions addressable"]
   end
   subgraph D["Domains — own structured truth"]
-    DOM["4b. Authorized domain reads<br/>by reference, per owner"]
+    DOM["5b. Domain reads<br/>operations already approved in the plan"]
   end
-  REVAL["5. Revalidation barrier<br/>re-prove before disclosure"]
-  CB["ContextBundle<br/>request-local · ephemeral · NOT authority"]
+  SEL["6. Selection / ranking<br/>within the authorized set only"]
+  REVAL["7. Revalidation barrier<br/>Home freshly re-evaluates · NOT a TTL check"]
+  CB["ContextBundle<br/>request-local · ephemeral · never persisted · NOT authority"]
   LLM["Model / user"]
 
-  ENV --> DEC --> PLAN --> EXEC --> REVAL
-  PLAN -. "separate authorization" .-> DOM --> REVAL
-  REVAL -->|proven fresh| CB --> LLM
-  REVAL -->|unknown / changed| ABST["Explicit abstention<br/>fail closed"]
+  ENV --> META --> PLAN --> DEC
+  DEC --> EXEC --> SEL
+  DEC --> DOM --> SEL
+  SEL --> REVAL
+  REVAL -->|freshly re-proven| CB --> LLM
+  REVAL -->|denied / changed / unknown| ABST["Explicit abstention<br/>fail closed"]
 
   classDef home fill:#e8f0fe,stroke:#4a86e8;
   classDef kn fill:#e6f4ea,stroke:#16a765;
   classDef dom fill:#fef7e0,stroke:#ffad47;
   classDef bad fill:#fce8e6,stroke:#d93025;
   class H,DEC home;
-  class K,PLAN,EXEC kn;
+  class K1,META,K2,EXEC kn;
   class D,DOM dom;
   class ABST bad;
 ```
 
-The load-bearing idea is stage 3. **A retrieval never receives an unconstrained query.** The authorization decision, the suppression register and the lifecycle predicates are compiled into the addressable scope of the operation, so unauthorized, suppressed or ineligible records are not filtered out — they are *not addressable*. Whether that scope is expressed as a structured predicate, a namespace restriction or an index partition is a Technology Gate decision that does not change the protocol.
+**Stage 2 is what makes stage 4 correct.** A request cannot know a record's complete requirement set — B1 scenario D shows a Household record whose hidden `{PERSON/A}` + HEALTH restriction appears nowhere in the query. Protected metadata planning establishes those requirements first, **inside trusted infrastructure**, so the plan compiled at stage 3 is genuinely complete. This phase is partition-bound, carries security and control metadata **only** — no statement text, no snippets, no embeddings, no semantic scores or counts — is never model-visible, and is **not the content candidate set** (§9.2). A record appearing in it has been neither retrieved, matched, ranked, scored nor counted.
 
-Stage 5 exists because stage 3 is necessarily a snapshot. Between planning and disclosure, a grant can be revoked, an assertion superseded, a classification strengthened or a suppression committed. B3 §11.8 and B4 §13 require an enforceable fence, and the fence must be at the last moment before content leaves the trusted boundary.
+**Stage 5 is the load-bearing enforcement.** A retrieval never receives an unconstrained query: the authorization decision, the suppression register and the lifecycle predicates are compiled into the addressable scope of the operation, so unauthorized, suppressed or ineligible records are not filtered out — they are *not addressable*. Whether that scope is expressed as a structured predicate, a namespace restriction or an index partition is a Technology Gate decision that does not change the protocol.
+
+**Stage 7 exists because stages 2–4 are necessarily a snapshot.** Between planning and disclosure, a grant can be revoked, an assertion superseded, a classification strengthened or a suppression committed. B3 §11.8 and B4 §13 require an enforceable fence, and the fence must be at the last moment before content leaves the trusted boundary.
 
 ---
 
@@ -932,11 +965,26 @@ The two-round-trip target holds **only if** executing an operation already appro
 | Revocation and revalidation semantics preserved | B3 §11.8 ordering fence intact; RT#2 still re-evaluates |
 | Domain-side enforcement preserved | The domain still verifies; it does not simply trust a caller |
 
-**What is explicitly forbidden as a solution:** replaying the consumed delegation; treating `decision_id` as bearer authority; trusting a model-supplied claim; weakening domain-side enforcement; bypassing Home as the authorization authority; or lengthening the delegation into reusable authority.
+**The non-bearer boundary — the invariant that keeps this from becoming rejected Alternative D:**
+
+> **Possession of a downstream execution artifact alone must never be sufficient authority.**
+
+Alternative D was rejected in §5 because a capability that travels is a bearer permission, which B1 §10 refuses. An execution basis that could be lifted out of its context and presented by any holder would recreate exactly that, under a different name. So a compliant mechanism must **additionally bind verification to trusted server-side context** — the authenticated machine/service identity, the trusted channel or request context, or an equivalent non-bearer binding. The artifact is one input to a verification that also requires context the holder cannot supply.
+
+Concretely:
+
+- **A transferable signed token whose possession alone grants execution is NOT compliant**, however short-lived or narrowly scoped.
+- **`decision_id` remains correlation only** (§8.4 item 4) and contributes nothing to a decision.
+- **The domain still verifies.** It does not simply trust a caller who presents an artifact.
+- **RT#2 still freshly revalidates with Home** (§11.1). The execution basis governs whether a *pre-approved* operation may execute without an extra crossing; it never substitutes for the disclosure barrier.
+- **The Technology Gate may choose a concrete mechanism only if it preserves this boundary.**
+- **If no compliant mechanism can achieve the two-crossing target, the performance target changes — security does not.** The budget becomes 2 + N and §18A.4's invariant is revised upward.
+
+**What is explicitly forbidden as a solution:** replaying the consumed delegation; treating `decision_id` as bearer authority; trusting a model-supplied claim; weakening domain-side enforcement; bypassing Home as the authorization authority; lengthening the delegation into reusable authority; or any artifact whose mere possession suffices.
 
 **Is such a mechanism consistent with B1–B5?** **Yes — nothing in the accepted decisions prohibits this shape**, and one accepted passage anticipates it. B1 §5.2 requires background work to "retain trusted partition and operation provenance, then revalidate authority before sensitive work or publication" — a trusted, bounded, server-side basis carried forward and revalidated is exactly that pattern. What B1 forbids is a *bearer* permission (§10) and a *model-supplied* authority (scenario H); a server-side, operation-bound, short-lived proof produced by Home as part of its own decision is neither.
 
-**One plausible shape, not selected:** Home's plan evaluation could produce, per approved operation, a bounded execution basis that the owning domain verifies before acting — audience-scoped to that domain, bound to partition/actor/operation, short-lived, single-purpose. The existing delegation design already demonstrates every one of these properties (audience binding, 300 s maximum lifetime, single-use claiming, fail-closed verification, F3), so the security pattern is proven in this codebase even though its application here is new.
+**One plausible shape, not selected:** Home's plan evaluation could produce, per approved operation, a bounded execution basis that the owning domain verifies before acting — audience-scoped to that domain, bound to partition/actor/operation, short-lived, single-purpose, **and verified together with the trusted server-side context of the caller so that the artifact alone is insufficient**. The existing delegation design already demonstrates most of these properties (audience binding, 300 s maximum lifetime, single-use claiming, fail-closed verification, F3), and the dual-principal model (B1 §2: a service credential proves "this service may call this interface", never "this service is Person X") already demonstrates the second-factor binding. **No mechanism is selected here.**
 
 **Honest status.** This is an **architectural requirement with an unresolved mechanism**. B6 states what must be true; the mechanism is a Technology Gate and implementation decision, and §18A.10 requires the benchmark to *prove* no hidden crossings occur. **If no safe mechanism is found, the ≤2 round-trip target must be revised upward rather than the requirement quietly dropped** — a 3-domain query would then cost 5 crossings (~600 ms) and the p95 target would be unreachable. Recorded as **R13**.
 
@@ -1096,14 +1144,24 @@ Future benchmark specifications. **No benchmark is implemented by this proposal.
 | **P2** | Knowledge + Nutrition | 2 (OP-K, OP-N) | **2** | — | Yes: Knowledge ∥ Nutrition | No | Fail closed | Two crossings; domain access overlaps Knowledge work |
 | **P3** | Knowledge + 3 independent domains | **4** (OP-K, OP-N, OP-D, OP-B) | **2** | — | All four in parallel | No | Fail closed; optional domains may degrade (P8) | Two crossings + **slowest** domain, not the sum. **This row is the headline claim of the plan abstraction and must be measured** |
 | **P4** | Base retrieval + source expansion | 2–3 | **3** | Base reads parallel; expansion after selection | Yes | Expansion denial ≠ base failure (§14) | Third crossing + source fetch; deep-path budget |
-| **P5** | Denied request | 1, denied | **1** | None | No | **Fail closed** — no candidates, scores or counts | Single crossing; should be the *fastest* path |
+| **P5** | Denied request | 1, denied | **1** | None | No | **Fail closed** — no candidates, scores or counts | Single crossing internally. **Externally observable timing is governed by PA-10d**, not by a fastest-path goal |
 | **P6** | Suppressed record still in index/cache | 1 | **2** | Normal | No | **Fail closed** — not addressable | Register consulted inside the owner boundary; **no extra crossing** (§18A.2) |
 | **P7** | Authorization/lifecycle changes after selection | 1–N | **2** | Normal | No | **Fail closed** at the barrier | RT#2 detects the change — the crossing earning its cost |
 | **P8** | Optional domain slow or unavailable | 2+ | **2** | Yes, with per-domain timeout | No | **Explicit bounded/degraded result**, never silently smaller (§17) | Timeout budget, not the domain itself |
 
 **P3 is the decisive benchmark.** Four authorization operations in **two** network crossings is the entire claim of the plan abstraction (§8.3.2) and of §18A.3a. If measurement shows four operations costing four or five crossings, the abstraction has not been implemented and the p95 target is unreachable. **This is precisely the case §18A.10's instrumentation must detect** — a candidate can pass a small latency test while still having an N-domain → N-crossing architecture.
 
-**P5 deserves attention:** a denied request should be the *fastest* outcome, not the slowest. If a denial is slower than an allow, the timing itself becomes an oracle — a side channel that would undermine §17's anti-oracle rule. **Denial-path timing should not be distinguishable in a way that reveals whether data exists.**
+**P5 — internal short-circuiting versus observable timing.** These are two different things, and an earlier draft conflated them by calling denial "the fastest path." Corrected:
+
+- **Internally, a denial SHOULD short-circuit unnecessary work.** There is no reason to plan, retrieve, rank or assemble for a request that cannot be answered, and B6 does **not** require intentionally slow processing.
+- **Externally, observable timing must not expose a stable distinguishable signal** about resource existence or authorization state. If "denied" is reliably 200 ms faster than "allowed", timing becomes the existence oracle §17 and PA-10d forbid — and the same applies to distinguishing "denied" from "nothing recorded."
+
+These coexist because internal work and observable response timing are separable concerns. The obligations that follow:
+
+- The implementation and Technology Gate **must measure allow / deny / no-content timing distributions**, not just averages — a stable separation is the failure signal.
+- If measurement shows a distinguishable signal, **bounded timing equalization, jitter or minimum-response handling may be considered later**. **B6 selects no timing-defence mechanism**, and none is required unless measurement shows one is.
+
+P5 may still expect, internally: one Home authorization crossing, zero content candidacy, zero ranking, scores or counts. Its **externally observable** timing is subject to PA-10d.
 
 ### 18A.10 Technology Gate benchmark requirement
 
@@ -1137,7 +1195,8 @@ source_expansion_count           ← expansions performed
 | `authorization_operation_count >= domain_call_count + 1` for P2, P3 | Every domain call was covered by an approved operation |
 | `home_auth_round_trip_count` **does not grow with** `domain_call_count` | **The decisive test.** Growth reveals an N-domain → N-crossing architecture |
 | `source_expansion_count == 0` on ordinary paths | Expansion stayed lazy (§18A.7) |
-| `home_auth_round_trip_count == 1` for P5 | Denial short-circuits before retrieval |
+| `home_auth_round_trip_count == 1` for P5 | Denial short-circuits internally before retrieval |
+| allow / deny / no-content **timing distributions** reported for P1, P2 and P5 | PA-10d: a stable observable separation is an existence oracle |
 
 A candidate may meet a latency threshold during a small test while still crossing to Home per domain — the counts expose that; the timings alone would not.
 
@@ -1224,7 +1283,7 @@ holds regardless of whether the policy authority is Home or a future adapter. En
 | 9 | Pre-LLM ordinary-read p95 ≤ 500 ms | **ACCEPT** | Realistic but not generous; ~240–270 ms is Home alone |
 | 10 | TTFT measured separately | **ACCEPT** | Prevents inference masking orchestration (§18A.12) |
 
-**Additions proposed:** a **p99 ≤ 800 ms** target (§18A.8), since p99 is where connection re-establishment appears; and **denial-path timing should not be a side channel** (§18A.9, P5).
+**Additions proposed:** a **p99 ≤ 800 ms** target (§18A.8), since p99 is where connection re-establishment appears; and **denial-path observable timing must not be a side channel** (§18A.9, P5) — internal short-circuiting is encouraged, externally distinguishable timing is not.
 
 **Modification proposed:** p50 recorded as **≤ 300 ms** rather than 250–300 ms, because 250 ms is not achievable on the measured topology once a domain read is involved.
 
@@ -1329,8 +1388,8 @@ No Enterprise profile is designed, proposed or approved here.
 | R9 | **The p95 ≤ 500 ms target has thin headroom** | Two measured Home crossings consume ~240–270 ms at p95, leaving ~230–260 ms for eligibility, retrieval, concurrent domain reads, ranking and assembly. Workable but not comfortable. This is the number most likely to need revision on measured evidence, and a third mandatory crossing would make it unreachable on this topology (§18A.8) |
 | R10 | **Cross-Atlantic hop is permanent and dominates** | F15/F17: ~120 ms per Home crossing is network, not Home's work, and G1.7's withdrawal makes it a deliberate constraint. No amount of Home-side optimization helps; only reducing crossings does. A future commercial deployment with co-located authority would see materially different numbers |
 | R11 | **Concurrency is required, not optional** | §18A.13: serial domain reads grow linearly and stop being interactive at roughly four or five domains. If a future implementation serializes for simplicity, the architecture silently stops meeting its targets as Olin grows |
-| R13 | **Downstream execution authority is an unresolved mechanism** | §18A.3a states what must be true for a pre-authorized domain operation to execute without another Home crossing, and confirms B1–B5 permit such a mechanism — but none is selected. **If no safe mechanism is found, the ≤2 crossing target must be revised upward to 2 + N**, making the p95 target unreachable for multi-domain queries. This is the single largest open item in the performance model and §18A.10's counters exist to detect it |
-| R14 | **Raw domain access latency is unmeasured** | §18A.3b: the one measured "domain read" figure already contains a Home crossing, so the raw cost is UNKNOWN. Nutrition's own read is a local SQLite query and so is likely small, but that is one service with one storage shape and must not be generalized to future Health, Finance or Device services |
+| R13 | **Downstream execution authority — accepted requirement, mechanism deferred to the Technology Gate** | §18A.3a states what must be true for a pre-authorized domain operation to execute without another Home crossing, including the **non-bearer boundary**: possession of an execution artifact alone is never sufficient authority, and verification must additionally bind trusted server-side context. B1–B5 permit this shape; no mechanism is selected. The Gate must demonstrate **either** a compliant mechanism preserving the ≤2 ordinary-crossing architecture, **or** evidence it cannot be done — in which case performance budgets are revised upward (2 + N) **without weakening authorization**. §18A.10's counters exist to detect a non-compliant implementation. **Does not reopen B6** |
+| R14 | **Raw domain access latency is unmeasured — Technology Gate constraint** | §18A.3b: the one measured "domain read" figure already contains a Home crossing, so the raw cost is UNKNOWN and **must be measured at the Gate**. Nutrition's own read is a local indexed query and so is likely small, but that is one service with one storage shape and must not be generalized to future Health, Finance or Device services. **Does not reopen B6** |
 | R12 | **Denial-path timing as a side channel** | §18A.9 P5: if a denial is measurably slower than an allow, timing reveals whether data exists, undermining §17's anti-oracle rule. Requires acceptance testing, not just intent |
 
 ### 22.1 Inconsistencies found in current docs
@@ -1345,11 +1404,11 @@ None contradicts B1–B5 in a way requiring any of them to reopen.
 
 ## 23. Product Architect dispositions
 
-The Architecture Board reviewed this proposal and recorded the dispositions below. The core architecture is **accepted in direction**:
+The Architecture Board reviewed this proposal and recorded the dispositions below. The core architecture is **accepted**:
 
 > **authorization-constrained retrieval planning + suppression/lifecycle before candidacy + mandatory pre-disclosure revalidation.**
 
-Four required corrections were issued and are incorporated; §23.1 maps each to where it landed. **B6 is not marked RESOLVED by this document** — it closes only when the Board approves merge and the gate register records it.
+Four required corrections were issued and are incorporated; §23.1 maps each to where it landed. A later performance review added §18A and PA-10, and a final closure pass corrected §6's ordering, R13's non-bearer boundary and the P5 denial-timing contradiction. **The Product Architect then accepted B6 and closed it** on 2026-09-22; acceptance is a recorded decision, not an inference from a PR merge.
 
 | # | Decision | Disposition | Where implemented |
 |---|---|---|---|
@@ -1362,7 +1421,7 @@ Four required corrections were issued and are incorporated; §23.1 maps each to 
 | **PA-7** | Bounds | **ACCEPT** — architectural bounds with concrete values deferred | §17 |
 | **PA-8** | Abstention model | **ACCEPT** cites-or-abstains with the anti-oracle and confidence-is-not-authority corrections | §17, §20.B |
 | **PA-9** | Backend neutrality | **ACCEPT** — no semantic/vector/hybrid retrieval assumption | §20.E |
-| **PA-10** | **Performance and latency architecture** *(added after the performance review; PA-1 … PA-9 unchanged)* | **ACCEPTED IN DIRECTION, sub-items below** | §18A |
+| **PA-10** | **Performance and latency architecture** *(added after the performance review; PA-1 … PA-9 unchanged)* | **ACCEPTED, sub-items below** | §18A |
 
 **PA-10 sub-item dispositions**, recorded by the Board after the reconciliation pass:
 
@@ -1371,7 +1430,7 @@ Four required corrections were issued and are incorporated; §23.1 maps each to 
 | **PA-10a** — Round-trip budget | **ACCEPT WITH CLARIFICATION** | Ordinary reads target **≤ 2 Home authorization NETWORK round trips**: one bounded Authorization Plan evaluation, one bounded fresh revalidation. A single plan may contain several independently complete operations (§8.3.2). Named exceptions: late-discovered source expansion, history/review needing additional operations, writes, declared dynamic workflows. **Conditional on §18A.3a** (R13) |
 | **PA-10b** — p50 target | **MODIFIED — target, not claim** | `p50 ≤ 300 ms` remains an architecture **aspiration**. The repository does **not** demonstrate it, and §18A.3b shows the earlier estimate double-counted a Home crossing. Targets are now differentiated by path: reasonable for Knowledge-only; **contingent and marked for Technology Gate calibration** for Knowledge + domain, since raw domain access is UNKNOWN. `p95 ≤ 500 ms` remains a useful ordinary-read target, explicitly subject to Gate measurement |
 | **PA-10c** — p99 target | **ACCEPT** | `p99 ≤ 800 ms` retained as an initial Gate target, revisable from real measurements |
-| **PA-10d** — Denial timing | **ACCEPT** | Denial-path timing must not become an existence oracle |
+| **PA-10d** — Denial timing | **ACCEPT** | Denial **internally** short-circuits unnecessary work; **externally observable** timing must not expose a stable distinguishable signal about resource existence or authorization state. The Gate must measure allow / deny / no-content timing **distributions**. Bounded equalization, jitter or minimum-response handling may be considered later if measurement shows a signal; **B6 selects no timing-defence mechanism** and requires no intentionally slow processing (§18A.9) |
 | **PA-10e** — Benchmark conditions | **ACCEPT** | Realistic cross-node topology plus warm and cold-ish paths, **and** the §18A.10 counter instrumentation proving no hidden Home crossings |
 
 **Retained unchanged:** logical security layers ≠ network calls · no authorization per candidate · independent domain reads concurrent by default · lazy source expansion · one final bounded revalidation rather than per item · p50/p95/p99 required at the Technology Gate · orchestration latency measured separately from LLM TTFT.
@@ -1393,9 +1452,9 @@ Per the Board's direction, this revision does not reconsider: authorization befo
 
 ---
 
-## 24. B6 acceptance criteria
+## 24. B6 acceptance criteria — satisfied
 
-B6 is resolved when the Product Architect has:
+B6 is resolved because the Product Architect has:
 
 1. Recorded a disposition on **PA-1 … PA-9** — **done**, §23.
 2. Accepted the ten trusted-retrieval invariants (§4) as binding on any future implementation, including the corrected invariant 8 (nomination is not authorization).
@@ -1411,18 +1470,19 @@ B6 is resolved when the Product Architect has:
 12. Accepted scenarios 1–20 plus 19b (§19) as future acceptance specifications, explicitly not as evidence of implemented enforcement.
 13. Recorded a disposition on **PA-10** and its sub-items, accepting the §18A performance architecture: the latency model, the ten invariants assessed in §18A.15, the round-trip budget, the concurrency requirement, lazy source expansion, the targets, the benchmark requirement (§18A.10) and the disqualification criteria (§18A.11).
 14. Confirmed that **B1–B5 remain RESOLVED and unamended**, that the **Knowledge Technology Gate remains OPEN**, and that no technology, runtime, schema, placement, migration or deployment is approved.
+15. Accepted **R13** as an architectural requirement whose concrete mechanism is deferred to the Technology Gate, subject to the non-bearer boundary (§18A.3a), and **R14** as a benchmark-required unknown. Neither reopens B6.
 
-All criteria are satisfied by this document as corrected, subject to the Board's final merge review. Acceptance of B6 supplies no runtime approval and no technology selection. It closes the last architecture blocker before the Technology Gate may run.
+All criteria are satisfied by this document as accepted, and the Architecture Board confirmed satisfaction at closure. **Acceptance of B6 authorizes the Knowledge Technology Gate to begin; it supplies no runtime approval, no technology selection and no implementation authority.** B6 was the last architecture blocker before that Gate may run.
 
 ---
 
 ## 25. Verification and change boundary
 
-This change adds this proposal and updates the B6 entry and status references in the gate register. B1–B5 accepted decisions, canonical architecture documents, ADRs, contracts, services, apps, deployment and production are untouched.
+This change adds this accepted decision and updates the B6 entry and status references in the gate register. B1–B5 accepted decisions, canonical architecture documents, ADRs, contracts, services, apps, deployment and production are untouched.
 
 ```json
 {
-  "task": "knowledge_b6_architecture_proposal",
+  "task": "knowledge_b6_architecture_decision",
   "baseline_main_sha": "33df3d08467013e3fd6a55de1d8c6732115e7411",
   "main_moved_since_requested_commit": false,
   "pr_28": "MERGED",
@@ -1437,7 +1497,7 @@ This change adds this proposal and updates the B6 entry and status references in
   "b3": "RESOLVED",
   "b4": "RESOLVED",
   "b5": "RESOLVED",
-  "b6": "PROPOSED — FINAL ARCHITECTURE BOARD CLOSURE REVIEW",
+  "b6": "RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-22",
   "required_corrections_incorporated": 4,
   "performance_section_added": "18A",
   "performance_invariants_assessed": 10,
@@ -1456,6 +1516,16 @@ This change adds this proposal and updates the B6 entry and status references in
     "duplicate_paragraph_removed": true,
     "pa10_dispositions_recorded": true
   },
+  "closure_pass": {
+    "section_6_ordering_aligned": true,
+    "r13_non_bearer_boundary_explicit": true,
+    "p5_denial_timing_contradiction_resolved": true,
+    "b6_closed": true
+  },
+  "r13": "ACCEPTED REQUIREMENT — mechanism deferred to Technology Gate, non-bearer boundary binding",
+  "r14": "BENCHMARK-REQUIRED UNKNOWN",
+  "technology_gate_authorized_to_begin": true,
+  "implementation_authorized": false,
   "retrieval_model_changed_by_review": false,
   "new_contradiction_found": false,
   "bounded_partial_retrieval": "WITHDRAWN — conflicted with B1 section 10",
@@ -1491,18 +1561,20 @@ $env:PYTHONPATH = (Join-Path (Get-Location) 'packages/nutrition-domain/src')
 python -m pytest packages/nutrition-domain/tests -q -p no:cacheprovider
 ```
 
-Passing verifies the inspected baseline only, not enforcement of this proposal.
+Passing verifies the inspected baseline only, not enforcement of this decision.
 
-**B6 PROPOSED — FINAL ARCHITECTURE BOARD CLOSURE REVIEW**
+**B1–B6 RESOLVED BY PRODUCT ARCHITECT DECISION**
 
-**B1–B5 REMAIN RESOLVED**
-
-**KNOWLEDGE TECHNOLOGY GATE REMAINS OPEN**
+**KNOWLEDGE TECHNOLOGY GATE REMAINS OPEN — NOW AUTHORIZED TO BEGIN**
 
 **NO TECHNOLOGY SELECTED**
 
 **NO RETRIEVAL TECHNOLOGY SELECTED**
 
 **NO KNOWLEDGE RUNTIME IMPLEMENTED**
+
+**NO BENCHMARK IMPLEMENTED**
+
+**NO SCHEMA, MIGRATION OR DEPLOYMENT APPROVED**
 
 **NO PRODUCTION CHANGE**
