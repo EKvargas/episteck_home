@@ -1,20 +1,20 @@
 # Knowledge Technology Gate
 
-Status: OPEN
-
-Phase: **IN INVESTIGATION / PHASE 1** — candidate investigation and benchmark/spike design
+Status: **OPEN — PHASE 1 COMPLETE / EMPIRICAL SPIKE AUTHORIZED**
 
 Runtime implementation: NOT APPROVED
 
 Technology selection: NOT APPROVED
 
-Benchmark: DESIGNED, NOT IMPLEMENTED
+Benchmark: **AUTHORIZED (TG-PA-7), NOT IMPLEMENTED**
 
 Date opened: 2026-09-19
 
-Phase 1 opened: 2026-09-22 — see [Knowledge Technology Gate Phase 1](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md). It proposes candidate classifications, spike candidates, an R13 mechanism family and experimental realization, a placement recommendation and an isolated synthetic spike design. **It selects no technology, implements no benchmark and authorizes no runtime.** B1–B6 remain RESOLVED and unamended.
+**Phase 1 — COMPLETE, accepted 2026-09-22.** See [Knowledge Technology Gate Phase 1](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md): candidate classifications, spike candidates, an R13 mechanism family and experimental realization, a placement recommendation and an isolated synthetic spike design. The Architecture Board required **twelve corrections**, all incorporated (Phase-1 §22), then **accepted the investigation and the corrections**.
 
-Phase 1 Board review: 2026-09-22 — the Architecture Board accepted the general direction and required **twelve corrections**, all incorporated (Phase-1 §22). Dispositions recorded: **TG-PA-1** ACCEPT WITH CORRECTIONS · **TG-PA-2** MODIFIED · **TG-PA-3** ACCEPT · **TG-PA-4** ACCEPT WITH BENCHMARK-ENVIRONMENT CLARIFICATION · **TG-PA-5** ACCEPT WITH SPIKE-REALIZATION DETAIL REQUIRED · **TG-PA-6** ACCEPT WITH MODIFICATIONS · **TG-PA-7** **PENDING** — the spike remains unimplemented.
+Final dispositions: **TG-PA-1** ACCEPT WITH CORRECTIONS · **TG-PA-2** MODIFIED / ACCEPTED AS REVISED · **TG-PA-3** ACCEPT · **TG-PA-4** ACCEPT WITH BENCHMARK-ENVIRONMENT CLARIFICATION · **TG-PA-5** ACCEPT WITH EXPERIMENTAL REALIZATION · **TG-PA-6** ACCEPT WITH MODIFICATIONS · **TG-PA-7** **APPROVED — isolated synthetic spike authorized** (scope and exclusions in Phase-1 §18.1).
+
+**The Technology Gate itself is NOT resolved.** Selection requires the spike's empirical evidence plus the acceptance criteria in Phase-1 §17. **No technology is selected, the spike is not implemented, and no runtime, production schema, migration or deployment is approved.** B1–B6 remain RESOLVED and unamended.
 
 Repository: EKvargas/episteck_home
 
@@ -520,7 +520,7 @@ The Gate must evaluate candidates against the accepted B1–B6 requirements, inc
 
 **No candidate is selected by this closure.** Technology selection and runtime implementation require their own separate approval; B1–B6 acceptance supplies neither. Agreed acceptance scenarios (B6 §19, P1–P8) must precede technology selection.
 
-**Gate progress.** Phase 1 — candidate investigation and benchmark/spike design — is recorded in [KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md) and awaits Product Architect decisions TG-PA-1 … TG-PA-7. Phase 2 (empirical spike, then selection) begins only if TG-PA-7 authorizes the spike. **The Gate remains OPEN; no technology is selected and no benchmark is implemented.**
+**Gate progress.** Phase 1 — candidate investigation and benchmark/spike design — is **COMPLETE and accepted**, recorded in [KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md) with final dispositions TG-PA-1 … TG-PA-7. **TG-PA-7 authorizes an isolated synthetic spike** (scope and exclusions in Phase-1 §18.1). Phase 2 is that spike, followed by selection against Phase-1 §17's acceptance criteria. **The Gate remains OPEN; no technology is selected and the spike is not implemented.**
 
 The original gate-opening task changed only the independent review artifact and this gate register. The B1 follow-up changes only [KNOWLEDGE_B1_SECURITY_SCOPE.md](KNOWLEDGE_B1_SECURITY_SCOPE.md) and B1 status/references in this register. It does not modify canonical architecture documents, existing ADRs, `packages/home-contracts/`, `services/`, `deploy/`, or production configuration.
 

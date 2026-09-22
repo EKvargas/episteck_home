@@ -49,16 +49,18 @@ EU customers, a regional deployment/data-residency strategy will be designed sep
 likely dedicated EU Home instances for those customers rather than migrating the personal
 US instance. No stage is scheduled for it.
 
-### Knowledge Technology Gate `[OPEN — IN INVESTIGATION / PHASE 1]`
+### Knowledge Technology Gate `[OPEN — PHASE 1 COMPLETE / SPIKE AUTHORIZED]`
 **B1–B6 are RESOLVED**; B6 acceptance authorized this Gate to begin. **No Knowledge
 technology is selected**, and the pure G1.5 contracts are not a Knowledge runtime or
 persistence implementation.
 
-**Phase 1 — candidate investigation and benchmark/spike design — is underway**
-(`proposals/KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md`). Final selection requires an
-explicit Product Architect disposition **plus empirical evidence** where B6 requires
-it; no benchmark has been implemented. Prereqs recorded by the Gate: a clear first
-Knowledge use case (now defined) and B6 closed (now closed).
+**Phase 1 — candidate investigation and benchmark/spike design — is COMPLETE and
+accepted** (`proposals/KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md`). **TG-PA-7 authorizes an
+isolated synthetic spike** — disposable, off the production Nuremberg host, synthetic
+data only, stubbed peers. **The spike is not implemented.** Final selection requires
+its empirical evidence plus an explicit Product Architect disposition. Prereqs
+recorded by the Gate: a clear first Knowledge use case (now defined) and B6 closed
+(now closed).
 
 **No stack is pre-selected here.** Earlier wording in this Roadmap named a specific
 candidate stack before the Gate had run; it predated B1–B6 and is superseded by the

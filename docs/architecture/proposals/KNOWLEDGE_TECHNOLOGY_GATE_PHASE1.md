@@ -1,12 +1,14 @@
 # Knowledge Technology Gate — Phase 1: candidate investigation and benchmark design
 
-Status: **PROPOSED — IN INVESTIGATION / PHASE 1**
+Status: **ACCEPTED — PHASE 1 COMPLETE**
+
+Knowledge Technology Gate: **OPEN — PHASE 1 COMPLETE / EMPIRICAL SPIKE AUTHORIZED**
 
 Technology selection: **NOT MADE**
 
 Runtime implementation: **NOT AUTHORIZED**
 
-Benchmark: **DESIGNED, NOT IMPLEMENTED**
+Benchmark: **DESIGNED AND AUTHORIZED (TG-PA-7), NOT IMPLEMENTED**
 
 Date: 2026-09-22
 
@@ -20,9 +22,13 @@ Branch: `docs/knowledge-technology-gate-phase1`
 
 Gate: [Knowledge Technology Gate](KNOWLEDGE_TECHNOLOGY_GATE.md)
 
-Author disposition: **PROPOSAL — awaiting Product Architect decisions TG-PA-1 … TG-PA-7 (§18)**
+Decision owner: Product Architect
 
-This document is a Phase-1 investigation, not an accepted decision. It proposes candidate eliminations, a shortlist, an R13 mechanism-family recommendation, a topology recommendation and a benchmark design. **It selects no technology**, changes no contract, schema, service, runtime, index, deployment or production system, and authorizes no implementation. B1–B6 remain **RESOLVED and unamended**; no finding in this investigation demonstrated a contradiction requiring any of them to reopen. All named people and household statements are synthetic.
+Decision date: 2026-09-22
+
+Disposition: **PHASE 1 ACCEPTED — TG-PA-1 … TG-PA-7 CLOSED (§18); ISOLATED SYNTHETIC SPIKE AUTHORIZED (§18.1)**
+
+This document records the accepted Phase-1 investigation: candidate classifications, spike candidates, an R13 mechanism family and experimental realization, a placement recommendation and a benchmark design. **Phase 1 is complete and the isolated synthetic spike is authorized.** The Gate itself remains **OPEN** — **no technology is selected**, no contract, schema, service, runtime, index, deployment or production system changes, and **no implementation is authorized**. The spike is **not implemented**. B1–B6 remain **RESOLVED and unamended**; no finding demonstrated a contradiction requiring any of them to reopen. All named people and household statements are synthetic.
 
 ---
 
@@ -725,22 +731,50 @@ Chosen over A for three reasons, none of which is a claim that B is the better *
 
 **SECONDARY, only if incremental cost proves small: A**, to confirm the property is not an artifact of the application-layer construction. If time is constrained, **A is dropped, not B.**
 
+#### 11.4.1 The confirmation key must be bound to trusted machine/service identity
+
+**An experimental invariant, clarified at Phase-1 closure.** Holder-of-key proves that the presenter holds *a* private key. On its own that is not sufficient here: if the caller could nominate which key counts, an attacker would simply present a key it controls and a matching proof. The proof would verify and the boundary would be worthless. **The key must be one the trusted infrastructure already accepts for that service, not one the request introduces.**
+
+The experimental invariant:
+
+> **The confirmation key derives its authority from trusted server-side machine/service context, never from the request that presents it.**
+
+Concretely, the experiment must hold all of the following:
+
+| # | Invariant |
+|---|---|
+| 1 | **The caller, the model and the browser cannot nominate an arbitrary confirmation key as authority.** A key appearing in an untrusted request payload, tool argument or header is **inert** — the same treatment B1 scenario H gives a forged `actor_person_id` or `security_partition_id` |
+| 2 | **Home obtains or validates the confirmation key through trusted server-side machine/service context**, not from the requesting payload |
+| 3 | **The basis binds BOTH the authenticated machine/service identity AND its accepted confirmation key** — the pair, not either alone |
+| 4 | **The domain verifies the proof-of-possession AND that the key/service binding matches the approved operation.** Two checks, both required |
+| 5 | **A valid proof from the wrong service still fails.** Correct cryptography plus the wrong authenticated identity is a denial, not a pass |
+| 6 | **A key introduced only through an untrusted request payload cannot establish machine identity.** Presenting a key does not make you the service that key belongs to |
+| 7 | **`decision_id` remains correlation only** (B6 §8.4 item 4) — it names which operation to re-evaluate and contributes nothing to any decision |
+
+**This is the second factor that keeps the mechanism non-bearer.** B6 §18A.3a requires that "verification must additionally bind trusted server-side context", and the key/service pair is that context: an artifact lifted out of its setting fails because the lifter cannot authenticate as the bound service, regardless of what key material it carries. The precedent already exists in the codebase — B1 §2's dual-principal model states a machine credential proves "this service may call this interface", never "this service is Person X", and E2/E3 show the gateway stripping inbound forged security headers before they reach any handler.
+
+**No production key-registration, certificate-issuance, enrolment or rotation mechanism is selected.** How a service's confirmation key would be established, distributed, rotated or revoked in production is a later decision. **For the experiment, a fixture-provisioned key per stubbed service is sufficient**, provided it is provisioned out-of-band and never accepted from a request.
+
 **Exactly what P12 must prove** — each is a distinct assertion, not a narrative:
 
 | # | Case | Required outcome |
 |---|---|---|
 | 1 | Basis copied **without** the key/channel, presented by another party | **FAIL closed** |
 | 2 | Correct basis + **wrong service identity** | **FAIL closed** |
+| **2a** | **Wrong key + correct-looking service claim** — the request *asserts* it is service S but presents a key not bound to S | **FAIL closed** — a claimed identity is not an authenticated one (§11.4.1 invariants 1, 6) |
+| **2b** | **Correct key + wrong authenticated service identity** — a key genuinely bound to service S, presented by an authenticated caller that is not S | **FAIL closed** — the binding is the pair, not the key (§11.4.1 invariants 3, 5) |
 | 3 | Correct basis presented to the **wrong audience/domain** | **FAIL closed** |
 | 4 | **Cross-request replay** — valid basis reused on a later request | **FAIL closed** |
 | 5 | **Cross-actor replay** — basis minted for actor X used for actor Y | **FAIL closed** |
 | 6 | **Expired** basis | **FAIL closed** |
-| 7 | The **exact approved operation** with correct key and audience | **SUCCEEDS** |
+| 7 | The **exact approved operation** with correct key, authenticated service and audience | **SUCCEEDS** |
 | 8 | **RT#2 still freshly re-evaluates with Home** after execution | Revalidation observed, not skipped |
 | 9 | Possessing **`decision_id` alone** | **Proves nothing** — no execution, no information |
 | 10 | Home crossing count across the whole flow | **`home_auth_round_trip_count == 2`** |
 
-Cases 1–6 are the non-bearer boundary; 7 is the functional requirement; 8–9 preserve B6 §8.4 and §11.1; 10 is the performance claim. **A realization passing 7 and 10 but failing any of 1–6 has reproduced rejected Alternative D and must be reported as a failure, not a partial success.**
+Cases 1–6 (including 2a and 2b) are the non-bearer boundary; 7 is the functional requirement; 8–9 preserve B6 §8.4 and §11.1; 10 is the performance claim. **A realization passing 7 and 10 but failing any of 1–6 has reproduced rejected Alternative D and must be reported as a failure, not a partial success.**
+
+**2a and 2b are the pair that matters most**, because together they establish that neither half of the binding is sufficient alone — which is precisely what separates this from a bearer capability with extra steps.
 
 ---
 
@@ -941,7 +975,7 @@ The Gate asks this explicitly, and separating the two is what keeps Phase 2 hone
 
 ## 16. Benchmark / spike design
 
-**Designed here. Not implemented. Implementation requires TG-PA-7.**
+**Designed here. Authorized by TG-PA-7 (§18.1). Not implemented — implementation is the next task.**
 
 ### 16.1 Purpose
 
@@ -1120,21 +1154,56 @@ The Gate may close when the Product Architect has:
 
 ## 18. Product Architect decisions required
 
-No final winner is manufactured. **The Architecture Board reviewed the first Phase-1 draft on 2026-09-22 and recorded the dispositions below**, requiring twelve corrections before these can close. All twelve are incorporated (§23). The dispositions are recorded as the Board issued them, with the revised content each now refers to.
+No final winner is manufactured. **The Architecture Board reviewed the first Phase-1 draft on 2026-09-22, required twelve corrections, and on review of the revision accepted the Phase-1 investigation and all twelve incorporated corrections.** Final dispositions are recorded below.
 
-| # | Decision | **Board disposition** | Revised content it now covers |
+| # | Decision | **Final disposition** | Content it covers |
 |---|---|---|---|
-| **TG-PA-1** | Candidate eliminations | **ACCEPT WITH CORRECTIONS** | §13.1 now uses three categories. Mem0 hard-eliminated on lifecycle/suppression/deletion/ownership, **not `user_id`**; RAGFlow hard-eliminated on ownership, **not MySQL**; Graphiti and graph DBs **not shortlisted** rather than eliminated |
-| **TG-PA-2** | Shortlist | **MODIFIED** | §14 now lists **S1-SQLite, S1-PostgreSQL, S2 (CONDITIONAL), S3a (DEFERRED/CONDITIONAL), S3b (DEFERRED)**. Both S1 realizations are benchmarked; ANN is not in the first spike |
-| **TG-PA-3** | Canonical-store / retrieval-layer direction | **ACCEPT** | §5.3 unchanged: one transactional owner, no separate retrieval materialization initially, compile-to-constraints seam preserved |
-| **TG-PA-4** | Topology | **ACCEPT WITH BENCHMARK-ENVIRONMENT CLARIFICATION** | §10 unchanged for **eventual deployment** (Nuremberg). §16.2 now separates that from **where the spike runs — off production by default** |
-| **TG-PA-5** | R13 mechanism families | **ACCEPT WITH SPIKE-REALIZATION DETAIL REQUIRED** | §11.3 unchanged (Family 1 primary, Family 2 fallback, Family 3 eliminated). **§11.4 added**: primary experiment is application-layer holder-of-key, with ten explicit P12 assertions |
-| **TG-PA-6** | Benchmark scenarios and metrics | **ACCEPT WITH MODIFICATIONS** | §16.5 adds **P13** (cleanup contention) and runs P1–P13 on both realizations; **§16.6.1 adds execution-barrier instrumentation**; §16.5 adds a staged C-large plan |
-| **TG-PA-7** | Authorize the spike | **PENDING THIS REVISION — do not implement yet** | §16 as revised. **The spike remains unimplemented.** This proposal recommends authorization after the revision is accepted |
+| **TG-PA-1** | Candidate classifications | **ACCEPT WITH CORRECTIONS** | §13.1 uses three categories. Mem0 hard-eliminated on lifecycle/suppression/deletion/ownership, **not `user_id`**; RAGFlow hard-eliminated on ownership, **not MySQL**; Graphiti and graph DBs **not shortlisted** rather than eliminated |
+| **TG-PA-2** | Shortlist | **MODIFIED / ACCEPTED AS REVISED** | §14: **S1-SQLite, S1-PostgreSQL, S2 (CONDITIONAL), S3a (DEFERRED/CONDITIONAL), S3b (DEFERRED)**. Both S1 realizations benchmarked; ANN not in the first spike |
+| **TG-PA-3** | Canonical-store / retrieval-layer direction | **ACCEPT** | §5.3: one transactional owner, no separate retrieval materialization initially, compile-to-constraints seam preserved |
+| **TG-PA-4** | Topology | **ACCEPT WITH BENCHMARK-ENVIRONMENT CLARIFICATION** | §10 for **eventual deployment** (Nuremberg); §16.2 separates that from **where the spike runs — off production** |
+| **TG-PA-5** | R13 mechanism families | **ACCEPT WITH EXPERIMENTAL REALIZATION** | §11.3 (Family 1 primary, Family 2 fallback, Family 3 eliminated) plus **§11.4** application-layer holder-of-key and **§11.4.1** the trusted key/service binding invariant |
+| **TG-PA-6** | Benchmark scenarios and metrics | **ACCEPT WITH MODIFICATIONS** | §16.5 adds **P13** and runs P1–P13 on both realizations; **§16.6.1** execution-barrier instrumentation; staged C-large plan |
+| **TG-PA-7** | Authorize the spike | **APPROVED — isolated synthetic spike authorized** | §18.1 records the exact scope and its limits |
 
-**Each is independent.** Rejecting TG-PA-5 does not block TG-PA-1–4; it changes what the spike tests and what the budget becomes.
+**Each is independent.** The Technology Gate itself is **NOT resolved** by these dispositions — selection still requires the spike's evidence and §17's acceptance criteria.
 
-**The Technology Gate is NOT resolved by these dispositions.** It remains OPEN / Phase 1 until TG-PA-7 is granted, the spike runs, and §17's acceptance criteria are met.
+### 18.1 TG-PA-7 — authorization scope
+
+**The Product Architect APPROVES the isolated synthetic Technology-Gate spike.** This is an authorization to *gather evidence*, not to build anything durable.
+
+**Authorized:**
+
+| # | Scope item |
+|---|---|
+| 1 | **Disposable isolated environment**, **OFF the production Nuremberg host** |
+| 2 | **Synthetic data only** — no real Person, Circle, grant, preference or health content |
+| 3 | **No production credentials** |
+| 4 | **No production Tailscale route** to production services |
+| 5 | **Home and domain peers stubbed** |
+| 6 | **Calibrated latency** drawn from accepted repository measurements (E7) |
+| 7 | **S1-SQLite and S1-PostgreSQL** as the two S1 realizations |
+| 8 | **Conditional S2 barrier experiment** (§16.6.1) |
+| 9 | **R13 primary experimental holder-of-key realization** (§11.4, §11.4.1) |
+| 10 | **Scenarios P1–P13** |
+| 11 | **Required p50/p95/p99, the four counters, and barrier instrumentation** (§16.6, §16.6.1) |
+| 12 | **Teardown after the experiment** |
+
+**Explicitly NOT authorized:**
+
+| # | Out of scope |
+|---|---|
+| 1 | **Production schema** — the spike's schema is synthetic and disposable |
+| 2 | **Knowledge runtime deployment** |
+| 3 | **Real family data** |
+| 4 | **Migration** of any kind, including Nutrition preference re-capture |
+| 5 | **Final technology selection** |
+| 6 | **S3a implementation** — design recorded only |
+| 7 | **ANN / S3b** in any form |
+| 8 | **Production R13 mechanism**, including any key-registration, certificate-issuance or rotation scheme |
+| 9 | **Production Nuremberg benchmark load** |
+
+**The boundary between items 1 and 5 on each list is the one to watch.** A spike that produces a schema good enough to keep, or a realization that looks ready to deploy, has still produced **evidence** and nothing more. Selection is a separate Product Architect decision taken against §17's criteria, and deployment is separate again.
 
 ---
 
@@ -1181,9 +1250,9 @@ Nothing else gates this phase.
 
 ## 21. Recommended next empirical task
 
-**Run the §16 spike**, subject to TG-PA-7 — which the Board has held **PENDING this revision**, so the spike remains unimplemented.
+**Run the §16 spike. TG-PA-7 is APPROVED** (§18.1) and the spike is **authorized but not implemented** — implementation is the next task, not part of this phase.
 
-Proposed sequence, ordered so that a failure stops work early rather than late:
+Sequence, ordered so that a failure stops work early rather than late:
 
 1. **Provision the disposable isolated environment** — **not** the production Nuremberg host (§16.2). Separately, take a **read-only** Nuremberg capacity reading to inform eventual deployment feasibility; it does not gate the spike.
 2. **Schema sketch** for S1, expressed **once** and applied to both realizations, sufficient to express B1 partition binding, B3 exact versions and control revisions, B4 suppression register and derivation families, B2 conjunctive requirements and classification revisions, and B6 §15.2 bindings. **Synthetic and disposable** — not a production schema (the Gate forbids creating one).
@@ -1191,7 +1260,7 @@ Proposed sequence, ordered so that a failure stops work early rather than late:
 4. **Stubbed Home and domain owners** with injected latency calibrated to E7.
 5. **Generate C-small, C-medium, C-large** with the adversarial fixtures of §16.3.
 6. **Run P1–P13** on **both S1-SQLite and S1-PostgreSQL**, warm and cold, collecting §16.6 measurements, counters and §16.6.1 barrier instrumentation. Apply the §16.5 staged plan if C-large on both proves expensive.
-7. **Build the §11.4 primary R13 experiment** (application-layer holder-of-key) and run P12's ten assertions, including cross-domain, cross-actor and cross-request presentation. Add realization A only if incremental cost is small.
+7. **Build the §11.4 primary R13 experiment** (application-layer holder-of-key), with confirmation keys **provisioned out-of-band per stubbed service** and never accepted from a request (§11.4.1). Run P12's twelve assertions, including **2a** (wrong key + correct-looking service claim) and **2b** (correct key + wrong authenticated service identity). Add realization A only if incremental cost is small.
 8. **Extend to S2** on each realization to test the full-text barrier — and **report honestly if the barrier cannot be expressed**, since that is a finding rather than a failure of the spike.
 9. **Do not build S3a or S3b.** S3a's design is recorded for a later phase; S3b awaits a topology proposal.
 10. **Report** per §16.8. **Tear down.**
@@ -1242,11 +1311,13 @@ This change adds **one new file**, updates the Technology Gate register's status
   "b4": "RESOLVED",
   "b5": "RESOLVED",
   "b6": "RESOLVED",
-  "knowledge_technology_gate": "OPEN — IN INVESTIGATION / PHASE 1",
+  "knowledge_technology_gate": "OPEN — PHASE 1 COMPLETE / EMPIRICAL SPIKE AUTHORIZED",
   "phase": 1,
-  "revision": "architecture_board_phase1_review_incorporated",
+  "revision": "phase1_closure - board review incorporated and accepted",
+  "phase_1": "COMPLETE — ACCEPTED BY PRODUCT ARCHITECT, 2026-09-22",
   "board_corrections_required": 12,
   "board_corrections_incorporated": 12,
+  "board_accepted_investigation_and_corrections": true,
   "internet_research_available": true,
   "external_sources_consulted": 20,
   "candidates_investigated": 9,
@@ -1261,7 +1332,9 @@ This change adds **one new file**, updates the Technology Gate register's status
   "spike_environment": "disposable isolated environment, OFF the production Nuremberg host",
   "r13_recommended_family": "Family 1 — channel-bound / holder-of-key; Family 2 declared fallback",
   "r13_primary_experimental_realization": "application-layer holder-of-key proof; channel-bound optional secondary",
-  "r13_p12_assertions": 10,
+  "r13_confirmation_key_binding": "bound to trusted machine/service identity; never nominable from request payload; basis binds the service+key pair",
+  "r13_production_key_mechanism_selected": false,
+  "r13_p12_assertions": 12,
   "vectors_needed_first_vertical": false,
   "ann_compliant_via_static_partitioning": false,
   "graph_needed_first_vertical": false,
@@ -1269,12 +1342,16 @@ This change adds **one new file**, updates the Technology Gate register's status
   "benchmark_scenarios_designed": 13,
   "corpus_sizes_designed": 3,
   "barrier_instrumentation_required": true,
+  "spike_authorized": true,
   "benchmark_implemented": false,
+  "knowledge_technology_gate_status": "OPEN — PHASE 1 COMPLETE / EMPIRICAL SPIKE AUTHORIZED",
+  "technology_gate_resolved": false,
   "technology_selected": false,
   "retrieval_technology_selected": false,
   "placement_selected": false,
   "r13_mechanism_selected": false,
-  "pa_dispositions_recorded": ["TG-PA-1 ACCEPT WITH CORRECTIONS", "TG-PA-2 MODIFIED", "TG-PA-3 ACCEPT", "TG-PA-4 ACCEPT WITH BENCHMARK-ENVIRONMENT CLARIFICATION", "TG-PA-5 ACCEPT WITH SPIKE-REALIZATION DETAIL REQUIRED", "TG-PA-6 ACCEPT WITH MODIFICATIONS", "TG-PA-7 PENDING THIS REVISION"],
+  "pa_dispositions_final": ["TG-PA-1 ACCEPT WITH CORRECTIONS", "TG-PA-2 MODIFIED / ACCEPTED AS REVISED", "TG-PA-3 ACCEPT", "TG-PA-4 ACCEPT WITH BENCHMARK-ENVIRONMENT CLARIFICATION", "TG-PA-5 ACCEPT WITH EXPERIMENTAL REALIZATION", "TG-PA-6 ACCEPT WITH MODIFICATIONS", "TG-PA-7 APPROVED — isolated synthetic spike authorized"],
+  "not_authorized": ["production schema", "Knowledge runtime deployment", "real family data", "migration", "final technology selection", "S3a implementation", "ANN/S3b", "production R13 mechanism", "production Nuremberg benchmark load"],
   "accepted_decisions_amended": false,
   "b1_b6_reopened": false,
   "new_contradiction_found": false,
@@ -1342,13 +1419,19 @@ All accessed 2026-09-22. Upstream documentation and source, **not** verified pro
 
 **B1–B6 REMAIN RESOLVED AND UNAMENDED**
 
-**KNOWLEDGE TECHNOLOGY GATE — OPEN / IN INVESTIGATION / PHASE 1**
+**PHASE 1 COMPLETE — ACCEPTED BY PRODUCT ARCHITECT**
+
+**KNOWLEDGE TECHNOLOGY GATE — OPEN / PHASE 1 COMPLETE / EMPIRICAL SPIKE AUTHORIZED**
+
+**TECHNOLOGY GATE NOT RESOLVED**
+
+**ISOLATED SYNTHETIC SPIKE AUTHORIZED (TG-PA-7) — NOT IMPLEMENTED**
 
 **NO TECHNOLOGY SELECTED**
 
 **NO RETRIEVAL TECHNOLOGY SELECTED**
 
-**NO R13 MECHANISM SELECTED**
+**NO R13 PRODUCTION MECHANISM SELECTED**
 
 **NO PLACEMENT SELECTED**
 
@@ -1356,6 +1439,6 @@ All accessed 2026-09-22. Upstream documentation and source, **not** verified pro
 
 **NO KNOWLEDGE RUNTIME IMPLEMENTED**
 
-**NO SCHEMA, MIGRATION OR DEPLOYMENT APPROVED**
+**NO PRODUCTION SCHEMA, MIGRATION OR DEPLOYMENT APPROVED**
 
 **NO PRODUCTION CHANGE**
