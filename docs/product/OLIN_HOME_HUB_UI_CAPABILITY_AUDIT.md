@@ -3,7 +3,7 @@
 ## 1. Executive Summary
 The Olin Home Hub UI is visually refined and demonstrates a clear intent for a unified household operating system. While the UI surfaces are well-defined, the Home Hub presentation layer currently consumes mock/local data rather than live domain APIs. 
 
-Crucially, **the underlying Olin backend capability already exists and is operational.** The repository has an authoritative Home Control Plane API, Person/Circle/Consent boundaries, trusted server-side actor resolution, a Home BFF, Home MCP, Hermes delegation gateway, a live `svc-nutrition` API with USDA and Open Food Facts providers, and Mealie integration. The immediate priority is not building backend services, but rather creating the UI Integration Foundation to connect the Next.js presentation layer to these existing, trusted domain APIs.
+Crucially, **substantial foundational Olin backend capabilities and the Nutrition domain already exist and are operational.** The repository has an authoritative Home Control Plane API, Person/Circle/Consent boundaries, trusted server-side actor resolution, a Home BFF, Home MCP, Hermes delegation gateway, a live `svc-nutrition` API with USDA and Open Food Facts providers, and Mealie integration. The immediate priority is not building backend services, but rather creating the UI Integration Foundation to connect the Next.js presentation layer to these existing, trusted domain APIs.
 
 ## 2. Existing UI Map
 * **`/` (Today):** Dashboard with context switcher, active tasks, schedule, nutrition summary, and physical home controls.
@@ -17,18 +17,18 @@ Crucially, **the underlying Olin backend capability already exists and is operat
 * **`/settings/privacy` & `/settings/appearance`:** Basic configuration shells, mostly focusing on demonstrating privacy guarantees.
 
 ## 3. Backend-Readiness Matrix
-| Capability | UI Exists? | Backend Exists? | Integration Exists? | Real-data allowed? | Architecture blocker? | Recommended next step |
+| Capability | UI Exists? | Backend Exists? | Integration Exists? | Integration data policy | Architecture blocker? | Recommended next step |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| Home identity/context | YES (Mock) | YES | NO | YES (Synthetic only) | NONE | Design UI Integration Foundation |
-| Nutrition | YES (Mock) | YES | NO | NO (Synthetic only) | NONE | Read Model/API Gap Analysis |
-| Pregnancy Nutrition | YES (Mock) | YES | NO | NO (Synthetic only) | NONE | Map to svc-nutrition targets |
-| Ask Olin | YES (Mock) | YES | NO | YES | NONE | UX Consolidation + Transport Contract |
-| Memory | YES (Mock) | NO | NO | NO | Knowledge Technology Gate | Await Tech Gate resolution |
-| Health | YES (Mock) | NO | NO | NO | G2 Architecture + Approvals | Blocked |
-| Calendar | YES (Mock) | NO | NO | NO | External Connector Missing | Blocked |
-| Physical Home | YES (Mock) | NO | NO | NO | Device Gateway Missing | Blocked |
-| Kiosk data | YES (Mock) | PARTIAL | NO | NO (Synthetic only) | NONE | Enforce server-side redaction |
-| Settings/Consent | YES (Mock) | YES | NO | YES (Synthetic only) | NONE | Map UI to Home Control Plane |
+| Home identity/context | YES (Mock) | YES | NO | SYNTHETIC / TEST ONLY | NONE | Design UI Integration Foundation |
+| Nutrition | YES (Mock) | YES | NO | SYNTHETIC / TEST ONLY | NONE | Read Model/API Gap Analysis |
+| Pregnancy Nutrition | YES (Mock) | YES | NO | SYNTHETIC / TEST ONLY | NONE | Map to svc-nutrition targets |
+| Ask Olin | YES (Mock) | YES | NO | SYNTHETIC / TEST ONLY | NONE | UX Consolidation + Transport Contract |
+| Memory | YES (Mock) | NO | NO | BLOCKED | Knowledge Technology Gate | Await Tech Gate resolution |
+| Health | YES (Mock) | NO | NO | BLOCKED | G2 Architecture + Approvals | Blocked |
+| Calendar | YES (Mock) | NO | NO | NOT APPLICABLE YET | External Connector Missing | Blocked |
+| Physical Home | YES (Mock) | NO | NO | NOT APPLICABLE YET | Device Gateway Missing | Blocked |
+| Kiosk data | YES (Mock) | PARTIAL FOUNDATION | NO | SYNTHETIC / TEST ONLY | KIOSK-SAFE SERVER PROJECTION / REDACTION CONTRACT MISSING | Design kiosk-safe server-side projection/redaction contract. |
+| Settings/Consent | YES (Mock) | YES | NO | SYNTHETIC / TEST ONLY | NONE | Map UI to Home Control Plane |
 
 ## 4. UI Capability & Integration Status
 
@@ -97,8 +97,8 @@ Prototype names (Ana/Erick) may remain in UI mocks, but this does not make mock 
 ### P0-A — Home Hub Integration Foundation
 Create the conceptual UI architecture for: trusted session, viewer/context, domain API client adapters, loading/error/stale/partial states, and mock-vs-live provenance.
 
-### P0-B — First real/synthetic domain integration
-Use **Nutrition** as the preferred first domain because substantial backend capability already exists. (Must use synthetic data only).
+### P0-B — First live-service integration using synthetic records
+Use **Nutrition** as the preferred first domain because substantial backend capability already exists. **Important:** "Live-service" means calling the real `svc-nutrition` service using *synthetic/test records*, NOT onboarding Ana/Erick real health or nutrition records.
 
 ### P0-C — Standard UI data-state envelope
 Define a reusable frontend model (as detailed in Section 6).
