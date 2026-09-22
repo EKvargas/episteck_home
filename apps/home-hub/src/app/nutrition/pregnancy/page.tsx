@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { useAppContext } from '@/components/providers/AppProvider';
 import { getMicronutrientCoverageMock } from '@/domain/mocks';
 import { CoverageCard } from '@/components/features/nutrition/CoverageCard';
