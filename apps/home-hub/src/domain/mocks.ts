@@ -262,10 +262,11 @@ export const getTodaySummaryMock = (contextId: string): TodaySummary => {
   };
 };
 
-export const getMicronutrientCoverageMock = (contextId: string): MicronutrientCoverage => {
+export const getMicronutrientCoverageMock = (contextId: string): MicronutrientCoverage[] => {
   // Scenario 1: Ana (Pregnancy context) - Good Data Completeness
   if (contextId === 'PSN-ana') {
-    return {
+    return [
+      {
       id: 'iron',
       name: 'Iron',
       targetAmount: 27, // mg for pregnancy
@@ -296,12 +297,51 @@ export const getMicronutrientCoverageMock = (contextId: string): MicronutrientCo
         }
       ],
       trendSummary: 'On track based on weekly average (28mg/day)'
-    };
+      },
+      {
+        id: 'calcium',
+        name: 'Calcium',
+        targetAmount: 1000,
+        currentAmount: 850,
+        unit: 'mg',
+        dataCompletenessPercentage: 100,
+        contributions: [
+          { sourceType: 'FOOD', amount: 500, unit: 'mg', quality: 'ESTIMATED', label: 'Greek Yogurt' },
+          { sourceType: 'FOOD', amount: 350, unit: 'mg', quality: 'MEASURED', label: 'Almond Milk' }
+        ],
+        trendSummary: 'Close to daily goal'
+      },
+      {
+        id: 'folate',
+        name: 'Folate',
+        targetAmount: 600,
+        currentAmount: 400,
+        unit: 'mcg',
+        dataCompletenessPercentage: 60,
+        contributions: [
+          { sourceType: 'SUPPLEMENT', amount: 400, unit: 'mcg', quality: 'MEASURED', label: 'Prenatal Vitamin' }
+        ],
+        trendSummary: 'Needs more dietary folate'
+      },
+      {
+        id: 'vitd',
+        name: 'Vitamin D',
+        targetAmount: 15,
+        currentAmount: 15,
+        unit: 'mcg',
+        dataCompletenessPercentage: 100,
+        contributions: [
+          { sourceType: 'SUPPLEMENT', amount: 15, unit: 'mcg', quality: 'MEASURED', label: 'Prenatal Vitamin' }
+        ],
+        trendSummary: 'Daily goal met'
+      }
+    ];
   }
 
   // Scenario 2: Erick (Personal context) - Partial Data, Unknowns
   if (contextId === 'PSN-me') {
-    return {
+    return [
+      {
       id: 'iron',
       name: 'Iron',
       targetAmount: 8, // mg for men
@@ -325,11 +365,13 @@ export const getMicronutrientCoverageMock = (contextId: string): MicronutrientCo
         }
       ],
       trendSummary: 'Insufficient data for today'
-    };
+      }
+    ];
   }
 
   // Scenario 3: Family or Fallback - No Supplement Data
-  return {
+  return [
+    {
     id: 'iron',
     name: 'Iron',
     targetAmount: 27,
@@ -337,7 +379,8 @@ export const getMicronutrientCoverageMock = (contextId: string): MicronutrientCo
     unit: 'mg',
     dataCompletenessPercentage: 0,
     contributions: [],
-    trendSummary: 'No data logged for today'
-  };
+      trendSummary: 'No data logged for today'
+    }
+  ];
 };
 

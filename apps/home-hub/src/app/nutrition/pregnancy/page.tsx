@@ -22,7 +22,9 @@ export default function PregnancyNutritionPage() {
       </header>
 
       <main className={styles.dashboardGrid}>
-        <CoverageCard coverage={coverageData} />
+        {coverageData.map((coverage) => (
+          <CoverageCard key={coverage.id} coverage={coverage} />
+        ))}
       </main>
     </div>
   );
