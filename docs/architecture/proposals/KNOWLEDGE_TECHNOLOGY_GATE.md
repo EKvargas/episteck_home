@@ -2,13 +2,17 @@
 
 Status: OPEN
 
-Phase: PROCESS / ARCHITECTURE
+Phase: **IN INVESTIGATION / PHASE 1** — candidate investigation and benchmark/spike design
 
 Runtime implementation: NOT APPROVED
 
 Technology selection: NOT APPROVED
 
+Benchmark: DESIGNED, NOT IMPLEMENTED
+
 Date opened: 2026-09-19
+
+Phase 1 opened: 2026-09-22 — see [Knowledge Technology Gate Phase 1](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md), a **proposal awaiting Product Architect decisions TG-PA-1 … TG-PA-7**. It proposes candidate eliminations, a shortlist of architecture shapes, an R13 mechanism family to benchmark, a placement recommendation and an isolated synthetic spike design. **It selects no technology, implements no benchmark and authorizes no runtime.** B1–B6 remain RESOLVED and unamended.
 
 Repository: EKvargas/episteck_home
 
@@ -355,6 +359,8 @@ All entries are **UNSELECTED**. The hypotheses below preserve review input; they
 
 The historical review contains the supporting technology analysis and primary-source references. Existing accepted decisions, including the rejection of adopting a turnkey RAG stack now, are not reversed by keeping candidates visible in this register. Any later selection requires explicit Product Architect disposition and version-specific verification.
 
+**Phase 1 investigation (2026-09-22).** [KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md) re-derives these hypotheses against accepted B1–B6 and current primary sources, and **proposes** eliminating Mem0 (as canonical owner), Graphiti and RAGFlow architecturally; deferring a dedicated search engine and Docling; and shortlisting three nested relational shapes. Those proposals are **not accepted** until the Product Architect records TG-PA-1 … TG-PA-7. Until then every entry above remains **UNSELECTED** and this table is unchanged.
+
 ## Workflow Orchestration / Flowable
 
 Status: OPEN — NOT SELECTED
@@ -511,6 +517,8 @@ The Gate must evaluate candidates against the accepted B1–B6 requirements, inc
 | The ten performance disqualification criteria | B6 §18A.11 |
 
 **No candidate is selected by this closure.** Technology selection and runtime implementation require their own separate approval; B1–B6 acceptance supplies neither. Agreed acceptance scenarios (B6 §19, P1–P8) must precede technology selection.
+
+**Gate progress.** Phase 1 — candidate investigation and benchmark/spike design — is recorded in [KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md) and awaits Product Architect decisions TG-PA-1 … TG-PA-7. Phase 2 (empirical spike, then selection) begins only if TG-PA-7 authorizes the spike. **The Gate remains OPEN; no technology is selected and no benchmark is implemented.**
 
 The original gate-opening task changed only the independent review artifact and this gate register. The B1 follow-up changes only [KNOWLEDGE_B1_SECURITY_SCOPE.md](KNOWLEDGE_B1_SECURITY_SCOPE.md) and B1 status/references in this register. It does not modify canonical architecture documents, existing ADRs, `packages/home-contracts/`, `services/`, `deploy/`, or production configuration.
 
