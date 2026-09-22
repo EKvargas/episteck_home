@@ -12,7 +12,9 @@ Benchmark: DESIGNED, NOT IMPLEMENTED
 
 Date opened: 2026-09-19
 
-Phase 1 opened: 2026-09-22 — see [Knowledge Technology Gate Phase 1](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md), a **proposal awaiting Product Architect decisions TG-PA-1 … TG-PA-7**. It proposes candidate eliminations, a shortlist of architecture shapes, an R13 mechanism family to benchmark, a placement recommendation and an isolated synthetic spike design. **It selects no technology, implements no benchmark and authorizes no runtime.** B1–B6 remain RESOLVED and unamended.
+Phase 1 opened: 2026-09-22 — see [Knowledge Technology Gate Phase 1](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md). It proposes candidate classifications, spike candidates, an R13 mechanism family and experimental realization, a placement recommendation and an isolated synthetic spike design. **It selects no technology, implements no benchmark and authorizes no runtime.** B1–B6 remain RESOLVED and unamended.
+
+Phase 1 Board review: 2026-09-22 — the Architecture Board accepted the general direction and required **twelve corrections**, all incorporated (Phase-1 §22). Dispositions recorded: **TG-PA-1** ACCEPT WITH CORRECTIONS · **TG-PA-2** MODIFIED · **TG-PA-3** ACCEPT · **TG-PA-4** ACCEPT WITH BENCHMARK-ENVIRONMENT CLARIFICATION · **TG-PA-5** ACCEPT WITH SPIKE-REALIZATION DETAIL REQUIRED · **TG-PA-6** ACCEPT WITH MODIFICATIONS · **TG-PA-7** **PENDING** — the spike remains unimplemented.
 
 Repository: EKvargas/episteck_home
 
@@ -359,7 +361,7 @@ All entries are **UNSELECTED**. The hypotheses below preserve review input; they
 
 The historical review contains the supporting technology analysis and primary-source references. Existing accepted decisions, including the rejection of adopting a turnkey RAG stack now, are not reversed by keeping candidates visible in this register. Any later selection requires explicit Product Architect disposition and version-specific verification.
 
-**Phase 1 investigation (2026-09-22).** [KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md) re-derives these hypotheses against accepted B1–B6 and current primary sources, and **proposes** eliminating Mem0 (as canonical owner), Graphiti and RAGFlow architecturally; deferring a dedicated search engine and Docling; and shortlisting three nested relational shapes. Those proposals are **not accepted** until the Product Architect records TG-PA-1 … TG-PA-7. Until then every entry above remains **UNSELECTED** and this table is unchanged.
+**Phase 1 investigation (2026-09-22, Board-reviewed).** [KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md) re-derives these hypotheses against accepted B1–B6 and current primary sources. After Board review it classifies candidates in **three distinct categories**: **HARD ELIMINATED as canonical owner** (Mem0, RAGFlow) · **NOT SHORTLISTED for the first vertical** (Graphiti, graph databases — a weaker claim than elimination) · **DEFERRED / RE-ENTERABLE** (exact vector, ANN, dedicated search engines, Docling). Spike candidates are **S1-SQLite, S1-PostgreSQL and S2 full-text (conditional)**; **ANN is deferred** because static index partitioning cannot express dynamic intra-partition authorization. **No entry above is selected**, and this table is unchanged until the Product Architect closes TG-PA-1 … TG-PA-7.
 
 ## Workflow Orchestration / Flowable
 

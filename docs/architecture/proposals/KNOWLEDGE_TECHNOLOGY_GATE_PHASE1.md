@@ -10,6 +10,8 @@ Benchmark: **DESIGNED, NOT IMPLEMENTED**
 
 Date: 2026-09-22
 
+Revision: 2026-09-22 — **Architecture Board Phase-1 review incorporated.** The Board accepted the general direction and required twelve corrections before TG-PA-1 … TG-PA-7 can close. All twelve are incorporated; §23 maps each to where it landed. **Three factual characterizations were corrected against current upstream sources, two shortlist classifications were tightened, one candidate elimination was downgraded from architectural impossibility to not-shortlisted, one source citation was replaced, and the spike design was materially changed.** No correction reversed the direction of the investigation, and none required B1–B6 to reopen.
+
 Repository: `EKvargas/episteck_home`
 
 Main baseline: `26152713a404379a4ba6e0ac22a50edbd70eeed1`, verified current `origin/main` after [PR #29](https://github.com/EKvargas/episteck_home/pull/29) merged and made accepted B6 authoritative on `main`. This equals the commit named in the investigation request; `main` has not moved.
@@ -32,25 +34,29 @@ B6's acceptance authorized this Gate to begin. The Gate's question is not "which
 
 The investigation reaches four conclusions, three of which can be made from architecture alone and one of which cannot.
 
-**First, most of the candidate field is eliminated architecturally, before any benchmark.** Mem0, Graphiti and RAGFlow each fail at least one hard B1–B6 requirement in a way that configuration cannot repair — not because they are immature, but because they are built around a different ownership model. The decisive failures are documented in §8 with primary-source evidence: Mem0's history store retains superseded memory text and its `user_id` is an application-supplied partition key rather than a trusted binding (B4 §10, B1 §4.2); Graphiti mandates a graph database plus an LLM in the ingestion path and offers no trusted partition or authorization model (B1 §4, B3 §6); RAGFlow requires ≥16 GB RAM across five services and is an integrated platform whose canonical store would become the Knowledge owner (B5 §6.2 fixed point 3).
+**First, part of the candidate field is removed before any benchmark — but for different reasons, which §13 now separates into three categories rather than one.** Mem0 and RAGFlow are **hard-eliminated as canonical Knowledge owners** because their ownership, lifecycle and deletion semantics conflict with accepted B3/B4/B5 in ways their intended role cannot repair. Graphiti and direct graph databases are **not shortlisted for the first vertical** — a weaker and more accurate claim than the first draft made, because a trusted wrapper using Graphiti's direct-write path could technically avoid its autonomous semantics, at which point it is largely a graph store for a workload Olin does not have. The decisive evidence is in §7 with primary sources.
 
-**Second, vectors are not needed for the first vertical, and adopting them early would actively cost correctness.** The accepted first use case is a PERSON-scoped reusable food preference over a small personal corpus. pgvector's own documentation states that with approximate indexes "filtering is applied *after* the index is scanned" — which is structurally the retrieve-then-filter pattern B1 §10 forbids, unless the addressable scope is narrowed *before* the ANN scan by partial indexes or partitioning. That is a real and available answer, but it is a constraint on *how* pgvector may be used, not a free capability, and it is unnecessary for the first vertical. **Exact search over an authorization-constrained candidate set has no such problem**, because the constraint is an ordinary predicate in the same plan.
+**Second, vectors are not needed for the first vertical, and the reason is sharper than the first draft stated.** pgvector's own documentation states that with approximate indexes "filtering is applied *after* the index is scanned" — structurally the retrieve-then-filter pattern B1 §10 forbids. The first draft treated partial indexing and list partitioning as an available answer. **That was too generous.** Those mechanisms pre-narrow *static* dimensions; Olin's authorization is **dynamic within one trusted partition** and depends on Circle, every Person subject, every required domain, actor grants, lifecycle, classification and suppression. B1 §10 says explicitly that partition isolation alone is insufficient. So §14 now splits the vector question: **S3a** (exact distance over an already-authorized version-ID set) may be compliant and is retained as a future option; **S3b** (ANN) is **deferred pending a proven authorization-equivalent index topology** and is not in the ordinary first spike.
 
 **Third, the canonical store and the retrieval materialization should be separated conceptually and unified physically — for now.** B2 §10.2 and B6 §15.2 make every materialized representation a protected derivative that must prove its own currency. The cheapest way to satisfy that is to have no separate materialization at all initially: one transactional owner, with retrieval expressed as constrained queries over canonical state. This is Option B (authoritative store + *optional* derived materialization) with the optional part deliberately empty at first.
 
-**Fourth, the one thing that genuinely cannot be decided from architecture is R13**, and it gates the performance budget rather than security. §11 compares three mechanism families for downstream pre-authorized execution and recommends benchmarking the **channel-bound / holder-of-key family** — the one whose non-bearer property is structural rather than promised. If no compliant mechanism survives measurement, B6 §18A.3a already prescribes the answer: the budget becomes 2 + N crossings and the target is revised upward, **not** the requirement dropped.
+**Fourth, full-text search is not the free pass the first draft assumed.** The Board correctly objected that a global text index may internally discover postings for unauthorized rows before relational filtering applies, and that correct SQL *results* do not prove B1's candidate-*ordering* invariant. **S2 is therefore reclassified `CONDITIONAL — BENCHMARK REQUIRED`**, and the spike must observe the execution barrier rather than only the answer (§16.6.1).
 
-The proposed shortlist is therefore three *architecture shapes*, not three products:
+**Fifth, the one thing that genuinely cannot be decided from architecture is R13**, and it gates the performance budget rather than security. §11 compares three mechanism families and recommends the **channel-bound / holder-of-key family**, whose non-bearer property is structural rather than promised. §11.4 now specifies **which experimental realization P12 implements**, because "any Family-1 realization" is not something a spike can build. If no compliant mechanism survives measurement, B6 §18A.3a already prescribes the answer: the budget becomes 2 + N crossings and the target is revised upward, **not** the requirement dropped.
 
-| | Shape | Canonical store | Retrieval |
-|---|---|---|---|
-| **S1** | Relational canonical owner, structured retrieval only | PostgreSQL | Structured predicates; no text or vector index |
-| **S2** | S1 plus native full-text | PostgreSQL | Adds `tsvector`/GIN in the same transactional boundary |
-| **S3** | S1/S2 plus a constrained vector extension | PostgreSQL + pgvector | Adds ANN **only** under pre-narrowed addressability |
+The revised shortlist is five *architecture shapes across two realizations*, not three products:
 
-These are deliberately nested: S2 is S1 plus one in-database capability, S3 is S2 plus one extension. **The shortlist is a staging plan disguised as a comparison** — which is the honest shape of the answer, because the corpus that would justify S2 or S3 does not exist yet and cannot be simulated into existence by preference.
+| | Shape | Realization | Retrieval | Status |
+|---|---|---|---|---|
+| **S1-SQLite** | Relational canonical, structured retrieval | SQLite | Structured predicates | **SPIKE** |
+| **S1-PostgreSQL** | Relational canonical, structured retrieval | PostgreSQL | Structured predicates | **SPIKE** |
+| **S2** | + native full-text | Either | `tsvector`/GIN or FTS5, behind an authorized-set barrier | **SPIKE — CONDITIONAL** |
+| **S3a** | + exact vector distance | Either | Distance computed **only** over an authorized version-ID set | **DEFERRED / CONDITIONAL** |
+| **S3b** | + ANN (HNSW/IVFFlat) | PostgreSQL + pgvector | Approximate index traversal | **DEFERRED** — needs a proven authorization-equivalent topology |
 
-The recommended next empirical task is an **isolated, synthetic, disposable spike** (§16) that measures what architecture cannot settle: raw domain access latency (R14), whether a compliant R13 mechanism preserves two crossings, whether crossings stay flat as domains are added, and — critically — whether the B6 security properties actually hold under a real backend rather than on paper. **The spike is designed here and explicitly not implemented.**
+**SQLite and PostgreSQL are both benchmarked**, per the Board's instruction that the Gate's mission — find the smallest architecture that safely works — is not served by deciding against SQLite on intuition before measurement. SQLite may win the minimum-runtime decision; PostgreSQL may win on evolution and concurrent cleanup. **The spike generates the evidence.**
+
+The recommended next empirical task is an **isolated, synthetic, disposable spike** (§16), running **off the production Nuremberg host by default** (§16.2), that measures what architecture cannot settle: raw domain access latency (R14), whether a compliant R13 mechanism preserves two crossings, whether crossings stay flat as domains are added, and — critically — whether the B6 security properties hold under a real backend rather than on paper. **The spike is designed here and explicitly not implemented.**
 
 ### 1.1 What this phase does not do
 
@@ -99,7 +105,9 @@ These were inspected in code at the baseline rather than inherited from B6's fin
 
 Two corrections from evidence, in the convention B4 §2.2 and B5 §2.2 established.
 
-**First, the ROADMAP still pre-empts this Gate.** [ROADMAP L52–57](../ROADMAP.md) describes the Knowledge Technology Gate as "Decide + install the Knowledge stack (candidates: **Mem0 + Docling + Postgres/pgvector; Graphiti deferred; RAGFlow rejected**)". That sentence names a stack and a disposition before the Gate has run, and it predates B1–B6 entirely. It is also in tension with the gate register's own candidate table, which marks every entry `UNSELECTED`. This investigation reaches conclusions that partly agree with that line and partly do not — Mem0 is eliminated rather than adopted, and Docling is out of scope for the first vertical rather than part of the initial stack. **Recorded as a documentation follow-up (§19 D-8), not corrected in this PR**, because the Gate has not closed and correcting it now would substitute one pre-emption for another.
+**First, the ROADMAP pre-empted this Gate — corrected in this PR.** The Roadmap described the Knowledge Technology Gate as "Decide + install the Knowledge stack (candidates: **Mem0 + Docling + Postgres/pgvector; Graphiti deferred; RAGFlow rejected**)". That sentence named a stack and dispositions before the Gate had run, predated B1–B6 entirely, and was in tension with the gate register's own candidate table marking every entry `UNSELECTED`. This investigation partly contradicts it — Mem0 is hard-eliminated as canonical owner rather than adopted, and Docling is out of scope for the first vertical rather than part of an initial stack.
+
+The first draft deferred this correction until the Gate closed. **The Architecture Board required it now** (§19.1), on the precedent B5 set when it corrected an active ROADMAP contradiction (B5 D-1) rather than leaving it to misdirect the next phase. **The replacement states neutral current state only** — not this proposal's shortlist presented as selected.
 
 **Second, the independent review's technology ranking is historical input, not a baseline.** The review's assessment that "plain relational persistence with bounded authorized retrieval is the leading baseline" is well-founded and this investigation independently reaches a compatible conclusion — but by a different route. The review predates B1–B6 and could not test candidates against, for example, B6 §15.2's materialization-binding requirement or B6 §9.2's protected-metadata-before-content ordering, neither of which existed when it was written. **Its conclusions are re-derived here rather than inherited**, and where this document agrees with it, that agreement is evidence of convergence rather than of citation.
 
@@ -216,35 +224,40 @@ Candidates are evaluated as *architecture shapes*, not products, because the que
 flowchart TB
   subgraph SHAPES["Candidate architecture shapes"]
     direction TB
-    S1["<b>S1 — Relational canonical, structured retrieval</b><br/>one transactional owner<br/>structured predicates only<br/>no text index · no vectors"]
-    S2["<b>S2 — S1 + native full-text</b><br/>same owner, same transaction<br/>tsvector/GIN in-plan"]
-    S3["<b>S3 — S2 + constrained vector extension</b><br/>same owner<br/>ANN only under pre-narrowed addressability"]
-    S4["<b>S4 — Canonical + separate search engine</b><br/>two systems<br/>derived index is a distinct service"]
+    S1["<b>S1 — Relational canonical, structured retrieval</b><br/>one transactional owner<br/>structured predicates only<br/>TWO realizations: SQLite · PostgreSQL"]
+    S2["<b>S2 — S1 + native full-text</b><br/>CONDITIONAL — needs an explicit<br/>authorized-set-before-search barrier"]
+    S3a["<b>S3a — exact vector distance</b><br/>computed ONLY over the<br/>authorized version-ID set"]
+    S3b["<b>S3b — ANN (HNSW/IVFFlat)</b><br/>DEFERRED — needs a proven<br/>authorization-equivalent topology"]
+    S4["<b>S4 — Canonical + separate search engine</b><br/>two systems · derived index"]
     S5["<b>S5 — Graph-backed</b><br/>graph DB as canonical or derived"]
     S6["<b>S6 — Turnkey memory/RAG framework</b><br/>product owns canonical semantics"]
   end
-  S1 --> S2 --> S3
-  S1 -.->|"only if S1-S3 insufficient"| S4
-  S1 -.->|"requires demonstrated multi-hop workload"| S5
-  S6 -.->|"eliminated §8"| X["✗"]
+  S1 -->|"spike"| S2
+  S2 -.->|"only if semantic recall needed"| S3a
+  S3a -.->|"only with proven topology"| S3b
+  S1 -.->|"only if S1-S3a insufficient"| S4
+  S1 -.->|"needs multi-hop workload"| S5
+  S6 -.->|"hard eliminated §13"| X["✗"]
   classDef short fill:#e6f4ea,stroke:#16a765;
-  classDef maybe fill:#fef7e0,stroke:#ffad47;
+  classDef cond fill:#fef7e0,stroke:#ffad47;
   classDef out fill:#fce8e6,stroke:#d93025;
-  class S1,S2,S3 short;
-  class S4,S5 maybe;
+  class S1 short;
+  class S2,S3a cond;
+  class S3b,S4,S5 cond;
   class S6,X out;
 ```
 
 | Shape | Canonical owner | Retrieval mechanism | Separate materialization | Realization considered |
 |---|---|---|---|---|
-| **S1** | Relational DB | Structured predicates over canonical state | **None** | PostgreSQL; SQLite considered and assessed in §8.3 |
-| **S2** | Relational DB | S1 + native full-text in the same plan | **None** (index is in-transaction, not a separate system) | PostgreSQL `tsvector` + GIN |
-| **S3** | Relational DB | S2 + ANN under pre-narrowed addressability | **None** (extension in the same transaction) | PostgreSQL + pgvector |
-| **S4** | Relational DB | Dedicated external search/vector service | **Yes** | Elasticsearch/OpenSearch, Qdrant, Weaviate, Typesense as a class |
-| **S5** | Graph DB, canonical or derived | Graph traversal + temporal edges | Depends | Neo4j / FalkorDB directly; Graphiti as a framework over one |
-| **S6** | The product's own store | The product's own pipeline | Inherent | Mem0, RAGFlow |
+| **S1** | Relational DB | Structured predicates over canonical state | **None** | **Both SQLite and PostgreSQL** — benchmarked, §8.3 |
+| **S2** | Relational DB | S1 + native full-text **behind an authorized-set barrier** | **None** (index is in-transaction) | PostgreSQL `tsvector`/GIN; SQLite FTS5 |
+| **S3a** | Relational DB | Exact distance over the authorized version-ID set only | **None** | pgvector exact search, or any distance function |
+| **S3b** | Relational DB | ANN index traversal | **None** (extension in the same transaction) | pgvector HNSW/IVFFlat — **deferred** |
+| **S4** | Relational DB | Dedicated external search/vector service | **Yes** | Elasticsearch/OpenSearch, Qdrant, Weaviate, Typesense as a class; RAGFlow would fall here if ever revisited |
+| **S5** | Graph DB, canonical or derived | Graph traversal + temporal edges | Depends | Neo4j / FalkorDB directly; Graphiti over one |
+| **S6** | The product's own store | The product's own pipeline | Inherent | Mem0, RAGFlow as canonical owners |
 
-**On S2's classification.** A GIN index on a `tsvector` column is a derived structure in the literal sense, but it is not a *separate retrieval materialization* in B5/B6's sense: it lives inside the same transaction, is updated synchronously with the row, cannot be ahead of or behind canonical state, and cannot be served without the row. H6's "checkable without a rebuild" is satisfied because there is nothing to check — index and row commit together. This distinction matters, and §8.2 tests it rather than assuming it.
+**On S2's classification — corrected.** A GIN or FTS5 index is a derived structure in the literal sense, but it is not a *separate retrieval materialization* in B5/B6's sense: it lives in the same transaction, updates synchronously with the row, cannot diverge from canonical state, and cannot be served without the row. **That argument settles H6 (currency) and is retained.** It does **not** settle H3 (ordering) — a global posting list may be walked before the authorization predicate applies (§7.1). The two properties are independent, and conflating them was the first draft's error. **S2 passes H6 and is CONDITIONAL on H3**, pending the barrier evidence in §16.6.1.
 
 ---
 
@@ -264,7 +277,17 @@ All external research was performed during this investigation against upstream d
 | RLS caveats | "The only exceptions to row-security checking are `leakproof` functions… the optimizer may choose to apply such functions ahead of the row-security check." Also: "Referential integrity checks… always bypass row security… Care must be taken… to avoid 'covert channel' leaks" | [PostgreSQL RLS](https://www.postgresql.org/docs/17/ddl-rowsecurity.html) |
 | Deletion | `DELETE` does not immediately reclaim storage; old row versions persist until vacuumed | [Routine vacuuming](https://www.postgresql.org/docs/current/routine-vacuuming.html) |
 
-**Assessment against the hard requirements.** PostgreSQL satisfies H1 (partition as an ordinary indexed column, set server-side), H3 (the constraint is a predicate in the same plan — structurally, not by policy), H4 (real transactional versioning with atomic multi-row CAS), H5 (register consulted in-plan; a suppressed row is unaddressable by predicate regardless of whether its payload was deleted) and H8.
+**Assessment against the hard requirements.** For **structured** retrieval (S1), PostgreSQL satisfies H1 (partition as an ordinary indexed column, set server-side), H3 (the constraint is a predicate in the same plan — structurally, not by policy), H4 (real transactional versioning with atomic multi-row CAS), H5 (register consulted in-plan; a suppressed row is unaddressable by predicate regardless of whether its payload was deleted) and H8.
+
+**Full-text search (S2) does not automatically inherit that H3 pass — corrected after Board review.** The first draft treated `tsvector`/GIN as an automatic PASS on the reasoning that the index commits with the row and cannot diverge. That argument is sound for **H6** (currency) and is retained. **It says nothing about H3** (ordering), and the Board correctly objected that these are different properties.
+
+The concern is concrete: a GIN index over a `tsvector` column spanning all Knowledge content is a **global posting list**. When a text predicate and an authorization predicate appear in the same query, the planner may satisfy the text predicate first — walking postings for rows the actor cannot address — and apply the authorization predicate afterwards. The *returned rows* would be correct. **The candidate ordering would not be**, and B1 §10 constrains the ordering, not merely the output. B2 §10.2 extends this to scores and counts: a relevance ranking computed across a posting list that included unauthorized rows is influenced by them even when their text is discarded.
+
+**SQL result semantics alone cannot prove B1's candidate-ordering invariant.** What would prove it is an explicit execution barrier: establish the authorized exact-version ID set first, then perform text matching **only** against that bounded set. **B6 selects no SQL mechanism here and neither does this proposal** — the requirement is what matters:
+
+> **No full-text index or search operation may allow unauthorized content to participate in candidate generation, scores, counts or ranking.**
+
+**S2 is therefore reclassified `CONDITIONAL — BENCHMARK REQUIRED`** on H3, and the spike must observe the barrier rather than only the answer (§16.6.1). The same requirement applies to SQLite FTS5, and for the same reason.
 
 **Two caveats deserve to be stated rather than glossed.**
 
@@ -285,13 +308,20 @@ All external research was performed during this investigation against upstream d
 | **Pre-narrowing options** | "If filtering by only a few distinct values, consider **partial indexing**" — `CREATE INDEX … WHERE (category_id = 123)`. "If filtering by many different values, consider **partitioning**" — `PARTITION BY LIST(category_id)` | [pgvector README — Filtering](https://github.com/pgvector/pgvector/blob/master/README.md) |
 | Vacuum | "Vacuuming can take a while for HNSW indexes. Speed it up by reindexing first" | [pgvector README](https://github.com/pgvector/pgvector/blob/master/README.md) |
 
-**This is the single most consequential external finding in the investigation, and it cuts both ways.**
+**This is the single most consequential external finding in the investigation. The first draft drew too generous a conclusion from it, and the Board was right to object.**
 
-*Against naive use:* an ANN index scan that generates candidates and *then* applies the authorization predicate is **structurally the pattern B1 §10 forbids** — "global search → retrieve unauthorized candidates/text → application-filter". The fact that the filter happens inside PostgreSQL rather than in application code does not change the ordering. Worse, it leaks in exactly the way B2 §10.2 names: with post-scan filtering, *which* authorized rows survive depends on how many unauthorized rows were in the top-`ef_search` — so an unauthorized record influences the authorized result set even though its text is never returned. Iterative scans make this *less visible* by scanning further, not less true.
+*Against ANN use:* an ANN index scan that generates candidates and *then* applies the authorization predicate is **structurally the pattern B1 §10 forbids** — "global search → retrieve unauthorized candidates/text → application-filter". That the filter runs inside PostgreSQL rather than in application code does not change the ordering. It leaks in exactly the way B2 §10.2 names: with post-scan filtering, *which* authorized rows survive depends on how many unauthorized rows occupied the top-`ef_search` — so an unauthorized record influences the authorized result set even though its text is never returned. Iterative scans make this *less visible* by scanning further; they do not make it untrue.
 
-*In favour of disciplined use:* **partial indexing and `PARTITION BY LIST` are pre-narrowing mechanisms.** A separate HNSW index per partition — or per `(partition, subject)` where the cardinality allows — means the ANN scan only ever addresses rows the constraint already permits. The unauthorized record is not filtered out after scanning; it is in a different index that the plan does not touch. **That satisfies H3 properly**, and it is a documented, supported pattern rather than a workaround.
+*The first draft's error.* It concluded that partial indexing and `PARTITION BY LIST` make ANN compliant, calling that "a documented, supported pattern rather than a workaround". **That conclusion is withdrawn.** Those mechanisms pre-narrow a **static** filter dimension — a category id, a tenant id, a value known at index-creation time. **Olin's authorization is not static.** Within one trusted security partition it depends on the Circle, every Person subject, every required content domain, the actor's current grants, lifecycle state, classification revision and suppression state — a predicate that varies per request and per actor. You cannot create an index per authorization outcome.
 
-The conclusion is not "pgvector fails H3". It is: **pgvector satisfies H3 only under a specific index topology, and the burden is on the implementation to prove that topology holds for every query shape.** That is a benchmarkable claim, and spike scenario P6 is designed to test it directly rather than accept it. A candidate that requires a particular index layout to be secure is acceptable; one whose security depends on nobody later adding a convenient global index is a standing risk, recorded as **RK-3** (§20).
+And B1 §10 anticipates exactly this: **"Partition isolation alone is insufficient when private Persons coexist inside one partition."** An HNSW index partitioned by security partition would therefore satisfy nothing that matters, because Olin's hard case is Erick and Ana *inside the same partition* (B1 scenarios D and E).
+
+**Corrected conclusion, and it splits the candidate in two** (§14):
+
+- **S3a — exact distance over an already-authorized set.** Protected metadata planning produces the authorized exact-version ID set; distance is then computed **only** over those versions, with no ANN structure traversed. Nothing outside the authorized set is ever addressed, so the ordering invariant holds for the same reason it holds for a structured predicate. **Potentially compliant; retained as a future semantic-retrieval option.**
+- **S3b — ANN (HNSW/IVFFlat).** Compliant **only** if the implementation can prove that the index structure traversed for a given request contains *only* records within that request's complete addressable scope. A static partition-level index does not establish that. **DEFERRED pending a proven authorization-equivalent index topology**, and **excluded from the ordinary first spike** — §4 shows the first vertical does not need ANN at all.
+
+A candidate whose security depends on nobody later adding a convenient global ANN index is a standing risk, recorded as **RK-3** (§20).
 
 ### 7.3 Mem0
 
@@ -300,19 +330,26 @@ The conclusion is not "pgvector fails H3". It is: **pgvector satisfies H3 only u
 | License | Apache 2.0 | [Mem0 repository](https://github.com/mem0ai/mem0) |
 | Deployment | Library mode, self-hosted server, and a managed Cloud Platform | [Mem0 repository](https://github.com/mem0ai/mem0) |
 | **OSS/managed split** | The April 2026 algorithm is available in the managed platform with "proprietary optimizations not available in the open-source SDK" | [Mem0 repository](https://github.com/mem0ai/mem0) |
-| **Deletion semantics** | Deletion removes the vector-store point but writes a DELETE **event** to an append-only history database; prior `old_memory`/`new_memory` text from earlier ADD/UPDATE events **remains readable** via `history(memory_id=…)` | [Mem0 delete operation docs](https://docs.mem0.ai/core-concepts/memory-operations/delete); corroborated by [issue #7316](https://github.com/mem0ai/mem0/issues/7316) |
-| Store reconciliation | The history table and payload hash "are never reconciled with the vector store, so out of band edits to memories are invisible" | [Issue #7316](https://github.com/mem0ai/mem0/issues/7316) |
-| Isolation | `user_id` / `agent_id` / `run_id` filters; `delete_all` now requires at least one filter | [Mem0 repository](https://github.com/mem0ai/mem0) |
-| Newer algorithm | Redesigned to "preserve memory history rather than overwrite it", single-pass ADD-only extraction, so memories accumulate | Search-surfaced upstream description; **secondary evidence, flagged as such** |
+| **Deletion semantics** | **Deletion is a tombstone that preserves the prior text.** `_delete_memory` captures `prev_value = existing_memory.payload["data"]`, deletes the vector-store point, then calls `self.db.add_history(memory_id, prev_value, None, "DELETE", …, is_deleted=1)` — so the previous memory text is written into the history row rather than erased | **[Issue #3245](https://github.com/mem0ai/mem0/issues/3245)**, which quotes the source directly; [Mem0 delete operation docs](https://docs.mem0.ai/core-concepts/memory-operations/delete) |
+| Deletion residue elsewhere | The same issue reports that `Memory.delete(memory_id)` removes the vector-store point and adds a history record but "fails to remove corresponding nodes and relationships from the Neo4j graph store" when a graph store is configured | [Issue #3245](https://github.com/mem0ai/mem0/issues/3245) |
+| Isolation | `user_id` / `agent_id` / `run_id` filters; `delete_all` requires at least one filter | [Mem0 repository](https://github.com/mem0ai/mem0) |
+| Newer algorithm | Redesigned to preserve memory history rather than overwrite it, so memories accumulate | Search-surfaced upstream description; **secondary evidence, not load-bearing** |
 
-**Assessment.** Mem0 fails multiple hard requirements, and the failures are architectural rather than configurational:
+**Source-citation correction.** The first draft cited [issue #7316](https://github.com/mem0ai/mem0/issues/7316) for the deletion-retention finding. That issue is genuine but is about *reconciliation* — that the history table and payload hash are never compared against the vector store — **not about deletion retaining prior text.** It could not carry the weight the first draft placed on it. **[Issue #3245](https://github.com/mem0ai/mem0/issues/3245) is the correct primary source**, because it quotes the `_delete_memory` implementation showing `prev_value` written to history with `is_deleted=1`. The finding is unchanged and is now better evidenced; the citation is corrected.
 
-- **H1 fails.** `user_id` is an application-supplied identifier. B1 §4.2 requires the partition to come from trusted runtime context and B1 scenario H requires a forged value to be inert. A library whose isolation key is a function argument has moved the trust boundary into the caller, which is precisely the confused-deputy shape G1.6 was built to eliminate.
-- **H5/H4 fail.** There is no suppression register, no exact-version lifecycle, no assertion line, no attestation and no dispute model. B3's entire lifecycle facet model is unrepresentable.
-- **B4 §10 is violated directly.** B4 lists among things that **must not be retained**: "claim statement text" and "free-text reasons that restate the content". Mem0's history retaining `old_memory` text after deletion is the exact failure B4 §10.1 forbids, and the newer accumulate-rather-than-overwrite behaviour makes it worse, not better.
-- **H6 fails.** No binding exists between a stored memory and a classification or lifecycle revision.
+**Assessment, with H1 reasoning corrected.**
 
-**Disposition: ELIMINATED as a canonical owner.** The gate register's existing hypothesis — "may later be evaluated as a proposal/extraction helper, never the canonical authority" — survives this investigation intact and is *not* disturbed. A proposal-producing extraction helper is a different role with different requirements (its output is PROPOSED under B3 §5.1, never admitted), and evaluating it in that role later requires no Gate decision now. **This elimination is about canonical ownership only.**
+**H1 is CONDITIONAL and external to Mem0, not the primary hard failure.** The first draft claimed that a caller-facing `user_id` argument was an irreparable H1 failure. **That was too strong.** A trusted Knowledge service wrapping Mem0 could set the namespace from trusted server-side context, never accepting it from a model, tool payload or browser — which is exactly what B1 §5.1 requires of the partition binding. The accurate statement is narrower: *Mem0 does not itself provide Olin's trusted-partition authority; a wrapper could supply it.* H1 is therefore **not** the disqualifier.
+
+**The decisive conflicts are the canonical-owner semantics, and these a wrapper cannot repair:**
+
+- **H4 — no exact-version lifecycle.** No immutable assertion versions, no assertion lines, no lifecycle/control revision, no attestations, no disputes, no replacement relations with typed reasons. B3's entire facet model (§5.2) is unrepresentable, and a wrapper cannot add versioning to a store that overwrites or accumulates by design.
+- **H5 — no suppression register.** B4's core inversion is that a durable prohibition, not deletion, is what makes information stop being used. Mem0 has no such register and no pre-use barrier consulting one.
+- **B4 §10 — retained forgotten content.** B4 lists among things that **must not be retained**: "claim statement text" and "free-text reasons that restate the content". Writing `prev_value` into history on delete is exactly that. A wrapper could delete the history rows afterwards, but then the wrapper is implementing erasure *against* the library's design rather than with it — and B4 §4's whole point is that correctness must not depend on that cleanup succeeding.
+- **H6 — no bindings.** No classification revision, lifecycle revision, derivation family or partition binding attaches to a stored memory, so a stale derivative cannot be detected without a rebuild.
+- **B5 ownership.** The product owns canonical semantics for what it stores, conflicting with B5 §6.2 fixed point 1.
+
+**Disposition: HARD ELIMINATED as canonical Knowledge owner**, on lifecycle, suppression, deletion and ownership semantics — **not** on `user_id`. The gate register's existing hypothesis — "may later be evaluated as a proposal/extraction helper, never the canonical authority" — survives intact and is *not* disturbed. In that role its output would be PROPOSED under B3 §5.1 and never admitted without passing the normal gates, which is a different requirement set. **This elimination is about canonical ownership only.**
 
 ### 7.4 Graphiti
 
@@ -322,20 +359,25 @@ The conclusion is not "pgvector fails H3". It is: **pgvector satisfies H3 only u
 | **Required backend** | **A graph database is mandatory.** Neo4j 5.26+, FalkorDB 1.1.2+, Amazon Neptune, or Kuzu 0.11.2 (deprecated, upstream unmaintained) | [Graphiti repository](https://github.com/getzep/graphiti) |
 | **LLM requirement** | **Mandatory in the ingestion pipeline.** "Graphiti works best with LLM services that support Structured Output" | [Graphiti repository](https://github.com/getzep/graphiti) |
 | Temporal model | Bi-temporal. "Facts have validity windows. When information changes, old facts are invalidated — not deleted" | [Graphiti repository](https://github.com/getzep/graphiti) |
-| Multi-tenancy | **No explicit multi-tenancy, `group_id` isolation or authorization model** stated in upstream documentation | [Graphiti repository](https://github.com/getzep/graphiti) |
+| **`group_id` partitioning** | **`group_id` exists and partitions graph data and episodes.** Nodes, edges and episodes carry it, searches are scoped by `group_ids`, and cross-group operations require separate calls. It is a **caller-facing parameter** | [Adding fact triples](https://help.getzep.com/graphiti/graphiti/adding-fact-triples) (shows `group_id` on the call); [issue #1876](https://github.com/getzep/graphiti/issues/1876) (discusses `group_id` write/read database resolution) |
+| **`add_triplet` direct write** | **A fact can be written directly without episode extraction.** The caller constructs `EntityNode`/`EntityEdge` objects and calls `add_triplet`. Upstream states: "Graphiti will attempt to deduplicate your passed in nodes and edge with the already existing nodes and edges in the graph. If there are no duplicates, it will add them as new nodes and edges" | [Adding fact triples](https://help.getzep.com/graphiti/graphiti/adding-fact-triples) |
+| Autonomous path | The standard `add_episode` path performs LLM-driven entity/edge extraction, deduplication and **contradiction resolution / temporal invalidation** | [Graphiti repository](https://github.com/getzep/graphiti); [issue #1193](https://github.com/getzep/graphiti/issues/1193) on extraction LLM cost |
 | Operational | Python 3.10+, LLM credentials, external graph DB instance, `SEMAPHORE_LIMIT` concurrency control, optional full-text backend | [Graphiti repository](https://github.com/getzep/graphiti) |
 
-**Assessment.** Graphiti's bi-temporal model is genuinely close to B3's applicability windows and supersession — the closest of any candidate. That similarity is why it deserves a careful rejection rather than a dismissive one.
+**Factual corrections to the first draft.** Two claims were **wrong and are withdrawn**:
 
-It fails on three independent grounds:
+1. The first draft said Graphiti has "no explicit multi-tenancy, `group_id` isolation or authorization model". **`group_id` does exist and does partition graph data and episodes.** The accurate criticism is narrower: it is a *caller-facing grouping mechanism*, so satisfying B1 would require binding it from trusted server-side context — the same wrapper argument that applies to Mem0's `user_id` (§7.3), and equally *not* an irreparable failure.
+2. The first draft implied a mandatory LLM on **every** write path. **`add_triplet` writes a fact directly without episode extraction.** Upstream does document that it still attempts deduplication against existing nodes and edges, and upstream discussion ([issue #1193](https://github.com/getzep/graphiti/issues/1193)) indicates embedding and possible resolution calls remain on that path — so it is "bypasses extraction", not "provably zero model involvement". That distinction is recorded rather than overstated in either direction.
 
-- **H1 fails.** No trusted partition model. Isolation would have to be rebuilt above it.
-- **B3 §6 / D2 fails structurally.** A mandatory LLM in the ingestion path means the model participates in what becomes durable state. B3's D2 clarification is explicit: "An LLM cannot decide that material is 'low risk' and thereby approve a new class", and B2 §10.1 states AI "cannot… rewrite requirements… [or] declare independent human evidence". Graphiti's automatic temporal invalidation is a model deciding that one fact supersedes another — which is exactly the authority B3 §8 reserves for an explicit, authorized replacement command. **Its strongest feature is the one Olin must not use.**
-- **H6/H5 fail.** No suppression register; no classification-revision binding on derived edges.
+**Corrected assessment.** Graphiti's bi-temporal model is genuinely the closest of any candidate to B3's applicability windows and supersession, and the corrected facts make the honest conclusion weaker than a hard elimination:
 
-The independent review's position — "require a concrete multi-hop query workload before considering its operational cost" — is re-derived and confirmed. §4 shows no such workload exists.
+- **Its default autonomous behaviour is unsuitable as Olin's canonical lifecycle authority.** The standard `add_episode` path delegates semantic contradiction resolution and temporal invalidation to an LLM. B3 §8 reserves supersession for an explicit authorized replacement command, B3 D2 states an LLM cannot create or approve an admission class, and B2 §10.1 states AI "cannot… rewrite requirements… [or] declare independent human evidence". **Used as canonical lifecycle control, that path is incompatible with accepted B3 authority semantics.** This finding stands and is the durable one.
+- **But a trusted wrapper using only `add_triplet` could avoid those defaults.** At which point Graphiti is largely a graph storage and retrieval layer with bi-temporal edges — and Olin would be paying for a mandatory graph database, an LLM dependency and a second operational surface to get storage it already has.
+- **`group_id` would need trusted server-side binding** to satisfy B1, which is achievable but is work the wrapper must do rather than a property Graphiti supplies.
+- **H5/H6 remain unmet:** no suppression register, no classification-revision binding on derived edges.
+- **No demonstrated multi-hop workload justifies the complexity** (§4). The independent review's position — "require a concrete multi-hop query workload before considering its operational cost" — is re-derived and confirmed.
 
-**Disposition: ELIMINATED for the first vertical.** Recorded as revisitable only against a demonstrated multi-hop workload *and* a separate resolution of the LLM-in-ingestion conflict, which is an architecture question rather than a technology one.
+**Disposition: NOT SHORTLISTED FOR THE FIRST VERTICAL** — explicitly *not* a claim of fundamental architectural impossibility. Re-enterable if a demonstrated multi-hop graph workload appears **and** a controlled direct-write path with trusted `group_id` binding is designed, which would also require resolving what role its autonomous temporal semantics play, if any.
 
 ### 7.5 RAGFlow
 
@@ -343,13 +385,21 @@ The independent review's position — "require a concrete multi-hop query worklo
 |---|---|---|
 | License | Apache 2.0 | [RAGFlow repository](https://github.com/infiniflow/ragflow) |
 | **Minimum hardware** | **CPU ≥ 4 cores, RAM ≥ 16 GB, Disk ≥ 50 GB** | [RAGFlow repository](https://github.com/infiniflow/ragflow) |
-| Services deployed | Elasticsearch (or Infinity) + **MySQL** + Redis + MinIO, plus optional gVisor sandbox | [RAGFlow repository](https://github.com/infiniflow/ragflow) |
+| **Metadata database** | **Not MySQL-only.** The metadata/business layer uses Peewee with pooled backends selected at runtime by a `DB_TYPE` setting; `PooledMySQLDatabase` and `PooledPostgresqlDatabase` are both wired in, with matching `MySQLMigrator`/`PostgresqlMigrator`. PostgreSQL support was requested in [#2356](https://github.com/infiniflow/ragflow/issues/2356) and [#5860](https://github.com/infiniflow/ragflow/issues/5860); a current proposal ([#19983](https://github.com/infiniflow/ragflow/issues/19983)) adds another PG-compatible backend by reusing those same pooled classes | [db_models.py discussion](https://github.com/infiniflow/ragflow/issues/10687); [issue #19983](https://github.com/infiniflow/ragflow/issues/19983) |
+| Document engine | `DOC_ENGINE` selects the chunk/vector store — Elasticsearch by default, Infinity as an alternative | [RAGFlow repository](https://github.com/infiniflow/ragflow) |
+| Services deployed | Document engine (Elasticsearch/Infinity) + metadata DB + Redis + MinIO + the app, plus optional gVisor sandbox. The official configuration page documents the MySQL variables (`MYSQL_PASSWORD`, `MYSQL_PORT`, `EXPOSE_MYSQL_PORT`) | [RAGFlow configuration](https://ragflow.io/docs/configurations) |
 | LLM requirement | External LLM service required | [RAGFlow repository](https://github.com/infiniflow/ragflow) |
 | Multi-tenancy / permissions | **Not explicitly documented** | [RAGFlow repository](https://github.com/infiniflow/ragflow) |
 
-**Assessment.** RAGFlow is an integrated document-RAG platform. Adopting it would place canonical Knowledge semantics inside a product whose own MySQL store would become the authority — directly contradicting **B5 §6.2 fixed point 1** (Knowledge is a distinct logical bounded context) and **fixed point 3** (an external product's schema cannot implicitly become the Knowledge security, lifecycle or transactional model). Its five-service footprint and ≥16 GB requirement are disproportionate to §4's workload, and H1/H5/H6 are unaddressed.
+**Factual correction to the first draft.** The first draft stated RAGFlow's "own MySQL store would become the authority", implying MySQL is inherent. **That is wrong and is withdrawn:** the metadata layer is a runtime-selected Peewee backend and PostgreSQL is a supported option. Note the official [configuration page](https://ragflow.io/docs/configurations) still documents only the MySQL variables, so the PostgreSQL path is real but less prominently documented than MySQL.
 
-**Disposition: ELIMINATED.** ADR-0007 already rejected adopting a turnkey RAG stack, and nothing in current upstream documentation disturbs that. The elimination is on ownership grounds first and resource grounds second — **the resource argument alone would not be sufficient**, since hardware can be bought, whereas the ownership conflict cannot be configured away.
+**This correction does not change the conclusion, because the conclusion never depended on which SQL engine it uses.** The conflict is that RAGFlow's *own* metadata, retrieval and object-storage semantics would become the canonical Knowledge semantics — and that is true whether those rows live in MySQL or PostgreSQL.
+
+**Corrected assessment.** Adopting RAGFlow as the canonical Knowledge owner would place canonical assertion identity, lifecycle and security semantics inside an integrated RAG platform, contradicting **B5 §6.2 fixed point 1** (Knowledge is a distinct logical bounded context) and **fixed point 3** (an external product's schema cannot implicitly become the Knowledge security, lifecycle or transactional model). H1/H5/H6 are unaddressed by the platform, and its five-service footprint and ≥16 GB documented minimum are disproportionate to §4's workload.
+
+**Disposition: HARD ELIMINATED as canonical Knowledge owner** — on ownership grounds first, resources second. **The resource argument alone would not suffice**, since hardware can be bought whereas the ownership conflict cannot be configured away. ADR-0007 already rejected adopting a turnkey RAG stack and nothing in current upstream disturbs that.
+
+**Not universally unusable.** If a future document-heavy vertical ever justified it, RAGFlow could in principle serve as a **derived retrieval materialization** over canonical Knowledge it does not own. That role is the already-deferred **S4** class (§7.6) and carries S4's requirements — H6 bindings, serve-time suppression checks, never authority. No separate disposition is proposed for it.
 
 ### 7.6 Dedicated search / vector services as a class (S4)
 
@@ -365,7 +415,7 @@ Rather than evaluate each product, the class is assessed against the hard requir
 | **H7** | A second store in the restore path, each with its own currency question |
 | Operational | A second service to run, back up, restore, monitor and upgrade on a constrained node |
 
-**Disposition: RETAINED as a deferred shape, NOT shortlisted.** S4 is not eliminated on correctness — a correctly-bound external index can satisfy H3/H5/H6 — but it is **not justified by §4's workload**, and it makes the two hardest ongoing obligations (H5, H6) materially harder for a capability the first vertical does not need. It should be reconsidered only if measured retrieval requirements demonstrate S1–S3 insufficient.
+**Disposition: RETAINED as a deferred shape, NOT shortlisted.** S4 is not eliminated on correctness — a correctly-bound external index can satisfy H3/H5/H6 — but it is **not justified by §4's workload**, and it makes the two hardest ongoing obligations (H5, H6) materially harder for a capability the first vertical does not need. It should be reconsidered only if measured retrieval requirements demonstrate S1–S3a insufficient.
 
 ### 7.7 Graph databases directly (S5)
 
@@ -408,31 +458,35 @@ Security correctness is **not** collapsed into a score. Each cell is `PASS`, `FA
 
 ### 8.1 Shapes against hard requirements
 
-| Req | S1 Postgres structured | S2 + full-text | S3 + pgvector | S4 separate engine | S5 graph | S6 Mem0 | S6 RAGFlow | S5 Graphiti |
-|---|---|---|---|---|---|---|---|---|
-| **H1** partition | **PASS** | **PASS** | **PASS** | CONDITIONAL — client-supplied namespace unless sole trusted writer | PASS | **FAIL** — `user_id` is an application argument | **FAIL** — undocumented | **FAIL** — no model |
-| **H2** metadata before content | **PASS** — separable columns | **PASS** | **PASS** | UNKNOWN — per product | PASS | **FAIL** — payload-coupled | **FAIL** | **FAIL** |
-| **H3** unaddressability | **PASS** — predicate in-plan | **PASS** — same plan | **CONDITIONAL** — ANN filters *after* scan unless partial-indexed/partitioned | UNKNOWN — must verify pre/post ordering per product | PASS | **FAIL** — post-filter | **FAIL** | **FAIL** |
-| **H4** exact-version lifecycle | **PASS** | **PASS** | **PASS** | N/A — external to engine | PASS | **FAIL** — no version model | **FAIL** | **FAIL** — LLM-driven invalidation (B3 D2) |
-| **H5** suppression before candidacy | **PASS** — in-plan register | **PASS** | **PASS** — if register predicate precedes ANN | CONDITIONAL — needs serve-time binding check | PASS | **FAIL** — no register | **FAIL** | **FAIL** |
-| **H6** materialization bindings | **PASS (vacuous)** — no derivative | **PASS** — index commits with row | **PASS** — same transaction | CONDITIONAL — six bindings + rebuild-free check | CONDITIONAL | **FAIL** — no bindings | **FAIL** | **FAIL** |
-| **H7** restore freshness | UNKNOWN — mechanism unselected (B4 C1) | UNKNOWN | UNKNOWN | UNKNOWN — worse: two stores | UNKNOWN | **FAIL** — history resurrects text | UNKNOWN | UNKNOWN |
-| **H8** final revalidation | **PASS** | **PASS** | **PASS** | UNKNOWN | PASS | **FAIL** | **FAIL** | **FAIL** |
-| **H9** no auth per candidate | **PASS** — orchestration property | **PASS** | **PASS** | PASS | PASS | N/A — eliminated | N/A | N/A |
-| **H10** bundle never persisted | **PASS** — orchestration property | **PASS** | **PASS** | PASS | PASS | **FAIL** — memory *is* persisted context | N/A | N/A |
-| **H11** performance shape | UNKNOWN — **BENCHMARK** | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | N/A | **FAIL** — B6 §18A.11 resource/service count | N/A |
-| **H12** R13 | UNKNOWN — **BENCHMARK** (§11) | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | N/A | N/A | N/A |
-| **H13** R14 | UNKNOWN — **BENCHMARK** | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | N/A | N/A | N/A |
-| **B5 ownership** | **PASS** | **PASS** | **PASS** | PASS | PASS | **FAIL** — product owns semantics | **FAIL** — §6.2 fixed point 1/3 | **FAIL** |
-| **Outcome** | **SHORTLIST** | **SHORTLIST** | **SHORTLIST (conditional)** | **DEFERRED** | **ELIMINATED — no workload** | **ELIMINATED** | **ELIMINATED** | **ELIMINATED** |
+| Req | S1-SQLite | S1-PostgreSQL | S2 full-text | S3a exact vector | S3b ANN | S4 separate engine | S5 graph direct | Mem0 as owner | RAGFlow as owner | Graphiti |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **H1** partition | **PASS** | **PASS** | **PASS** | **PASS** | PASS | CONDITIONAL — client-supplied namespace unless sole trusted writer | PASS | CONDITIONAL — **external to Mem0**; a wrapper could bind it | CONDITIONAL — not the disqualifier | CONDITIONAL — `group_id` exists but is caller-facing |
+| **H2** metadata before content | **PASS** — separable columns | **PASS** | **PASS** | **PASS** | PASS | UNKNOWN — per product | PASS | **FAIL** — payload-coupled | UNKNOWN | UNKNOWN |
+| **H3** unaddressability | **PASS** — predicate in-plan | **PASS** — predicate in-plan | **CONDITIONAL — BENCHMARK** — global posting list may be walked before the authorization predicate (§7.1) | **CONDITIONAL** — compliant iff distance is computed only over the authorized ID set | **DEFERRED** — ANN filters *after* scan; static partitioning ≠ dynamic authorization (B1 §10) | UNKNOWN — must verify pre/post ordering per product | PASS | **FAIL** — post-filter | **FAIL** | **FAIL** on the autonomous path |
+| **H4** exact-version lifecycle | **PASS** | **PASS** | **PASS** | **PASS** | PASS | N/A — external to engine | PASS | **FAIL** — no version model | **FAIL** | **FAIL** as canonical lifecycle authority (LLM invalidation, B3 D2/§8) |
+| **H5** suppression before candidacy | **PASS** — in-plan register | **PASS** | **CONDITIONAL** — same barrier question | **CONDITIONAL** — register must bound the ID set | DEFERRED | CONDITIONAL — needs serve-time binding check | PASS | **FAIL** — no register | **FAIL** | **FAIL** — no register |
+| **H6** materialization bindings | **PASS (vacuous)** — no derivative | **PASS (vacuous)** | **PASS** — index commits with row | **PASS** — same transaction | PASS | CONDITIONAL — six bindings + rebuild-free check | CONDITIONAL | **FAIL** — no bindings | **FAIL** | **FAIL** |
+| **H7** restore freshness | UNKNOWN — mechanism unselected (B4 C1) | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN — worse: two stores | UNKNOWN | **FAIL** — deletion writes prior text to history | UNKNOWN | UNKNOWN |
+| **H8** final revalidation | **PASS** | **PASS** | **PASS** | **PASS** | PASS | UNKNOWN | PASS | **FAIL** | **FAIL** | **FAIL** |
+| **H9** no auth per candidate | **PASS** — orchestration property | **PASS** | **PASS** | **PASS** | PASS | PASS | PASS | N/A | N/A | N/A |
+| **H10** bundle never persisted | **PASS** — orchestration property | **PASS** | **PASS** | **PASS** | PASS | PASS | PASS | **FAIL** — memory *is* persisted context | N/A | N/A |
+| **H11** performance shape | UNKNOWN — **BENCHMARK** | UNKNOWN — **BENCHMARK** | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | N/A | **FAIL** — B6 §18A.11 resource/service count | N/A |
+| **H12** R13 | UNKNOWN — **BENCHMARK** (§11) | UNKNOWN — **BENCHMARK** | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | N/A | N/A | N/A |
+| **H13** R14 | UNKNOWN — **BENCHMARK** | UNKNOWN — **BENCHMARK** | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | N/A | N/A | N/A |
+| **B5 ownership** | **PASS** | **PASS** | **PASS** | **PASS** | PASS | PASS | PASS | **FAIL** — product owns semantics | **FAIL** — §6.2 fixed points 1/3 | **FAIL** as canonical owner |
+| **Outcome** | **SPIKE** | **SPIKE** | **SPIKE — CONDITIONAL** | **DEFERRED / CONDITIONAL** | **DEFERRED** | **DEFERRED** | **NOT SHORTLISTED** | **HARD ELIMINATED** as owner | **HARD ELIMINATED** as owner | **NOT SHORTLISTED** for first vertical |
+
+**Reading the CONDITIONAL cells on H1 for the eliminated candidates.** Mem0, RAGFlow and Graphiti now show `CONDITIONAL` rather than `FAIL` on H1, because a trusted wrapper could bind their namespace from server-side context. **That change does not rescue any of them** — it relocates the disqualifier to where it actually is. Mem0 and RAGFlow are hard-eliminated on lifecycle, suppression, deletion and ownership semantics; Graphiti is not shortlisted on workload and autonomous-lifecycle grounds. Recording H1 honestly makes the real reasons load-bearing instead of resting on the weakest available argument.
 
 ### 8.2 The three cells that carry the most weight
 
-**S3/H3 — `CONDITIONAL`, not `PASS` and not `FAIL`.** pgvector's documented post-scan filtering would fail H3 under naive use, and its documented partial-indexing and list-partitioning patterns satisfy H3 properly. **The distinction is an implementation property that must be measured, not asserted** — which is why P6 exists in the spike and why S3 is shortlisted conditionally rather than either adopted or rejected. Recording this as a plain `PASS` would hide a real architectural disqualifier inside a convenient summary, which the Gate's own instructions forbid.
+**S3b/H3 — `DEFERRED`, not `CONDITIONAL`.** The first draft marked ANN `CONDITIONAL` on the reasoning that partial indexing and list partitioning pre-narrow the scan. **That reasoning is withdrawn** (§7.2): those mechanisms narrow *static* dimensions, while Olin's authorization is dynamic within one partition and B1 §10 states that partition isolation alone is insufficient. ANN is compliant only against a proven authorization-equivalent index topology, which nobody has proposed. **S3a — exact distance over an already-authorized ID set — is the shape that may be compliant**, and it is the one retained.
 
-**S2/H6 — `PASS` on the "index commits with row" argument.** This is the claim that a GIN index is not a separate materialization because it cannot diverge from canonical state. The argument is sound in principle and is the reason S2 is a small step rather than a large one, but it is an argument rather than a measurement. **Spike scenario P11 tests it directly** by attempting to serve from a stale binding.
+**S2/H3 — `CONDITIONAL`, corrected from `PASS`.** The first draft's "same plan, same transaction" argument settles **H6**, not **H3**. A global `tsvector`/GIN posting list may be walked before the authorization predicate applies, and correct returned rows do not prove correct candidate ordering (§7.1). **This is the correction most likely to change what the spike must build**, since it requires an explicit authorized-set barrier rather than a compound `WHERE`.
 
-**H7 — `UNKNOWN` for every shape, and that is correct rather than evasive.** B4 C1 deliberately selected no persistence or replication mechanism for the restore-freshness authority, and B5 PA-3 assigned the owner without the mechanism. **No backend choice determines H7** — it is determined by how control state is replicated and how its currency is proven, which is a design decision layered on top of any of S1–S3. Marking it `PASS` for Postgres would be false precision. P10 measures it.
+**S2/H6 — `PASS` retained.** A GIN or FTS5 index cannot diverge from canonical state because it commits with the row. **Spike scenario P11 still tests it** by attempting to serve from a stale binding, because an argument is not a measurement.
+
+**H7 — `UNKNOWN` for every shape, and that is correct rather than evasive.** B4 C1 deliberately selected no persistence or replication mechanism for the restore-freshness authority, and B5 PA-3 assigned the owner without the mechanism. **No backend choice determines H7** — it is determined by how control state is replicated and how its currency is proven, which is a design decision layered on top of any of S1–S3a. Marking it `PASS` for Postgres would be false precision. P10 measures it.
 
 ### 8.3 SQLite versus PostgreSQL as the S1 realization
 
@@ -443,21 +497,24 @@ Both are genuine S1 realizations and the choice is not obvious, so it is assesse
 | **H4 CAS** | Single-writer serialization gives ordering essentially for free, **but the contract is enforced at the application layer** | Genuine concurrent writers; CAS needs an explicit `WHERE revision = ?` guard or `SELECT … FOR UPDATE` |
 | **H2/H3** | Adequate — predicates are predicates | Adequate |
 | **Full-text (S2 path)** | FTS5 available | `tsvector`/GIN in core |
-| **Vector (S3 path)** | No first-class in-core option comparable to pgvector | pgvector, same transaction |
-| **Concurrency** | One writer at a time; WAL lets readers proceed. Background cleanup jobs + interactive writes contend | MVCC; cleanup and interactive work do not block each other |
+| **Vector (S3a path)** | Exact distance is expressible without an extension | pgvector, same transaction |
+| **Vector (S3b path)** | No first-class ANN option comparable to pgvector | pgvector HNSW/IVFFlat — **deferred anyway** (§7.2) |
+| **Concurrency** | One writer at a time; WAL lets readers proceed. **Background cleanup jobs and interactive writes contend** | MVCC; cleanup and interactive work do not block each other |
 | **Operational** | **No service to run.** One file. Backup already proven for svc-nutrition | A service to run, back up, restore, upgrade, monitor |
 | **Restore (H7)** | File-level, simple | More moving parts, better tooling |
-| **Evolution** | S2 reachable; **S3 effectively not** | S1 → S2 → S3 is additive |
+| **Evolution** | S2 and S3a reachable; **S3b effectively not** | S1 → S2 → S3a → S3b is additive |
 
-**Assessment.** SQLite is *sufficient* for the first vertical and has the lower operational burden — a genuine advantage on a constrained node, and the honest answer to "what is the smallest thing that works". PostgreSQL's advantages are concentrated in exactly the two places this Gate cares about beyond the first vertical: **B4's asynchronous cleanup obligations run concurrently with interactive reads**, which is where SQLite's single writer becomes a real constraint rather than a theoretical one, and **the S3 evolution path exists at all**.
+**Assessment — and the Board's correction to it.** The first draft proposed benchmarking PostgreSQL only, with SQLite as a "live fallback". **The Board rejected that**, correctly: the Gate's mission is to find the smallest architecture that safely works, and deciding against SQLite on evolution-path intuition *before measurement* is exactly the substitution of preference for evidence this phase exists to avoid. The S3b evolution path — one of the two reasons the first draft favoured PostgreSQL — is now **deferred anyway** (§7.2), which weakens that argument further.
 
-**Proposed for benchmarking: PostgreSQL**, with SQLite recorded as a live fallback if the spike shows the operational cost unjustified. This is a recommendation for what to *measure*, not a selection — and it is the one place in this document where the smallest-thing-that-works principle is deliberately not followed, so the reasoning is stated rather than buried: the evolution path and the concurrent-cleanup property are worth one service, and the spike should test whether that judgment survives contact with measurement. **If the Product Architect prefers SQLite, the spike design is unchanged except for the backend** — every scenario in §16 is backend-neutral by construction.
+**Both are benchmarked.** The remaining genuine discriminator is **B4's asynchronous cleanup running concurrently with interactive reads and writes**, where SQLite's single writer is a real constraint rather than a theoretical one — and that is a *measurable* property, not a judgement call. The spike measures it directly (§16.5, P13).
+
+**Neither is proposed as the selection.** SQLite may win the minimum-runtime decision; PostgreSQL may win on concurrent cleanup and evolution. Every scenario in §16 is backend-neutral by construction, so running both costs schema work once and execution twice.
 
 ### 8.4 Non-hard factors
 
 Qualitative comparison only, per the Gate's instruction not to hide disqualifiers inside aggregate scores. Limited to surviving shapes.
 
-| Factor | S1 | S2 | S3 | S4 (deferred) |
+| Factor | S1 | S2 | S3a / S3b | S4 (deferred) |
 |---|---|---|---|---|
 | Operational complexity | Lowest | Lowest + one index type | Low + one extension | **Highest** — second service, second backup, second restore |
 | Services to operate | 1 | 1 | 1 | 2+ |
@@ -470,7 +527,7 @@ Qualitative comparison only, per the Gate's instruction not to hide disqualifier
 | Portability | **High** — SQL, plain export | High | High for canonical; vectors are regenerable | **Lower** — sync logic is bespoke |
 | Lock-in risk | **Minimal** — canonical stays in SQL | Minimal | Minimal — canonical never enters the vector index exclusively | Real if canonical semantics drift into the engine |
 
-**On portability specifically**, since the Gate asks whether canonical Knowledge becomes trapped in a search product: under S1–S3 it cannot, because canonical state is relational rows and any derived structure is regenerable from them. Under S4 or S6 that guarantee depends on discipline. This is the same property §5.3 recommends preserving, viewed from the exit rather than the entrance.
+**On portability specifically**, since the Gate asks whether canonical Knowledge becomes trapped in a search product: under S1–S3a it cannot, because canonical state is relational rows and any derived structure is regenerable from them. Under S4 or S6 that guarantee depends on discipline. This is the same property §5.3 recommends preserving, viewed from the exit rather than the entrance.
 
 ---
 
@@ -478,7 +535,7 @@ Qualitative comparison only, per the Gate's instruction not to hide disqualifier
 
 No prices are invented. Costs are expressed in resources and operational obligations, which is what the repository evidence supports.
 
-| | S1/S2 (PostgreSQL) | S3 (+pgvector) | S4 (separate engine) | RAGFlow (eliminated) |
+| | S1/S2 | S3a / S3b (+pgvector) | S4 (separate engine) | RAGFlow (eliminated) |
 |---|---|---|---|---|
 | New services | 1 | 1 | 2 | **5** (ES/Infinity, MySQL, Redis, MinIO, app) |
 | Documented minimum RAM | Modest; tunable | Modest + index build/vacuum headroom | Product-dependent, typically substantial | **≥16 GB** ([RAGFlow](https://github.com/infiniflow/ragflow)) |
@@ -491,7 +548,7 @@ No prices are invented. Costs are expressed in resources and operational obligat
 
 **Node capacity is not established by this investigation and must not be asserted.** The only measured host figure in the repository is 3.7 GiB total / ~1.14 GiB available, recorded 2026-09-14 in the [Mealie capacity gate](../../episteck-home/mealie-capacity-gate.md). That reading predates the current Nuremberg service topology — Mealie, svc-nutrition, Home MCP, the BFF and the gateway are now all deployed there per [DEPLOYMENT](../DEPLOYMENT.md) — so it cannot be relied upon as the current Nuremberg baseline. **A current capacity reading is a spike prerequisite** (§16.2), and the ROADMAP already names "capacity check on Nuremberg" as a Gate prerequisite. If the current node has headroom comparable to that reading, RAGFlow's ≥16 GB would be infeasible regardless of its architectural elimination — but the elimination does not depend on that.
 
-**One cost is easy to overlook and worth naming:** S3 requires an embedding model in the ingestion path. That model call has latency, may have per-token cost, and — under B2 §5.2 — its output is a protected derivative inheriting the full conjunctive requirements of its input. If the embedding is computed by an external provider, B4 C4's external-disclosure rule applies and the content has left the boundary. **That is an architectural consequence of S3, not merely an operational one**, and it is a further reason not to adopt S3 before a workload requires it.
+**One cost is easy to overlook and worth naming:** any vector shape (S3a or S3b) requires an embedding model in the ingestion path. That model call has latency, may have per-token cost, and — under B2 §5.2 — its output is a protected derivative inheriting the full conjunctive requirements of its input. If the embedding is computed by an external provider, B4 C4's external-disclosure rule applies and the content has left the boundary. **That is an architectural consequence of adopting vectors at all, not merely an operational one**, and it is a further reason not to adopt S3a or S3b before a workload requires it.
 
 ---
 
@@ -639,9 +696,51 @@ Place KN and the domain services inside one trust boundary such that pre-approve
 
 Three reasons. Its non-bearer property is *structural* rather than a promise about scope — the distinction B6 §18A.3a insists on. It has mature standardized prior art in two forms (transport-layer RFC 8705, application-layer RFC 9449), so the design question is selection rather than invention. And it extends the existing trust seam rather than competing with it: audience binding, bounded lifetime, single-use `jti` claiming and fail-closed verification are all already implemented (E2, E3).
 
-**No concrete mechanism is selected.** Whether the binding is mTLS, a DPoP-style proof, or another key-confirmation scheme is a decision for the spike and for implementation. The spike's P12 measures whether *any* Family-1 realization preserves two crossings without becoming a bearer capability, and the counters of §16.6 are what detect a non-compliant implementation.
+**No production mechanism is selected.** But the Board correctly observed that **"any Family-1 realization" is not something a spike can build** — P12 needs a concrete experiment. §11.4 specifies it.
 
-**Honest limitation.** Both RFC 8705 and RFC 9449 solve *client-to-resource* proof-of-possession. Olin's shape is slightly different: the basis is produced by Home, consumed by a domain, and presented by an orchestrator. That composition is not itself standardized, and the spike must verify that the binding survives it — in particular that the orchestrator cannot present a basis minted for one domain to a different domain. **Recorded as RK-5** (§20).
+**Honest limitation.** Both RFC 8705 and RFC 9449 solve *client-to-resource* proof-of-possession. Olin's shape differs: the basis is produced by Home, consumed by a domain, and presented by an orchestrator. That composition is not itself standardized, and the spike must verify the binding survives it — in particular that the orchestrator cannot present a basis minted for one domain to a different domain. **Recorded as RK-5** (§20).
+
+### 11.4 The R13 experimental realization — what P12 actually builds
+
+**This selects an EXPERIMENT, not production R13 technology.** Its purpose is to establish whether the non-bearer property and the two-crossing budget can hold simultaneously; a production mechanism would be chosen later, on this evidence plus operational criteria the spike does not address.
+
+Two realizations were considered:
+
+| | **A — transport/channel-bound** | **B — application-layer holder-of-key** |
+|---|---|---|
+| Binding | Basis names the caller's TLS client-certificate thumbprint; the domain verifies the basis **and** that the mTLS peer presenting it matches | Basis names a public key; the caller signs a per-request proof over method, target, a nonce and a hash of the basis |
+| Prior art | [RFC 8705](https://www.rfc-editor.org/info/rfc8705/) certificate-bound tokens, `cnf` claim | [RFC 9449](https://www.rfc-editor.org/rfc/rfc9449.html) DPoP: `htm`, `htu`, `jti`, `ath` |
+| Why possession alone fails | Presenter cannot produce the CertificateVerify signature without the private key | Presenter cannot sign a fresh proof without the private key |
+| Spike cost | Certificate generation and an mTLS listener between stubbed services | Key generation plus sign/verify on each call; no TLS configuration |
+| Fidelity to Olin | Closest to a real deployment: services already hold distinct identities | Transport-agnostic; would also work through the existing nginx seam |
+| Weakness as an experiment | Conflates the mechanism with TLS plumbing, so a failure is ambiguous | Does not exercise the transport seam the production system would likely use |
+
+**PRIMARY experimental realization: B — application-layer holder-of-key proof.**
+
+Chosen over A for three reasons, none of which is a claim that B is the better *production* answer:
+
+1. **It isolates the variable under test.** The question is whether a non-bearer basis can preserve two crossings. A mTLS experiment would entangle that with certificate distribution and TLS termination, so a negative result would not tell us which part failed.
+2. **It is cheaper and fully reproducible** in a disposable environment with no PKI, which matters under §16.2's isolation requirements.
+3. **It composes with the existing seam rather than competing with it.** E2/E3 show the gateway already strips inbound forged headers and mints per POST; an application-layer proof rides that same path.
+
+**SECONDARY, only if incremental cost proves small: A**, to confirm the property is not an artifact of the application-layer construction. If time is constrained, **A is dropped, not B.**
+
+**Exactly what P12 must prove** — each is a distinct assertion, not a narrative:
+
+| # | Case | Required outcome |
+|---|---|---|
+| 1 | Basis copied **without** the key/channel, presented by another party | **FAIL closed** |
+| 2 | Correct basis + **wrong service identity** | **FAIL closed** |
+| 3 | Correct basis presented to the **wrong audience/domain** | **FAIL closed** |
+| 4 | **Cross-request replay** — valid basis reused on a later request | **FAIL closed** |
+| 5 | **Cross-actor replay** — basis minted for actor X used for actor Y | **FAIL closed** |
+| 6 | **Expired** basis | **FAIL closed** |
+| 7 | The **exact approved operation** with correct key and audience | **SUCCEEDS** |
+| 8 | **RT#2 still freshly re-evaluates with Home** after execution | Revalidation observed, not skipped |
+| 9 | Possessing **`decision_id` alone** | **Proves nothing** — no execution, no information |
+| 10 | Home crossing count across the whole flow | **`home_auth_round_trip_count == 2`** |
+
+Cases 1–6 are the non-bearer boundary; 7 is the functional requirement; 8–9 preserve B6 §8.4 and §11.1; 10 is the performance claim. **A realization passing 7 and 10 but failing any of 1–6 has reproduced rejected Alternative D and must be reported as a failure, not a partial success.**
 
 ---
 
@@ -655,7 +754,7 @@ From E7 and B6 §18A.1: the ~120 ms Home crossing is **network, not Home's work*
 
 Almost nothing — which is the point, and is a favourable finding rather than a disappointing one.
 
-| Stage | S1/S2/S3 expectation | Basis |
+| Stage | S1/S2 expectation | Basis |
 |---|---|---|
 | Envelope + nomination resolution | Local, sub-ms | No network |
 | **Protected metadata planning** | Local to KN; one indexed query over §4's corpus | §4.2: hundreds of rows |
@@ -666,7 +765,7 @@ Almost nothing — which is the point, and is a favourable finding rather than a
 | **Home RT #2** | **~120 ms** | **Measured** (E7) |
 | Bundle construction | Local | — |
 
-**Two Home crossings remain ~240 ms and dominate every shortlist shape equally.** The backend choice moves numbers that are an order of magnitude smaller. This is the strongest argument for choosing the *simplest* shape that satisfies the requirements: within S1–S3 the performance differences are mostly invisible behind the network, so the tiebreaker is correctness surface and operational burden, not speed.
+**Two Home crossings remain ~240 ms and dominate every shortlist shape equally.** The backend choice moves numbers that are an order of magnitude smaller. This is the strongest argument for choosing the *simplest* shape that satisfies the requirements: within S1–S3a the performance differences are mostly invisible behind the network, so the tiebreaker is correctness surface and operational burden, not speed.
 
 ### 12.3 What remains unknown
 
@@ -675,7 +774,7 @@ Almost nothing — which is the point, and is a favourable finding rather than a
 | **R14 — raw domain access excluding authorization** | E6/B6 §18A.3b: the one measured figure contains a Home crossing. Nutrition's own read is a local indexed SQLite `SELECT` and so is probably small, **but that is one service with one storage shape** | P2, P3, P4 |
 | **R13 — whether crossings stay flat** | §11: mechanism unselected | **P12 — decisive** |
 | Metadata planning cost | Depends on schema shape, which does not exist | P1, P9 |
-| S3 ANN-under-constraint cost | Depends on index topology (§7.2) | P6 with S3 |
+| S3b ANN authorization-equivalent topology | No topology proposed (§7.2) | **Not in the first spike** |
 | Cold-path behaviour | F16: re-established connection costs ~195 ms more | All, warm and cold |
 | Denial timing distribution | PA-10d: a stable separation is an existence oracle | **P6 — distributions, not averages** |
 
@@ -693,23 +792,37 @@ Local retrieval over §4's corpus does not appear on this list, at any shortlist
 
 ## 13. Candidate eliminations and the evolution path
 
-### 13.1 Eliminated without benchmark
+### 13.1 Three categories, applied consistently
 
-| Candidate | Eliminated on | Exact reason |
+**Added after Board review.** The first draft used "eliminated" for two materially different situations and blurred a third. The Board required three categories, and they are not interchangeable:
+
+| Category | Meaning |
+|---|---|
+| **HARD ELIMINATED** | Violates a B1–B6 hard requirement in a way the **intended role** cannot reasonably repair |
+| **NOT SHORTLISTED FOR FIRST VERTICAL** | Technically usable in some constrained role, but no demonstrated workload justifies it, or using it safely would mean bypassing its primary semantics |
+| **DEFERRED / RE-ENTERABLE** | May become relevant if the measured workload changes |
+
+**The distinction is not cosmetic.** "Hard eliminated" asserts something about the candidate; "not shortlisted" asserts something about Olin's current workload. Conflating them overstates the finding and would mislead a future reader into thinking a door is closed that is merely unopened.
+
+| Candidate | Category | Exact reason |
 |---|---|---|
-| **Mem0** (as canonical owner) | H1, H4, H5, H6, H8, H10, B4 §10, B5 | `user_id` is an application-supplied argument, not a trusted partition binding (B1 §4.2, scenario H). No suppression register, no exact-version lifecycle, no attestation/dispute model. **Deletion retains prior memory text in append-only history** — the exact retention B4 §10 forbids. Product owns canonical semantics, contradicting B5 §6.2 fixed point 1. **Not eliminated as a future proposal-producing extraction helper**, which is a different role |
-| **Graphiti** | H1, H4 (via B3 D2), H5, H6 | No trusted partition model. **Mandatory LLM in the ingestion path performs temporal invalidation** — a model deciding supersession, which B3 §8 reserves for an explicit authorized replacement command and B3 D2 forbids an LLM from authorizing. Mandatory graph DB for a workload with no demonstrated multi-hop query (§4) |
-| **RAGFlow** | B5 §6.2 fixed points 1 and 3; H1, H5, H6; H11 | Integrated platform whose own MySQL store would become the canonical Knowledge authority. Five services and ≥16 GB documented minimum, disproportionate to §4. ADR-0007 already rejected a turnkey RAG stack. **Ownership conflict is the primary ground; resources are secondary** |
-| **Graph DB directly (S5)** | No qualifying workload | B4 §7 states explicitly that bounded derivation families are "a discipline, not a technology". Relational foreign keys express them. No multi-hop query workload exists (§4). B5 §6.1's single transactional owner is more straightforward relationally. **Not eliminated on incapability** |
-| **R13 Family 3 (co-location)** | ADR-0002, B5 | Buys the crossing budget by dissolving the domain-service boundary the architecture deliberately created |
+| **Mem0 as canonical Knowledge owner** | **HARD ELIMINATED** | **On lifecycle, suppression, deletion and ownership semantics — not on `user_id`.** No exact-version lifecycle, assertion lines, attestations or disputes (H4); no suppression register or pre-use barrier (H5); **deletion writes the prior text into history with `is_deleted=1`** ([#3245](https://github.com/mem0ai/mem0/issues/3245)), the retention B4 §10 forbids; no classification/lifecycle bindings (H6); product owns canonical semantics (B5 §6.2 fixed point 1). **H1 is CONDITIONAL and external** — a wrapper could bind the namespace; that does not repair the rest |
+| **RAGFlow as canonical Knowledge owner** | **HARD ELIMINATED** | Its own metadata, retrieval and object-storage semantics would become the canonical Knowledge semantics, contradicting B5 §6.2 fixed points 1 and 3. **Not because it "requires MySQL" — it does not** (§7.5); the conflict is ownership, independent of SQL engine. Five services and ≥16 GB documented minimum, disproportionate to §4. ADR-0007 already rejected a turnkey RAG stack |
+| **Graphiti** | **NOT SHORTLISTED FOR FIRST VERTICAL** | **Its default autonomous path delegates contradiction resolution and temporal invalidation to an LLM**, incompatible with B3 §8/D2 if used as canonical lifecycle control. A trusted wrapper using `add_triplet` could avoid those defaults — at which point it is largely a graph store for a workload Olin does not have (§4). `group_id` exists but is caller-facing and would need trusted binding. **Not a claim of fundamental incapability** |
+| **Graph DB directly (S5)** | **NOT SHORTLISTED FOR FIRST VERTICAL** | B4 §7 states bounded derivation families are "a discipline, not a technology". Relational foreign keys express them. No multi-hop query workload exists (§4). **Not a claim of incapability** |
+| **R13 Family 3 (co-location)** | **HARD ELIMINATED** | Buys the crossing budget by dissolving the ADR-0002 domain-service boundary and B5's ownership separation — a trade this Gate is not authorized to make |
+| **S3b — ANN** | **DEFERRED** | Compliant only against a proven authorization-equivalent index topology; static partitioning does not establish one (§7.2, B1 §10). Not needed by the first vertical |
 
-### 13.2 Deferred rather than eliminated
+### 13.2 Deferred / re-enterable
 
 | Candidate | Status | Re-entry condition |
 |---|---|---|
-| **S4 — dedicated search/vector engine** | **DEFERRED** | Measured evidence that S1–S3 cannot meet a real retrieval requirement. Requires per-product H3 verification (pre- vs post-candidate filtering) and an H6 binding design before it could be shortlisted |
+| **S4 — dedicated search/vector engine** | **DEFERRED** | Measured evidence that S1–S3a cannot meet a real retrieval requirement. Requires per-product H3 verification (pre- vs post-candidate filtering) and an H6 binding design before shortlisting. **RAGFlow-as-derived-index falls here**, not in the canonical-owner elimination |
+| **S3a — exact vector over authorized set** | **DEFERRED / CONDITIONAL** | A demonstrated semantic recall failure that structured and lexical predicates cannot meet. Design recorded in §14; not built in the first spike |
+| **S3b — ANN** | **DEFERRED** | A concrete, justified index topology proving the traversed structure contains only in-scope records |
+| **Graphiti / graph DB** | **RE-ENTERABLE** | A demonstrated multi-hop graph workload **and** a controlled direct-write path with trusted `group_id` binding |
 | **Docling** | **OUT OF SCOPE** | A document-ingestion vertical, which the first vertical excludes |
-| **Mem0 as extraction helper** | **NOT ASSESSED** | A future proposal-generation role, evaluated against B3 §5.1 PROPOSED semantics. No Gate decision needed now |
+| **Mem0 as extraction helper** | **NOT ASSESSED** | A future proposal-generation role under B3 §5.1 PROPOSED semantics. No Gate decision needed now |
 | **Crypto-shredding** | **DEFERRED by B4 D2** | Not reopened here |
 
 ### 13.3 The evolution path
@@ -724,7 +837,7 @@ flowchart TB
   CC["<b>Constraint compiler</b><br/>the stable seam"]
   T1["Structured predicate<br/><b>S1 — today</b>"]
   T2["Full-text predicate<br/><b>S2 — if lexical recall needed</b>"]
-  T3["Pre-narrowed ANN scope<br/><b>S3 — if semantic recall needed</b>"]
+  T3["Exact vector over authorized set<br/><b>S3a — if semantic recall needed</b>"]
   T4["External engine constraint<br/><b>S4 — deferred</b>"]
   DEC --> CC
   CC --> T1
@@ -758,34 +871,37 @@ Absent a trigger, adding a layer adds H6's ongoing obligation and B2 §10.3's im
 
 ## 14. Shortlist
 
-**Three nested architecture shapes, one canonical owner, no separate retrieval materialization initially.**
+**Revised after Board review (TG-PA-2 MODIFIED): two S1 realizations, one conditional extension, two deferred vector shapes.**
 
-| | **S1 — structured only** | **S2 — + native full-text** | **S3 — + constrained vectors** |
-|---|---|---|---|
-| Canonical owner | One relational transactional owner | Same | Same |
-| Retrieval | Structured predicates compiled from the authorization decision | + `tsvector`/GIN **in the same plan and transaction** | + ANN **only under pre-narrowed addressability** |
-| Separate materialization | **None** | **None** | **None** — extension in the same transaction |
-| Proposed benchmark realization | PostgreSQL (SQLite as live fallback, §8.3) | PostgreSQL `tsvector` + GIN | PostgreSQL + pgvector 0.8.x |
-| Hard-requirement status | All PASS or benchmark-UNKNOWN | Same | Same **except H3 CONDITIONAL** (§7.2, §8.2) |
-| Justified by §4 today | **Yes** | Not yet — no demonstrated lexical recall failure | **No** — §4.2 |
-| Primary risk | Retrieval proves insufficient as the corpus grows | Minimal — additive | **H3 depends on index topology** (RK-3) |
+| | **S1-SQLite** | **S1-PostgreSQL** | **S2 — + full-text** | **S3a — exact vector** | **S3b — ANN** |
+|---|---|---|---|---|---|
+| Canonical owner | One relational transactional owner | Same | Same | Same | Same |
+| Retrieval | Structured predicates compiled from the authorization decision | Same | + full-text **behind an authorized-set barrier** | Exact distance over the authorized version-ID set **only** | ANN index traversal |
+| Separate materialization | **None** | **None** | **None** | **None** | **None** |
+| Realization | SQLite (+FTS5 for S2) | PostgreSQL (+`tsvector`/GIN for S2) | Either | pgvector exact, or any distance function | pgvector HNSW/IVFFlat |
+| Hard-requirement status | PASS or benchmark-UNKNOWN | PASS or benchmark-UNKNOWN | **H3 CONDITIONAL** (§7.1) | **H3 CONDITIONAL** on the ID-set bound | **H3 DEFERRED** — no proven topology (§7.2) |
+| Justified by §4 today | **Yes** | **Yes** | Not yet — no demonstrated lexical recall failure | **No** | **No** |
+| In the first spike? | **Yes** | **Yes** | **Yes — to test the barrier** | **No** — design recorded, not built | **No** |
+| Primary risk | Single-writer contention with B4 cleanup | One more service to operate | Barrier may be awkward to express | Cost of materializing large ID sets | **Topology cannot be proven** (RK-3) |
 
-**S1 is the proposed starting point. S2 and S3 are on the shortlist as measured extensions, not as alternatives to be chosen between.** Benchmarking all three in one spike is cheap because they share a schema and a compiler seam, and it produces the evidence needed to decide *when* — not *whether* — to extend.
+**Both S1 realizations are benchmarked**, per TG-PA-2 as modified. **S2 is in the spike specifically to test whether the authorized-set barrier can be expressed cleanly** — not because a lexical recall failure has been demonstrated. **S3a and S3b are not built in the first spike**; S3a's design is recorded so a later phase can pick it up, and S3b awaits a topology proposal that does not yet exist.
 
 ### 14.1 What remains unknown for each
 
-| Unknown | S1 | S2 | S3 | Scenario |
-|---|---|---|---|---|
-| Protected metadata resolvable without content, cheaply (R2/H2) | **UNKNOWN** | UNKNOWN | UNKNOWN | P1, P9 |
-| Suppression-before-candidacy holds under a real backend | **UNKNOWN** | UNKNOWN | UNKNOWN | **P7** |
-| Stale materialization unservable without rebuild (H6) | UNKNOWN (vacuous, must confirm) | **UNKNOWN** | **UNKNOWN** | **P9, P11** |
-| Restore freshness provable (H7) | **UNKNOWN** | UNKNOWN | UNKNOWN | **P10** |
-| Raw domain access (R14) | **UNKNOWN** | UNKNOWN | UNKNOWN | P2–P4 |
-| R13 preserves 2 crossings (H12) | **UNKNOWN** | UNKNOWN | UNKNOWN | **P12** |
-| Crossings flat as domains grow | **UNKNOWN** | UNKNOWN | UNKNOWN | **P3, P4** |
-| Denial timing not an oracle (PA-10d) | **UNKNOWN** | UNKNOWN | UNKNOWN | **P6** |
-| ANN addressable scope pre-narrowed (H3) | N/A | N/A | **UNKNOWN — decisive for S3** | **P6 (S3 variant)** |
-| Corpus scaling behaviour | **UNKNOWN** | UNKNOWN | UNKNOWN | All, three sizes |
+| Unknown | S1 (both) | S2 | S3a | S3b | Scenario |
+|---|---|---|---|---|---|
+| Protected metadata resolvable without content, cheaply (R2/H2) | **UNKNOWN** | UNKNOWN | UNKNOWN | UNKNOWN | P1, P9 |
+| **Authorized-set barrier observable** (H3 ordering) | **UNKNOWN** | **UNKNOWN — decisive for S2** | UNKNOWN | UNKNOWN | **P6, §16.6.1** |
+| Suppression-before-candidacy holds under a real backend | **UNKNOWN** | UNKNOWN | UNKNOWN | UNKNOWN | **P7** |
+| Stale materialization unservable without rebuild (H6) | UNKNOWN (vacuous, must confirm) | **UNKNOWN** | UNKNOWN | UNKNOWN | **P9, P11** |
+| Restore freshness provable (H7) | **UNKNOWN** | UNKNOWN | UNKNOWN | UNKNOWN | **P10** |
+| Raw domain access (R14) | **UNKNOWN** | UNKNOWN | — | — | P2–P4 |
+| R13 preserves 2 crossings (H12) | **UNKNOWN** | UNKNOWN | — | — | **P12** |
+| Crossings flat as domains grow | **UNKNOWN** | UNKNOWN | — | — | **P3, P4** |
+| Denial timing not an oracle (PA-10d) | **UNKNOWN** | UNKNOWN | UNKNOWN | UNKNOWN | **P6** |
+| **Single-writer contention under B4 cleanup** | **UNKNOWN — decisive between the two S1 realizations** | UNKNOWN | — | — | **P13** |
+| ANN scope provably authorization-equivalent | N/A | N/A | N/A | **UNKNOWN — blocks S3b** | not in first spike |
+| Corpus scaling behaviour | **UNKNOWN** | UNKNOWN | UNKNOWN | UNKNOWN | All, three sizes |
 
 ---
 
@@ -795,28 +911,31 @@ The Gate asks this explicitly, and separating the two is what keeps Phase 2 hone
 
 **Decidable from architecture alone — and decided in this proposal:**
 
-1. Mem0, Graphiti and RAGFlow are eliminated as canonical owners (§13.1) — each fails a hard requirement in a way configuration cannot repair.
-2. A graph database is not needed for the first vertical (§7.7) — B4 §7 settles it.
+1. Mem0 and RAGFlow are **hard-eliminated as canonical owners** (§13.1) on lifecycle, suppression, deletion and ownership semantics.
+2. Graphiti and direct graph databases are **not shortlisted for the first vertical** (§7.4, §7.7) — a weaker and more accurate claim than elimination.
 3. A dedicated search engine is not needed for the first vertical (§7.6) — deferred, not eliminated.
-4. Vectors are not needed for the first vertical (§4.2) — and S3's H3 is conditional.
+4. Vectors are not needed for the first vertical (§4.2), and **ANN is deferred** because static partitioning cannot express dynamic intra-partition authorization (§7.2, B1 §10).
 5. One relational transactional owner can satisfy the first implementation safely (§8.1).
 6. Canonical and retrieval should share a store initially (§5.3).
-7. KN should run on Nuremberg (§10).
-8. R13 Family 3 is eliminated; Family 1 is the family to test; Family 2 is the fallback (§11.3).
+7. KN should **eventually** run on Nuremberg (§10) — distinct from where the spike runs (§16.2).
+8. R13 Family 3 is eliminated; Family 1 is the family to test; Family 2 is the fallback (§11.3); **the primary experiment is application-layer holder-of-key** (§11.4).
 9. The clean migration path is a constraint-compiler seam (§13.3).
 
 **Requiring measurement — and therefore Phase 2:**
 
 1. R14 raw domain latency.
-2. Whether a Family-1 R13 mechanism preserves two crossings without becoming bearer authority.
+2. Whether the §11.4 R13 experiment preserves two crossings without becoming bearer authority.
 3. Whether `home_auth_round_trip_count` stays flat as `domain_call_count` grows.
 4. Whether protected metadata is resolvable without content at acceptable cost.
 5. Whether suppression, stale-binding and restore-freshness properties hold under a real backend rather than on paper.
 6. Whether denial timing distributions leak.
-7. Whether S3's ANN scope is genuinely pre-narrowed.
-8. Whether p50/p95/p99 targets are met, and at which corpus size they stop being met.
+7. **Whether the authorized-set barrier can be expressed such that no unauthorized content is examined** — decisive for S2, and provable only by instrumentation (§16.6.1).
+8. **Whether SQLite's single writer contends measurably with B4 cleanup** — the discriminator between the two S1 realizations (P13).
+9. Whether p50/p95/p99 targets are met, and at which corpus size they stop being met.
 
 **The asymmetry is informative.** Every architecture-decidable question resolves toward *less* technology, and every measurement-requiring question is about whether the accepted security properties survive contact with an implementation. That is the correct shape for a gate whose first vertical is small and whose correctness requirements are severe.
+
+**The Board's review moved two questions across that line**, in the right direction: S2's H3 compliance and the SQLite-versus-PostgreSQL choice were both treated as settled by argument in the first draft, and are now measured.
 
 ---
 
@@ -830,17 +949,21 @@ The spike must test **B6 requirements, not raw database speed**. A benchmark sho
 
 ### 16.2 Isolation requirements — binding
 
+**Revised after Board review.** The first draft treated "current Nuremberg capacity reading" as a prerequisite and left open that the spike might run on that host. **The Board separated two things the first draft conflated:** where Knowledge should *eventually* be deployed (TG-PA-4: Nuremberg) and where the *synthetic spike* runs. Running CPU, memory and database benchmarks on the production Nuremberg host could perturb production services **even with no credentials and no production data**, through contention alone. Given that host already runs Mealie, svc-nutrition, Home MCP, the BFF and the gateway (E8), that is a real risk for no benefit.
+
 | Requirement | How it is met |
 |---|---|
-| **Isolated from production** | Runs in a disposable environment. **No connection to `home.episteck.com`, svc-nutrition, Mealie, the BFF or the gateway.** Home and domain owners are **stubbed**, with a configurable injected latency calibrated to E7's measured figures |
+| **Runs OFF production by default** | **The spike runs in a disposable isolated environment — not on the production Nuremberg host.** A same-host experiment would need explicit later approval plus resource isolation, and is not proposed |
+| **Isolated from production** | **No connection to `home.episteck.com`, svc-nutrition, Mealie, the BFF or the gateway. No Tailscale route to production services. No production credentials provisioned.** Home and domain owners are **stubbed**, with injected latency calibrated to E7 |
 | **Synthetic data only** | Generated fixtures. **No real Person, Circle, grant, preference or health content.** No production backup is restored |
-| **Cannot read real data** | No production credentials provisioned. No Tailscale route to production services. Failure to reach production is a **pass condition**, not an error |
+| **Cannot read real data** | Nothing to read from. Failure to reach production is a **pass condition**, not an error |
 | **Cannot mutate production** | Read-only by construction — it has nothing to write to |
 | **Reproducible** | Fixed seed, pinned versions, recorded commit SHA, scripted setup |
 | **Disposable** | Teardown removes every artifact. No persistent service |
-| **Capacity-safe** | **A current Nuremberg capacity reading is a prerequisite** (§9). If headroom is insufficient, the spike runs elsewhere or the topology is simulated with calibrated latency |
 
-**On stubbing Home.** This is a deliberate design choice with a tradeoff worth stating. Stubbing means the spike measures the *architecture's* crossing behaviour rather than Home's real response time — but E7 already establishes Home's real response time with 30 live samples, and F15 establishes that Home's own work is sub-millisecond. **Injecting a calibrated ~120 ms is more faithful to what is being tested than a real call would be**, because it isolates the variable under test (how many crossings) from one already measured (how long each takes). It also keeps the spike from touching production, which is a hard requirement. The counters (§16.6) are what actually answer the crossing question, and they are exact rather than statistical.
+**Capacity measurement is separate from spike execution.** A **read-only** current Nuremberg capacity reading is still wanted — not to decide where the spike runs, but to assess **deployment feasibility** for the eventual placement TG-PA-4 accepts (§9 notes the only repository figure predates the current topology). It is an observation, not a benchmark, and it does not gate the spike.
+
+**On stubbing Home.** A deliberate tradeoff worth stating. Stubbing means the spike measures the *architecture's* crossing behaviour rather than Home's live response time — but E7 already measures Home with 30 live samples, and F15 establishes its own work is sub-millisecond. **Injecting a calibrated ~120 ms is more faithful to what is under test** than a real call would be, because it isolates the variable being measured (how many crossings) from one already measured (how long each takes). It also keeps the spike off production entirely. The counters (§16.6) answer the crossing question exactly rather than statistically.
 
 ### 16.3 Synthetic corpus sizes
 
@@ -869,15 +992,20 @@ P1–P8 map to B6 §18A.9's performance scenarios; P9–P12 add the correctness 
 | **P3** | Knowledge + **three** independent domains | **Crossings flat; concurrency real** | **2 crossings**; total ≈ slowest domain, not the sum |
 | **P4** | Knowledge + **five** independent domains | Scaling shape confirmed, not extrapolated | **2 crossings**; total still ≈ slowest domain |
 | **P5** | Source expansion | Lazy expansion; separate operation | 3 crossings; `source_expansion_count == 1`; 0 on P1–P4 |
-| **P6** | **Authorization denial before content candidacy** | **H3.** Unauthorized content never becomes a candidate | **Zero** candidates, scores, counts, titles. 1 crossing. **Allow/deny/no-content timing distributions reported** (PA-10d). S3 variant: ANN scope pre-narrowed |
+| **P6** | **Authorization denial before content candidacy** | **H3.** Unauthorized content never becomes a candidate | **Zero** candidates, scores, counts, titles. 1 crossing. **Allow/deny/no-content timing distributions reported** (PA-10d). **S2 variant per §16.6.1: barrier instrumentation** |
 | **P7** | **Suppressed record physically still present** | **H5.** Suppression precedes candidacy | Record **not addressable** though payload, index entry and cache entry all exist. No score, count or "something was removed" signal |
 | **P8** | Grant/lifecycle change between selection and disclosure | **H8.** RT#2 is a fresh re-evaluation | Disclosure **denied**. Change detected at the barrier, not by TTL |
 | **P9** | **Classification revision invalidates stale materialization** | **H6/B2 §10.3.** Immediate ineligibility, no reindex grace | Stale derivative **unservable immediately**, detected via bindings **without a rebuild** |
 | **P10** | **Restored old payload, newer suppression state** | **H7.** B4 C1's T1/T2/T4 case | X **not retrievable**. With currency unprovable, **no** restored Knowledge retrievable; explicit abstention |
 | **P11** | **Stale cache/index binding** | **H6.** Unknown binding fails closed | Entry **unservable**; unknown binding state denies |
-| **P12** | **R13 pre-authorized domain execution** | **H12.** Family 1 preserves 2 crossings without bearer authority | 2 crossings. **Adversarial:** artifact lifted to a different channel/actor/domain **fails**; basis alone insufficient |
+| **P12** | **R13 pre-authorized domain execution** | **H12.** The §11.4 experiment preserves 2 crossings without bearer authority | 2 crossings. **Ten assertions of §11.4**, cases 1–6 must all fail closed |
+| **P13** | **B4 asynchronous cleanup concurrent with interactive reads/writes** | **The decisive discriminator between S1-SQLite and S1-PostgreSQL** (§8.3) | Interactive p95 measured **while** a bounded cleanup obligation runs. SQLite's single writer either contends measurably or does not — this is measured, not predicted |
 
 **Additional required negative checks**, run across scenarios: a ContextBundle is never persisted (H10); a denied operation abstains as a whole with no salvaged subset (B6 §8.3, scenario 18); an authority outage denies (ADR-0008); a suppression-store outage denies (B6 §17); a forged partition or actor field is **inert**, not merely refused (B1 scenario H).
+
+**Scenarios run per realization.** P1–P13 run against **S1-SQLite** and **S1-PostgreSQL**. P6 additionally runs against **S2** on each realization to test the full-text barrier (§16.6.1). **S3a and S3b are not exercised in the first spike.**
+
+**Staged plan if C-large on both proves expensive.** Run C-small and C-medium on **both** realizations; run **C-large only on the surviving realization(s)** — where "surviving" means it passed every §16.7 pass condition at the smaller sizes. This keeps the comparison honest at the sizes that matter for correctness while bounding the work at the size that only probes scaling.
 
 ### 16.6 Required measurements
 
@@ -886,7 +1014,7 @@ P1–P8 map to B6 §18A.9's performance scenarios; P9–P12 add the correctness 
 - protected security-metadata planning
 - initial Home authorization (RT#1)
 - canonical Knowledge lookup
-- retrieval materialization lookup *(if present — absent in S1/S2/S3 as proposed)*
+- retrieval materialization lookup *(if present — absent in S1/S2 as proposed)*
 - **domain access excluding authorization** — R14
 - domain fan-out (wall-clock, to prove concurrency)
 - ranking/selection
@@ -917,19 +1045,51 @@ source_expansion_count           ← expansions performed
 | Zero candidates in P6; zero addressability in P7 | H3, H5 |
 | No ContextBundle persisted, any scenario | H10 |
 
+#### 16.6.1 Execution-barrier instrumentation — added after Board review
+
+**Required, and this is the correction most likely to change what the spike builds.** Final result correctness is **not sufficient evidence** for H3. A backend can return exactly the right rows while internally walking a posting list, scanning index entries or computing distances over unauthorized content — which still violates B1 §10 (ordering) and B2 §10.2 (scores and counts influenced by hidden records).
+
+The spike must therefore **observe the protected-metadata → authorized-ID → content-search boundary**, not infer it. For S1, S2 and S3a, instrument and assert:
+
+```text
+security_metadata_rows_inspected   ← rows examined during protected metadata planning
+authorized_versions_produced       ← exact versions the authorization decision yielded
+content_records_examined_after_barrier
+                                   ← content rows / index entries / postings touched
+                                      AFTER the authorized set was established
+unauthorized_content_records_examined
+                                   ← MUST BE ZERO
+unauthorized_rows_contributing_to_score_or_count
+                                   ← MUST BE ZERO
+```
+
+**Required assertions:**
+
+| Assertion | Why |
+|---|---|
+| `unauthorized_content_records_examined == 0` in every scenario | H3 ordering — the core invariant |
+| `unauthorized_rows_contributing_to_score_or_count == 0` | B2 §10.2 — scores and counts are disclosure |
+| `content_records_examined_after_barrier <= authorized_versions_produced × k` for a declared bound `k` | Content access is bounded by the authorized set, not by corpus size |
+| `security_metadata_rows_inspected` does **not** grow with content size at fixed authorized-set size | Planning is not a disguised full scan |
+
+**Instrumentation is backend-appropriate, and the spike must say which method it used.** Query plan capture (`EXPLAIN (ANALYZE, BUFFERS)` on PostgreSQL, `EXPLAIN QUERY PLAN` plus `sqlite3_stmt_status` counters on SQLite), row-level access counters, or an instrumented access layer are all acceptable. **What is not acceptable is inferring the barrier from returned results**, which is precisely the gap this instrumentation exists to close.
+
+**This is where S2 is decided.** If the full-text barrier cannot be expressed such that `unauthorized_content_records_examined == 0`, S2 does not become "slower" — **it becomes non-compliant**, and the finding is reported as such rather than tuned around.
+
 ### 16.7 What the spike must prove
 
 Restated as pass conditions, because a benchmark without pass conditions is a data-collection exercise:
 
-1. **Unauthorized content never becomes a candidate** — not filtered, not counted, not scored (P6).
+1. **Unauthorized content never becomes a candidate** — not filtered, not counted, not scored. **Proven by barrier instrumentation, not by returned results** (P6, §16.6.1).
 2. **Suppressed content cannot influence results while physically present** (P7).
 3. **Stale materializations cannot be served**, detected without a rebuild (P9, P11).
-4. **Home crossings do not grow with known independent domain calls** under the R13 candidate (P3, P4, P12).
-5. **No ContextBundle persistence** (all).
-6. **Failure paths fail closed** — authority outage, suppression-store outage, unknown binding, unprovable restore freshness (P10, P11, negatives).
-7. **R14 measured** and reported separately from authorization (P2–P4).
+4. **Home crossings do not grow with known independent domain calls** under the R13 experiment (P3, P4, P12).
+5. **The R13 non-bearer boundary holds** — §11.4 cases 1–6 all fail closed (P12).
+6. **No ContextBundle persistence** (all).
+7. **Failure paths fail closed** — authority outage, suppression-store outage, unknown binding, unprovable restore freshness (P10, P11, negatives).
+8. **R14 measured** and reported separately from authorization (P2–P4).
 
-**A spike that produces good latency numbers while failing any of 1–6 is a failed spike.** That ordering is deliberate.
+**A spike that produces good latency numbers while failing any of 1–7 is a failed spike.** That ordering is deliberate, and condition 1's "proven by instrumentation" qualifier is the Board's correction: a backend returning correct rows while internally scanning unauthorized content has failed, however good the timings.
 
 ### 16.8 Deliverables
 
@@ -960,19 +1120,21 @@ The Gate may close when the Product Architect has:
 
 ## 18. Product Architect decisions required
 
-No final winner is manufactured. These are the decisions this phase asks for.
+No final winner is manufactured. **The Architecture Board reviewed the first Phase-1 draft on 2026-09-22 and recorded the dispositions below**, requiring twelve corrections before these can close. All twelve are incorporated (§23). The dispositions are recorded as the Board issued them, with the revised content each now refers to.
 
-| # | Decision | Proposed | Consequence if rejected |
+| # | Decision | **Board disposition** | Revised content it now covers |
 |---|---|---|---|
-| **TG-PA-1** | **Approve the candidate eliminations** (§13.1): Mem0, Graphiti and RAGFlow as canonical owners; graph DB for the first vertical; R13 Family 3 | **APPROVE** | A rejected elimination returns to the shortlist and must be benchmarked, enlarging the spike |
-| **TG-PA-2** | **Approve the shortlist** (§14): S1, S2, S3 as nested shapes, with S4 deferred and re-enterable on measured evidence | **APPROVE** | If S4 is restored, per-product H3 verification and an H6 binding design are prerequisites |
-| **TG-PA-3** | **Approve the canonical-store / retrieval-layer direction** (§5.3): one transactional owner, **no separate retrieval materialization initially**, with the compile-to-constraints seam preserved | **APPROVE** | Option B with a materialization from day one adds H6 and B2 §10.3 obligations before a workload requires them |
-| **TG-PA-4** | **Approve the topology to benchmark** (§10): **Nuremberg**, with Home unchanged in Ashburn and B5 §6.2's four fixed points intact | **APPROVE** | Ashburn placement inverts locality and invites the DocType realization B5 forbids |
-| **TG-PA-5** | **Approve the R13 mechanism families to benchmark** (§11): **Family 1 (channel-bound/holder-of-key)** primary, **Family 2** declared fallback, Family 3 eliminated | **APPROVE** | Without a Family-1 test the budget defaults to 2 + N and the p95 target is unreachable for multi-domain queries |
-| **TG-PA-6** | **Approve the benchmark scenarios and metrics** (§16.5–16.7): P1–P12, three corpus sizes, four counters, p50/p95/p99 warm and cold, timing distributions | **APPROVE** | Scenario removal leaves a hard requirement unverified before selection |
-| **TG-PA-7** | **Authorize the isolated synthetic benchmark spike** (§16.2), subject to a current Nuremberg capacity reading | **APPROVE** | The Gate cannot close: seven of eight unknowns in §15 require measurement |
+| **TG-PA-1** | Candidate eliminations | **ACCEPT WITH CORRECTIONS** | §13.1 now uses three categories. Mem0 hard-eliminated on lifecycle/suppression/deletion/ownership, **not `user_id`**; RAGFlow hard-eliminated on ownership, **not MySQL**; Graphiti and graph DBs **not shortlisted** rather than eliminated |
+| **TG-PA-2** | Shortlist | **MODIFIED** | §14 now lists **S1-SQLite, S1-PostgreSQL, S2 (CONDITIONAL), S3a (DEFERRED/CONDITIONAL), S3b (DEFERRED)**. Both S1 realizations are benchmarked; ANN is not in the first spike |
+| **TG-PA-3** | Canonical-store / retrieval-layer direction | **ACCEPT** | §5.3 unchanged: one transactional owner, no separate retrieval materialization initially, compile-to-constraints seam preserved |
+| **TG-PA-4** | Topology | **ACCEPT WITH BENCHMARK-ENVIRONMENT CLARIFICATION** | §10 unchanged for **eventual deployment** (Nuremberg). §16.2 now separates that from **where the spike runs — off production by default** |
+| **TG-PA-5** | R13 mechanism families | **ACCEPT WITH SPIKE-REALIZATION DETAIL REQUIRED** | §11.3 unchanged (Family 1 primary, Family 2 fallback, Family 3 eliminated). **§11.4 added**: primary experiment is application-layer holder-of-key, with ten explicit P12 assertions |
+| **TG-PA-6** | Benchmark scenarios and metrics | **ACCEPT WITH MODIFICATIONS** | §16.5 adds **P13** (cleanup contention) and runs P1–P13 on both realizations; **§16.6.1 adds execution-barrier instrumentation**; §16.5 adds a staged C-large plan |
+| **TG-PA-7** | Authorize the spike | **PENDING THIS REVISION — do not implement yet** | §16 as revised. **The spike remains unimplemented.** This proposal recommends authorization after the revision is accepted |
 
 **Each is independent.** Rejecting TG-PA-5 does not block TG-PA-1–4; it changes what the spike tests and what the budget becomes.
+
+**The Technology Gate is NOT resolved by these dispositions.** It remains OPEN / Phase 1 until TG-PA-7 is granted, the spike runs, and §17's acceptance criteria are met.
 
 ---
 
@@ -982,11 +1144,19 @@ Consistent with how B1–B5 handled consolidation: recorded, not performed.
 
 | # | Document | Issue | Status |
 |---|---|---|---|
-| **D-8** | [ROADMAP.md](../ROADMAP.md) §Knowledge Technology Gate | Still names a pre-emptive stack — "candidates: Mem0 + Docling + Postgres/pgvector; Graphiti deferred; RAGFlow rejected" — predating B1–B6 and in tension with the gate register's `UNSELECTED` table. **This investigation partly contradicts it** | **OPEN — correct when the Gate closes**, not before (§2.4) |
-| **D-9** | [STATUS.md](../STATUS.md) "Deliberately NOT done" | Lists "Knowledge tech install (Mem0/Graphiti/RAGFlow/pgvector/Docling)" as a single bundle | **OPEN — cosmetic**, resolve with D-8 |
+| **D-8** | [ROADMAP.md](../ROADMAP.md) §Knowledge Technology Gate | Named a pre-emptive stack — "candidates: Mem0 + Docling + Postgres/pgvector; Graphiti deferred; RAGFlow rejected" — predating B1–B6, in tension with the gate register's `UNSELECTED` table, and **partly contradicted by this investigation** | **RESOLVED — corrected in this PR** (§19.1) |
+| **D-9** | [STATUS.md](../STATUS.md) "Deliberately NOT done" | Lists "Knowledge tech install (Mem0/Graphiti/RAGFlow/pgvector/Docling)" as a single bundle | **OPEN — cosmetic follow-up.** It describes work not done, which remains true, and names no selection |
 | D-2 … D-7 | Various | Inherited from B5 §17.2 | **OPEN — unchanged**, not reopened here |
 
-None gates this phase.
+### 19.1 D-8 resolved in this PR
+
+**The first draft deferred this correction until the Gate closed. The Board required it now**, on the same principle B5 applied when it corrected an active ROADMAP contradiction before moving forward (B5 §17.2, D-1): leaving stale pre-emption on `main` during Phase 2 risks steering the next session toward assumptions this investigation has partly contradicted.
+
+**The old wording was not replaced with the new shortlist.** Doing so would substitute one pre-emption for another — presenting S1/S2/S3a as selected when they are candidates awaiting evidence. The replacement states **neutral current state only**: B1–B6 resolved, Gate open and in Phase 1, no technology selected, Phase-1 investigation and spike design underway, final selection requiring Product Architect disposition plus empirical evidence.
+
+This is the **only canonical-document change** in this PR, and it is made for the same reason B5's D-1 was: it removes an active contradiction rather than adding a new claim.
+
+Nothing else gates this phase.
 
 ---
 
@@ -996,42 +1166,68 @@ None gates this phase.
 |---|---|---|
 | **RK-1** | **R13 has no compliant mechanism** | The largest open item, inherited as B6 R13. If Family 1 fails, the budget becomes 2 + N and p95 is unreachable for multi-domain queries. **B6 §18A.3a already prescribes revising the budget, not the requirement** — so this is a performance risk, never a security one |
 | **RK-2** | **Protected metadata cannot be resolved cheaply without content** (B6 R2) | E4 confirms today's contracts cannot express it at all. If a schema making it cheap proves elusive, every retrieval pays a heavy pre-pass. **A genuine constraint on schema design**, measured by P1/P9 |
-| **RK-3** | **S3's H3 depends on index topology** | pgvector satisfies H3 only under partial indexing or list partitioning (§7.2). A later "convenient" global ANN index would silently reintroduce post-scan filtering. **If S3 is ever adopted, this needs an enforced invariant and a test, not a convention** |
+| **RK-3** | **ANN has no demonstrated authorization-equivalent topology** — revised after Board review | The first draft held that partial indexing and list partitioning satisfy H3. **Withdrawn**: those pre-narrow *static* dimensions, while Olin's authorization is dynamic within one partition, and B1 §10 states partition isolation alone is insufficient (§7.2). **S3b is therefore DEFERRED, not conditional.** If ANN is ever proposed, it needs a concrete topology argument, an enforced invariant and a test — not a convention. A later "convenient" global ANN index would silently reintroduce post-scan filtering |
+| **RK-11** | **The S2 full-text barrier may be awkward or impossible to express** — added after Board review | A global posting list may be walked before the authorization predicate (§7.1). If the barrier cannot be expressed such that `unauthorized_content_records_examined == 0`, **S2 is non-compliant rather than slow**, and lexical retrieval would need a different mechanism. Measured by §16.6.1, decided by evidence |
 | **RK-4** | **H7 restore freshness has no selected mechanism** | B4 C1 deliberately selected none; B5 PA-3 assigned the owner only. Unknown freshness failing closed means a restore could leave Knowledge unusable — operationally painful and correct. **Constrains design more than backend choice** |
 | **RK-5** | **R13 prior art does not exactly match Olin's composition** | RFC 8705 and RFC 9449 solve client-to-resource proof-of-possession; Olin's basis is Home-produced, orchestrator-presented, domain-consumed. **The spike must verify a basis minted for one domain cannot be presented to another** (§11.3) |
 | **RK-6** | **Spike stubs Home** | Measures architecture rather than live Home. Mitigated: E7 already measures Home with 30 live samples, F15 shows its own work is sub-millisecond, and the counters are exact rather than statistical (§16.2) |
-| **RK-7** | **Node capacity unverified** | The only repository figure predates the current Nuremberg topology (§9). **A current reading is a spike prerequisite.** Does not affect the architectural eliminations |
+| **RK-7** | **Node capacity unverified for eventual deployment** | The only repository figure predates the current Nuremberg topology (§9). A **read-only** current reading informs deployment feasibility. **It is no longer a spike prerequisite**, because the spike runs off that host (§16.2). Does not affect the architectural eliminations |
 | **RK-8** | **The multi-resource authorization protocol does not exist** (B6 R1) | E1 confirms `check_access_many` cannot express a plan. Every shape inherits this; the spike must stub it. **It is the largest implementation prerequisite B6 implies, and it sits at the Home boundary — not at the Knowledge backend** |
 | **RK-9** | **Corpus estimates could be wrong** | §4.1 estimates are estimates. Mitigated by C-large at ~1,000× the realistic case (§16.4) |
-| **RK-10** | **Premature extension to S2/S3** | The nested shortlist could be read as a plan to adopt all three. **It is not**: §13.3 states testable triggers, and absent one, extending adds obligations for no measured benefit |
+| **RK-10** | **Premature extension to S2/S3a** | The staged shortlist could be read as a plan to adopt everything. **It is not**: §13.3 states testable triggers, S3a and S3b are not built in the first spike, and absent a trigger, extending adds obligations for no measured benefit |
+| **RK-12** | **Running two S1 realizations doubles execution** — added after Board review | Benchmarking SQLite and PostgreSQL costs schema work once and execution twice. Mitigated by the §16.5 staged plan (both at C-small/C-medium, C-large only for survivors). **Accepted deliberately**: deciding between them on intuition is what the Board rejected |
 
 ---
 
 ## 21. Recommended next empirical task
 
-**Run the §16 spike**, subject to TG-PA-7 and a current Nuremberg capacity reading.
+**Run the §16 spike**, subject to TG-PA-7 — which the Board has held **PENDING this revision**, so the spike remains unimplemented.
 
 Proposed sequence, ordered so that a failure stops work early rather than late:
 
-1. **Capacity reading** on the intended host. Gate: sufficient headroom, or relocate/simulate.
-2. **Schema sketch** for S1 sufficient to express B1 partition binding, B3 exact versions and control revisions, B4 suppression register and derivation families, B2 conjunctive requirements and classification revisions, and B6 §15.2 bindings. **Synthetic and disposable** — not a production schema (the Gate forbids creating one).
-3. **Constraint compiler stub** — structured-predicate target only.
+1. **Provision the disposable isolated environment** — **not** the production Nuremberg host (§16.2). Separately, take a **read-only** Nuremberg capacity reading to inform eventual deployment feasibility; it does not gate the spike.
+2. **Schema sketch** for S1, expressed **once** and applied to both realizations, sufficient to express B1 partition binding, B3 exact versions and control revisions, B4 suppression register and derivation families, B2 conjunctive requirements and classification revisions, and B6 §15.2 bindings. **Synthetic and disposable** — not a production schema (the Gate forbids creating one).
+3. **Constraint compiler stub** — structured-predicate target, with the **authorized-set barrier made explicit and instrumentable** (§16.6.1).
 4. **Stubbed Home and domain owners** with injected latency calibrated to E7.
 5. **Generate C-small, C-medium, C-large** with the adversarial fixtures of §16.3.
-6. **Run P1–P12** warm and cold, collecting §16.6 measurements and counters.
-7. **Run the R13 Family 1 adversarial cases** (P12), including cross-domain and cross-channel presentation.
-8. **Extend to S2, then S3**, only if the S1 results warrant it — and record if they do not.
-9. **Report** per §16.8. **Tear down.**
+6. **Run P1–P13** on **both S1-SQLite and S1-PostgreSQL**, warm and cold, collecting §16.6 measurements, counters and §16.6.1 barrier instrumentation. Apply the §16.5 staged plan if C-large on both proves expensive.
+7. **Build the §11.4 primary R13 experiment** (application-layer holder-of-key) and run P12's ten assertions, including cross-domain, cross-actor and cross-request presentation. Add realization A only if incremental cost is small.
+8. **Extend to S2** on each realization to test the full-text barrier — and **report honestly if the barrier cannot be expressed**, since that is a finding rather than a failure of the spike.
+9. **Do not build S3a or S3b.** S3a's design is recorded for a later phase; S3b awaits a topology proposal.
+10. **Report** per §16.8. **Tear down.**
 
-**Do I recommend authorizing it? Yes** — with the caveat that step 8 should be genuinely conditional. Seven of the eight measurement-requiring questions in §15 cannot be resolved any other way, and the two most consequential (R13, R14) are explicit B6 obligations on this Gate. The spike is cheap: synthetic data, stubbed peers, no production contact, disposable.
+**Do I recommend authorizing it? Yes** — with steps 8 and 9 genuinely conditional, and step 1 firmly off production. Seven of the eight measurement-requiring questions in §15 cannot be resolved any other way, and the two most consequential (R13, R14) are explicit B6 obligations on this Gate. The spike is cheap: synthetic data, stubbed peers, no production contact, disposable.
 
 The most valuable outcome is not a latency table. It is **evidence about whether the accepted B6 security properties survive contact with a real backend** — because those properties are currently proven only on paper, and every one of them is a property the architecture depends on absolutely.
 
 ---
 
-## 22. Verification and change boundary
+## 22. Architecture Board corrections and how each was addressed
 
-This change adds **one new file** and updates the Technology Gate register's status to record Phase 1 in investigation. **No accepted decision is amended. No canonical architecture document, ADR, contract, service, app, schema, deployment or production system is touched.** No technology is selected, no benchmark is implemented, no runtime is authorized.
+The Board accepted the general Phase-1 direction and required twelve corrections before TG-PA-1 … TG-PA-7 can close. All twelve are incorporated.
+
+| # | Board requirement | Change made |
+|---|---|---|
+| **1** | **Correct Graphiti.** `group_id` exists and partitions data; `add_triplet` writes directly, bypassing extraction. Remove categorical claims; classify as NOT SHORTLISTED rather than architecturally impossible | §7.4 rewritten with both facts sourced and the two wrong claims explicitly withdrawn. Disposition changed from ELIMINATED to **NOT SHORTLISTED FOR FIRST VERTICAL**. The durable finding — its autonomous path is unsuitable as canonical lifecycle authority — is preserved and sharpened |
+| **2** | **Correct Mem0 H1 reasoning and citation.** A caller-facing `user_id` is not by itself an irreparable H1 failure; re-check the issue number | §7.3 rewritten: **H1 is now CONDITIONAL and external to Mem0**, with the decisive conflicts moved to H4/H5/H6/B4 §10/B5. **Citation corrected from [#7316](https://github.com/mem0ai/mem0/issues/7316) to [#3245](https://github.com/mem0ai/mem0/issues/3245)**, which quotes `_delete_memory` writing `prev_value` to history with `is_deleted=1`. The correction is stated openly rather than silently swapped |
+| **3** | **Correct RAGFlow.** It supports more than one metadata backend | §7.5 rewritten: `DB_TYPE` selects pooled MySQL **or PostgreSQL** backends. The "own MySQL store" claim is withdrawn. **Conclusion unchanged, because it never depended on the SQL engine.** Derived-index use relocated to the deferred S4 class |
+| **4** | **Fix S2 full-text classification.** A global text index may discover postings for unauthorized rows before relational filtering; SQL result semantics do not prove candidate ordering | §7.1 adds the ordering analysis and the requirement; **S2 reclassified `CONDITIONAL — BENCHMARK REQUIRED` on H3** while retaining its H6 pass; §6 and §8.1–8.2 updated; **§16.6.1 added** so the spike observes the barrier |
+| **5** | **Split vector search into exact vs ANN.** Static partitioning cannot express dynamic intra-partition authorization | §7.2's partial-index conclusion **withdrawn**; §14 splits **S3a** (exact distance over the authorized ID set, retained) from **S3b** (ANN, **DEFERRED** pending a proven topology); matrix, RK-3 and shortlist terminology updated; ANN removed from the first spike |
+| **6** | **Keep SQLite and PostgreSQL as two S1 realizations** | §8.3's "benchmark PostgreSQL only" recommendation **withdrawn**; §14 lists **S1-SQLite and S1-PostgreSQL**; §16.5 runs P1–P13 on both with a staged C-large plan; **P13 added** to measure the real discriminator — cleanup contention against interactive work |
+| **7** | **Make the execution barrier observable** | **§16.6.1 added**: five counters, four assertions, backend-appropriate instrumentation, and an explicit statement that inferring the barrier from returned results is not acceptable |
+| **8** | **Specify the R13 experiment, not production** | **§11.4 added**: two realizations compared, **application-layer holder-of-key selected as PRIMARY** with reasons, channel-bound as optional secondary, and **ten explicit P12 assertions** |
+| **9** | **Spike must not run on the production Nuremberg host by default** | §16.2 rewritten to separate **eventual placement** (TG-PA-4: Nuremberg) from **spike environment** (disposable, isolated, off production). Capacity reading becomes a **read-only deployment-feasibility observation**, no longer a spike prerequisite; RK-7 updated |
+| **10** | **Resolve ROADMAP D-8 now** | [ROADMAP.md](../ROADMAP.md) corrected in this PR (§19.1). **Neutral current state only** — not the new shortlist presented as selected. D-9 remains cosmetic follow-up |
+| **11** | **Reclassify hard-eliminated vs not-shortlisted vs deferred** | §13.1 restructured into the three categories with the distinction stated explicitly, and applied consistently across §7, §8.1, §14 and §15 |
+| **12** | **Record dispositions** | §18 rewritten to carry the Board's dispositions verbatim against the revised content each now covers |
+
+**No correction reversed the investigation's direction**, and none required B1–B6 to reopen. Three made the findings **weaker and more accurate** (Graphiti, Mem0 H1, RAGFlow), two made them **stronger** (S2 and ANN are less compliant than the first draft claimed), and one **enlarged the spike** (both S1 realizations). The net effect is that fewer conclusions now rest on argument and more rest on evidence still to be gathered.
+
+---
+
+## 23. Verification and change boundary
+
+This change adds **one new file**, updates the Technology Gate register's status to record Phase 1 in investigation, and **corrects one canonical document** ([ROADMAP.md](../ROADMAP.md), D-8 — §19.1), on the same basis B5 corrected D-1: removing an active contradiction rather than adding a new claim. **No accepted decision is amended. No ADR, contract, service, app, schema, deployment or production system is touched.** No technology is selected, no benchmark is implemented, no runtime is authorized.
 
 ```json
 {
@@ -1048,28 +1244,42 @@ This change adds **one new file** and updates the Technology Gate register's sta
   "b6": "RESOLVED",
   "knowledge_technology_gate": "OPEN — IN INVESTIGATION / PHASE 1",
   "phase": 1,
+  "revision": "architecture_board_phase1_review_incorporated",
+  "board_corrections_required": 12,
+  "board_corrections_incorporated": 12,
   "internet_research_available": true,
-  "external_sources_consulted": 12,
+  "external_sources_consulted": 20,
   "candidates_investigated": 9,
-  "eliminated_without_benchmark": ["Mem0 (as canonical owner)", "Graphiti", "RAGFlow", "graph database for first vertical", "R13 Family 3 co-location"],
-  "deferred_not_eliminated": ["dedicated search/vector engine (S4)", "Docling", "Mem0 as extraction helper"],
-  "shortlist": ["S1 relational structured", "S2 + native full-text", "S3 + constrained pgvector"],
+  "factual_characterizations_corrected": ["Graphiti group_id and add_triplet", "Mem0 H1 reasoning", "RAGFlow metadata backend"],
+  "source_citation_corrected": "mem0 deletion retention: issue #7316 -> issue #3245",
+  "hard_eliminated": ["Mem0 as canonical owner", "RAGFlow as canonical owner", "R13 Family 3 co-location"],
+  "not_shortlisted_first_vertical": ["Graphiti", "graph database directly"],
+  "deferred_re_enterable": ["S3a exact vector", "S3b ANN", "S4 dedicated search engine", "Docling", "Mem0 as extraction helper"],
+  "spike_candidates": ["S1-SQLite", "S1-PostgreSQL", "S2 full-text CONDITIONAL"],
   "canonical_vs_retrieval_recommendation": "one transactional owner; no separate retrieval materialization initially; compile-to-constraints seam preserved",
-  "topology_recommendation": "Nuremberg (EU), Home unchanged in Ashburn",
+  "topology_recommendation_eventual_deployment": "Nuremberg (EU), Home unchanged in Ashburn",
+  "spike_environment": "disposable isolated environment, OFF the production Nuremberg host",
   "r13_recommended_family": "Family 1 — channel-bound / holder-of-key; Family 2 declared fallback",
+  "r13_primary_experimental_realization": "application-layer holder-of-key proof; channel-bound optional secondary",
+  "r13_p12_assertions": 10,
   "vectors_needed_first_vertical": false,
+  "ann_compliant_via_static_partitioning": false,
   "graph_needed_first_vertical": false,
   "dedicated_search_engine_needed_first_vertical": false,
-  "benchmark_scenarios_designed": 12,
+  "benchmark_scenarios_designed": 13,
   "corpus_sizes_designed": 3,
+  "barrier_instrumentation_required": true,
   "benchmark_implemented": false,
   "technology_selected": false,
   "retrieval_technology_selected": false,
   "placement_selected": false,
   "r13_mechanism_selected": false,
-  "pa_decisions_requested": ["TG-PA-1", "TG-PA-2", "TG-PA-3", "TG-PA-4", "TG-PA-5", "TG-PA-6", "TG-PA-7"],
+  "pa_dispositions_recorded": ["TG-PA-1 ACCEPT WITH CORRECTIONS", "TG-PA-2 MODIFIED", "TG-PA-3 ACCEPT", "TG-PA-4 ACCEPT WITH BENCHMARK-ENVIRONMENT CLARIFICATION", "TG-PA-5 ACCEPT WITH SPIKE-REALIZATION DETAIL REQUIRED", "TG-PA-6 ACCEPT WITH MODIFICATIONS", "TG-PA-7 PENDING THIS REVISION"],
   "accepted_decisions_amended": false,
+  "b1_b6_reopened": false,
   "new_contradiction_found": false,
+  "canonical_docs_changed": ["docs/architecture/ROADMAP.md"],
+  "d8_roadmap_preemption_resolved": true,
   "contracts_or_schemas_changed": false,
   "knowledge_runtime_implemented": false,
   "migration_performed": false,
@@ -1086,7 +1296,7 @@ git diff --name-only origin/main...HEAD
 git status --short --branch
 ```
 
-Expected changed paths: `docs/architecture/proposals/KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md` (new) and `docs/architecture/proposals/KNOWLEDGE_TECHNOLOGY_GATE.md` (status only).
+Expected changed paths: `docs/architecture/proposals/KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md` (new), `docs/architecture/proposals/KNOWLEDGE_TECHNOLOGY_GATE.md` (status only) and `docs/architecture/ROADMAP.md` (D-8 only).
 
 Reproduce the baseline test check without writing cache files:
 
@@ -1113,9 +1323,18 @@ All accessed 2026-09-22. Upstream documentation and source, **not** verified pro
 - [pgvector 0.8.0 release announcement](https://www.postgresql.org/about/news/pgvector-080-released-2952)
 - [Mem0 — repository](https://github.com/mem0ai/mem0)
 - [Mem0 — delete memory operation](https://docs.mem0.ai/core-concepts/memory-operations/delete)
-- [Mem0 — issue #7316, history/vector-store reconciliation](https://github.com/mem0ai/mem0/issues/7316)
+- **[Mem0 — issue #3245, deletion writes `prev_value` to history with `is_deleted=1`](https://github.com/mem0ai/mem0/issues/3245)** — the corrected primary source for the deletion-retention finding
+- [Mem0 — issue #7316, history/vector-store reconciliation](https://github.com/mem0ai/mem0/issues/7316) — retained as context for the *reconciliation* finding only; **it does not support the deletion-retention claim** and no longer carries it
 - [Graphiti — repository](https://github.com/getzep/graphiti)
+- **[Graphiti — adding fact triples (`add_triplet`, `group_id`)](https://help.getzep.com/graphiti/graphiti/adding-fact-triples)**
+- [Graphiti — issue #1876, `group_id` write/read database resolution](https://github.com/getzep/graphiti/issues/1876)
+- [Graphiti — issue #1193, extraction LLM cost and custom extraction](https://github.com/getzep/graphiti/issues/1193)
 - [RAGFlow — repository](https://github.com/infiniflow/ragflow)
+- [RAGFlow — configuration reference](https://ragflow.io/docs/configurations)
+- **[RAGFlow — issue #10687, PostgreSQL metadata backend](https://github.com/infiniflow/ragflow/issues/10687)**
+- [RAGFlow — issue #2356, PostgreSQL support request](https://github.com/infiniflow/ragflow/issues/2356)
+- [RAGFlow — issue #5860, Postgres instead of MySQL](https://github.com/infiniflow/ragflow/issues/5860)
+- [RAGFlow — issue #19983, additional PG-compatible metadata backend](https://github.com/infiniflow/ragflow/issues/19983)
 - [RFC 8705 — OAuth 2.0 Mutual-TLS Client Authentication and Certificate-Bound Access Tokens](https://www.rfc-editor.org/info/rfc8705/)
 - [RFC 9449 — OAuth 2.0 Demonstrating Proof of Possession (DPoP)](https://www.rfc-editor.org/rfc/rfc9449.html)
 
