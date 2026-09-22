@@ -57,8 +57,8 @@ export const CoverageCard: React.FC<CoverageCardProps> = ({ coverage, variant = 
           {isPartial && isDetailed && !isNoData && (
             <div style={{ fontSize: '0.8rem', color: 'var(--olin-warning)', marginTop: '0.25rem', maxWidth: '300px' }}>
               {coverage.knownIntake < coverage.targetAmount
-                ? "Known intake is below today&apos;s configured target, but some nutrient data is missing."
-                : "Known intake meets or exceeds today&apos;s configured target. Some nutrient data is still missing, so actual intake may be higher."}
+                ? "Known intake is below today's configured target, but some nutrient data is missing."
+                : "Known intake meets or exceeds today's configured target. Some nutrient data is still missing, so actual intake may be higher."}
             </div>
           )}
         </div>

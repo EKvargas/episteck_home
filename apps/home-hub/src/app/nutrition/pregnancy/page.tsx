@@ -15,12 +15,12 @@ export default function PregnancyNutritionPage() {
 
   if (activeContext.id !== 'PSN-ana') {
     return (
-      <div className={styles.page}>
+      <div className={styles.pageContainer}>
         <header className={styles.header}>
-          <div className={styles.headerTop}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2>Pregnancy Nutrition</h2>
-            <div className={styles.headerActions}>
-              <Link href="/nutrition" className={styles.backLink}>
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <Link href="/nutrition" style={{ textDecoration: 'none', color: 'var(--olin-accent)' }}>
                 ← Back to Nutrition
               </Link>
             </div>
