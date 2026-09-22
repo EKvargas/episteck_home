@@ -8,61 +8,74 @@
 The Olin ecosystem currently operates with a robust, trusted backend foundation:
 - **Home Control Plane (Frappe)** owns identity, consent, and relationships.
 - **Home BFF** (on the EU node) handles OAuth login, holds session tokens server-side, and mints short-lived delegations via loopback.
-- **Domain Services (Nutrition, Mealie)** enforce authorization independently by resolving delegations against the Control Plane.
+- **svc-nutrition** is the protected domain boundary for Nutrition. It enforces authorization independently by resolving delegations against the Control Plane. **Mealie** is a provider/integration operating underneath the `svc-nutrition` boundary, not an independent authorization enforcer.
 
 Currently, the Next.js **Home Hub** presentation layer is disconnected from this backend. It uses client-side mock data and a visual-only `activeContext` state that mimics authorization.
 
-## 2. Proposed UI Integration Topology
-The final Home Hub path utilizes Next.js Server capabilities (Server Components and Server Actions) as the presentation BFF. The browser must never directly hold API delegations or contact domain services.
+## 2. Proposed UI Integration Topology & Deployment Gap
+The target topology utilizes Next.js Server capabilities (Server Components and Server Actions) as the presentation BFF. The browser must never directly hold API delegations or contact domain services.
 
-```text
-Browser
-  │ (HttpOnly Session Cookie)
-  ▼
-Next.js Server (Home Hub)
-  │ (Reads Cookie, requests delegation)
-  ▼
-Home BFF (internal POST /delegation)
-  │ (Returns X-Episteck-Delegation token)
-  ▼
-Next.js Server (Home Hub)
-  │ (Calls domain API with Delegation + Subject ID)
-  ▼
-svc-nutrition (Domain Service)
-  │ (Independently verifies Delegation with Home Control Plane)
-  ▼
-(Returns Domain Data) -> Next.js Server -> Browser (React UI)
-```
+**CRITICAL GAP - Cookie & Origin Topology:**
+The current Home BFF session cookie (`episteck_home_session`) is strictly host-only (no Domain attribute). A cookie created by `bff.home.episteck.com` will NOT be automatically available to a Next.js application hosted on a different subdomain. Furthermore, widening the cookie domain to `.episteck.com` is rejected as a security risk.
 
-## 3. Trust-Boundary Diagram
+**Topology Options:**
+* **Option A (Recommended):** Home Hub is co-located and served under the **SAME public origin** as the BFF using reverse-proxy path separation (e.g., `/api/bff/...` vs `/...` for UI). This is the smallest topology that preserves current security properties.
+* **Option B:** A dedicated Home Hub origin with an explicitly designed same-origin auth proxy/callback architecture.
+
+## 3. Trust-Boundary & Architecture Diagram
+Next.js acting as a presentation BFF implies it becomes a **new trusted runtime**.
+The current `/delegation` endpoint on `home-bff` is strictly internal, loopback-only, and returns 404 publicly. Next.js cannot call this endpoint unless it is placed inside the trusted local runtime boundary (or another approved private transport is created).
+Furthermore, the current internal mint path via Unix socket is bound to a fixed `RUNTIME_ID` (`home-agent-primary`) and cannot simply be reused for independent browser sessions.
+
 ```mermaid
 flowchart TD
   Browser["Browser (React UI)"]
-  NextJS["Next.js Server (BFF)"]
-  HomeBFF["Home BFF (:9933)"]
-  ControlPlane["Home Control Plane (Frappe)"]
-  Nutrition["svc-nutrition (:9930)"]
+  
+  subgraph PublicBoundary["Public Origin"]
+    NextJS["[PROPOSED] Next.js Server<br/>(Presentation BFF)"]
+    HomeBFF["[EXISTING] Home BFF<br/>(OAuth Client)"]
+  end
+  
+  subgraph TrustedLocal["Nuremberg Loopback / Trusted Network"]
+    MintSeam["[MISSING TRUST SEAM]<br/>Home Hub Mint Endpoint"]
+    InternalDelegation["[EXISTING] POST /delegation<br/>(Blocked Publicly)"]
+    Nutrition["[EXISTING] svc-nutrition"]
+  end
+  
+  ControlPlane["[EXISTING] Home Control Plane<br/>(Ashburn)"]
 
-  Browser -- "1. HttpOnly Cookie" --> NextJS
-  NextJS -- "2. POST /delegation (Cookie)" --> HomeBFF
-  HomeBFF -- "3. X-Episteck-Delegation" --> NextJS
-  NextJS -- "4. GET /daily (Delegation + Subject)" --> Nutrition
-  Nutrition -- "5. verify session" --> ControlPlane
-  ControlPlane -- "6. allow/deny" --> Nutrition
-  Nutrition -- "7. domain data" --> NextJS
-  NextJS -- "8. UI Data Envelope" --> Browser
+  Browser -- "1. HttpOnly Cookie" --> PublicBoundary
+  NextJS -- "2. Validates Session" --> HomeBFF
+  NextJS -. "3. Requests Delegation (Needs Seam)" .-> MintSeam
+  MintSeam -. "4. X-Episteck-Delegation" .-> NextJS
+  NextJS -- "5. GET /gap-v2 (Delegation + Subject)" --> Nutrition
+  Nutrition -- "6. Verify Session & Policy" --> ControlPlane
+  ControlPlane -- "7. allow/deny" --> Nutrition
+  Nutrition -- "8. Domain Data" --> NextJS
+  NextJS -- "9. UI Data Envelope" --> Browser
 
   style Browser fill:#f9f,stroke:#333
-  style NextJS fill:#bbf,stroke:#333
-  style ControlPlane fill:#fcc,stroke:#333
+  style NextJS stroke-dasharray: 5 5,fill:#bbf,stroke:#333
+  style MintSeam stroke-dasharray: 5 5,fill:#fcc,stroke:#333
 ```
 
+### Properties of the Future Home Hub Trusted-Runtime Boundary:
+- Server-only execution.
+- Never exposes the delegation to the browser.
+- Strictly bound to the correct authenticated browser session.
+- Uses private transport.
+- Operates with least privilege.
+- Contains no model-controlled credential path.
+- Contains no public mint endpoint.
+- Has an auditable service identity.
+- Credentials/tokens are never logged.
+
+*Decision pending Product Architect disposition: Whether existing loopback `/delegation` can be safely reused after explicit co-location/hardening, or if a dedicated Home-Hub mint seam is required.*
+
 ## 4. Session / Viewer Lifecycle
-The browser session model is strictly presentation metadata.
 - **Login Initiation:** Browser hits Next.js, finds no session, redirects to `home-bff` `/login`.
-- **Callback:** `home-bff` handles PKCE, creates server-side session, sets HttpOnly `episteck_session` cookie, and redirects to Next.js.
-- **Viewer Resolution:** Next.js Server calls `home-bff` `/whoami` to populate initial context (Identity, Roles).
-- **Session Expiry:** If Next.js receives a 401/403 from `home-bff`, it triggers a redirect to `/login`.
+- **Callback & Redirect Gap:** `home-bff` `/callback` currently completes PKCE and returns JSON. **GAP:** A post-login UI handoff/redirect is required to return the user to the Home Hub. Any return target must be strictly allow-listed.
+- **Session Expiry:** A 401 triggers a redirect to `/login`.
 - **Frontend State:**
   ```typescript
   interface Viewer {
@@ -70,95 +83,104 @@ The browser session model is strictly presentation metadata.
     name: string;
   }
   ```
-**Crucial Rule:** The frontend NEVER stores bearer tokens, machine credentials, or PKCE verifiers.
 
 ## 5. Context-Selection Model
-The current `PERSONAL | FAMILY | CARE` selector evolves into a **Resource Scope Selector**.
-- The browser selects a context (e.g., Ana views Erick's dashboard).
-- This selection merely sets the `subject_person_id` in API requests.
-- **The browser never asserts identity or authorization.** The `X-Episteck-Delegation` token provides the trusted `actor_person_id`.
-- **Partial Denial:** If Ana's context is visible but her Health domain is denied, the UI must NOT globally hide Ana. Instead, the Health tab renders an `AUTHORIZATION_DENIED` state while Nutrition renders normally.
+`activeContext` is a **Discriminated Resource Scope**. Context is NOT always a Person (e.g., `CIR-fam`).
 
-## 6. Frontend Layer Architecture
-A reusable frontend structure to prevent domain-logic leaks:
-- `src/integration/session/`: Reads cookies, interfaces with `home-bff` for validation and delegations.
-- `src/integration/home/`: Adapters for fetching `whoami` and context relationships.
-- `src/integration/nutrition/`: Adapters strictly mapping `svc-nutrition` responses to UI envelopes.
-- `src/integration/state/`: Standard envelope models and error normalization.
+```typescript
+type ResourceScope = 
+  | { type: 'PERSON'; personId: string }
+  | { type: 'CIRCLE'; circleId: string };
+```
+- **Rule:** `Person != Circle`. Circle membership != authorization.
+- The UI context selection nominates a RESOURCE SCOPE only. Each domain adapter decides which canonical identifier its API accepts.
+- If a resource scope is visible but a specific domain is denied, the UI renders `ACCESS_DENIED` for that domain tab without hiding the context entirely.
+
+## 6. Viewer / Context Bootstrap Gap
+`home-bff` `/whoami` returns trusted actor/principal information, but **it does not provide the complete UI bootstrap** (display Person, Circles, Care Relationships, available contexts).
+While the Control Plane has APIs for this (`get_person`, `list_my_circles`, `get_care_dashboard`), **the Home Hub does not yet have an approved trusted path to consume them**. This is a real integration gap that must be addressed before the UI can render dynamic navigation.
+
+## 7. Frontend Layer Architecture
+- `src/integration/session/`: Reads cookies, interfaces with backend for validation.
+- `src/integration/home/`: Adapters for viewer and context relationships (once the bootstrap gap is closed).
+- `src/integration/nutrition/`: Adapters mapping `svc-nutrition` to UI envelopes.
+- `src/integration/state/`: Standard envelope models and error taxonomy.
 - `src/components/providers/`: React Contexts exposing `Viewer` and `activeContext`.
 
-## 7. Standard Data-State Model
-To prevent ambiguous empty states, the UI envelope separates distinct dimensions:
+## 8. Standard Data-State Envelope
+The generic envelope focuses strictly on delivery, authorization, freshness, environment, provenance, and safe error codes. Domain-specific attributes (like data quality) belong inside the domain payload.
 
 ```typescript
 interface DataEnvelope<T> {
-  // Transport & Delivery
-  status: 'LOADING' | 'READY' | 'ERROR' | 'UNAVAILABLE';
-  
-  // Security
+  delivery: 'LOADING' | 'READY' | 'ERROR';
   authorization: 'GRANTED' | 'DENIED' | 'INDETERMINATE';
-  
-  // Domain Quality & Freshness
-  quality: 'MEASURED' | 'ESTIMATED' | 'UNKNOWN';
   freshness: 'FRESH' | 'STALE' | 'UNKNOWN';
-  
-  // Environment 
   environment: 'MOCK' | 'LIVE';
   
   updatedAt?: string;
-  source?: string; // e.g. "USDA", "Mealie"
-  error?: string;
-  data?: T;
+  sourceSummary?: string; 
+  errorCode?: SafeUIErrorCode;
+  data?: T; // e.g., NutritionData may contain { quality: 'ESTIMATED' }
 }
 ```
+**Mandatory Rule:** `UNKNOWN != ZERO`.
 
-## 8. Error / Auth UX Model
-Normalized frontend behavior:
-- **401 / Session Expired:** Silent seamless redirect to `/login`.
-- **403 / Denied:** Render a distinct "Access Restricted" boundary. **Never** infer `DENIED == EMPTY`.
-- **404 / Indeterminate:** Render "Data Unavailable".
-- **Network Offline:** Render "Offline - Showing stale data" if cached, else Offline boundary.
-- **UNKNOWN:** Explicitly render as "?", never as "0". `UNKNOWN != ZERO` is mandatory.
+## 9. Error / Authorization UX Taxonomy
+Normalized UI errors must use safe INTERNAL CODES. Never leak upstream error messages or assume HTTP 404 means the same thing across APIs.
 
-## 9. Mock → Live Migration Strategy
-- Introduce an adapter pattern: `NutritionMockAdapter` and `NutritionLiveAdapter` adhering to the same TypeScript contract.
-- A server-side environment variable (`USE_MOCK_DATA=true`) selects the adapter. Mock/live switching is a development concern only and never a runtime security branch.
-- **Visual Distinction:** When `environment === 'MOCK'`, the root layout will inject a subtle "MOCK DATA" watermark/badge in the header, ensuring reviewers can differentiate without breaking the polished aesthetic.
+```typescript
+type SafeUIErrorCode = 
+  | 'SESSION_REQUIRED'
+  | 'SESSION_INVALID'
+  | 'ACCESS_DENIED'
+  | 'RESOURCE_NOT_AVAILABLE'
+  | 'NOT_CONFIGURED'
+  | 'SERVICE_UNAVAILABLE'
+  | 'OFFLINE'
+  | 'INVALID_RESPONSE';
+```
+- **401 (BFF):** Maps to `SESSION_REQUIRED` / `SESSION_INVALID` -> Seamless redirect to `/login`.
+- **403 (Nutrition):** Maps to `ACCESS_DENIED` -> Render distinct "Access Restricted" boundary.
+- **404 (Nutrition Profile):** Maps to `NOT_CONFIGURED` -> Prompt to create profile.
 
-## 10. Caching Rules
-- **Viewer Metadata & Context List:** Cacheable briefly (e.g., 5 mins) keyed by session.
-- **Domain Data:** Cacheable (e.g., 1 min), but MUST be strictly keyed by `(actor_id, subject_id, domain)`.
-- **Authorization Decisions:** **NEVER CACHE.** Every request must be evaluated by the Control Plane per G1.6 strict rules.
-- **Denied Responses:** May be cached briefly on the frontend to prevent server hammering.
+## 10. Mock → Live Config Safety
+- Provide `MockAdapter` and `LiveAdapter` implementations.
+- Configuration must **fail closed**: Require an explicit environment data mode. Production deployments must strictly reject `MOCK` mode at startup.
+- There must be NO per-request or browser-controlled mock/live switches.
 
-## 11. Privacy / Logging Rules
-- **URLs:** Sensitive Person IDs must not appear in URLs unnecessarily (e.g., prefer `/nutrition` leveraging internal session context over `/nutrition/PSN-123`).
+## 11. Caching Rules (Fail Safe)
+Premature caching undermines revocation semantics.
+- **PERSON-SENSITIVE SERVER DATA:** `no-store` / no cross-request application cache.
+- **AUTHORIZATION DECISIONS:** NEVER CACHED.
+- **DENIALS:** NEVER CACHED as an authorization decision.
+- **SESSION ENDPOINTS:** `no-store`.
+- **Mock / Static Visual Data:** May be cached normally.
+- Request-local memoization is acceptable ONLY when it cannot survive the request or act as authority.
+
+## 12. Nutrition Gap Analysis & Proving Example
+**EXISTING API CAN SUPPORT:**
+- `GET /gap-v2/{person_id}/{date}`: Already produces per-nutrient target, consumed, remaining, percentage, and status (`KNOWN`/`UNKNOWN`). This fully supports basic micronutrient coverage (Pregnancy UI).
+- `GET /mealplan/{start}/{end}`: Supports planned meals.
+
+**UI MAPPER NEEDED:**
+- Mapping `gap-v2` payload into the specific React Component props for the Pregnancy Nutrition cards.
+
+**BACKEND ENDPOINT / DOMAIN CAPABILITY MISSING:**
+- Nutrient-data completeness semantics.
+- Food contributors / Supplement vs. Food contribution semantics.
+- Explicit supplement logging workflows.
+- 7-day / 30-day rolling averages and historical trend aggregation.
+- Richer provenance per contribution.
+
+## 13. Privacy / Logging Rules
+- **URLs:** Sensitive Person IDs must not appear in URLs unnecessarily.
 - **Telemetry:** Must strip all Person IDs, clinical data, and credentials.
-- **Next.js Server Logs:** Log exception classes only, never exception messages that might echo payloads (e.g., log `TokenExchangeError` rather than the raw HTTP response). No tokens in logs.
+- **Next.js Logs:** Log exception classes only (e.g., `TokenExchangeError`), never exception messages that might echo payloads. No tokens in logs.
 
-## 12. Nutrition Proving Example (TASK 2 Prep)
-Testing the integration foundation with Nutrition (synthetic data only):
-- **Trace:** Browser (Next.js client) -> Next.js Server Action -> `home-bff` (mint delegation) -> `svc-nutrition` -> Map to DataEnvelope -> UI.
-
-### 13. Existing APIs Reusable As-Is
-- `GET /daily/{person_id}/{date}`: Provides daily macros.
-- `GET /mealplan/{start}/{end}?subject_person_id={person_id}`: Provides planned meals.
-- `GET /profile/{person_id}`: Provides configuration and targets (including pregnancy targets).
-- `POST /delegation` (Home BFF): Provides the required transport delegation.
-
-### 14. Missing APIs / Gaps
-- **Micronutrient Read Model:** `svc-nutrition` needs explicit rollups for micronutrient coverage (e.g., Iron, Folate % toward target).
-- **Rolling Averages:** No endpoint currently supplies 7-day or 30-day historical trend aggregation.
-
-## 15. Recommended Implementation Sequence
-- **F1 — Integration Foundation:** Build `DataEnvelope`, error normalization, and standard UI boundaries.
-- **F2 — Session / Viewer Adapter:** Implement the Next.js server-side connection to `home-bff` `/session` and `/whoami`.
-- **F3 — Context Provider Migration:** Replace the mock `AppProvider` with the real Server-Side Viewer context.
-- **F4 — Nutrition Synthetic Adapter:** Implement the `LiveNutritionAdapter` connecting to `svc-nutrition` using synthetic test records.
-- **F5 — Incremental UI Migration:** Switch Today and Nutrition screens to the Live Adapter.
-
-## 16. Explicit Non-Goals
-- DO NOT implement production integration (Ana/Erick real health data).
-- DO NOT modify backend security semantics (`home-bff` and `check_access` remain authoritative).
-- DO NOT create new authentication mechanisms (reuse the existing Home BFF OAuth flow).
-- DO NOT implement caching for authorization decisions.
+## 14. Recommended Implementation Sequence
+* **F0 — Home Hub Runtime / Origin / Trust Seam Decision:** (Requires Product Architect disposition on deployment origin and delegation minting seam).
+* **F1 — Frontend Contracts:** Safe state/error model and `DataEnvelope` definitions.
+* **F2 — Session / Viewer Bootstrap:** Resolve the UI bootstrap gap and implement Next.js server-side validation.
+* **F3 — Context Migration:** Migrate `activeContext` to the `Person/Circle` resource-context model.
+* **F4 — Nutrition Read-Only Synthetic Adapter:** Implement live-service integration using synthetic records.
+* **F5 — Incremental UI Migration:** Migrate Today/Nutrition screens to the new foundation (No production real-person data).
