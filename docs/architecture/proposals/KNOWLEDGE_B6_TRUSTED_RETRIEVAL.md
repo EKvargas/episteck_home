@@ -6,6 +6,8 @@ Date: 2026-09-22
 
 Revision: 2026-09-22 — Architecture Board review incorporated. Core architecture accepted in direction (**authorization-constrained retrieval planning + suppression/lifecycle before candidacy + mandatory pre-disclosure revalidation**); PA-1 … PA-9 dispositions recorded in section 23; required corrections 1–4 incorporated per section 23.1.
 
+Revision: 2026-09-22 — **performance and latency architecture added as section 18A**, with PA-10 and sub-items PA-10a … PA-10e in section 23. PA-1 … PA-9 and all existing section numbers are unchanged; 18A was inserted rather than renumbering to preserve traceability. The analysis changed no security control and did not change the core recommendation (section 18A.16).
+
 Repository: `EKvargas/episteck_home`
 
 Main baseline: `33df3d08467013e3fd6a55de1d8c6732115e7411`, verified current `origin/main` after [PR #28](https://github.com/EKvargas/episteck_home/pull/28) merged and made accepted B5 authoritative on `main`. This equals the commit named in the investigation request; `main` has not moved.
@@ -729,6 +731,319 @@ sequenceDiagram
 
 The retained ordering — authorization before retrieval, fresh revalidation immediately before the model — is correct and is the heart of the protocol.
 
+**On the number of Home interactions.** The `opt` blocks above are *conditional*, not part of every request. §18A.4 establishes that an ordinary read targets **two** Home round trips — the initial authorization operation and the final revalidation — with additional operations appearing only when the request genuinely needs them. Performance analysis, latency budget and the round-trip invariant are in §18A.
+
+---
+
+## 18A. Performance and latency architecture
+
+This section was added after Board review to answer a specific question: **can the accepted security architecture support interactive chat, and what invariants prevent security layers from becoming serial latency?** It preserves every B1–B5 guarantee. Nothing here trades security for speed; where the two appeared to conflict, the resolution was to remove *unnecessary round trips*, never to remove checks.
+
+### 18A.1 Measured baseline from the repository
+
+All figures below are **measured evidence already recorded in the repository**, not estimates. This matters because the performance case rests on them.
+
+| Path | Median | p95 | Source |
+|---|---:|---:|---|
+| Nuremberg → `home.episteck.com`, **new TLS connection per request** | 307.48 ms | 311.56 ms | [G1.5 §6](../G1_5_VALIDATION.md) |
+| Home `check_access` from svc-nutrition, **persistent client** | 111.57 ms | 119.88 ms | [G1.5 §6](../G1_5_VALIDATION.md) |
+| Cross-person Nutrition profile request | 114.55 ms | 121.60 ms | [G1.5 §6](../G1_5_VALIDATION.md) |
+| Hermes → gateway → Home `whoami` (post-G1.6 cutover) | 130.79 ms | 133.94 ms | [G1.6 §Rollback and latency](../G1_6_VALIDATION.md) |
+| Hermes → gateway → Nutrition profile (post-G1.6 cutover) | 131.23 ms | 139.06 ms | [G1.6 §Rollback and latency](../G1_6_VALIDATION.md) |
+
+Three findings shape everything that follows:
+
+- **F15 — the ~120 ms is network, not Home.** G1.6 §7 records that adding delegation verification — HMAC plus JSON plus one indexed session lookup, no network, no authorization cache — cost "well under a millisecond against a ~120 ms network-bound baseline." **The cross-Atlantic hop dominates; Home's own work is close to free.** Optimizing Home's logic would therefore buy almost nothing; *reducing the number of crossings* is the only lever that matters.
+- **F16 — connection reuse is worth ~195 ms per call and is already in place.** A fresh TLS connection costs ~307 ms; the deployed persistent client costs ~111 ms. Both the Nutrition and Home MCP clients construct a long-lived `httpx.Client`, and the gateway uses HTTP/1.1 upstream keepalive. Any future component on this path inherits an obligation to reuse connections; a design that opens a new connection per authorization would roughly triple the dominant cost.
+- **F17 — the cross-Atlantic hop is permanent for this deployment.** G1.6 §7 states it plainly: Stage G1.7 was withdrawn and the Control Plane stays in Ashburn. The latency model must therefore be *designed around* a ~120 ms Home round trip rather than assume it will improve.
+
+**F18 — existing timeout budgets.** The Home clients use a 3 s timeout (`HOME_API_TIMEOUT_SECONDS`, default 3); the gateway mint sub-request uses 3 s connect/read/send; MCP upstreams allow 300 s for model-bearing responses. These are the outer bounds a future design inherits, and they are far looser than the targets proposed below — a 3 s ceiling is a failure boundary, not a performance goal.
+
+### 18A.2 Logical security layers are not network hops
+
+> **B6 performance principle: logical security layers ≠ network round trips.**
+
+This is the single most important performance invariant, because the naive reading of B6 — authorization, then suppression, then lifecycle, then classification, then applicability, then lineage — suggests six sequential remote checks. It does not, and must not.
+
+| Predicate | Owner | Evaluated where |
+|---|---|---|
+| Partition binding | Knowledge owner (records Home's resolved result, §7.1) | **Within the Knowledge owner**, alongside everything else it owns |
+| Suppression | Knowledge owner | Same boundary |
+| Lifecycle / control revision | Knowledge owner | Same boundary |
+| Classification revision | Knowledge owner | Same boundary |
+| Applicability window | Knowledge owner, against the trusted clock | Same boundary |
+| Lineage / derivation binding | Knowledge owner | Same boundary |
+| **Authorization** | **Home** | **The only predicate that necessarily crosses to another owner** |
+
+B5 placed assertion versions, lifecycle/control revision, lineage, suppression and the restore-freshness authority under **one** transactional owner precisely so they commit atomically. That same co-location makes them evaluable **together, in one pass, inside one boundary**. The ownership decision that B5 made for correctness turns out to be exactly the decision that makes B6 fast.
+
+So the requirement is: **wherever ownership permits, compose predicates within the owning boundary and into the retrieval plan — never as a chain of remote calls.** Only authorization is genuinely a different owner, and §18A.4 bounds how often it is consulted.
+
+### 18A.3 The ordinary read hot path
+
+Modelling "What foods does Ana dislike?", "What are my current nutrition preferences?", "How is my weight progressing against my stated goal?"
+
+| # | Stage | Local / remote | Sequential? | Concurrent? | Optional? | Dominates? |
+|---|---|---|---|---|---|---|
+| 1 | Trusted envelope: actor, partition, clock; resolve nominations in-partition | Local | Yes | — | No | No |
+| 2 | **Initial authorization operation** | **Remote → Home** | Yes — everything depends on it | — | No | **Yes (~120 ms)** |
+| 3 | Protected metadata + suppression + lifecycle + classification + applicability | Local to Knowledge owner | Yes | Composed in one pass (§18A.2) | No | No |
+| 4 | Constrained Knowledge execution | Local to Knowledge owner | Yes | — | No | Depends on backend |
+| 5 | Domain reads (per owner) | Remote per domain | **No — after prerequisites** | **Yes, by default** (§18A.6) | Often | Only if serialized |
+| 6 | Ranking / selection within the authorized set | Local | Yes | — | No | No |
+| 7 | Source expansion | Remote | — | — | **Yes — lazy** (§18A.7) | Only when invoked |
+| 8 | **Final revalidation** | **Remote → Home** | Yes — must be last | — | No | **Yes (~120 ms)** |
+| 9 | ContextBundle construction | Local | Yes | — | No | No |
+| 10 | LLM request / TTFT | Remote | Yes | — | No | **Yes — but measured separately** (§18A.12) |
+
+```mermaid
+flowchart LR
+  subgraph N["Normal path — target ≤ 2 Home round trips"]
+    E["1 envelope<br/>local"] --> A1["2 INITIAL AUTH<br/>~120 ms · Ashburn"]
+    A1 --> P["3-4 eligibility + retrieval<br/>ONE pass, one boundary"]
+    P --> DOM{"5 domain reads<br/>CONCURRENT"}
+    DOM --> R["6 rank/select<br/>local"]
+    R --> A2["8 REVALIDATION<br/>~120 ms · Ashburn"]
+    A2 --> CB["9 bundle<br/>local"] --> M["10 LLM TTFT<br/>measured separately"]
+  end
+  subgraph D["Deep path — exceptional"]
+    R -. "7 lazy, only if needed" .-> SX["source expansion<br/>+1 auth operation"]
+    SX -.-> A2
+  end
+  classDef hot fill:#fce8e6,stroke:#d93025;
+  classDef loc fill:#e6f4ea,stroke:#16a765;
+  class A1,A2 hot;
+  class E,P,R,CB loc;
+```
+
+**Estimated pre-LLM orchestration budget** — engineering estimates, explicitly *not* measurements, except the two Home figures which are measured:
+
+| Component | Estimate | Basis |
+|---|---:|---|
+| Initial authorization | ~120 ms | **Measured** (F15) |
+| Eligibility + Knowledge retrieval | ~10–50 ms | Estimate; one local pass, small personal corpus, no network |
+| Domain reads, concurrent | ~120–140 ms | **Measured** per-call (G1.6); concurrent, so ≈ slowest, not sum |
+| Ranking / selection | ~5–20 ms | Estimate; bounded candidate set |
+| Final revalidation | ~120 ms | **Measured** (F15) |
+| Bundle construction | ~5–15 ms | Estimate; local assembly |
+| **Total pre-LLM, Knowledge + one domain** | **~280–370 ms** | Two Home crossings dominate |
+
+Two Home round trips account for ~240 ms of that — roughly 70–85% of orchestration. **This is the architecture's latency shape: it is network-bound on two unavoidable crossings, not compute-bound on security logic.**
+
+### 18A.4 Round-trip budget — proposed invariant
+
+> **An ordinary read SHOULD require no more than two Home authorization round trips: one bounded initial authorization operation, and one bounded pre-disclosure revalidation.**
+
+**Accept as an architectural invariant**, with exceptions named explicitly:
+
+| Path | Home round trips | Why |
+|---|---:|---|
+| Ordinary read (Knowledge ± concurrent domains) | **2** | The target |
+| Explicitly requested source expansion | 3 | Expansion is a separate operation discovered after selection (§8.5) |
+| History / review / dispute use | 2–3 | A different use class; may need its own operation |
+| Writes and mutations | ≥ 2 | B3 §11.8 commit barrier is separate work, outside this read budget |
+| Unusual multi-step workflows | Bounded, declared | Must be explicit, never emergent |
+
+**Why two, and not one.** One is impossible without weakening the model: B3 §11.8 requires an enforceable fence against revocation, and §11.1 requires revalidation to be a *fresh evaluation against current grants*, not a TTL check. Collapsing to one round trip would mean either no revalidation or a cached-authority revalidation — both forbidden.
+
+**Why two, and not more.** Each extra crossing costs ~120 ms (F15). Three round trips push an ordinary read past 400 ms of orchestration before the model is even invoked. The budget exists to make additional crossings a **deliberate, visible decision** rather than something that accumulates.
+
+**Reconciling with §18's sequence.** That diagram shows up to four Home interactions because it includes two `opt` blocks. On the ordinary path both are skipped: domain reads are authorized within the initial operation where their requirements are known up front, and source expansion does not occur. A domain read whose requirements *cannot* be known until after candidate selection is the exception that justifies a third crossing — and it should be recognised as leaving the ordinary budget.
+
+### 18A.5 Forbidden: authorization per candidate
+
+> **FORBIDDEN: one authorization decision per candidate, per chunk, per version, or per row.**
+
+```text
+candidate 1 → Home auth      ← FORBIDDEN
+candidate 2 → Home auth
+candidate 3 → Home auth
+```
+
+This is simultaneously a **security** and a **performance** anti-pattern, and it fails on four independent grounds:
+
+1. **Security.** Authorization must constrain the candidate space *before* retrieval (B1 §10, invariant 1). Per-candidate authorization implies candidates were already materialized to be asked about — retrieve-then-filter wearing different clothes.
+2. **Delegation semantics.** Delegations are single-use with atomic replay claiming (F3). N candidate checks cannot obtain N delegations within one operation; the second would be replay-denied. The pattern is not merely slow — it is **unimplementable** without weakening replay protection, which B1 §5.1 forbids.
+3. **Cross-region cost.** At ~120 ms per crossing (F15), 20 candidates would cost ~2.4 s of pure authorization latency.
+4. **Scalability.** Latency would grow linearly with corpus size, so the system would get slower precisely as it becomes more useful.
+
+The same reasoning applies at the disclosure barrier: **revalidation operates once over the selected set** (§11.4), not per item. A future per-item revalidation would require an explicitly approved use case and its own latency justification.
+
+### 18A.6 Concurrency — independent domain reads
+
+> **After authorization prerequisites are satisfied, independent domain reads SHOULD execute concurrently by default.**
+
+```text
+FORBIDDEN (serial):   Knowledge → wait → Nutrition → wait → Device → wait   ≈ sum
+REQUIRED (parallel):  Knowledge ∥ Nutrition ∥ Device                        ≈ slowest
+```
+
+**What genuinely cannot be parallelized**, and why:
+
+| Dependency | Reason |
+|---|---|
+| Initial authorization **before** everything | Nothing may be addressed before the decision exists (invariant 1) |
+| Eligibility **before** retrieval | Suppression and lifecycle precede candidacy (invariants 2, 3) |
+| Selection **before** source expansion | Expansion targets are unknown until candidates are selected |
+| Ranking **after** all inputs that feed it | Ranking over a partial set produces a different answer |
+| Revalidation **after** selection, **before** disclosure | It is the last gate by definition (§11) |
+| A domain read whose *input* is another read's output | True data dependency — rare on the ordinary path |
+
+Everything else is parallelizable. In particular, Knowledge retrieval and independent domain reads have no ordering relationship once authorization is settled. **Concurrency is the difference between a 3-domain query costing ~140 ms and ~420 ms of domain time.**
+
+### 18A.7 Lazy source expansion
+
+> **Source expansion is a deep path and SHOULD be lazy. Ordinary chat does not automatically fetch original documents, transcripts, long Episodes or external provider payloads.**
+
+Expansion occurs only when: the user explicitly asks for evidence; a contradiction or review path requires it; an evidence threshold demands it; or the answer is inherently about a source.
+
+**This is security-positive, not a trade-off.** B1 §8.4 and B2 §9 already establish that permission to use an assertion is *not* permission to open its sources, and that each expansion is separately authorized. Lazy expansion means the system does not routinely request authorization for sources it does not need — reducing both latency and the number of authorization decisions made about sensitive originals. §12.2 already requires each bundle item to carry provenance and citation references, so ordinary answers can cite without expanding.
+
+Checked against B1–B5: consistent with all five. No accepted decision requires eager expansion; several discourage it.
+
+### 18A.8 Proposed performance targets
+
+Four categories, deliberately distinguished:
+
+| Category | Meaning | Status |
+|---|---|---|
+| **Measured baseline** | Recorded in the repository today | Fact (§18A.1) |
+| **Architecture target** | What the design must be capable of | Proposed here |
+| **Product UX target** | What the experience should feel like | Product decision, not B6's |
+| **Technology benchmark** | What a candidate must demonstrate | Gate criterion (§18A.10) |
+
+**Ordinary read, pre-LLM orchestration:**
+
+| Metric | Proposed target | Assessment against evidence |
+|---|---:|---|
+| p50 | **≤ 300 ms** | Realistic. Estimated ~280–370 ms for Knowledge + one domain; two Home crossings are ~240 ms of it |
+| p95 | **≤ 500 ms** | Realistic but **not generous**. Two measured p95 crossings alone are ~240–270 ms, leaving ~230–260 ms for everything else |
+| p99 | **≤ 800 ms** | Proposed addition. p99 is where connection re-establishment (F16, ~307 ms) and retries appear; without a p99 target those costs stay invisible |
+
+I propose the suggested p50 of "250–300 ms" be recorded as **≤ 300 ms** rather than 250 ms. On the measured evidence, 250 ms leaves ~10 ms for all non-Home work at p50, which is not achievable once a domain read is involved. **300 ms is honest; 250 ms would be a target the architecture cannot meet on this topology.**
+
+**Time to first token:** p50 < 1.5 s, p95 < 2.5 s — accepted as reasonable, contingent on orchestration hitting the above and on model TTFT being measured separately (§18A.12).
+
+**Deep path** (expansion, history, multi-domain review): 1–2 s orchestration is acceptable. A third Home crossing plus source fetches makes sub-500 ms unrealistic, and this path is user-initiated, so a visible pause is acceptable.
+
+**These are not SLAs.** They are architecture targets for the Technology Gate to test against, revisable on measured evidence.
+
+### 18A.9 Performance scenarios
+
+Future benchmark specifications. **No benchmark is implemented by this proposal.**
+
+| # | Scenario | Home RTs | Concurrent | Expansion | Posture | Expected dominant cost |
+|---|---|---:|---|---|---|---|
+| **P1** | Knowledge only, single Person | 2 | — | No | Fail closed on any denial | Two Home crossings (~240 ms) ≈ 80–90% of orchestration |
+| **P2** | Knowledge + Nutrition | 2 | Knowledge ∥ Nutrition | No | Fail closed | Two Home crossings; domain read overlaps Knowledge work |
+| **P3** | Knowledge + 3 independent domains | 2 | All 4 in parallel | No | Fail closed; optional domains may degrade (P8) | Two Home crossings + **slowest** domain, not the sum |
+| **P4** | Base retrieval + source expansion | **3** | Base reads parallel; expansion after selection | Yes | Expansion denial ≠ base failure (§14) | Third crossing + source fetch; deep-path budget applies |
+| **P5** | Denied request | **1** | None | No | **Fail closed** — no candidates, no scores, no counts | Single crossing; should be the *fastest* path |
+| **P6** | Suppressed record still in index/cache | 2 | Normal | No | **Fail closed** — not addressable | Register consultation inside the owner boundary; no extra crossing (§18A.2) |
+| **P7** | Authorization/lifecycle changes after selection | 2 | Normal | No | **Fail closed** at the barrier | Revalidation crossing detects the change — the round trip earning its cost |
+| **P8** | Optional domain slow or unavailable | 2 | Yes, with per-domain timeout | No | **Explicit bounded/degraded result**, never silently smaller (§17) | Timeout budget, not the domain itself |
+
+**P5 deserves attention:** a denied request should be the *fastest* outcome, not the slowest. If a denial is slower than an allow, the timing itself becomes an oracle — a side channel that would undermine §17's anti-oracle rule. **Denial-path timing should not be distinguishable in a way that reveals whether data exists.**
+
+### 18A.10 Technology Gate benchmark requirement
+
+Before approving any Knowledge technology or runtime, measure **p50, p95 and p99** for each stage:
+
+initial authorization · protected-metadata/eligibility evaluation · Knowledge retrieval · concurrent domain reads · ranking/selection · final revalidation · ContextBundle construction · **total pre-LLM orchestration** · model TTFT · **total time to first token**
+
+Conditions:
+
+- **Warm and cold-ish paths both.** Cold matters because of F16: a re-established connection costs ~195 ms more.
+- **Realistic cross-node topology.** Localhost benchmarks are misleading when ~120 ms of the budget is a cross-Atlantic hop (F15, F17). A localhost measurement would understate orchestration by roughly 240 ms.
+- **Scenarios P1–P8**, so scaling and failure behaviour are measured, not assumed.
+- **Orchestration and TTFT reported separately** (§18A.12).
+
+### 18A.11 Technology disqualification criteria
+
+A candidate is **rejected** if it requires any of the following on the normal chat path. Each is both a performance and a correctness failure:
+
+| Disqualifier | Correctness basis | Performance basis |
+|---|---|---|
+| Authorization per candidate | B1 §10 retrieve-then-filter | Linear in corpus; unimplementable under single-use delegation |
+| Serial authorization per domain where one bounded decision suffices | — | ~120 ms per avoidable crossing |
+| Global retrieval then filtering | **B1 §10 forbids explicitly** | Wasted retrieval over unauthorized space |
+| Suppression enforced only after retrieval | B4 §8 | Suppressed data already fetched |
+| Full index rebuild to make suppression effective | B4 §4 — correctness must not depend on cleanup | Rebuild latency becomes exposure window |
+| Source expansion on every query | B1 §8.4, B2 §9 | Deep-path cost on the ordinary path |
+| Sequential independent domain reads | — | Sum instead of max (§18A.6) |
+| Per-item disclosure revalidation | §11.4 | N × 120 ms |
+| Index/cache unable to test freshness/bindings efficiently | §15.2 | Either unsafe or unusably slow |
+| Excessive cross-region round trips from the retrieval engine | B1 §5.2 partition binding | Multiplies the dominant cost |
+
+### 18A.12 Separating orchestration from inference
+
+> **Olin orchestration latency and LLM inference latency MUST be measured and reported independently.**
+
+Without this separation, a 2 s TTFT hides whether orchestration took 300 ms or 1.5 s, and platform regressions become invisible behind model variance. Three consequences:
+
+- Orchestration is what B6 governs and what the Technology Gate tests.
+- TTFT is a model and routing concern, relevant to the future LLM Routing & Cost Gate.
+- Both are reported; neither is allowed to mask the other.
+
+### 18A.13 Scaling with the number of domains
+
+**Desired shape: adding independent domains increases total work but not critical-path latency, because concurrent reads cost the slowest rather than the sum.**
+
+| Domains | Serial (rejected) | Concurrent (required) | Critical path |
+|---|---:|---:|---|
+| 1 | ~130 ms | ~130 ms | Two Home crossings dominate |
+| 3 | ~390 ms | **~140 ms** | Slowest domain |
+| 5 | ~650 ms | **~150 ms** | Slowest domain |
+
+Under concurrency, orchestration stays roughly flat as domains are added; under serialization it grows linearly and the architecture stops being interactive at around four or five domains.
+
+Required supporting mechanisms:
+
+- **Bounded fan-out.** Concurrency is bounded, not unlimited — B6 invariant 9 already requires bounds decided before execution.
+- **Slowest-domain effect.** Critical path equals the slowest *required* domain, which is why per-domain timeouts matter more than average latency.
+- **Timeout budget.** Per-domain timeouts must be well inside the orchestration target; the existing 3 s client timeout (F18) is a failure boundary, far too loose to protect a 500 ms p95.
+- **Optional vs required context.** Optional domains may degrade (P8); required domains cannot, and their failure denies the operation.
+- **Degraded semantics.** Always explicit, never a silently smaller result (§17).
+- **Context budget.** More domains also means more tokens; bounds apply to context size, not only latency.
+
+### 18A.14 Enterprise-reuse observation
+
+The performance invariants are policy-neutral and generalize on the same terms as §21 — **an observation, not an Enterprise design.** The shape
+
+> one authorization planning operation → parallel Knowledge + live business/domain reads → one final revalidation → model
+
+holds regardless of whether the policy authority is Home or a future adapter. Enterprise deployments would likely find the network profile *easier*, since authority and data are more often co-located than Olin's deliberate cross-Atlantic split (F17). No Enterprise architecture is designed here.
+
+### 18A.15 Assessment of the ten proposed invariants
+
+| # | Invariant | Disposition | Rationale |
+|---|---|---|---|
+| 1 | No authorization per candidate | **ACCEPT** | Security and performance failure on four grounds (§18A.5) |
+| 2 | Ordinary reads ≤ 2 Home round trips | **ACCEPT** | With exceptions named (§18A.4); two is the floor given B3 §11.8 |
+| 3 | Independent domain reads concurrent by default | **ACCEPT** | The difference between flat and linear scaling (§18A.13) |
+| 4 | Predicates composed within owner boundaries | **ACCEPT** | B5's co-location decision makes this natural (§18A.2) |
+| 5 | Source expansion lazy/conditional | **ACCEPT** | Security-positive as well as faster (§18A.7) |
+| 6 | Revalidation once per disclosure boundary | **ACCEPT** | Already §11.4; restated as a performance invariant |
+| 7 | Bounds decided before execution | **ACCEPT** | Already invariant 9; mid-flight truncation can hide denials |
+| 8 | p50/p95/p99 measured before technology approval | **ACCEPT** | With cold-path and realistic-topology conditions (§18A.10) |
+| 9 | Pre-LLM ordinary-read p95 ≤ 500 ms | **ACCEPT** | Realistic but not generous; ~240–270 ms is Home alone |
+| 10 | TTFT measured separately | **ACCEPT** | Prevents inference masking orchestration (§18A.12) |
+
+**Additions proposed:** a **p99 ≤ 800 ms** target (§18A.8), since p99 is where connection re-establishment appears; and **denial-path timing should not be a side channel** (§18A.9, P5).
+
+**Modification proposed:** p50 recorded as **≤ 300 ms** rather than 250–300 ms, because 250 ms is not achievable on the measured topology once a domain read is involved.
+
+### 18A.16 Does performance analysis change the B6 recommendation?
+
+**No.** The security architecture is viable for interactive chat, and the analysis strengthened rather than weakened it:
+
+- The dominant cost is **network crossings, not security logic** (F15). Security predicates are essentially free; it is geography that is expensive.
+- **B5's single-owner decision is what makes B6 fast.** Co-locating versions, lifecycle, lineage and suppression for transactional correctness also makes them evaluable in one local pass.
+- **The bounded-decision protocol (§8) was already the fast design.** The shape B1's single-use delegation forced is also the shape that minimizes crossings.
+- **No security control had to be relaxed.** Every latency improvement came from removing unnecessary round trips or adding concurrency.
+
+**Residual risk.** The p95 ≤ 500 ms target has roughly 230–260 ms of headroom after two measured Home crossings. That is workable but not comfortable, and it is the number most likely to need revision on measured evidence. If a future deployment adds a third mandatory crossing, the target becomes unreachable without changing the topology — which G1.7's withdrawal (F17) makes a deliberate constraint rather than an oversight.
+
 ---
 
 ## 19. Acceptance scenarios
@@ -810,6 +1125,10 @@ No Enterprise profile is designed, proposed or approved here.
 | R6 | **Abstention granularity can leak by shape** | The bounded-partial mechanism that created this risk is **withdrawn** (Correction 1), which removes its sharpest form. The residual risk is narrower: a per-operation abstention in a multi-operation turn ("Knowledge abstained, Nutrition answered") still reveals that a Knowledge question was asked and refused. Wording must not enumerate what was excluded, and must not distinguish denial from absence where that distinction leaks (§17) |
 | R7 | **Abstention classes can become an oracle** | §17 corrects for this, but the distinction between "not allowed" and "does not exist" must be enforced in wording, not just intent. Requires acceptance testing |
 | R8 | **No Knowledge runtime exists to validate against** | F10: this is greenfield. Every scenario in §19 is a conceptual expectation, not a verified behaviour. Acceptance must not be read as evidence of enforcement |
+| R9 | **The p95 ≤ 500 ms target has thin headroom** | Two measured Home crossings consume ~240–270 ms at p95, leaving ~230–260 ms for eligibility, retrieval, concurrent domain reads, ranking and assembly. Workable but not comfortable. This is the number most likely to need revision on measured evidence, and a third mandatory crossing would make it unreachable on this topology (§18A.8) |
+| R10 | **Cross-Atlantic hop is permanent and dominates** | F15/F17: ~120 ms per Home crossing is network, not Home's work, and G1.7's withdrawal makes it a deliberate constraint. No amount of Home-side optimization helps; only reducing crossings does. A future commercial deployment with co-located authority would see materially different numbers |
+| R11 | **Concurrency is required, not optional** | §18A.13: serial domain reads grow linearly and stop being interactive at roughly four or five domains. If a future implementation serializes for simplicity, the architecture silently stops meeting its targets as Olin grows |
+| R12 | **Denial-path timing as a side channel** | §18A.9 P5: if a denial is measurably slower than an allow, timing reveals whether data exists, undermining §17's anti-oracle rule. Requires acceptance testing, not just intent |
 
 ### 22.1 Inconsistencies found in current docs
 
@@ -840,6 +1159,17 @@ Four required corrections were issued and are incorporated; §23.1 maps each to 
 | **PA-7** | Bounds | **ACCEPT** — architectural bounds with concrete values deferred | §17 |
 | **PA-8** | Abstention model | **ACCEPT** cites-or-abstains with the anti-oracle and confidence-is-not-authority corrections | §17, §20.B |
 | **PA-9** | Backend neutrality | **ACCEPT** — no semantic/vector/hybrid retrieval assumption | §20.E |
+| **PA-10** | **Performance and latency architecture** *(added after the performance review; PA-1 … PA-9 are unchanged)*. Accept the §18A latency model, the ten performance invariants as assessed in §18A.15, the round-trip budget, the concurrency requirement, lazy source expansion, the proposed targets, the benchmark requirement and the disqualification criteria? | **NOT DECIDED — proposed** | §18A |
+
+**PA-10 sub-items requiring explicit disposition:**
+
+| Sub-item | Proposal |
+|---|---|
+| **PA-10a** — Round-trip budget | Adopt "ordinary reads ≤ 2 Home authorization round trips" as an invariant, with source expansion, history/review, writes and declared multi-step workflows as named exceptions (§18A.4) |
+| **PA-10b** — p50 target | Record **≤ 300 ms**, not 250–300 ms. On measured evidence, 250 ms leaves ~10 ms for all non-Home work once a domain read is involved (§18A.8) |
+| **PA-10c** — p99 target | **Add p99 ≤ 800 ms.** Not in the original set; p99 is where connection re-establishment (~307 ms cold vs ~111 ms warm) and retries surface (§18A.8) |
+| **PA-10d** — Denial timing | Accept that **denial-path timing must not become a side channel**. A denial that is measurably slower than an allow reveals existence, undermining §17's anti-oracle rule (§18A.9, P5) |
+| **PA-10e** — Benchmark conditions | Accept that benchmarks must include a cold-ish path and realistic cross-node topology; localhost-only measurement would understate orchestration by roughly 240 ms (§18A.10) |
 
 ### 23.1 Required corrections and how each was addressed
 
@@ -874,7 +1204,8 @@ B6 is resolved when the Product Architect has:
 10. Accepted the restore-freshness enforcement (§16) and the failure/abstention model (§17).
 11. Accepted the end-to-end sequence (§18), including the three ordering corrections and the delegation-budget explanation showing single-use semantics are unchanged.
 12. Accepted scenarios 1–20 plus 19b (§19) as future acceptance specifications, explicitly not as evidence of implemented enforcement.
-13. Confirmed that **B1–B5 remain RESOLVED and unamended**, that the **Knowledge Technology Gate remains OPEN**, and that no technology, runtime, schema, placement, migration or deployment is approved.
+13. Recorded a disposition on **PA-10** and its sub-items, accepting the §18A performance architecture: the latency model, the ten invariants assessed in §18A.15, the round-trip budget, the concurrency requirement, lazy source expansion, the targets, the benchmark requirement (§18A.10) and the disqualification criteria (§18A.11).
+14. Confirmed that **B1–B5 remain RESOLVED and unamended**, that the **Knowledge Technology Gate remains OPEN**, and that no technology, runtime, schema, placement, migration or deployment is approved.
 
 All criteria are satisfied by this document as corrected, subject to the Board's final merge review. Acceptance of B6 supplies no runtime approval and no technology selection. It closes the last architecture blocker before the Technology Gate may run.
 
@@ -901,8 +1232,16 @@ This change adds this proposal and updates the B6 entry and status references in
   "b3": "RESOLVED",
   "b4": "RESOLVED",
   "b5": "RESOLVED",
-  "b6": "PROPOSED — DISPOSITIONS RECORDED, AWAITING FINAL MERGE REVIEW",
+  "b6": "PROPOSED — DISPOSITIONS RECORDED, PA-10 PERFORMANCE PENDING, AWAITING FINAL MERGE REVIEW",
   "required_corrections_incorporated": 4,
+  "performance_section_added": "18A",
+  "performance_invariants_assessed": 10,
+  "performance_invariants_accepted": 10,
+  "performance_additions_proposed": ["p99 <= 800 ms", "denial-path timing is not a side channel"],
+  "performance_modification_proposed": "p50 recorded as <= 300 ms rather than 250-300 ms",
+  "core_recommendation_changed_by_performance_analysis": false,
+  "security_control_relaxed_for_latency": false,
+  "benchmark_implemented": false,
   "retrieval_model_changed_by_review": false,
   "new_contradiction_found": false,
   "bounded_partial_retrieval": "WITHDRAWN — conflicted with B1 section 10",
@@ -926,7 +1265,7 @@ git diff --name-only origin/main...HEAD
 git status --short --branch
 ```
 
-Expected changed paths: `docs/architecture/proposals/KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md` and `docs/architecture/proposals/KNOWLEDGE_TECHNOLOGY_GATE.md`.
+Expected changed paths: `docs/architecture/proposals/KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md` and `docs/architecture/proposals/KNOWLEDGE_TECHNOLOGY_GATE.md`. The performance analysis in §18A cites measured figures already recorded in `G1_5_VALIDATION.md` and `G1_6_VALIDATION.md`; **neither validation document is modified**, and no benchmark is implemented.
 
 Reproduce the baseline test check without writing cache files:
 

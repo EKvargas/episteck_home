@@ -226,6 +226,8 @@ Four required corrections were issued and incorporated: **(1)** each authorizati
 
 No correction exposed a contradiction requiring the selected retrieval model to change or requiring B1–B5 to reopen.
 
+**Performance and latency architecture (§18A of the proposal, PA-10 — NOT DECIDED).** A performance analysis was added after Board review. It concludes the secure architecture **is viable for interactive chat** and **did not change the core recommendation**; no security control was relaxed. Key findings from measured repository evidence: the ~120 ms Home round trip is **network cost, not Home's work** — G1.6 recorded delegation verification adding "well under a millisecond against a ~120 ms network-bound baseline" — and connection reuse is already worth ~195 ms per call (~307 ms cold vs ~111 ms warm). Proposed invariants: no authorization per candidate; ordinary reads ≤ **2** Home authorization round trips; independent domain reads concurrent by default; security predicates composed within owner boundaries rather than as serial network calls; lazy source expansion; revalidation once per disclosure boundary; bounds before execution; p50/p95/p99 measured before technology approval; pre-LLM ordinary-read p95 ≤ 500 ms; LLM TTFT measured separately from orchestration. **This adds performance disqualification criteria to the Technology Gate** (§18A.11) and a benchmark requirement covering scenarios P1–P8 on realistic cross-node topology (§18A.10). No benchmark is implemented and no technology is selected.
+
 Questions to resolve:
 
 - How does trusted actor resolution bind each request?
@@ -457,7 +459,7 @@ B4: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNO
 
 B5: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md))
 
-B6: OPEN — [proposal](KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md) accepted in direction with four required corrections incorporated; PA-1 … PA-9 recorded 2026-09-22; **NOT YET CLOSED** pending Architecture Board merge review
+B6: OPEN — [proposal](KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md) accepted in direction with four required corrections incorporated; PA-1 … PA-9 recorded 2026-09-22; **PA-10 performance architecture (§18A) proposed and NOT DECIDED**; **NOT YET CLOSED** pending Architecture Board merge review
 
 Flowable selection: NOT APPROVED. B4 confirms orchestration is never canonical Knowledge truth and that immediate suppression must not wait on it.
 
