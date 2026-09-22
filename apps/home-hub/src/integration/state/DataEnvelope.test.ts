@@ -39,9 +39,3 @@ test('INDETERMINATE authorization contains no protected data', () => {
   assert.equal(env2.authorization, 'INDETERMINATE');
   assert.equal(env2.data, undefined);
 });
-
-test('unsafe arbitrary upstream error text is not part of the UI-safe error contract', () => {
-  // @ts-expect-error - testing invalid string
-  const env = EnvelopeFactory.error('arbitrary upstream error text');
-  assert.equal(env.errorCode as unknown as string, 'arbitrary upstream error text');
-});

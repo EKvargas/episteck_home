@@ -4,8 +4,8 @@ export interface Viewer {
 }
 
 export interface CareRelationship {
-  subjectId: string;
-  relation: string;
+  subjectPersonId: string;
+  relationshipType: string;
 }
 
 export interface BootstrapContext {
