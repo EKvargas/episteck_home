@@ -106,51 +106,81 @@ def test_p4_five_independent_domains_scaling(loaded_backend):
     assert fanout_ms < 25.0, f"fan-out took {fanout_ms}ms; expected concurrency"
 
 
+def _assert_p0_has_reachable_predecessor(backend, corpus):
+    """Seed-robustness precondition (correction 3, not the assertion under test): P5's
+    3-crossing claim only holds if the query's surviving candidates actually reference a
+    reachable SUPERSEDED predecessor. Assert that the backend's own
+    `resolve_source_expansion` surfaces at least one predecessor for the exact base query
+    the test runs -- so a future corpus/seed change produces a self-explaining failure
+    ('no reachable predecessor for p0') rather than a silent pass at 2 crossings that would
+    make the source-expansion feature look untested."""
+    p0 = corpus.persons[0]
+    planned = backend.plan_metadata(
+        partition_id=corpus.partitions[0], subject_person_ids=(p0,), domains=DOMAINS, as_of=AS_OF
+    )
+    suppressed = backend.suppressed_version_ids(corpus.partitions[0])
+    surviving = tuple(sorted(v for v in planned.candidate_version_ids if v not in suppressed))
+    expansion = backend.resolve_source_expansion(
+        partition_id=corpus.partitions[0], surviving_version_ids=surviving
+    )
+    assert expansion, (
+        "corpus precondition broken: base query for p0 surfaces no surviving candidate "
+        "whose replaces_version_id points to a reachable SUPERSEDED predecessor, so source "
+        "expansion cannot be exercised (C-small seed=42 is expected to contain such a chain)"
+    )
+    return expansion
+
+
 def test_p5_source_expansion_is_lazy_and_separate(loaded_backend):
-    """P5: source expansion. Expected: 3 crossings (one extra for the expansion operation);
-    source_expansion_count == 1; 0 on P1-P4 (checked in those tests directly)."""
+    """P5: source expansion is a genuinely lazy, separately-authorized step.
+
+    Two properties, both asserted through the SAME `run_knowledge_query` code path P1-P4
+    use, differing only by the `expand_sources` flag:
+
+      (a) LAZY: with `expand_sources=False` (the default P1-P4 take), no derivation
+          reference is followed, no extra Home crossing is spent, and
+          `source_expansion_count == 0`.
+      (b) SEPARATE + INDEPENDENTLY AUTHORIZED: with `expand_sources=True`, the orchestrator
+          follows the surviving candidates' `replaces_version_id` references to their
+          SUPERSEDED predecessors and authorizes disclosing THAT provenance content as an
+          INDEPENDENT operation -- one additional RT#1-shaped crossing -- so a full P5 flow
+          is base-RT#1 -> expansion-RT#1 -> RT#2 = exactly 3 crossings, with
+          `source_expansion_count == 1`. This replaces the prior hand-waved "run the query
+          three times against a shared counter" proxy (which the old docstring itself
+          admitted could not express an RT#2-only step); the flag makes it one real flow.
+    """
     backend, corpus = loaded_backend
-    home = HomeStub(grants=_full_grants(corpus))
     p0 = corpus.persons[0]
 
-    # Baseline (no expansion requested) -- source_expansion_count must be 0.
-    result = run_knowledge_query(
+    # Precondition: the C-small seed=42 corpus actually contains a reachable predecessor for
+    # p0 (self-explaining failure if a future seed change removes it).
+    _assert_p0_has_reachable_predecessor(backend, corpus)
+
+    # (a) LAZY: expansion off -> no extra crossing, count stays 0. Same 2-crossing shape as
+    # P1-P4, confirming P1-P4 (which never pass expand_sources) also report 0.
+    home = HomeStub(grants=_full_grants(corpus))
+    base = run_knowledge_query(
         backend=backend, home=home, partition_id=corpus.partitions[0], actor_person_id=p0,
         subject_person_ids=(p0,), domains=DOMAINS, as_of=AS_OF,
     )
-    assert result.source_expansion_count == 0, "expansion must stay lazy unless explicitly requested"
+    assert not base.denied, base.deny_reason
+    assert base.source_expansion_count == 0, "expansion must stay lazy unless explicitly requested"
+    assert base.home_auth_round_trip_count == 2, "P1-P4 shape: RT#1 + RT#2, no expansion crossing"
 
-    # Explicit source expansion: one coherent P5 flow is
-    #   RT#1 (base query) -> RT#1-shaped crossing for the independent expansion operation
-    #   -> RT#2 (final revalidation) = 3 crossings total, counted on ONE HomeStub instance
-    # across the whole flow (not summed across three separately-counted calls).
-    home.reset_counters()
-    base_result = run_knowledge_query(
-        backend=backend, home=home, partition_id=corpus.partitions[0], actor_person_id=p0,
-        subject_person_ids=(p0,), domains=DOMAINS, as_of=AS_OF, revalidate=False,
+    # (b) SEPARATE: expansion on -> exactly one extra RT#1-shaped crossing, on ONE HomeStub
+    # across ONE coherent flow (not summed across separately-counted calls).
+    home_x = HomeStub(grants=_full_grants(corpus))
+    expanded = run_knowledge_query(
+        backend=backend, home=home_x, partition_id=corpus.partitions[0], actor_person_id=p0,
+        subject_person_ids=(p0,), domains=DOMAINS, as_of=AS_OF, expand_sources=True,
     )
-    assert base_result.home_auth_round_trip_count == 1  # RT#1 only so far
-
-    expansion_op_result = run_knowledge_query(
-        backend=backend, home=home, partition_id=corpus.partitions[0], actor_person_id=p0,
-        subject_person_ids=(p0,), domains=DOMAINS, as_of=AS_OF, revalidate=False,
+    assert not expanded.denied, expanded.deny_reason
+    assert expanded.source_expansion_count == 1, "one expansion crossing was actually spent"
+    assert expanded.home_auth_round_trip_count == 3, (
+        "P5 full flow = base RT#1 + expansion RT#1 + RT#2 = 3 crossings (expansion is a real "
+        "separate operation, not a free extension of the base grant)"
     )
-    # + one more RT#1-shaped crossing for the expansion "operation" (same HomeStub, counter accumulates)
-    assert expansion_op_result.home_auth_round_trip_count == 2
-
-    # Final RT#2 revalidation on the SAME HomeStub -- this call's own internal flow does
-    # one more RT#1-shaped crossing plus the RT#2, so it advances the shared counter by 2
-    # (1 for its own RT1, 1 for RT2), landing the flow total at 4. Restated correctly: a
-    # true single P5 flow is base-query(RT1) -> expansion(RT1) -> revalidate(RT2) = 3
-    # crossings, which requires the "final" step to perform ONLY RT#2, not another RT#1.
-    # This orchestration helper does not expose an RT#2-only call, so P5 is asserted at
-    # the granularity the helper supports: two independent RT#1-shaped operations plus a
-    # complete revalidated query is 4 crossings, and the flow's OWN incremental RT#2 cost
-    # (revalidated query minus its own RT#1) is exactly 1 -- confirming RT#2 is a single
-    # additional crossing, not a multiple, regardless of how many prior operations fed it.
-    home.reset_counters()
-    revalidated_only = run_knowledge_query(
-        backend=backend, home=home, partition_id=corpus.partitions[0], actor_person_id=p0,
-        subject_person_ids=(p0,), domains=DOMAINS, as_of=AS_OF, revalidate=True,
-    )
-    assert revalidated_only.home_auth_round_trip_count == 2, "one query with revalidation = RT1 + RT2 = 2"
+    # Expansion is additive: the predecessor content is disclosed on top of the base result,
+    # never in place of it (the base bundle is still produced).
+    assert expanded.bundle is not None
+    assert expanded.barrier_evidence.layer_a.verdict.value == "PASS"

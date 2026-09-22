@@ -157,7 +157,7 @@ def run_knowledge_query(
     *, backend: KnowledgeBackend, home: HomeStub, partition_id: str, actor_person_id: str,
     subject_person_ids: tuple[str, ...], domains: tuple[str, ...], as_of: int,
     grants_for_actor: tuple[str, ...] = (),  # unused here; home already has grants preloaded
-    domain_stubs: tuple = (), revalidate: bool = True,
+    domain_stubs: tuple = (), revalidate: bool = True, expand_sources: bool = False,
 ) -> OrchestrationResult:
     timings: list[StageTiming] = []
 
@@ -225,6 +225,50 @@ def run_knowledge_query(
         covered = _candidate_ids_covered_by(op, surviving_requirements)
         if not dec.allowed:
             addressable -= covered
+
+    # CORRECTION 3: lazy, opt-in source expansion. Only when explicitly requested does the
+    # orchestrator follow the surviving candidates' derivation references to their
+    # predecessor "source versions" and authorize disclosing THAT provenance content as an
+    # INDEPENDENT operation -- one additional RT#1-shaped Home crossing, never a free
+    # extension of the base grant. `source_expansion_count` is 1 for a flow that actually
+    # ran an expansion crossing, 0 otherwise (so P1-P4 report 0). If the expansion operation
+    # is DENIED, the base disclosure still succeeds but no predecessor content is added
+    # (expansion is additive and lazy; its denial must neither poison the base result nor
+    # silently salvage the predecessor).
+    source_expansion_count = 0
+    expansion_requirements: tuple = ()
+    if expand_sources:
+        expansion_requirements = backend.resolve_source_expansion(
+            partition_id=partition_id, surviving_version_ids=tuple(sorted(surviving_ids)),
+        )
+        if expansion_requirements:
+            expansion_ids = frozenset(r.version_id for r in expansion_requirements)
+            expansion_ops = _compile_operations(
+                planned=PlannedMetadata(
+                    partition_id=partition_id,
+                    candidate_version_ids=tuple(sorted(expansion_ids)),
+                    candidate_requirements=expansion_requirements,
+                    rows_returned=len(expansion_ids),
+                ),
+                surviving_ids=expansion_ids, requested_domains=domains,
+                actor_person_id=actor_person_id, partition_id=partition_id,
+            )
+            expansion_pool = {op.operation_id: expansion_ids for op in expansion_ops}
+            t0 = time.monotonic()
+            try:
+                expansion_decision = home.evaluate_plan(tuple(expansion_ops), version_pool=expansion_pool)
+            except RuntimeError as e:
+                timings.append(StageTiming("home_source_expansion", (time.monotonic() - t0) * 1000.0))
+                return OrchestrationResult(
+                    None, True, str(e), timings, home.home_auth_round_trip_count,
+                    home.authorization_operation_count, home.authorization_evaluation_count, 0, 1, None,
+                )
+            timings.append(StageTiming("home_source_expansion", expansion_decision.elapsed_ms))
+            source_expansion_count = 1  # an expansion crossing was actually spent
+            if expansion_decision.all_allowed():
+                addressable |= set(expansion_ids)
+            # else: expansion denied -> predecessor content NOT added, base result stands.
+
     authorized = AuthorizedSet(version_ids=tuple(sorted(addressable)))
 
     # Stage: content access -- ONLY authorized IDs, fully logged (H3 barrier evidence).
@@ -265,7 +309,7 @@ def run_knowledge_query(
             return OrchestrationResult(
                 None, True, "denied by Home RT#2 revalidation", timings,
                 home.home_auth_round_trip_count, home.authorization_operation_count,
-                home.authorization_evaluation_count, domain_call_count, 0, barrier,
+                home.authorization_evaluation_count, domain_call_count, source_expansion_count, barrier,
             )
 
     t0 = time.monotonic()
@@ -277,5 +321,5 @@ def run_knowledge_query(
     return OrchestrationResult(
         bundle, False, "", timings, home.home_auth_round_trip_count,
         home.authorization_operation_count, home.authorization_evaluation_count,
-        domain_call_count, 0, barrier,
+        domain_call_count, source_expansion_count, barrier,
     )

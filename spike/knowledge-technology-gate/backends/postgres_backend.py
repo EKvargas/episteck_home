@@ -269,6 +269,48 @@ class PostgresKnowledgeBackend(KnowledgeBackend):
             cur.execute("DROP TABLE pg_temp.authorized_scope_probe")
         return str(plan_json)
 
+    def resolve_source_expansion(
+        self, *, partition_id: str, surviving_version_ids: tuple[str, ...],
+    ) -> tuple[CandidateRequirement, ...]:
+        """CORRECTION 3, Postgres realization of the identical logical operation as
+        sqlite_backend.resolve_source_expansion -- follow each surviving candidate's
+        `replaces_version_id` to its SUPERSEDED predecessor in the SAME partition and
+        return the predecessor's complete subject/domain requirement (never content_text)
+        so the orchestrator can authorize the expansion as an independent operation.
+        One logical schema, two realizations (correction 9)."""
+        if not surviving_version_ids:
+            return ()
+        with self.conn.cursor() as cur:
+            cur.execute(f"SET search_path TO {self.schema_name}")
+            cur.execute(
+                """
+                SELECT DISTINCT pred.version_id
+                FROM assertion_version cur_av
+                JOIN assertion_version pred ON pred.version_id = cur_av.replaces_version_id
+                WHERE cur_av.version_id = ANY(%s)
+                  AND cur_av.partition_id = %s
+                  AND pred.partition_id = %s
+                  AND pred.version_id NOT IN (SELECT target_version_id FROM suppression)
+                """,
+                (list(surviving_version_ids), partition_id, partition_id),
+            )
+            predecessor_ids = tuple(r[0] for r in cur.fetchall())
+
+            requirements: list[CandidateRequirement] = []
+            for vid in predecessor_ids:
+                cur.execute("SELECT subject_person_id FROM assertion_subject WHERE version_id = %s", (vid,))
+                subj_rows = cur.fetchall()
+                cur.execute("SELECT domain FROM assertion_domain WHERE version_id = %s", (vid,))
+                dom_rows = cur.fetchall()
+                requirements.append(
+                    CandidateRequirement(
+                        version_id=vid,
+                        subject_person_ids=tuple(r[0] for r in subj_rows),
+                        domains=tuple(r[0] for r in dom_rows),
+                    )
+                )
+        return tuple(requirements)
+
     def suppressed_version_ids(self, partition_id: str) -> frozenset[str]:
         with self.conn.cursor() as cur:
             cur.execute(f"SET search_path TO {self.schema_name}")

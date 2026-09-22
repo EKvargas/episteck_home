@@ -119,6 +119,17 @@ class KnowledgeBackend:
         """S2 barrier: full-text matching ONLY over the bounded authorized set."""
         raise NotImplementedError
 
+    def resolve_source_expansion(
+        self, *, partition_id: str, surviving_version_ids: tuple[str, ...],
+    ) -> tuple[CandidateRequirement, ...]:
+        """CORRECTION 3: the lazy source-expansion step. Follow each surviving candidate's
+        derivation reference (`replaces_version_id`) to its predecessor "source version"
+        and return that predecessor's COMPLETE subject/domain requirement (never
+        content_text). The orchestrator authorizes the expansion as an INDEPENDENT
+        operation -- a separate Home crossing, not a free extension of the base grant.
+        Returns () when nothing is reachable (expansion stays lazy by construction)."""
+        raise NotImplementedError
+
     def suppressed_version_ids(self, partition_id: str) -> frozenset[str]:
         raise NotImplementedError
 

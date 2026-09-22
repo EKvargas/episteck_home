@@ -285,6 +285,60 @@ class SQLiteKnowledgeBackend(KnowledgeBackend):
         cur.execute("DROP TABLE temp.authorized_scope_probe")
         return [str(tuple(r)) for r in plan]
 
+    def resolve_source_expansion(
+        self, *, partition_id: str, surviving_version_ids: tuple[str, ...],
+    ) -> tuple[CandidateRequirement, ...]:
+        """CORRECTION 3 (Product Architect review of PR #33): the real, lazy source-
+        expansion step P5 exercises. Given the base query's surviving candidates, follow
+        each one's `replaces_version_id` derivation reference to its SUPERSEDED predecessor
+        (the "source version") -- a genuinely SEPARATE disclosure whose provenance content
+        the base query never authorized. Returns the COMPLETE per-predecessor
+        subject/domain requirement (never content_text), so the orchestrator can request
+        an INDEPENDENT authorization crossing for it (B6: expansion is not free -- it is
+        another complete operation, not a salvaged extension of the base grant).
+
+        This is metadata-only (SELECT list carries no content_text) and returns predecessors
+        in the SAME trusted partition only -- lineage never crosses the partition boundary
+        (B1/H1). A base candidate with no predecessor contributes nothing, so expansion is
+        lazy by construction: an all-current corpus slice yields an empty expansion set."""
+        if not surviving_version_ids:
+            return ()
+        cur = self.conn.cursor()
+        ph = ",".join("?" * len(surviving_version_ids))
+        # The predecessor version_ids referenced by the surviving set, restricted to the
+        # trusted partition. SUPERSEDED predecessors are exactly the versions the base
+        # ADMITTED-only query filtered out, so this genuinely surfaces something new.
+        rows = cur.execute(
+            f"""
+            SELECT DISTINCT pred.version_id
+            FROM assertion_version cur_av
+            JOIN assertion_version pred ON pred.version_id = cur_av.replaces_version_id
+            WHERE cur_av.version_id IN ({ph})
+              AND cur_av.partition_id = ?
+              AND pred.partition_id = ?
+              AND pred.version_id NOT IN (SELECT target_version_id FROM suppression)
+            """,
+            [*surviving_version_ids, partition_id, partition_id],
+        ).fetchall()
+        predecessor_ids = tuple(r["version_id"] for r in rows)
+
+        requirements: list[CandidateRequirement] = []
+        for vid in predecessor_ids:
+            subj_rows = cur.execute(
+                "SELECT subject_person_id FROM assertion_subject WHERE version_id = ?", (vid,)
+            ).fetchall()
+            dom_rows = cur.execute(
+                "SELECT domain FROM assertion_domain WHERE version_id = ?", (vid,)
+            ).fetchall()
+            requirements.append(
+                CandidateRequirement(
+                    version_id=vid,
+                    subject_person_ids=tuple(r["subject_person_id"] for r in subj_rows),
+                    domains=tuple(r["domain"] for r in dom_rows),
+                )
+            )
+        return tuple(requirements)
+
     def suppressed_version_ids(self, partition_id: str) -> frozenset[str]:
         cur = self.conn.cursor()
         rows = cur.execute(
