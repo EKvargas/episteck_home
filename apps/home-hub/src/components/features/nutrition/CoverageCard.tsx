@@ -44,7 +44,7 @@ export const CoverageCard: React.FC<CoverageCardProps> = ({ coverage, variant = 
           </div>
           {isPartial && isDetailed && (
             <div style={{ fontSize: '0.8rem', color: 'var(--olin-warning)', marginTop: '0.25rem', maxWidth: '200px' }}>
-              Known intake is below today's configured target, but some data is missing.
+              Known intake is below today&apos;s configured target, but some data is missing.
             </div>
           )}
         </div>
