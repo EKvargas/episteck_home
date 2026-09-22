@@ -208,13 +208,23 @@ Evidence: the existing [Nutrition profile fields/write path](https://github.com/
 
 ## B6 — Trusted retrieval and ContextBundle
 
-Status: OPEN — PROPOSAL SUBMITTED, AWAITING PRODUCT ARCHITECT DECISION
+Status: OPEN — DISPOSITIONS RECORDED, AWAITING FINAL ARCHITECTURE BOARD MERGE REVIEW
 
-Product Architect disposition: NOT DECIDED
+Product Architect disposition: **ACCEPTED IN DIRECTION WITH FOUR REQUIRED CORRECTIONS — NOT YET CLOSED**
 
-Proposal under review: [Knowledge B6 — Trusted retrieval and ContextBundle](KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md), including its section 4 trusted-retrieval invariants, the section 8 multi-resource authorization protocol, the section 12 ContextBundle semantics, and the section 23 decisions required (PA-1 … PA-9). Submitting a proposal does not resolve B6; only an explicit Product Architect disposition does.
+Proposal under review: [Knowledge B6 — Trusted retrieval and ContextBundle](KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md), including its section 4 trusted-retrieval invariants, the section 8 multi-resource authorization protocol, the section 12 ContextBundle semantics, and the section 23 dispositions. **B6 is not resolved by this entry.** It closes only when the Architecture Board approves merge and this status is changed to RESOLVED.
 
-Recommended model: **authorization-constrained retrieval planning with a mandatory pre-disclosure revalidation barrier** — the authorization decision, suppression register and lifecycle predicates are compiled into the addressable scope of the retrieval operation, so unauthorized or ineligible records are not filtered out but are not addressable. No retrieval, index, vector, graph or storage technology is selected.
+Accepted core architecture:
+
+> **authorization-constrained retrieval planning + suppression/lifecycle before candidacy + mandatory pre-disclosure revalidation.**
+
+The authorization decision, suppression register and lifecycle predicates are compiled into the addressable scope of the retrieval operation, so unauthorized or ineligible records are not filtered out but are **not addressable**. No retrieval, index, vector, graph or storage technology is selected.
+
+PA dispositions recorded: **PA-1** ACCEPT Alternative C · **PA-2** ACCEPT WITH CORRECTIONS · **PA-3** **CHANGED** — bounded partial authorization across one compound retrieval is not accepted, as it conflicts with accepted B1 §10 · **PA-4** RESOLVED at the architecture level via a Home-owned request authorization context, with no reusable or bearer user delegation and no weakening of single-use replay protection · **PA-5** ACCEPT disputed assertions excluded from ordinary use but available in explicitly authorized review/history use with attribution · **PA-6** ACCEPT the policy-adapter seam · **PA-7** ACCEPT architectural bounds with concrete values deferred · **PA-8** ACCEPT cites-or-abstains with the anti-oracle and confidence-is-not-authority corrections · **PA-9** ACCEPT backend neutrality, with no semantic/vector/hybrid retrieval assumption.
+
+Four required corrections were issued and incorporated: **(1)** each authorization operation is complete and all-or-nothing, with no automatic partial decomposition of a compound question, while distinct operations within one user turn remain independent; **(2)** revalidation under single-use delegation is resolved by a Home-owned request authorization context — the delegation is consumed once, the decision identity is a correlation handle only, the caller never resupplies a trusted actor or partition, and revalidation is a **fresh re-evaluation against current grants rather than a TTL check**; **(3)** untrusted input may *nominate* requested subjects, domains and temporal scope but never establish identity, partition, canonical resolution, use authority or authorization, and the trusted clock is separate from any requested historical interval; **(4)** the ContextBundle is never persisted, and any retained context-construction information becomes a separately defined audit artifact with its own purpose, classification, partition, lineage, retention and B2/B4 protections. See section 23.1 of the proposal.
+
+No correction exposed a contradiction requiring the selected retrieval model to change or requiring B1–B5 to reopen.
 
 Questions to resolve:
 
@@ -447,7 +457,7 @@ B4: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNO
 
 B5: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md))
 
-B6: OPEN — [proposal submitted 2026-09-22](KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md), NOT DECIDED
+B6: OPEN — [proposal](KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md) accepted in direction with four required corrections incorporated; PA-1 … PA-9 recorded 2026-09-22; **NOT YET CLOSED** pending Architecture Board merge review
 
 Flowable selection: NOT APPROVED. B4 confirms orchestration is never canonical Knowledge truth and that immediate suppression must not wait on it.
 
@@ -455,7 +465,7 @@ No installation, deployment, replication, configuration, process triggering, or 
 
 ## Gate completion and change boundary
 
-The next work is explicit Product Architect disposition of the [submitted B6 proposal](KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md), which is NOT DECIDED, and the remaining process requirements. B1–B5 are resolved by the accepted decisions above; the Knowledge Technology Gate remains OPEN and is not complete. Technology selection additionally requires B6 to close first. Agreed acceptance scenarios must precede technology selection. Technology selection and runtime implementation require their own approval; B1/B2/B3/B4 acceptance supplies neither.
+The next work is Architecture Board merge review of the [B6 proposal](KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md) — whose PA-1 … PA-9 dispositions are recorded and whose four required corrections are incorporated, but which is NOT YET CLOSED — and the remaining process requirements. B1–B5 are resolved by the accepted decisions above; the Knowledge Technology Gate remains OPEN and is not complete. Technology selection additionally requires B6 to close first. Agreed acceptance scenarios must precede technology selection. Technology selection and runtime implementation require their own approval; B1/B2/B3/B4 acceptance supplies neither.
 
 The original gate-opening task changed only the independent review artifact and this gate register. The B1 follow-up changes only [KNOWLEDGE_B1_SECURITY_SCOPE.md](KNOWLEDGE_B1_SECURITY_SCOPE.md) and B1 status/references in this register. It does not modify canonical architecture documents, existing ADRs, `packages/home-contracts/`, `services/`, `deploy/`, or production configuration.
 
