@@ -142,22 +142,46 @@ export interface TodaySummary {
 export type DataQualityState = 'MEASURED' | 'ESTIMATED' | 'UNKNOWN';
 export type NutrientSourceType = 'FOOD' | 'SUPPLEMENT';
 
-export interface NutrientContribution {
+// Point 5: Unknown != Zero. Use discriminated union for amount.
+export type NutrientContribution = {
   sourceType: NutrientSourceType;
-  amount: number;
   unit: string;
-  quality: DataQualityState;
   label: string; // e.g. "Prenatal Vitamin", "Spinach"
-}
+} & (
+  | { quality: 'MEASURED' | 'ESTIMATED'; amount: number }
+  | { quality: 'UNKNOWN'; amount: null }
+);
 
+// Point 10: Supplement status must have 3 states
+export type SupplementStatus = 'LOGGED_KNOWN' | 'EXPLICITLY_NOT_CONSUMED' | 'NOT_LOGGED_UNKNOWN';
+
+// Point 7 & 11: Structure the coverage contract better
 export interface MicronutrientCoverage {
   id: string; // e.g., 'iron', 'calcium'
   name: string; // e.g. "Iron"
-  targetAmount: number;
-  currentAmount: number;
   unit: string;
-  dataCompletenessPercentage: number; // 0-100 indicating how much of the day's meals are logged
+  
+  // Point 6: Do not present partial data as precise total
+  knownIntake: number;
+  knownFoodIntake: number;
+  knownSupplementIntake: number | null;
+  
+  // Point 11: Target provenance
+  targetAmount: number;
+  targetContext: string;
+  targetSource: string; // e.g. "Pregnancy target — UI mock"
+  
+  // Point 13: Data completeness language
+  todayCoveragePercent: number | null;
+  nutrientDataCoverage: number; // 0-100 indicating how much of the day's meals are covered
+  
+  // Point 8: Structured 7-day data
+  rolling7DayKnownAverage: number | null;
+  rolling7DayDataCoverage: number | null;
+  
+  supplementStatus: SupplementStatus;
+  
   contributions: NutrientContribution[];
-  trendSummary?: string; // e.g. "On track based on weekly average"
+  unknownItems: string[]; // e.g. ["Unlogged Lunch", "Restaurant Dinner"]
 }
 

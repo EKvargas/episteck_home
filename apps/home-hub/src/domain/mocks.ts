@@ -267,73 +267,129 @@ export const getMicronutrientCoverageMock = (contextId: string): MicronutrientCo
   if (contextId === 'PSN-ana') {
     return [
       {
-      id: 'iron',
-      name: 'Iron',
-      targetAmount: 27, // mg for pregnancy
-      currentAmount: 28.5,
-      unit: 'mg',
-      dataCompletenessPercentage: 85,
-      contributions: [
-        {
-          sourceType: 'SUPPLEMENT',
-          amount: 18,
-          unit: 'mg',
-          quality: 'MEASURED',
-          label: 'Prenatal Vitamin (Logged 08:00)'
-        },
-        {
-          sourceType: 'FOOD',
-          amount: 6.5,
-          unit: 'mg',
-          quality: 'MEASURED',
-          label: 'Spinach & Lentil Salad (Lunch)'
-        },
-        {
-          sourceType: 'FOOD',
-          amount: 4,
-          unit: 'mg',
-          quality: 'ESTIMATED',
-          label: 'Whole Wheat Toast (Breakfast)'
-        }
-      ],
-      trendSummary: 'On track based on weekly average (28mg/day)'
+        id: 'iron',
+        name: 'Iron',
+        unit: 'mg',
+        
+        knownIntake: 28.5,
+        knownFoodIntake: 10.5,
+        knownSupplementIntake: 18,
+        
+        targetAmount: 27, // mg for pregnancy
+        targetContext: 'Pregnancy',
+        targetSource: 'Pregnancy target — UI mock',
+        
+        todayCoveragePercent: 105,
+        nutrientDataCoverage: 85,
+        
+        rolling7DayKnownAverage: 28,
+        rolling7DayDataCoverage: 92,
+        
+        supplementStatus: 'LOGGED_KNOWN',
+        
+        contributions: [
+          {
+            sourceType: 'SUPPLEMENT',
+            unit: 'mg',
+            label: 'Prenatal Vitamin (Logged 08:00)',
+            quality: 'MEASURED',
+            amount: 18
+          },
+          {
+            sourceType: 'FOOD',
+            unit: 'mg',
+            label: 'Spinach & Lentil Salad (Lunch)',
+            quality: 'MEASURED',
+            amount: 6.5
+          },
+          {
+            sourceType: 'FOOD',
+            unit: 'mg',
+            label: 'Whole Wheat Toast (Breakfast)',
+            quality: 'ESTIMATED',
+            amount: 4
+          }
+        ],
+        unknownItems: ['Afternoon Snack (Banana & Almonds)']
       },
       {
         id: 'calcium',
         name: 'Calcium',
-        targetAmount: 1000,
-        currentAmount: 850,
         unit: 'mg',
-        dataCompletenessPercentage: 100,
+        
+        knownIntake: 850,
+        knownFoodIntake: 850,
+        knownSupplementIntake: 0,
+        
+        targetAmount: 1000,
+        targetContext: 'Pregnancy',
+        targetSource: 'Pregnancy target — UI mock',
+        
+        todayCoveragePercent: 85,
+        nutrientDataCoverage: 100,
+        
+        rolling7DayKnownAverage: 950,
+        rolling7DayDataCoverage: 100,
+        
+        supplementStatus: 'EXPLICITLY_NOT_CONSUMED',
+        
         contributions: [
-          { sourceType: 'FOOD', amount: 500, unit: 'mg', quality: 'ESTIMATED', label: 'Greek Yogurt' },
-          { sourceType: 'FOOD', amount: 350, unit: 'mg', quality: 'MEASURED', label: 'Almond Milk' }
+          { sourceType: 'FOOD', unit: 'mg', label: 'Greek Yogurt', quality: 'ESTIMATED', amount: 500 },
+          { sourceType: 'FOOD', unit: 'mg', label: 'Almond Milk', quality: 'MEASURED', amount: 350 }
         ],
-        trendSummary: 'Close to daily goal'
+        unknownItems: []
       },
       {
         id: 'folate',
         name: 'Folate',
-        targetAmount: 600,
-        currentAmount: 400,
         unit: 'mcg',
-        dataCompletenessPercentage: 60,
+        
+        knownIntake: 400,
+        knownFoodIntake: 0,
+        knownSupplementIntake: 400,
+        
+        targetAmount: 600,
+        targetContext: 'Pregnancy',
+        targetSource: 'Pregnancy target — UI mock',
+        
+        todayCoveragePercent: 67,
+        nutrientDataCoverage: 60,
+        
+        rolling7DayKnownAverage: 450,
+        rolling7DayDataCoverage: 80,
+        
+        supplementStatus: 'LOGGED_KNOWN',
+        
         contributions: [
-          { sourceType: 'SUPPLEMENT', amount: 400, unit: 'mcg', quality: 'MEASURED', label: 'Prenatal Vitamin' }
+          { sourceType: 'SUPPLEMENT', unit: 'mcg', label: 'Prenatal Vitamin', quality: 'MEASURED', amount: 400 }
         ],
-        trendSummary: 'Needs more dietary folate'
+        unknownItems: ['Breakfast', 'Lunch']
       },
       {
         id: 'vitd',
         name: 'Vitamin D',
-        targetAmount: 15,
-        currentAmount: 15,
         unit: 'mcg',
-        dataCompletenessPercentage: 100,
+        
+        knownIntake: 15,
+        knownFoodIntake: 0,
+        knownSupplementIntake: 15,
+        
+        targetAmount: 15,
+        targetContext: 'Pregnancy',
+        targetSource: 'Pregnancy target — UI mock',
+        
+        todayCoveragePercent: 100,
+        nutrientDataCoverage: 100,
+        
+        rolling7DayKnownAverage: 15,
+        rolling7DayDataCoverage: 100,
+        
+        supplementStatus: 'LOGGED_KNOWN',
+        
         contributions: [
-          { sourceType: 'SUPPLEMENT', amount: 15, unit: 'mcg', quality: 'MEASURED', label: 'Prenatal Vitamin' }
+          { sourceType: 'SUPPLEMENT', unit: 'mcg', label: 'Prenatal Vitamin', quality: 'MEASURED', amount: 15 }
         ],
-        trendSummary: 'Daily goal met'
+        unknownItems: []
       }
     ];
   }
@@ -342,29 +398,43 @@ export const getMicronutrientCoverageMock = (contextId: string): MicronutrientCo
   if (contextId === 'PSN-me') {
     return [
       {
-      id: 'iron',
-      name: 'Iron',
-      targetAmount: 8, // mg for men
-      currentAmount: 3.5,
-      unit: 'mg',
-      dataCompletenessPercentage: 40,
-      contributions: [
-        {
-          sourceType: 'FOOD',
-          amount: 3.5,
-          unit: 'mg',
-          quality: 'MEASURED',
-          label: 'Oatmeal & Berries (Breakfast)'
-        },
-        {
-          sourceType: 'FOOD',
-          amount: 0, // Should not be rendered as 0 but visualized as unknown
-          unit: 'mg',
-          quality: 'UNKNOWN',
-          label: 'Unlogged Lunch (Mediterranean Bowl)'
-        }
-      ],
-      trendSummary: 'Insufficient data for today'
+        id: 'iron',
+        name: 'Iron',
+        unit: 'mg',
+        
+        knownIntake: 3.5,
+        knownFoodIntake: 3.5,
+        knownSupplementIntake: null,
+        
+        targetAmount: 8, // mg for men
+        targetContext: 'Adult Male',
+        targetSource: 'Standard adult target — UI mock',
+        
+        todayCoveragePercent: 43,
+        nutrientDataCoverage: 40,
+        
+        rolling7DayKnownAverage: 6.2,
+        rolling7DayDataCoverage: 75,
+        
+        supplementStatus: 'NOT_LOGGED_UNKNOWN',
+        
+        contributions: [
+          {
+            sourceType: 'FOOD',
+            unit: 'mg',
+            label: 'Oatmeal & Berries (Breakfast)',
+            quality: 'MEASURED',
+            amount: 3.5
+          },
+          {
+            sourceType: 'FOOD',
+            unit: 'mg',
+            label: 'Unlogged Lunch (Mediterranean Bowl)',
+            quality: 'UNKNOWN',
+            amount: null // Replaced 0 with null according to new data model
+          }
+        ],
+        unknownItems: ['Unlogged Lunch (Mediterranean Bowl)']
       }
     ];
   }
@@ -372,14 +442,28 @@ export const getMicronutrientCoverageMock = (contextId: string): MicronutrientCo
   // Scenario 3: Family or Fallback - No Supplement Data
   return [
     {
-    id: 'iron',
-    name: 'Iron',
-    targetAmount: 27,
-    currentAmount: 0,
-    unit: 'mg',
-    dataCompletenessPercentage: 0,
-    contributions: [],
-      trendSummary: 'No data logged for today'
+      id: 'iron',
+      name: 'Iron',
+      unit: 'mg',
+      
+      knownIntake: 0,
+      knownFoodIntake: 0,
+      knownSupplementIntake: null,
+      
+      targetAmount: 27,
+      targetContext: 'Pregnancy',
+      targetSource: 'Pregnancy target — UI mock',
+      
+      todayCoveragePercent: 0,
+      nutrientDataCoverage: 0,
+      
+      rolling7DayKnownAverage: null,
+      rolling7DayDataCoverage: null,
+      
+      supplementStatus: 'NOT_LOGGED_UNKNOWN',
+      
+      contributions: [],
+      unknownItems: ['No data logged']
     }
   ];
 };

@@ -40,12 +40,18 @@ export default function NutritionPage() {
       </header>
 
       <main className={styles.grid}>
-        {/* Maternal Health Link for Ana Context */}
+        {/* 
+          Context usage comment (Product Owner requirement):
+          `activeContext` is used here purely as a UI/demo routing mechanism to show 
+          Ana's specific dashboard in the prototype. It is NOT an authorization decision.
+          In production, visibility and feature access must ultimately be determined by 
+          trusted server-side authorization and domain state.
+        */}
         {activeContext.id === 'PSN-ana' && (
           <div className={styles.card} style={{ gridColumn: '1 / -1', background: 'var(--olin-badge-bg)', border: '1px solid var(--olin-accent)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.25rem' }}>Maternal Health & Micronutrients</h3>
+                <h3 style={{ margin: 0, fontSize: '1.25rem' }}>Pregnancy Nutrition</h3>
                 <p style={{ color: 'var(--olin-text-muted)', margin: '0.25rem 0 0' }}>Track prenatal vitamins, iron, and key pregnancy nutrients.</p>
               </div>
               <Link href="/nutrition/pregnancy" style={{ padding: '0.75rem 1.5rem', background: 'var(--olin-accent)', color: 'white', borderRadius: '8px', textDecoration: 'none', fontWeight: 500 }}>

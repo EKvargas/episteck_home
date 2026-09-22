@@ -21,10 +21,24 @@ export default function PregnancyNutritionPage() {
         </p>
       </header>
 
-      <main className={styles.dashboardGrid}>
-        {coverageData.map((coverage) => (
-          <CoverageCard key={coverage.id} coverage={coverage} />
-        ))}
+      <main>
+        <div style={{ marginBottom: '2rem', padding: '1rem', background: 'var(--olin-surface-hover)', borderRadius: '8px', fontSize: '0.85rem', color: 'var(--olin-text-muted)' }}>
+          <strong>Note:</strong> Dietary intake does not determine nutrient status on its own. Lab values such as hemoglobin and ferritin belong to Health data.
+        </div>
+
+        {/* Hero Section - Iron */}
+        <div style={{ marginBottom: '2rem' }}>
+          {coverageData.filter(c => c.id === 'iron').map(coverage => (
+            <CoverageCard key={coverage.id} coverage={coverage} variant="detailed" />
+          ))}
+        </div>
+
+        {/* Compact Grid Section - Other Nutrients */}
+        <div className={styles.dashboardGrid}>
+          {coverageData.filter(c => c.id !== 'iron').map(coverage => (
+            <CoverageCard key={coverage.id} coverage={coverage} variant="compact" />
+          ))}
+        </div>
       </main>
     </div>
   );
