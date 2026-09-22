@@ -12,6 +12,36 @@ export default function PregnancyNutritionPage() {
   // Fetch mock data based on current context
   const coverageData = getMicronutrientCoverageMock(activeContext.id);
 
+  if (activeContext.id !== 'PSN-ana') {
+    return (
+      <div className={styles.page}>
+        <header className={styles.header}>
+          <div className={styles.headerTop}>
+            <h2>Pregnancy Nutrition</h2>
+            <div className={styles.headerActions}>
+              <Link href="/nutrition" className={styles.backLink}>
+                ← Back to Nutrition
+              </Link>
+            </div>
+          </div>
+        </header>
+        <main style={{ padding: '4rem 2rem', textAlign: 'center' }}>
+          <div style={{ background: 'var(--olin-surface-hover)', padding: '3rem', borderRadius: '12px', display: 'inline-block' }}>
+            <h3 style={{ margin: '0 0 1rem 0' }}>Pregnancy Nutrition</h3>
+            <p style={{ color: 'var(--olin-text-muted)', margin: 0 }}>
+              Pregnancy Nutrition is currently available in Ana&apos;s care context.
+            </p>
+            {/* 
+              Context usage comment (Product Owner requirement):
+              `activeContext` is used here purely as a UI/demo routing mechanism to show 
+              Ana's specific dashboard in the prototype. It is NOT an authorization decision.
+            */}
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.pageContainer}>
       <header className={styles.header}>

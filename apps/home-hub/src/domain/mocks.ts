@@ -279,7 +279,7 @@ export const getMicronutrientCoverageMock = (contextId: string): MicronutrientCo
         targetContext: 'Pregnancy',
         targetSource: 'Pregnancy target — UI mock',
         
-        todayCoveragePercent: 105,
+        knownTargetCoveragePercent: 105,
         nutrientDataCoverage: 85,
         
         rolling7DayKnownAverage: 28,
@@ -325,7 +325,7 @@ export const getMicronutrientCoverageMock = (contextId: string): MicronutrientCo
         targetContext: 'Pregnancy',
         targetSource: 'Pregnancy target — UI mock',
         
-        todayCoveragePercent: 85,
+        knownTargetCoveragePercent: 85,
         nutrientDataCoverage: 100,
         
         rolling7DayKnownAverage: 950,
@@ -352,7 +352,7 @@ export const getMicronutrientCoverageMock = (contextId: string): MicronutrientCo
         targetContext: 'Pregnancy',
         targetSource: 'Pregnancy target — UI mock',
         
-        todayCoveragePercent: 67,
+        knownTargetCoveragePercent: 67,
         nutrientDataCoverage: 60,
         
         rolling7DayKnownAverage: 450,
@@ -378,7 +378,7 @@ export const getMicronutrientCoverageMock = (contextId: string): MicronutrientCo
         targetContext: 'Pregnancy',
         targetSource: 'Pregnancy target — UI mock',
         
-        todayCoveragePercent: 100,
+        knownTargetCoveragePercent: 100,
         nutrientDataCoverage: 100,
         
         rolling7DayKnownAverage: 15,
@@ -410,7 +410,7 @@ export const getMicronutrientCoverageMock = (contextId: string): MicronutrientCo
         targetContext: 'Adult Male',
         targetSource: 'Standard adult target — UI mock',
         
-        todayCoveragePercent: 43,
+        knownTargetCoveragePercent: 43,
         nutrientDataCoverage: 40,
         
         rolling7DayKnownAverage: 6.2,
@@ -454,7 +454,7 @@ export const getMicronutrientCoverageMock = (contextId: string): MicronutrientCo
       targetContext: 'Pregnancy',
       targetSource: 'Pregnancy target — UI mock',
       
-      todayCoveragePercent: 0,
+      knownTargetCoveragePercent: 0,
       nutrientDataCoverage: 0,
       
       rolling7DayKnownAverage: null,

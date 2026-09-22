@@ -172,8 +172,8 @@ export interface MicronutrientCoverage {
   targetSource: string; // e.g. "Pregnancy target — UI mock"
   
   // Point 13: Data completeness language
-  todayCoveragePercent: number | null;
-  nutrientDataCoverage: number; // 0-100 indicating how much of the day's meals are covered
+  knownTargetCoveragePercent: number | null; // KNOWN intake relative to configured target (e.g. 105 means known intake is 105% of target)
+  nutrientDataCoverage: number; // 0-100 indicating percentage of relevant logged intake for which this nutrient value is available
   
   // Point 8: Structured 7-day data
   rolling7DayKnownAverage: number | null;

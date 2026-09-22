@@ -15,7 +15,11 @@ export const CoverageCard: React.FC<CoverageCardProps> = ({ coverage, variant = 
   // Calculate percentages for the progress bar
   const maxVisualTarget = Math.max(coverage.targetAmount, coverage.knownIntake);
   const foodPercent = (coverage.knownFoodIntake / maxVisualTarget) * 100;
-  const supplementPercent = ((coverage.knownSupplementIntake || 0) / maxVisualTarget) * 100;
+  const supplementPercent = coverage.knownSupplementIntake !== null 
+    ? (coverage.knownSupplementIntake / maxVisualTarget) * 100 
+    : 0;
+
+  const isNoData = compPercent === 0 && coverage.contributions.length === 0;
 
   return (
     <div className={styles.card} style={isDetailed ? { gridColumn: '1 / -1', padding: '2rem' } : undefined}>
@@ -36,18 +40,39 @@ export const CoverageCard: React.FC<CoverageCardProps> = ({ coverage, variant = 
       <div className={styles.metricsGrid} style={{ display: 'flex', gap: '2rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: '0.85rem', color: 'var(--olin-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            {isPartial ? 'Known Intake' : 'Total Intake'}
+            {isNoData ? 'No Known Intake Data' : (isPartial ? 'Known Intake' : 'Total Intake')}
           </div>
           <div className={styles.metrics}>
-            <span className={styles.currentAmount}>{coverage.knownIntake}</span>
-            <span className={styles.targetAmount}>/ {coverage.targetAmount} {coverage.unit}</span>
+            {!isNoData && <span className={styles.currentAmount}>{coverage.knownIntake}</span>}
+            <span className={styles.targetAmount}>{!isNoData && '/ '} {coverage.targetAmount} {coverage.unit}</span>
           </div>
-          {isPartial && isDetailed && (
-            <div style={{ fontSize: '0.8rem', color: 'var(--olin-warning)', marginTop: '0.25rem', maxWidth: '200px' }}>
-              Known intake is below today&apos;s configured target, but some data is missing.
+          
+          {/* Target Source - Compact */}
+          {!isDetailed && (
+            <div style={{ fontSize: '0.8rem', color: 'var(--olin-text-muted)', marginTop: '0.25rem' }}>
+              Configured dietary target
+            </div>
+          )}
+
+          {isPartial && isDetailed && !isNoData && (
+            <div style={{ fontSize: '0.8rem', color: 'var(--olin-warning)', marginTop: '0.25rem', maxWidth: '300px' }}>
+              {coverage.knownIntake < coverage.targetAmount
+                ? "Known intake is below today&apos;s configured target, but some nutrient data is missing."
+                : "Known intake meets or exceeds today&apos;s configured target. Some nutrient data is still missing, so actual intake may be higher."}
             </div>
           )}
         </div>
+
+        {isDetailed && (
+          <div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--olin-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Configured Dietary Target
+            </div>
+            <div className={styles.metrics}>
+              <span className={styles.targetAmount} style={{ color: 'var(--olin-text)' }}>{coverage.targetAmount} {coverage.unit}</span>
+            </div>
+          </div>
+        )}
 
         {isDetailed && coverage.rolling7DayKnownAverage !== null && (
           <div>
@@ -71,11 +96,13 @@ export const CoverageCard: React.FC<CoverageCardProps> = ({ coverage, variant = 
           style={{ width: `${foodPercent}%`, background: 'var(--olin-accent)' }}
           title={`Food: ${coverage.knownFoodIntake}${coverage.unit}`}
         />
-        <div 
-          className={styles.progressSegment} 
-          style={{ width: `${supplementPercent}%`, background: 'var(--olin-accent-hover)' }}
-          title={`Supplement: ${coverage.knownSupplementIntake || 0}${coverage.unit}`}
-        />
+        {coverage.knownSupplementIntake !== null && (
+          <div 
+            className={styles.progressSegment} 
+            style={{ width: `${supplementPercent}%`, background: 'var(--olin-accent-hover)' }}
+            title={`Supplement: ${coverage.knownSupplementIntake}${coverage.unit}`}
+          />
+        )}
       </div>
 
       {isDetailed && (
@@ -93,7 +120,7 @@ export const CoverageCard: React.FC<CoverageCardProps> = ({ coverage, variant = 
 
           {coverage.contributions.length === 0 ? (
             <div className={styles.contributionItem}>
-              <span className={styles.contributionLabel}>No known data logged for today</span>
+              <span className={styles.contributionLabel}>No nutrient intake data available today</span>
             </div>
           ) : (
             coverage.contributions.map((contrib, idx) => {
