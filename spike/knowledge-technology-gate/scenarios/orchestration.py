@@ -5,15 +5,30 @@ EXECUTION BARRIER"):
 
     trusted request context
     -> protected security-metadata planning (backend, content NEVER read)
-    -> Home RT#1 authorization (bounded Authorization Plan)
+    -> compile the COMPLETE union (subject, domain) requirement set across every
+       surviving candidate (correction 1)
+    -> Home RT#1 authorization (ONE compound, all-or-nothing Knowledge operation)
     -> ONLY THEN content access, bounded to the authorized set
     -> optional domain fan-out (concurrent, R14 measured separately)
     -> ranking/selection (trivial here -- no scoring beyond presence, SS4.2)
-    -> Home RT#2 final revalidation (fresh re-evaluation)
+    -> Home RT#2 final revalidation (fresh re-evaluation of the SAME logical operation)
     -> ContextBundle-shaped result, constructed ephemeral, never persisted (H10)
 
 This is the ONE orchestration function scenarios call so P1-P13 exercise identical
 plumbing and only vary inputs/assertions.
+
+CORRECTION 1 (Product Architect review of PR #33): the previous version authorized only
+`domains[0]` -- a single domain -- even when multiple domains were requested or a
+candidate spanned multiple subjects/domains. This version compiles the COMPLETE union
+requirement set from `PlannedMetadata.union_requirement_pairs()` (which itself reflects
+each candidate's full subject/domain membership, not just the requested slice) into ONE
+`AuthorizationOperation`, and grants candidacy only if Home authorizes ALL of it. No
+candidate-by-candidate authorization; no partial salvage if any required pair is denied.
+
+CORRECTION 2: `authorization_operation_count` now reflects logical operations (see
+home_stub/stub.py); this orchestration submits exactly ONE logical operation per query
+(re-evaluated at RT#1 and RT#2), so `authorization_operation_count == 1` for an ordinary
+query with revalidation, and `authorization_evaluation_count == 2`.
 """
 from __future__ import annotations
 
@@ -52,9 +67,11 @@ class OrchestrationResult:
     timings: list[StageTiming]
     home_auth_round_trip_count: int
     authorization_operation_count: int
+    authorization_evaluation_count: int
     domain_call_count: int
     source_expansion_count: int
     barrier_evidence: BarrierEvidence | None
+    missing_requirement: tuple[str, str] | None = None  # for adversarial-test visibility
 
 
 def run_knowledge_query(
@@ -77,32 +94,46 @@ def run_knowledge_query(
     # candidate for authorization either.
     t0 = time.monotonic()
     suppressed = backend.suppressed_version_ids(partition_id)
-    surviving_candidates = tuple(v for v in planned.candidate_version_ids if v not in suppressed)
+    surviving_ids = frozenset(v for v in planned.candidate_version_ids if v not in suppressed)
+    surviving_requirements = tuple(r for r in planned.candidate_requirements if r.version_id in surviving_ids)
     timings.append(StageTiming("suppression_filter", (time.monotonic() - t0) * 1000.0))
 
-    # Stage: Home RT#1.
+    # CORRECTION 1: compile the COMPLETE union (subject, domain) requirement set across
+    # every surviving candidate -- not just the requested slice, and not just domains[0].
+    union_pairs: list[tuple[str, str]] = []
+    for req in surviving_requirements:
+        for s in req.subject_person_ids:
+            for d in req.domains:
+                union_pairs.append((s, d))
+    union_pairs = list(dict.fromkeys(union_pairs))
+    union_subjects = tuple(dict.fromkeys(s for s, _ in union_pairs)) or subject_person_ids
+    union_domains = tuple(dict.fromkeys(d for _, d in union_pairs)) or domains
+
+    # Stage: Home RT#1 -- ONE compound, all-or-nothing operation over the complete union.
     op_id = f"op-{uuid.uuid4().hex[:8]}"
     operation = AuthorizationOperation(
-        operation_id=op_id, actor_person_id=actor_person_id, subject_person_ids=subject_person_ids,
-        domain=domains[0] if domains else "KNOWLEDGE", action="VIEW", partition_id=partition_id,
+        operation_id=op_id, actor_person_id=actor_person_id, subject_person_ids=union_subjects,
+        domains=union_domains, action="VIEW", partition_id=partition_id,
     )
     t0 = time.monotonic()
     try:
         decision = home.evaluate_plan(
-            (operation,), version_pool={op_id: frozenset(surviving_candidates)}
+            (operation,), version_pool={op_id: surviving_ids}
         )
     except RuntimeError as e:
         timings.append(StageTiming("home_rt1", (time.monotonic() - t0) * 1000.0))
         return OrchestrationResult(
             None, True, str(e), timings, home.home_auth_round_trip_count,
-            home.authorization_operation_count, 0, 0, None,
+            home.authorization_operation_count, home.authorization_evaluation_count, 0, 0, None,
         )
     timings.append(StageTiming("home_rt1", decision.elapsed_ms))
 
     if not decision.all_allowed():
+        missing = decision.decisions[0].missing_requirement if decision.decisions else None
         return OrchestrationResult(
-            None, True, "denied by Home RT#1", timings, home.home_auth_round_trip_count,
-            home.authorization_operation_count, 0, 0, None,
+            None, True, "denied by Home RT#1 (incomplete requirement set)", timings,
+            home.home_auth_round_trip_count, home.authorization_operation_count,
+            home.authorization_evaluation_count, 0, 0, None, missing,
         )
 
     authorized = AuthorizedSet(version_ids=tuple(decision.decisions[0].granted_version_ids))
@@ -114,7 +145,8 @@ def run_knowledge_query(
     timings.append(StageTiming("content_access", (time.monotonic() - t0) * 1000.0))
     barrier = BarrierEvidence(layer_a=layer_a_from_log(log), layer_b=None)
 
-    # Stage: domain fan-out (R14, concurrent).
+    # Stage: domain fan-out (synthetic fan-out topology latency -- NOT R14; see
+    # domain_stub/stub.py and correction 5 for why this is not a real domain measurement).
     domain_call_count = 0
     if domain_stubs:
         from domain_stub.stub import fan_out_concurrent, total_domain_call_count
@@ -124,25 +156,29 @@ def run_knowledge_query(
         timings.append(StageTiming("domain_fanout", (time.monotonic() - t0) * 1000.0))
         domain_call_count = total_domain_call_count(domain_stubs)
 
-    # Stage: Home RT#2 -- fresh re-evaluation, not a TTL check.
+    # Stage: Home RT#2 -- fresh re-evaluation of the SAME logical operation, not a TTL
+    # check. Re-submitting the same operation_id does NOT increment
+    # authorization_operation_count (correction 2); it does increment
+    # authorization_evaluation_count and home_auth_round_trip_count.
     if revalidate:
         t0 = time.monotonic()
         try:
             revalidation = home.evaluate_plan(
-                (operation,), version_pool={op_id: frozenset(surviving_candidates)}
+                (operation,), version_pool={op_id: surviving_ids}
             )
         except RuntimeError as e:
             timings.append(StageTiming("home_rt2", (time.monotonic() - t0) * 1000.0))
             return OrchestrationResult(
                 None, True, str(e), timings, home.home_auth_round_trip_count,
-                home.authorization_operation_count, domain_call_count, 0, barrier,
+                home.authorization_operation_count, home.authorization_evaluation_count,
+                domain_call_count, 0, barrier,
             )
         timings.append(StageTiming("home_rt2", revalidation.elapsed_ms))
         if not revalidation.all_allowed():
             return OrchestrationResult(
                 None, True, "denied by Home RT#2 revalidation", timings,
                 home.home_auth_round_trip_count, home.authorization_operation_count,
-                domain_call_count, 0, barrier,
+                home.authorization_evaluation_count, domain_call_count, 0, barrier,
             )
 
     t0 = time.monotonic()
@@ -153,5 +189,6 @@ def run_knowledge_query(
 
     return OrchestrationResult(
         bundle, False, "", timings, home.home_auth_round_trip_count,
-        home.authorization_operation_count, domain_call_count, 0, barrier,
+        home.authorization_operation_count, home.authorization_evaluation_count,
+        domain_call_count, 0, barrier,
     )

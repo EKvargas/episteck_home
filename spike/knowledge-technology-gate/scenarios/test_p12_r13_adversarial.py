@@ -163,8 +163,14 @@ def test_case8_rt2_still_performs_fresh_home_revalidation(rig):
     v, exec_result = _verify(rig, basis, proof, "svc-nutrition", rig["svc_nutrition"].public_key)
     assert exec_result.executed
 
-    home = HomeStub(grants=(Grant("P1", "P1", "NUTRITION", "VIEW", "PART-1"),))
-    op = AuthorizationOperation("c8", "P1", ("P1",), "NUTRITION", "VIEW", "PART-1")
+    home = HomeStub(grants=(
+        Grant("P1", "P1", "NUTRITION", "VIEW", "PART-1"),
+        Grant("P1", "P1", "KNOWLEDGE", "VIEW", "PART-1"),
+    ))
+    op = AuthorizationOperation(
+        operation_id="c8", actor_person_id="P1", subject_person_ids=("P1",),
+        domains=("NUTRITION",), action="VIEW", partition_id="PART-1",
+    )
     revalidation = home.evaluate_plan((op,), version_pool={"c8": frozenset({"v1"})})
     assert revalidation.all_allowed()
     assert home.home_auth_round_trip_count == 1, "this is RT#2's own crossing, distinct from R13 execution"
@@ -192,8 +198,14 @@ def test_case10_home_round_trip_count_equals_two_for_full_flow(rig):
     pair); R13 verification happens at the DOMAIN, not via a new Home call."""
     from home_stub.stub import AuthorizationOperation, Grant, HomeStub
 
-    home = HomeStub(grants=(Grant("P1", "P1", "NUTRITION", "VIEW", "PART-1"),))
-    op = AuthorizationOperation("c10", "P1", ("P1",), "NUTRITION", "VIEW", "PART-1")
+    home = HomeStub(grants=(
+        Grant("P1", "P1", "NUTRITION", "VIEW", "PART-1"),
+        Grant("P1", "P1", "KNOWLEDGE", "VIEW", "PART-1"),
+    ))
+    op = AuthorizationOperation(
+        operation_id="c10", actor_person_id="P1", subject_person_ids=("P1",),
+        domains=("NUTRITION",), action="VIEW", partition_id="PART-1",
+    )
     home.evaluate_plan((op,), version_pool={"c10": frozenset({"v1"})})  # RT#1
 
     basis = _mint(rig, op="c10")

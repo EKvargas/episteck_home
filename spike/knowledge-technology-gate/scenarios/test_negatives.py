@@ -120,7 +120,10 @@ def test_oversized_compound_operation_denies_whole_not_partial(loaded_backend):
     home = HomeStub(grants=tuple(Grant(p0, p0, d, "VIEW", corpus.partitions[0]) for d in DOMAINS))
 
     oversized_ops = tuple(
-        AuthorizationOperation(f"op-{i}", p0, (p0,), "NUTRITION", "VIEW", corpus.partitions[0])
+        AuthorizationOperation(
+            operation_id=f"op-{i}", actor_person_id=p0, subject_person_ids=(p0,),
+            domains=("NUTRITION",), action="VIEW", partition_id=corpus.partitions[0],
+        )
         for i in range(MAX_REQUIREMENTS + 3)
     )
     assert len(oversized_ops) > MAX_REQUIREMENTS

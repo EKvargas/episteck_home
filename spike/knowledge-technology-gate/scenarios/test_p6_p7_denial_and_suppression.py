@@ -38,7 +38,7 @@ def test_p6_allow_deny_nocontent_timing_distributions(loaded_backend):
     p0, p1 = corpus.persons[0], corpus.persons[1] if len(corpus.persons) > 1 else corpus.persons[0]
     full_grants = tuple(
         Grant(actor, actor, d, "VIEW", corpus.partitions[0])
-        for actor in corpus.persons for d in DOMAINS
+        for actor in corpus.persons for d in (*DOMAINS, "KNOWLEDGE")
     )
 
     def timed_run(grants, subject):
@@ -87,7 +87,8 @@ def test_p7_suppressed_record_unaddressable_though_present(loaded_backend):
     target = next(a for a in corpus.assertions if a.version_id == suppressed.target_version_id)
     actor = target.subject_person_ids[0]
     full_grants = tuple(
-        Grant(actor, s, d, "VIEW", corpus.partitions[0]) for s in target.subject_person_ids for d in DOMAINS
+        Grant(actor, s, d, "VIEW", corpus.partitions[0])
+        for s in target.subject_person_ids for d in (*DOMAINS, "KNOWLEDGE")
     )
     home = HomeStub(grants=full_grants)
 

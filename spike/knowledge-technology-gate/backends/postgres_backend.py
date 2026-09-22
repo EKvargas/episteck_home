@@ -14,7 +14,7 @@ Connection configuration (correction 8) is explicit below, documented per settin
 """
 from __future__ import annotations
 
-from .common import AuthorizedSet, ContentAccessLog, KnowledgeBackend, PlannedMetadata
+from .common import AuthorizedSet, CandidateRequirement, ContentAccessLog, KnowledgeBackend, PlannedMetadata
 from .model import Corpus
 
 # Documented PostgreSQL session configuration (correction 8).
@@ -142,7 +142,12 @@ class PostgresKnowledgeBackend(KnowledgeBackend):
         self, *, partition_id: str, subject_person_ids: tuple[str, ...], domains: tuple[str, ...],
         as_of: int,
     ) -> PlannedMetadata:
-        """Security-metadata-only query -- SELECT list never includes content_text."""
+        """Security-metadata-only query -- SELECT list never includes content_text.
+
+        CORRECTION 1 (Product Architect review of PR #33): returned
+        `candidate_requirements` carries each candidate's COMPLETE subject/domain
+        membership, not just the requested slice -- see sqlite_backend.py's identical
+        correction for the full rationale (one logical schema, both realizations)."""
         with self.conn.cursor() as cur:
             cur.execute(f"SET search_path TO {self.schema_name}")
             cur.execute(
@@ -162,9 +167,27 @@ class PostgresKnowledgeBackend(KnowledgeBackend):
                 (partition_id, as_of, as_of, list(subject_person_ids), list(domains)),
             )
             rows = cur.fetchall()
-        candidate_ids = tuple(r[0] for r in rows)
+            candidate_ids = tuple(r[0] for r in rows)
+
+            requirements: list[CandidateRequirement] = []
+            for vid in candidate_ids:
+                cur.execute("SELECT subject_person_id FROM assertion_subject WHERE version_id = %s", (vid,))
+                subj_rows = cur.fetchall()
+                cur.execute("SELECT domain FROM assertion_domain WHERE version_id = %s", (vid,))
+                dom_rows = cur.fetchall()
+                requirements.append(
+                    CandidateRequirement(
+                        version_id=vid,
+                        subject_person_ids=tuple(r[0] for r in subj_rows),
+                        domains=tuple(r[0] for r in dom_rows),
+                    )
+                )
+
+        # rows_returned: logical candidate-row count, NOT a physical-access claim
+        # (correction 9). See explain_plan_evidence() for Layer B corroboration.
         return PlannedMetadata(
-            partition_id=partition_id, candidate_version_ids=candidate_ids, rows_inspected=len(candidate_ids)
+            partition_id=partition_id, candidate_version_ids=candidate_ids,
+            candidate_requirements=tuple(requirements), rows_returned=len(candidate_ids),
         )
 
     def fetch_content(self, authorized: AuthorizedSet, *, log: ContentAccessLog) -> list[dict]:

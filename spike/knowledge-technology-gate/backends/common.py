@@ -18,12 +18,46 @@ from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
+class CandidateRequirement:
+    """The COMPLETE security-metadata requirement for one candidate version -- CORRECTION
+    1 (Product Architect review of PR #33): a candidate with subjects {P1, P2} and
+    domains {NUTRITION, HEALTH} must expose ALL FOUR subject/domain pairs, not just one,
+    so the orchestration layer can compile the true union requirement set before ever
+    asking Home for a decision. NEVER carries content_text."""
+
+    version_id: str
+    subject_person_ids: tuple[str, ...]
+    domains: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class PlannedMetadata:
-    """Result of protected security-metadata planning -- NEVER carries content_text."""
+    """Result of protected security-metadata planning -- NEVER carries content_text.
+
+    CORRECTION 9 (terminology, Product Architect review of PR #33): `rows_returned` (was
+    misleadingly named `rows_inspected`) is the count of CANDIDATE ROWS THE QUERY
+    RETURNED -- a logical metric, not a claim about physical rows/pages the backend
+    touched internally. The physical-access-style metric
+    (`security_metadata_rows_inspected`, per Phase-1 SS16.6.1) requires backend-internal
+    instrumentation this spike's application layer cannot itself produce with certainty;
+    see `backends/instrumentation.py` for the corroboration-only Layer B evidence, which
+    may legitimately report UNKNOWN rather than a false-precision number.
+    """
 
     partition_id: str
     candidate_version_ids: tuple[str, ...]  # eligible before suppression/authorization filter
-    rows_inspected: int  # security_metadata_rows_inspected
+    candidate_requirements: tuple[CandidateRequirement, ...]  # complete per-candidate subject/domain sets
+    rows_returned: int  # metadata_candidate_rows_produced -- logical count, NOT a physical-access claim
+
+    def union_requirement_pairs(self) -> tuple[tuple[str, str], ...]:
+        """The complete union of (subject, domain) pairs across every surviving
+        candidate -- what a compound Knowledge authorization operation must request."""
+        pairs: list[tuple[str, str]] = []
+        for req in self.candidate_requirements:
+            for s in req.subject_person_ids:
+                for d in req.domains:
+                    pairs.append((s, d))
+        return tuple(dict.fromkeys(pairs))
 
 
 @dataclass(frozen=True)

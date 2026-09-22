@@ -17,7 +17,9 @@ def test_p8_rt2_denies_after_authority_revoked_between_rt1_and_rt2(loaded_backen
     was detected AT the barrier, not by any cached expiry."""
     backend, corpus = loaded_backend
     p0 = corpus.persons[0]
-    grants = tuple(Grant(p0, p0, d, "VIEW", corpus.partitions[0]) for d in DOMAINS)
+    grants = tuple(Grant(p0, p0, d, "VIEW", corpus.partitions[0]) for d in DOMAINS) + (
+        Grant(p0, p0, "KNOWLEDGE", "VIEW", corpus.partitions[0]),
+    )
     home = HomeStub(grants=grants)
 
     # Interleave: mutate authority mid-flow by wrapping evaluate_plan. We simulate this by
@@ -39,7 +41,7 @@ def test_p8_rt2_denies_after_authority_revoked_between_rt1_and_rt2(loaded_backen
     from home_stub.stub import AuthorizationOperation
 
     op = AuthorizationOperation(
-        operation_id="p8-op", actor_person_id=p0, subject_person_ids=(p0,), domain=DOMAINS[0],
+        operation_id="p8-op", actor_person_id=p0, subject_person_ids=(p0,), domains=(DOMAINS[0],),
         action="VIEW", partition_id=corpus.partitions[0],
     )
     rt1 = home2.evaluate_plan((op,), version_pool={"p8-op": frozenset({"v1"})})

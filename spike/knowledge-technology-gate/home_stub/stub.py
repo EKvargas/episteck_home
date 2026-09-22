@@ -11,6 +11,21 @@ RT#1: evaluate a bounded Authorization Plan (independently complete operations).
 RT#2: freshly RE-EVALUATE all operations contributing to disclosure -- not a TTL check.
        Scenarios may mutate authority state between RT#1 and RT#2 (e.g. P8's grant
        revocation) to prove RT#2 is a real re-evaluation.
+
+CORRECTION 1 (Product Architect review of PR #33): a Knowledge authorization operation
+must require EVERY Person subject AND EVERY required content domain, all-or-nothing. An
+assertion with subjects {P1, P2} and domains {NUTRITION, HEALTH} must not become
+addressable merely because (P1, NUTRITION) was authorized -- B1's conservative
+intersection requires the WHOLE requirement set. `AuthorizationOperation` now carries
+`subject_person_ids` AND `domains` (plural, both complete sets) plus an explicit
+`include_knowledge_scope` flag (B1/B6 require a Knowledge-scope authorization in addition
+to per-domain authorization), and `_check()` verifies every (subject, domain, action)
+pair in the full cross product, never just the first domain.
+
+CORRECTION 2: `authorization_operation_count` now means the number of independently
+complete LOGICAL operations submitted in a Plan -- NOT the number of times operations are
+evaluated across RT#1 + RT#2. A separate `authorization_evaluation_count` tracks how many
+times operations were evaluated (RT#1 + RT#2 re-evaluations of the same logical set).
 """
 from __future__ import annotations
 
@@ -24,6 +39,8 @@ from dataclasses import dataclass, field
 # calibrated constant, rather than trying to reproduce a distribution it did not measure.
 CALIBRATED_HOME_CROSSING_MS = 111.57
 
+KNOWLEDGE_SCOPE_DOMAIN = "KNOWLEDGE"
+
 
 @dataclass
 class Grant:
@@ -36,14 +53,34 @@ class Grant:
 
 @dataclass
 class AuthorizationOperation:
-    """One independently-complete authorization operation within a Plan (B6 SS8.3.1)."""
+    """One independently-complete authorization operation within a Plan (B6 SS8.3.1).
+
+    CORRECTION 1: `subject_person_ids` and `domains` are BOTH complete sets. The
+    operation is granted only if the actor holds `action` (or MANAGE) for EVERY
+    (subject, domain) pair in their cross product, AND -- if `include_knowledge_scope`
+    is True (the default, per B1/B6's accepted requirement that Knowledge scope
+    authorization is required in addition to per-domain authorization) -- for
+    (subject, KNOWLEDGE, action) as well, for every subject.
+
+    This operation is all-or-nothing: `HomeStub._check` returns a single bool for the
+    whole cross product, never a partial/candidate-by-candidate result.
+    """
 
     operation_id: str
     actor_person_id: str
     subject_person_ids: tuple[str, ...]
-    domain: str
+    domains: tuple[str, ...]
     action: str
     partition_id: str
+    include_knowledge_scope: bool = True
+
+    def required_pairs(self) -> tuple[tuple[str, str], ...]:
+        """The complete (subject, domain) requirement set this operation demands,
+        including the Knowledge-scope requirement per subject unless disabled."""
+        pairs = [(s, d) for s in self.subject_person_ids for d in self.domains]
+        if self.include_knowledge_scope:
+            pairs.extend((s, KNOWLEDGE_SCOPE_DOMAIN) for s in self.subject_person_ids)
+        return tuple(dict.fromkeys(pairs))  # de-duplicate, preserve order
 
 
 @dataclass(frozen=True)
@@ -51,6 +88,7 @@ class OperationDecision:
     operation_id: str
     allowed: bool
     granted_version_ids: frozenset[str] = field(default_factory=frozenset)
+    missing_requirement: tuple[str, str] | None = None  # (subject, domain) that failed, for test/debug visibility only
 
 
 @dataclass(frozen=True)
@@ -72,7 +110,13 @@ class HomeStub:
         self._grants: list[Grant] = list(grants)
         self._inject_latency = inject_latency
         self.home_auth_round_trip_count = 0
+        # CORRECTION 2: logical operation count -- how many DISTINCT complete operations
+        # have ever been submitted across the whole scenario. Evaluating the SAME logical
+        # operation again at RT#2 does not add to this count.
         self.authorization_operation_count = 0
+        # New: how many times operations were EVALUATED (RT#1 + RT#2 both count).
+        self.authorization_evaluation_count = 0
+        self._seen_operation_ids: set[str] = set()
         self._unavailable = False
 
     def mutate_authority(self, *, revoke: tuple[Grant, ...] = (), add: tuple[Grant, ...] = ()) -> None:
@@ -107,6 +151,11 @@ class HomeStub:
 
         Raises RuntimeError if Home is marked unavailable (fail-closed caller obligation:
         caller must deny, never treat an exception as "no restriction").
+
+        CORRECTION 2: `authorization_operation_count` increments only for operation_ids
+        not previously seen by this HomeStub instance (new logical operations).
+        `authorization_evaluation_count` increments by len(operations) every call,
+        counting RT#1 and RT#2 re-evaluations of the same logical set separately.
         """
         start = time.monotonic()
         if self._unavailable:
@@ -115,30 +164,38 @@ class HomeStub:
 
         decisions = []
         for op in operations:
-            allowed = self._check(op)
+            allowed, missing = self._check(op)
             granted = version_pool.get(op.operation_id, frozenset()) if allowed else frozenset()
-            decisions.append(OperationDecision(op.operation_id, allowed, granted))
+            decisions.append(OperationDecision(op.operation_id, allowed, granted, missing))
+            if op.operation_id not in self._seen_operation_ids:
+                self._seen_operation_ids.add(op.operation_id)
+                self.authorization_operation_count += 1
         self._sleep_calibrated()
         elapsed = (time.monotonic() - start) * 1000.0
 
         self.home_auth_round_trip_count += 1
-        self.authorization_operation_count += len(operations)
+        self.authorization_evaluation_count += len(operations)
         return PlanDecision(decisions=tuple(decisions), elapsed_ms=elapsed)
 
-    def _check(self, op: AuthorizationOperation) -> bool:
-        for subject in op.subject_person_ids:
+    def _check(self, op: AuthorizationOperation) -> tuple[bool, tuple[str, str] | None]:
+        """CORRECTION 1: check the COMPLETE (subject, domain) cross product, including
+        the Knowledge-scope requirement. All-or-nothing: the first missing pair fails
+        the whole operation; no partial/candidate-by-candidate salvage."""
+        for subject, domain in op.required_pairs():
             found = any(
                 g.actor_person_id == op.actor_person_id
                 and g.subject_person_id == subject
-                and g.domain == op.domain
+                and g.domain == domain
                 and g.partition_id == op.partition_id
                 and (g.action == op.action or g.action == "MANAGE")
                 for g in self._grants
             )
             if not found:
-                return False  # ALL subjects must be authorized -- conservative intersection (B1)
-        return True
+                return False, (subject, domain)
+        return True, None
 
     def reset_counters(self) -> None:
         self.home_auth_round_trip_count = 0
         self.authorization_operation_count = 0
+        self.authorization_evaluation_count = 0
+        self._seen_operation_ids.clear()

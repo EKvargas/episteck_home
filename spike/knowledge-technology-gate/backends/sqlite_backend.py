@@ -17,7 +17,7 @@ import sqlite3
 import time
 from pathlib import Path
 
-from .common import AuthorizedSet, ContentAccessLog, KnowledgeBackend, PlannedMetadata
+from .common import AuthorizedSet, CandidateRequirement, ContentAccessLog, KnowledgeBackend, PlannedMetadata
 from .model import Corpus
 
 # Documented SQLite configuration (correction 8). Rationale per pragma:
@@ -164,7 +164,17 @@ class SQLiteKnowledgeBackend(KnowledgeBackend):
     ) -> PlannedMetadata:
         """Security-metadata-only query. Selects version_id + control columns; NEVER
         content_text -- H2's separability requirement, checked structurally by the SELECT
-        list, not by convention."""
+        list, not by convention.
+
+        CORRECTION 1 (Product Architect review of PR #33): candidacy requires the
+        assertion to have AT LEAST ONE requested subject and AT LEAST ONE requested
+        domain (the query-shape filter below), but the RETURNED `candidate_requirements`
+        carries each candidate's COMPLETE subject/domain membership -- not just the
+        requested slice -- so the orchestration layer can compile the true union
+        requirement set and Home can be asked to authorize ALL of it, not merely the
+        subset that matched the query filter. A candidate with subjects {P1, P2} whose
+        query only requested P1 still reports BOTH P1 and P2 here.
+        """
         cur = self.conn.cursor()
         subject_ph = ",".join("?" * len(subject_person_ids))
         domain_ph = ",".join("?" * len(domains))
@@ -184,11 +194,31 @@ class SQLiteKnowledgeBackend(KnowledgeBackend):
         params = [partition_id, as_of, as_of, *subject_person_ids, *domains]
         rows = cur.execute(sql, params).fetchall()
         candidate_ids = tuple(r["version_id"] for r in rows)
-        # rows_inspected: report the row count SQLite actually scanned per EXPLAIN QUERY
-        # PLAN, corroboration layer (instrumentation.py) computes the precise figure;
-        # here we report the returned-candidate count as the cheap in-band signal.
+
+        requirements: list[CandidateRequirement] = []
+        for vid in candidate_ids:
+            subj_rows = cur.execute(
+                "SELECT subject_person_id FROM assertion_subject WHERE version_id = ?", (vid,)
+            ).fetchall()
+            dom_rows = cur.execute(
+                "SELECT domain FROM assertion_domain WHERE version_id = ?", (vid,)
+            ).fetchall()
+            requirements.append(
+                CandidateRequirement(
+                    version_id=vid,
+                    subject_person_ids=tuple(r["subject_person_id"] for r in subj_rows),
+                    domains=tuple(r["domain"] for r in dom_rows),
+                )
+            )
+
+        # rows_returned: the logical count of candidate rows this query returned --
+        # NOT a claim about physical rows/pages the backend touched internally
+        # (correction 9). See backends/instrumentation.py for the separate,
+        # corroboration-only physical-access evidence (Layer B), which may report
+        # UNKNOWN rather than false precision.
         return PlannedMetadata(
-            partition_id=partition_id, candidate_version_ids=candidate_ids, rows_inspected=len(candidate_ids)
+            partition_id=partition_id, candidate_version_ids=candidate_ids,
+            candidate_requirements=tuple(requirements), rows_returned=len(candidate_ids),
         )
 
     def fetch_content(self, authorized: AuthorizedSet, *, log: ContentAccessLog) -> list[dict]:

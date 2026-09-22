@@ -10,10 +10,20 @@ DOMAINS = ("NUTRITION", "HEALTH", "CALENDAR", "FINANCE", "HOUSEHOLD")
 
 
 def _full_grants(corpus):
+    """CORRECTION 1: a genuinely PERMISSIVE grant set for baseline P1-P5 scenarios
+    (these test the ordinary-path plumbing, not denial), so the fixed actor `p0` is
+    authorized for EVERY subject the synthetic corpus may name in a multi-subject
+    candidate -- not just themselves. Includes KNOWLEDGE scope, required in addition to
+    every content domain by default (AuthorizationOperation.include_knowledge_scope).
+    A candidate naming subjects {P0, P1} requires authorization for BOTH; a grant set
+    that only covers self-access would (correctly) deny the whole compound operation,
+    which is exactly what the multi-subject correction exists to catch -- see
+    test_negatives.py for the adversarial tests proving that denial path."""
     grants = []
     for actor in corpus.persons:
-        for domain in DOMAINS:
-            grants.append(Grant(actor, actor, domain, "VIEW", corpus.partitions[0]))
+        for subject in corpus.persons:
+            for domain in (*DOMAINS, "KNOWLEDGE"):
+                grants.append(Grant(actor, subject, domain, "VIEW", corpus.partitions[0]))
     return tuple(grants)
 
 
