@@ -30,11 +30,11 @@ PROCESS
 
 Technology must not dictate the Knowledge model.
 
-This is a working decision register, NOT the final Knowledge architecture. The [independent architecture review](../reviews/2026-09-19-knowledge-independent-architecture-review.md) is historical review input, not canonical architecture. Its reviewed baseline was `ddebab6439c9d68487d180dec6995fc546d3cf68`; the G1.6 closeout was merged subsequently. Its findings were initially recorded without disposition. B1–B5 are now resolved by the explicit Product Architect decisions below; B6 remains OPEN.
+This is a working decision register, NOT the final Knowledge architecture. The [independent architecture review](../reviews/2026-09-19-knowledge-independent-architecture-review.md) is historical review input, not canonical architecture. Its reviewed baseline was `ddebab6439c9d68487d180dec6995fc546d3cf68`; the G1.6 closeout was merged subsequently. Its findings were initially recorded without disposition. B1–B6 are now resolved by the explicit Product Architect decisions below.
 
 Canonical architecture remains in [ARCHITECTURE.md](../ARCHITECTURE.md), [KNOWLEDGE.md](../KNOWLEDGE.md), accepted ADRs, and approved architecture proposals. The accepted [B1 security/scope decision](KNOWLEDGE_B1_SECURITY_SCOPE.md) governs B1 where older Knowledge documentation is less precise, until later consolidation. The existing [Roadmap](../ROADMAP.md) identifies the Knowledge gate. Other canonical documents are not rewritten here, and no runtime approval is granted.
 
-Only explicit Product Architect decisions may accept, modify, or reject review recommendations. For each disposition, record the decision owner, date, exact accepted/modified/rejected finding, reasoning, acceptance scenarios, and references to approved architecture changes. **B1 is RESOLVED** by Product Architect acceptance with amendments on **2026-09-19**. **B2 is RESOLVED** by Product Architect acceptance with clarification on **2026-09-20**. **B3 is RESOLVED** by Product Architect acceptance with D2/D4 clarifications on **2026-09-21**. **B4 is RESOLVED** by Product Architect acceptance with C1–C4 clarifications on **2026-09-21**. **B5 is RESOLVED** by Product Architect acceptance with corrections on **2026-09-21**. B6 remains **OPEN / NOT DECIDED**. The Knowledge Technology Gate remains **OPEN**. A reviewer recommendation or this document's eventual merge does not itself select technology or authorize runtime implementation.
+Only explicit Product Architect decisions may accept, modify, or reject review recommendations. For each disposition, record the decision owner, date, exact accepted/modified/rejected finding, reasoning, acceptance scenarios, and references to approved architecture changes. **B1 is RESOLVED** by Product Architect acceptance with amendments on **2026-09-19**. **B2 is RESOLVED** by Product Architect acceptance with clarification on **2026-09-20**. **B3 is RESOLVED** by Product Architect acceptance with D2/D4 clarifications on **2026-09-21**. **B4 is RESOLVED** by Product Architect acceptance with C1–C4 clarifications on **2026-09-21**. **B5 is RESOLVED** by Product Architect acceptance with corrections on **2026-09-21**. **B6 is RESOLVED** by Product Architect acceptance with corrections on **2026-09-22**. The Knowledge Technology Gate remains **OPEN** and is now authorized to begin. A reviewer recommendation or this document's eventual merge does not itself select technology or authorize runtime implementation.
 
 ## Current five-layer model
 
@@ -58,7 +58,7 @@ This distinction preserves the current conceptual direction. Contested ownership
 
 ## Security partition — accepted B1 invariant
 
-Status: ACCEPTED — PRODUCT ARCHITECT B1 DECISION, 2026-09-19 (B6 OPEN)
+Status: ACCEPTED — PRODUCT ARCHITECT B1 DECISION, 2026-09-19
 
 **Every durable Knowledge object and every derivative belongs to exactly one trusted security partition.**
 
@@ -127,7 +127,7 @@ Accepted decisions:
 - Source/container decoupling for an exact projection does not automatically require every Person whose information occurs elsewhere in the original. It requires source-handling authority, trusted projection approval, proof that removed Person/domain sensitivity is absent from the output, exact version/use binding and preservation of every remaining restriction. If the output still reveals protected content, affected-Person authority is required. Source custody cannot remove Person protection; Person consent cannot disclose unrelated protected source material.
 - Reclassification makes stale derivatives immediately ineligible. Current authorization constrains the candidate space before sensitive retrieval. No technology or runtime is selected or approved.
 
-Scenarios A–J are accepted conceptual outcomes and future acceptance specifications, not runtime tests. B2 resolution changes no schema, contract, service, database, index, workflow, deployment or production system. B3, B4 and B5 are resolved below; B6 remains OPEN.
+Scenarios A–J are accepted conceptual outcomes and future acceptance specifications, not runtime tests. B2 resolution changes no schema, contract, service, database, index, workflow, deployment or production system. B3, B4, B5 and B6 are resolved below.
 
 ## B3 — Confirmation and lifecycle
 
@@ -208,24 +208,63 @@ Evidence: the existing [Nutrition profile fields/write path](https://github.com/
 
 ## B6 — Trusted retrieval and ContextBundle
 
-Status: OPEN
+Status: B6 — RESOLVED — PRODUCT ARCHITECT DECISION
 
-Product Architect disposition: NOT DECIDED
+Decision owner: Product Architect
 
-Questions to resolve:
+Decision date: 2026-09-22
 
-- How does trusted actor resolution bind each request?
-- How does the security partition constrain every retrieval stage?
-- How is authorization enforced before retrieval, including candidate search space?
-- How does discoverability prevent unauthorized resource enumeration?
-- How is authorization freshness maintained across the request and any caches?
-- Which current lifecycle states and validity intervals are eligible?
-- How are source and canonical-domain retrieval independently authorized?
-- What final disclosure revalidation is needed if access or content changes during assembly?
-- How is ContextBundle bounded to the current task?
-- How is a persisted universal cross-domain bundle prevented?
+Product Architect disposition: **ACCEPTED WITH CORRECTIONS — B6 RESOLVED**
 
-Review concern: the bundle's structural validation does not prove that supplied authorization was trusted, current, or checked before retrieval. Its accepted content is broader than normal active/current retrieval. No revised contract, service or retrieval mechanism is approved here.
+Authoritative decision: [Knowledge B6 — Trusted retrieval and ContextBundle](KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md), including its section 4 trusted-retrieval invariants, the section 8 multi-resource authorization protocol, the section 12 ContextBundle semantics, the section 18A performance architecture, the section 19 scenarios and the section 23 dispositions.
+
+**Acceptance of B6 authorizes the Knowledge Technology Gate to begin. It does not authorize implementation.**
+
+Accepted core architecture:
+
+> **authorization-constrained retrieval planning + suppression/lifecycle before candidacy + mandatory pre-disclosure revalidation.**
+
+The authorization decision, suppression register and lifecycle predicates are compiled into the addressable scope of the retrieval operation, so unauthorized or ineligible records are not filtered out but are **not addressable**. No retrieval, index, vector, graph or storage technology is selected.
+
+PA dispositions recorded: **PA-1** ACCEPT Alternative C · **PA-2** ACCEPT WITH CORRECTIONS · **PA-3** **CHANGED** — bounded partial authorization across one compound retrieval is not accepted, as it conflicts with accepted B1 §10 · **PA-4** RESOLVED at the architecture level via a Home-owned request authorization context, with no reusable or bearer user delegation and no weakening of single-use replay protection · **PA-5** ACCEPT disputed assertions excluded from ordinary use but available in explicitly authorized review/history use with attribution · **PA-6** ACCEPT the policy-adapter seam · **PA-7** ACCEPT architectural bounds with concrete values deferred · **PA-8** ACCEPT cites-or-abstains with the anti-oracle and confidence-is-not-authority corrections · **PA-9** ACCEPT backend neutrality, with no semantic/vector/hybrid retrieval assumption.
+
+Four required corrections were issued and incorporated: **(1)** each authorization operation is complete and all-or-nothing, with no automatic partial decomposition of a compound question, while distinct operations within one user turn remain independent; **(2)** revalidation under single-use delegation is resolved by a Home-owned request authorization context — the delegation is consumed once, the decision identity is a correlation handle only, the caller never resupplies a trusted actor or partition, and revalidation is a **fresh re-evaluation against current grants rather than a TTL check**; **(3)** untrusted input may *nominate* requested subjects, domains and temporal scope but never establish identity, partition, canonical resolution, use authority or authorization, and the trusted clock is separate from any requested historical interval; **(4)** the ContextBundle is never persisted, and any retained context-construction information becomes a separately defined audit artifact with its own purpose, classification, partition, lineage, retention and B2/B4 protections. See section 23.1 of the proposal.
+
+No correction exposed a contradiction requiring the selected retrieval model to change or requiring B1–B5 to reopen.
+
+**Performance and latency architecture (§18A of the accepted decision, PA-10 accepted; B6 RESOLVED, Knowledge Technology Gate OPEN).** A performance analysis was added after Board review. It concludes the secure architecture **is viable for interactive chat** and **did not change the core recommendation**; no security control was relaxed. Key findings from measured repository evidence: the ~120 ms Home round trip is **network cost, not Home's work** — G1.6 recorded delegation verification adding "well under a millisecond against a ~120 ms network-bound baseline" — and connection reuse is already worth ~195 ms per call (~307 ms cold vs ~111 ms warm). Accepted invariants: no authorization per candidate; ordinary reads ≤ **2** Home authorization round trips; independent domain reads concurrent by default; security predicates composed within owner boundaries rather than as serial network calls; lazy source expansion; revalidation once per disclosure boundary; bounds before execution; p50/p95/p99 measured before technology approval; pre-LLM ordinary-read p95 ≤ 500 ms; LLM TTFT measured separately from orchestration. **This adds performance disqualification criteria to the Technology Gate** (§18A.11) and a benchmark requirement covering scenarios P1–P8 on realistic cross-node topology (§18A.10). No benchmark is implemented and no technology is selected.
+
+**Final reconciliation pass (2026-09-22).** Four corrections: protected security-metadata planning now **precedes** authorization, because a request cannot know a record's complete requirement set — demonstrated against B1 scenario D, where a Household record's hidden `{PERSON/A}` + HEALTH restriction would otherwise be discovered only after candidacy; **Authorization Plan**, **Authorization Operation** and **Home network round trip** are separated so several independently complete operations share one crossing without any becoming partial; **downstream execution authority** is stated as a requirement with an explicitly unresolved mechanism, since the measured "domain read" figure already contains a Home crossing; and the **latency accounting is corrected** for that double-count, with raw domain-access cost marked UNKNOWN and benchmark-required. **Two new Technology Gate obligations follow:** benchmarks must report `home_auth_round_trip_count`, `authorization_operation_count`, `domain_call_count` and `source_expansion_count` alongside latency, and must prove that `home_auth_round_trip_count` does not grow with `domain_call_count`. PA-10a ACCEPT WITH CLARIFICATION (the unit is the network crossing), PA-10b MODIFIED (p50 is an aspiration for Gate calibration, not a demonstrated capability), PA-10c/d/e ACCEPT.
+
+Questions resolved by this decision:
+
+| Question | Resolved by |
+|---|---|
+| How does trusted actor resolution bind each request? | Trusted envelope: actor, partition, machine caller and clock are server-side and never nominable (§7.1, §7.3) |
+| How does the security partition constrain every retrieval stage? | Immutable persisted partition binding on every object; all references resolve in-partition (§7.3, §15.2) |
+| How is authorization enforced before retrieval, including candidate search space? | Authorization compiles into the addressable scope; protected security-metadata planning establishes complete requirement sets first (§9.1, §9.2) |
+| How does discoverability prevent unauthorized resource enumeration? | Non-enumerating refusals; planning-set membership discloses nothing; denial wording does not distinguish absent from unauthorized (§9.2, §17) |
+| How is authorization freshness maintained across the request and any caches? | Home-owned request authorization context with a bounded window; caches carry currency bindings and are never authority (§8.4, §15.2) |
+| Which current lifecycle states and validity intervals are eligible? | Exact-version eligibility evaluated against the trusted clock; ACTIVE is derived readiness only (§10.3) |
+| How are source and canonical-domain retrieval independently authorized? | Each is its own complete authorization operation with its own requirement set (§8.3.1, §13, §14) |
+| What final disclosure revalidation is needed if access or content changes during assembly? | Fresh re-evaluation by Home against current grants — not a TTL check — plus suppression, lifecycle, classification and applicability (§11.1, §11.2) |
+| How is ContextBundle bounded to the current task? | Request-local, ephemeral, non-transferable, exact-version, bounded and honest (§12.1) |
+| How is a persisted universal cross-domain bundle prevented? | The bundle is never persisted; retained context-construction information is a separately defined audit artifact that is never reusable as context (§12.4) |
+
+### Implementation / Technology Gate verification items
+
+These are **not** open B6 architecture questions and **do not reopen B6**. They are verification obligations the Technology Gate and implementation must discharge against the accepted decision:
+
+- **R13** — downstream pre-authorized execution must satisfy the non-bearer boundary: possession of an execution artifact alone is never sufficient authority, and verification must additionally bind trusted server-side context. The Gate must demonstrate either a compliant mechanism preserving the ≤2 ordinary Home-crossing architecture, or evidence it cannot be done — in which case performance budgets are revised upward **without weakening authorization** (§18A.3a).
+- **R14** — raw domain access latency excluding authorization remains UNKNOWN and must be measured (§18A.3b).
+- Benchmark p50/p95/p99 across every stage, warm and cold, on realistic cross-node topology (§18A.10).
+- Report `home_auth_round_trip_count`, `authorization_operation_count`, `domain_call_count` and `source_expansion_count`, and prove crossings do not grow with domain calls (§18A.10).
+- Measure allow / deny / no-content timing distributions so denial timing does not become an existence oracle (PA-10d, §18A.9).
+- Demonstrate protected metadata resolvable without reading content, and materialization bindings testable without a rebuild (§9.2, §15.2).
+
+Historical review concern (addressed by this decision): the bundle's structural validation does not prove that supplied authorization was trusted, current, or checked before retrieval. **Corrected and quantified by the B6 investigation:** its accepted content is broader than *any* retrieval, not merely broader than normal active/current retrieval. In-memory probes on this baseline showed `ContextBundle` accepts all six lifecycle statuses including `REVOKED` and `PROPOSED`, accepts a claim whose stated validity window closed a year earlier, never authorizes the Circle even while carrying `circle_ids`, cannot express a second required content domain, carries no partition binding, no retrieval timestamp, no decision binding and no revalidation member, and deep-copies cleanly into a portable assertion of authorization. The earlier wording understated this.
+
+Additional verified constraints shaping B6: `check_access_many` decides at most 8 `(domain, action)` pairs for exactly **one** subject; the gateway mints exactly one delegation per HTTP POST via `auth_request`; delegations are single-use with atomic replay claiming and a 300-second maximum lifetime; and the pinned MCP runtime rejects JSON-RPC batch arrays outright. One tool call equals one POST equals one delegation, enforced at two layers. No contract, service, schema or retrieval mechanism is approved by this decision.
 
 ## Process register
 
@@ -374,7 +413,7 @@ Engine transactions do not by themselves make remote Knowledge commands atomic w
 
 Knowledge/domain state remains canonical. A completed process flag cannot activate an uncommitted claim or prove that all deletion obligations have finished. Reconcile workflow progress against current domain state and operation receipts; do not overwrite newer domain state to match an old workflow.
 
-If a domain commit succeeds but acknowledgement is lost, recovery should discover the existing result. If the workflow advances without a successful domain command, the domain operation remains incomplete. B3's atomic outcome and idempotency requirements and B4's cleanup/anti-resurrection obligations are accepted; B5 assigns their owners; the concrete reconciliation, cleanup and freshness **mechanisms** remain B6 OPEN.
+If a domain commit succeeds but acknowledgement is lost, recovery should discover the existing result. If the workflow advances without a successful domain command, the domain operation remains incomplete. B3's atomic outcome and idempotency requirements and B4's cleanup/anti-resurrection obligations are accepted; B5 assigns their owners and B6 defines the retrieval, freshness and revalidation protocol; concrete **mechanisms** remain Technology Gate work.
 
 ### 6. How should retry and idempotency work?
 
@@ -441,7 +480,7 @@ B4: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNO
 
 B5: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-21 ([accepted decision](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md))
 
-B6: OPEN
+B6: RESOLVED — PRODUCT ARCHITECT DECISION, 2026-09-22 ([accepted decision](KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md))
 
 Flowable selection: NOT APPROVED. B4 confirms orchestration is never canonical Knowledge truth and that immediate suppression must not wait on it.
 
@@ -449,7 +488,29 @@ No installation, deployment, replication, configuration, process triggering, or 
 
 ## Gate completion and change boundary
 
-The next work is explicit Product Architect disposition of **B6** and the remaining process requirements. B6 has no proposal. B1–B5 are resolved by the accepted decisions above; the Knowledge Technology Gate remains OPEN and is not complete. Technology selection additionally requires B6 to close first. Agreed acceptance scenarios must precede technology selection. Technology selection and runtime implementation require their own approval; B1/B2/B3/B4 acceptance supplies neither.
+**The B1–B6 architecture prerequisites are now closed.** The next work is the **Knowledge Technology Gate** itself, which remains OPEN and is now authorized to begin.
+
+The Gate must evaluate candidates against the accepted B1–B6 requirements, including at minimum:
+
+| Requirement | Source |
+|---|---|
+| Protected security-metadata planning **before** authorization and content candidacy | B6 §9.2, §6 |
+| Authorization-constrained retrieval — no retrieve-then-filter, in any form | B1 §10; B6 §9.1 |
+| Suppression enforced **before** candidacy, and again before disclosure | B4 §8; B6 §10.1 |
+| Exact-version lifecycle evaluation | B3 §5; B6 §10.3 |
+| Fresh pre-disclosure revalidation — a re-evaluation, not a TTL check | B3 §11.8; B6 §11.1 |
+| Materialization bindings that prove currency without a rebuild | B6 §15.2 |
+| Restore-freshness proof; unknown freshness fails closed | B4 C1; B6 §16 |
+| ContextBundle never persisted | B6 §12.4 |
+| **R13** — downstream pre-authorized execution satisfying the non-bearer boundary | B6 §18A.3a |
+| **R14** — raw domain access latency measured | B6 §18A.3b |
+| p50/p95/p99 benchmarks, warm and cold, on realistic cross-node topology | B6 §18A.10 |
+| Home-crossing counters proving crossings do not grow with domain calls | B6 §18A.10 |
+| Independent domain reads concurrent by default | B6 §18A.6 |
+| Lazy source expansion | B6 §18A.7 |
+| The ten performance disqualification criteria | B6 §18A.11 |
+
+**No candidate is selected by this closure.** Technology selection and runtime implementation require their own separate approval; B1–B6 acceptance supplies neither. Agreed acceptance scenarios (B6 §19, P1–P8) must precede technology selection.
 
 The original gate-opening task changed only the independent review artifact and this gate register. The B1 follow-up changes only [KNOWLEDGE_B1_SECURITY_SCOPE.md](KNOWLEDGE_B1_SECURITY_SCOPE.md) and B1 status/references in this register. It does not modify canonical architecture documents, existing ADRs, `packages/home-contracts/`, `services/`, `deploy/`, or production configuration.
 
