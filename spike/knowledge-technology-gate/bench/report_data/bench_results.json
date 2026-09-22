@@ -1,0 +1,202 @@
+{
+  "sqlite_configuration": {
+    "journal_mode": "WAL",
+    "synchronous": "NORMAL",
+    "busy_timeout": 5000
+  },
+  "calibrated_home_crossing_ms": 111.57,
+  "measurement_policy": {
+    "warmup_count": 3,
+    "measurement_count": 30,
+    "underpowered_threshold": 30
+  },
+  "postgres_availability": {
+    "available": false,
+    "reason": "no SPIKE_POSTGRES_DSN set; no reachable container daemon (docker/podman info failed) -- spike does not start one",
+    "dsn": null,
+    "version": null
+  },
+  "stages": [
+    {
+      "corpus_size": "C-small",
+      "stage": "metadata_planning_sqlite",
+      "warmup_count": 3,
+      "measurement_count": 30,
+      "p50_ms": 0.124,
+      "p95_ms": 0.134,
+      "p99_ms": 0.136,
+      "underpowered": false,
+      "samples_measured_local": "MEASURED"
+    },
+    {
+      "corpus_size": "C-small",
+      "stage": "content_access_sqlite",
+      "warmup_count": 3,
+      "measurement_count": 30,
+      "p50_ms": 0.065,
+      "p95_ms": 0.084,
+      "p99_ms": 0.098,
+      "underpowered": false,
+      "samples_measured_local": "MEASURED"
+    },
+    {
+      "corpus_size": "C-medium",
+      "stage": "metadata_planning_sqlite",
+      "warmup_count": 3,
+      "measurement_count": 30,
+      "p50_ms": 6.323,
+      "p95_ms": 8.802,
+      "p99_ms": 8.82,
+      "underpowered": false,
+      "samples_measured_local": "MEASURED"
+    },
+    {
+      "corpus_size": "C-medium",
+      "stage": "content_access_sqlite",
+      "warmup_count": 3,
+      "measurement_count": 30,
+      "p50_ms": 1.886,
+      "p95_ms": 2.796,
+      "p99_ms": 7.345,
+      "underpowered": false,
+      "samples_measured_local": "MEASURED"
+    },
+    {
+      "corpus_size": "C-large",
+      "stage": "metadata_planning_sqlite",
+      "warmup_count": 3,
+      "measurement_count": 30,
+      "p50_ms": 133.251,
+      "p95_ms": 167.284,
+      "p99_ms": 194.933,
+      "underpowered": false,
+      "samples_measured_local": "MEASURED"
+    },
+    {
+      "corpus_size": "C-large",
+      "stage": "content_access_sqlite",
+      "warmup_count": 3,
+      "measurement_count": 30,
+      "p50_ms": 34.674,
+      "p95_ms": 81.372,
+      "p99_ms": 86.955,
+      "underpowered": false,
+      "samples_measured_local": "MEASURED"
+    },
+    {
+      "corpus_size": "N/A",
+      "stage": "home_crossing_calibrated",
+      "warmup_count": 3,
+      "measurement_count": 10,
+      "p50_ms": 112.103,
+      "p95_ms": 112.364,
+      "p99_ms": 112.364,
+      "underpowered": true,
+      "samples_measured_local": "CALIBRATED"
+    },
+    {
+      "corpus_size": "N/A",
+      "stage": "domain_fanout_n1_measured",
+      "warmup_count": 3,
+      "measurement_count": 15,
+      "p50_ms": 11.551,
+      "p95_ms": 11.873,
+      "p99_ms": 11.873,
+      "underpowered": true,
+      "samples_measured_local": "MEASURED"
+    },
+    {
+      "corpus_size": "N/A",
+      "stage": "domain_fanout_n3_measured",
+      "warmup_count": 3,
+      "measurement_count": 15,
+      "p50_ms": 12.512,
+      "p95_ms": 13.282,
+      "p99_ms": 13.282,
+      "underpowered": true,
+      "samples_measured_local": "MEASURED"
+    },
+    {
+      "corpus_size": "N/A",
+      "stage": "domain_fanout_n5_measured",
+      "warmup_count": 3,
+      "measurement_count": 15,
+      "p50_ms": 12.987,
+      "p95_ms": 13.846,
+      "p99_ms": 13.846,
+      "underpowered": true,
+      "samples_measured_local": "MEASURED"
+    },
+    {
+      "corpus_size": "N/A",
+      "stage": "r13_execution_measured",
+      "warmup_count": 3,
+      "measurement_count": 30,
+      "p50_ms": 0.136,
+      "p95_ms": 0.293,
+      "p99_ms": 0.344,
+      "underpowered": false,
+      "samples_measured_local": "MEASURED"
+    }
+  ],
+  "barrier_evidence": [
+    {
+      "corpus_size": "C-small",
+      "S1_exact_lookup": {
+        "layer_a_verdict": "PASS",
+        "unauthorized_logical_content_ids_requested": 0
+      },
+      "S2_fulltext_barrier": {
+        "layer_a_verdict": "PASS",
+        "layer_a_unauthorized_requested": 0,
+        "layer_b_verdict": "FAIL",
+        "layer_b_note": "FTS5 MATCH requires scanning the virtual table's own index structure regardless of join order with the authorized-scope temp table; SQLite's planner does not push the join as a pre-filter into FTS5's xFilter. Empirically confirmed: EXPLAIN QUERY PLAN shows 'SCAN <fts> VIRTUAL TABLE INDEX 0:M2' even when authorized_scope is joined first.",
+        "combined_verdict": "FAIL"
+      }
+    },
+    {
+      "corpus_size": "C-medium",
+      "S1_exact_lookup": {
+        "layer_a_verdict": "PASS",
+        "unauthorized_logical_content_ids_requested": 0
+      },
+      "S2_fulltext_barrier": {
+        "layer_a_verdict": "PASS",
+        "layer_a_unauthorized_requested": 0,
+        "layer_b_verdict": "FAIL",
+        "layer_b_note": "FTS5 MATCH requires scanning the virtual table's own index structure regardless of join order with the authorized-scope temp table; SQLite's planner does not push the join as a pre-filter into FTS5's xFilter. Empirically confirmed: EXPLAIN QUERY PLAN shows 'SCAN <fts> VIRTUAL TABLE INDEX 0:M2' even when authorized_scope is joined first.",
+        "combined_verdict": "FAIL"
+      }
+    },
+    {
+      "corpus_size": "C-large",
+      "S1_exact_lookup": {
+        "layer_a_verdict": "PASS",
+        "unauthorized_logical_content_ids_requested": 0
+      },
+      "S2_fulltext_barrier": {
+        "layer_a_verdict": "PASS",
+        "layer_a_unauthorized_requested": 0,
+        "layer_b_verdict": "FAIL",
+        "layer_b_note": "FTS5 MATCH requires scanning the virtual table's own index structure regardless of join order with the authorized-scope temp table; SQLite's planner does not push the join as a pre-filter into FTS5's xFilter. Empirically confirmed: EXPLAIN QUERY PLAN shows 'SCAN <fts> VIRTUAL TABLE INDEX 0:M2' even when authorized_scope is joined first.",
+        "combined_verdict": "FAIL"
+      }
+    }
+  ],
+  "timing_side_channel": {
+    "note": "measured separately from bench/run_bench.py, N=50 reps, Home latency injection disabled (inject_latency=False) to isolate application-level timing from the calibrated constant",
+    "allow": {
+      "n": 50,
+      "p50_ms": 7.5324,
+      "p95_ms": 9.5997,
+      "p99_ms": 12.8417
+    },
+    "deny": {
+      "n": 50,
+      "p50_ms": 5.7482,
+      "p95_ms": 6.4566,
+      "p99_ms": 6.8276
+    },
+    "finding": "allow p50 is ~1.8ms slower than deny p50 with no percentile overlap through p99 -- a measurable, stable timing separation exists at the application layer (content-fetch cost on allow vs early short-circuit on deny), independent of the Home network crossing which is identical in both paths. This is a real PA-10d finding, not remediated in this spike per its own instructions (no production timing equalization required for the experiment itself)."
+  }
+}
