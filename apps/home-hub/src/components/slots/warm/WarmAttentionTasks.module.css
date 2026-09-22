@@ -1,0 +1,136 @@
+/* src/components/slots/warm/WarmAttentionTasks.module.css */
+.card {
+  background-color: var(--olin-surface-card);
+  border: 1px solid var(--olin-surface-border);
+  border-radius: var(--olin-card-radius);
+  box-shadow: var(--olin-shadow-elevation);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card:hover {
+  border-color: var(--olin-surface-border-strong);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.titleArea {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bellIcon {
+  color: var(--olin-accent);
+}
+
+.titleText {
+  margin: 0;
+  font-family: var(--olin-font-headline);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--olin-text-main);
+}
+
+.pendingTag {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #c4643c;
+  background-color: #fae8dc;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.4rem;
+  border: 1px solid rgba(196, 100, 60, 0.2);
+}
+
+.taskList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.taskItem {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.85rem;
+  background-color: #fbf7f2;
+  border: 1px solid #ebdcd0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.taskItem:hover {
+  background-color: #ffffff;
+  border-color: #d4c2b0;
+  transform: translateY(-1px);
+}
+
+.taskItemDoorAlert {
+  background-color: #fdf2eb;
+  border-color: rgba(196, 100, 60, 0.4);
+}
+
+.taskCheckbox {
+  appearance: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 0.35rem;
+  border: 2px solid #c4643c;
+  background-color: #ffffff;
+  cursor: pointer;
+  display: grid;
+  place-content: center;
+  transition: all 0.2s ease;
+  margin: 0;
+}
+
+.taskCheckbox:checked {
+  background-color: #c4643c;
+}
+
+.taskCheckbox:checked::before {
+  content: "✓";
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.taskText {
+  flex: 1;
+  font-family: var(--olin-font-body);
+  font-size: 0.85rem;
+  color: var(--olin-text-main);
+  font-weight: 500;
+  transition: opacity 0.2s ease;
+}
+
+.taskTextDone {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+.taskTag {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.68rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.35rem;
+  background-color: #f2e6dc;
+  color: #79675b;
+  font-weight: 500;
+}
+
+.taskTagDoor {
+  background-color: #fae7db;
+  color: #923f1e;
+  font-weight: 600;
+}

@@ -1,0 +1,121 @@
+/* AmbientAttentionTasks.module.css */
+.card {
+  background: var(--olin-surface-card);
+  backdrop-filter: var(--olin-surface-blur);
+  -webkit-backdrop-filter: var(--olin-surface-blur);
+  border: 1px solid var(--olin-surface-border);
+  border-radius: var(--olin-card-radius);
+  box-shadow: var(--olin-shadow-elevation);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card:hover {
+  border-color: var(--olin-surface-border-strong);
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.titleArea {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bellIcon {
+  color: var(--olin-accent);
+}
+
+.titleText {
+  font-family: var(--olin-font-headline);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--olin-text-main);
+  margin: 0;
+}
+
+.pendingBadge {
+  font-family: var(--olin-font-mono);
+  font-size: 0.6875rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  background: rgba(246, 171, 99, 0.15);
+  color: #f6ab63;
+  font-weight: 600;
+}
+
+.taskList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.taskItem {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.taskItem:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(94, 178, 248, 0.25);
+}
+
+.taskItemAlert {
+  background: rgba(246, 171, 99, 0.1) !important;
+  border: 1px solid rgba(246, 171, 99, 0.28) !important;
+}
+
+.taskItemAlert:hover {
+  background: rgba(246, 171, 99, 0.16) !important;
+}
+
+.checkboxInput {
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 0.375rem;
+  border: 1.5px solid rgba(94, 178, 248, 0.4);
+  background: rgba(7, 19, 34, 0.6);
+  cursor: pointer;
+  accent-color: var(--olin-accent);
+}
+
+.taskText {
+  flex: 1;
+  font-size: 0.875rem;
+  color: var(--olin-text-main);
+  transition: all 0.2s ease;
+}
+
+.taskTextDone {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+
+.taskTag {
+  font-family: var(--olin-font-mono);
+  font-size: 0.625rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 0.25rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--olin-text-muted);
+}
+
+.taskTagAlert {
+  background: rgba(246, 171, 99, 0.25);
+  color: #fed7aa;
+  font-weight: 600;
+}

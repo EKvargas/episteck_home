@@ -1,0 +1,76 @@
+/* AmbientAskOlinTrigger.module.css */
+.triggerContainer {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 40;
+}
+
+.triggerButton {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 9999px;
+  background: rgba(16, 38, 64, 0.75);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid rgba(94, 178, 248, 0.35);
+  box-shadow: 0 0 32px rgba(94, 178, 248, 0.35);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.triggerButton:hover {
+  transform: translateY(-2px) scale(1.03);
+  border-color: rgba(94, 178, 248, 0.6);
+  box-shadow: 0 0 40px rgba(94, 178, 248, 0.55);
+}
+
+.sparkleOrb {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #5eb2f8;
+  color: #02070f;
+  transition: transform 0.3s ease;
+}
+
+.triggerButton:hover .sparkleOrb {
+  transform: rotate(15deg);
+}
+
+.textBlock {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.title {
+  font-family: var(--olin-font-headline);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #ffffff;
+  line-height: 1.2;
+}
+
+.subtitle {
+  font-family: var(--olin-font-mono);
+  font-size: 0.625rem;
+  color: #7dd3fc;
+  opacity: 0.85;
+}
+
+.chevronIcon {
+  color: #bae6fd;
+  margin-left: 0.25rem;
+  transition: transform 0.3s ease;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}

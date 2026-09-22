@@ -1,0 +1,66 @@
+/* src/components/slots/canvas/CanvasRelationshipSwitcher.module.css */
+.container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 9999px;
+  background-color: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(225, 215, 198, 0.85);
+  box-shadow: 0 4px 14px rgba(35, 52, 90, 0.08);
+}
+
+.nodeButton {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 1rem;
+  border-radius: 9999px;
+  background: none;
+  border: none;
+  font-family: var(--olin-font-body);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #5a6575;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.nodeButton:hover {
+  color: #16202e;
+}
+
+/* Fluid chromatic gradient active states */
+.activeFamily {
+  background: linear-gradient(135deg, #2e66f6 0%, #6366f1 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(46, 102, 246, 0.4);
+  transform: scale(1.05);
+}
+
+.activeErick {
+  background: linear-gradient(135deg, #f97316 0%, #f43f5e 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(249, 115, 22, 0.4);
+  transform: scale(1.05);
+}
+
+.activeAna {
+  background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
+  transform: scale(1.05);
+}
+
+@media (max-width: 640px) {
+  .container {
+    gap: 0.35rem;
+    padding: 0.25rem 0.35rem;
+  }
+  .nodeButton {
+    padding: 0.35rem 0.7rem;
+    font-size: 0.72rem;
+  }
+}

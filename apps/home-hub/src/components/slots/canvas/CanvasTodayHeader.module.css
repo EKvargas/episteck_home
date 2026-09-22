@@ -1,0 +1,81 @@
+/* src/components/slots/canvas/CanvasTodayHeader.module.css */
+.headerNav {
+  position: relative;
+  z-index: 20;
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.greetingBlock {
+  display: flex;
+  flex-direction: column;
+}
+
+.timeIndicator {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #5a6575;
+}
+
+.greetingText {
+  margin: 0;
+  font-family: var(--olin-font-headline);
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #16202e;
+  letter-spacing: -0.02em;
+}
+
+.rightArea {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.homePill {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 9999px;
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(225, 215, 198, 0.85);
+  box-shadow: 0 2px 8px rgba(35, 52, 90, 0.06);
+  font-family: var(--olin-font-body);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #5a6575;
+}
+
+.pulseDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background-color: #0bb579;
+  animation: pulse 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.9); }
+}
+
+.privacyBadge {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 9999px;
+  background-color: #e6effe;
+  color: #1a56db;
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.7rem;
+  font-weight: 600;
+  border: 1px solid rgba(46, 102, 246, 0.2);
+}

@@ -1,0 +1,57 @@
+/* src/components/slots/warm/WarmAskOlinTrigger.module.css */
+.triggerButton {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 1.15rem;
+  border-radius: 9999px;
+  background-color: #ffffff;
+  border: 1.5px solid #c4643c;
+  box-shadow: 0 10px 25px -4px rgba(196, 100, 60, 0.3), 0 2px 6px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.triggerButton:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 14px 30px -4px rgba(196, 100, 60, 0.4);
+}
+
+.iconCircle {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  background-color: #c4643c;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--olin-font-headline);
+  font-weight: 700;
+  font-size: 0.95rem;
+  box-shadow: 0 2px 6px rgba(196, 100, 60, 0.3);
+}
+
+.textColumn {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.title {
+  font-family: var(--olin-font-headline);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #2b1f1a;
+  line-height: 1.1;
+}
+
+.subtitle {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.65rem;
+  color: #79675b;
+}

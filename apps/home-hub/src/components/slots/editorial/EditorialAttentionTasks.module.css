@@ -1,0 +1,141 @@
+/* src/components/slots/editorial/EditorialAttentionTasks.module.css */
+.card {
+  background-color: #ffffff;
+  border: 1px solid #141414;
+  border-radius: 0.35rem;
+  box-shadow: 4px 4px 0px #141414;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0px #141414;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1.5px solid #141414;
+  padding-bottom: 0.75rem;
+}
+
+.titleArea {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bellIcon {
+  color: #781c22;
+}
+
+.titleText {
+  margin: 0;
+  font-family: var(--olin-font-headline);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #141414;
+}
+
+.pendingTag {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #781c22;
+  background-color: #eee9dc;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.25rem;
+  border: 1px solid #141414;
+}
+
+.taskList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.taskItem {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.25rem;
+  background-color: #faf9f5;
+  border: 1px solid #d4cfc3;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.taskItem:hover {
+  background-color: #ffffff;
+  border-color: #141414;
+  box-shadow: 2px 2px 0px #141414;
+}
+
+.taskItemDoorAlert {
+  border-color: #781c22;
+  background-color: #fdf5f5;
+}
+
+.taskCheckbox {
+  appearance: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 0.2rem;
+  border: 2px solid #141414;
+  background-color: #ffffff;
+  cursor: pointer;
+  display: grid;
+  place-content: center;
+  transition: all 0.15s ease;
+  margin: 0;
+}
+
+.taskCheckbox:checked {
+  background-color: #781c22;
+  border-color: #781c22;
+}
+
+.taskCheckbox:checked::before {
+  content: "✓";
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.taskText {
+  flex: 1;
+  font-family: var(--olin-font-body);
+  font-size: 0.85rem;
+  color: #141414;
+  font-weight: 500;
+  transition: opacity 0.2s ease;
+}
+
+.taskTextDone {
+  text-decoration: line-through;
+  opacity: 0.45;
+}
+
+.taskTag {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.68rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.2rem;
+  background-color: #eee9dc;
+  color: #141414;
+  font-weight: 600;
+  border: 1px solid #d4cfc3;
+}
+
+.taskTagDoor {
+  background-color: #781c22;
+  color: #ffffff;
+  border-color: #781c22;
+}

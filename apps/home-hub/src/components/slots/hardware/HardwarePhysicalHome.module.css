@@ -1,0 +1,155 @@
+/* src/components/slots/hardware/HardwarePhysicalHome.module.css */
+.card {
+  background: linear-gradient(170deg, rgba(38, 44, 51, 0.8) 0%, rgba(20, 23, 28, 0.9) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--olin-card-radius);
+  box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card:hover {
+  border-color: rgba(245, 142, 42, 0.65);
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.titleArea {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.iconBadge {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(245, 142, 42, 0.12);
+  color: #f58e2a;
+  border: 1px solid rgba(245, 142, 42, 0.25);
+}
+
+.titleText {
+  margin: 0;
+  font-family: var(--olin-font-headline);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--olin-text-main);
+}
+
+.subtitleText {
+  margin: 0;
+  font-family: var(--olin-font-body);
+  font-size: 0.75rem;
+  color: var(--olin-text-muted);
+}
+
+.statusPill {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border-radius: 0.35rem;
+  background-color: rgba(16, 210, 144, 0.15);
+  color: #10d290;
+  border: 1px solid rgba(16, 210, 144, 0.3);
+}
+
+.tilesGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+}
+
+.tile {
+  padding: 0.85rem 1rem;
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  transition: all 0.2s ease;
+}
+
+.tile:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(245, 142, 42, 0.3);
+  transform: translateY(-1px);
+}
+
+.tileClickable {
+  cursor: pointer;
+}
+
+.tileTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--olin-text-muted);
+  font-family: var(--olin-font-body);
+}
+
+.tileValue {
+  font-family: var(--olin-font-headline);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--olin-text-main);
+  line-height: 1.2;
+}
+
+.tileValueEmerald {
+  color: #10d290;
+}
+
+.tileValueAmber {
+  color: #f58e2a;
+}
+
+.tileSub {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.68rem;
+  color: var(--olin-text-muted);
+}
+
+.tileSubEmerald {
+  color: #10d290;
+  font-weight: 600;
+}
+
+.tileSubLink {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.68rem;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  color: #ffb773;
+  font-weight: 600;
+}
+
+.tileSubAccent {
+  color: #f58e2a;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .tilesGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

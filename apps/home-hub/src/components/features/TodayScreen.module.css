@@ -1,0 +1,336 @@
+/* src/components/features/TodayScreen.module.css */
+.container {
+  padding: var(--ep-space-10) var(--ep-space-6);
+  max-width: 1080px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .container {
+    padding: var(--ep-space-16) var(--ep-space-12);
+  }
+}
+
+.header {
+  margin-bottom: var(--ep-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ep-space-6);
+}
+
+.titleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ep-space-2);
+}
+
+.title {
+  /* Use clamp for responsive scaling to prevent mobile dominance */
+  font-size: clamp(2rem, 5vw, 2.5rem);
+  font-weight: 600;
+  color: var(--olin-text-main);
+  font-family: var(--olin-font-headline);
+  margin: 0;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+}
+
+.subtitle {
+  font-size: 1.125rem;
+  color: var(--olin-text-muted);
+  font-family: var(--olin-font-body);
+  margin: 0;
+  font-weight: 500;
+}
+
+.contextChips {
+  display: flex;
+  gap: var(--ep-space-3);
+  /* Use horizontal scrolling on small screens instead of wrapping */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: var(--ep-space-2); /* Space for shadow */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.contextChips::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ep-space-3);
+  padding: 6px 20px 6px 6px;
+  background-color: var(--olin-surface-card);
+  border: 1px solid var(--olin-surface-border);
+  border-radius: var(--olin-pill-radius);
+  color: var(--olin-text-muted);
+  font-family: var(--olin-font-body);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0; /* Prevent squishing on mobile */
+  backdrop-filter: var(--olin-surface-blur);
+}
+
+.chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.04);
+  background-color: var(--olin-surface-card-hover);
+  border-color: var(--olin-surface-border-strong);
+}
+
+.chipActive {
+  background-color: var(--olin-text-main);
+  color: var(--olin-bg-canvas);
+  border-color: var(--olin-text-main);
+}
+
+.chipAvatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: var(--olin-badge-bg);
+  color: var(--olin-badge-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.chipActive .chipAvatar {
+  background-color: var(--olin-bg-canvas);
+  color: var(--olin-text-main);
+}
+
+.sharedBadge {
+  display: inline-flex;
+  align-items: center;
+  color: var(--olin-text-muted);
+  font-family: var(--olin-font-body);
+  font-size: 0.9rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.layoutGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--ep-space-12);
+}
+
+@media (min-width: 900px) {
+  .layoutGrid {
+    grid-template-columns: 1.2fr 1fr;
+    gap: var(--ep-space-24);
+  }
+}
+
+.leftCol, .rightCol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ep-space-16);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ep-space-6);
+}
+
+.sectionTitle {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--olin-text-muted);
+  font-family: var(--olin-font-body);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Schedule */
+.scheduleBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ep-space-6);
+  position: relative;
+  /* Add padding to structurally contain the timeline dot/line instead of overlapping */
+  padding-left: 20px;
+}
+
+.scheduleBox::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 4px; /* Align strictly within the structural padding */
+  width: 2px;
+  background-color: var(--olin-surface-border);
+}
+
+.scheduleItem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ep-space-4);
+  position: relative;
+}
+
+.scheduleItem::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: -20px; /* Aligns exactly with the timeline line */
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--olin-accent);
+  border: 2px solid var(--olin-bg-canvas);
+}
+
+.scheduleTime {
+  font-family: var(--olin-font-body);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--olin-text-muted);
+  width: 75px;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
+.scheduleTitle {
+  font-family: var(--olin-font-headline);
+  font-size: 1.15rem;
+  font-weight: 500;
+  color: var(--olin-text-main);
+  flex: 1;
+  word-wrap: break-word; /* Handle long titles gracefully */
+  line-height: 1.3;
+}
+
+/* To Do / Attention */
+.todoList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ep-space-4);
+}
+
+.todoItem {
+  display: flex;
+  align-items: center;
+  gap: var(--ep-space-4);
+  font-size: 1rem;
+  font-family: var(--olin-font-body);
+  color: var(--olin-text-muted);
+  background-color: transparent;
+  padding: var(--ep-space-3) 0;
+  border-radius: var(--ep-radius-lg);
+}
+
+.todoCircle {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--olin-surface-border);
+  flex-shrink: 0;
+}
+
+/* Warning Task (e.g. Medium priority) */
+.todoItemWarning {
+  color: var(--olin-text-main);
+  font-weight: 500;
+}
+
+.todoItemWarning .todoCircle {
+  border-color: var(--olin-status-attention);
+}
+
+/* Urgent Task (e.g. High priority) */
+.todoItemUrgent {
+  background-color: transparent;
+  border: 1px solid var(--olin-status-error);
+  padding: var(--ep-space-4) var(--ep-space-5);
+  color: var(--olin-status-error);
+  font-weight: 600;
+  margin-left: calc(-1 * var(--ep-space-5));
+  margin-right: calc(-1 * var(--ep-space-5));
+  border-radius: var(--olin-card-radius);
+}
+
+.todoItemUrgent .todoCircle {
+  border-color: var(--olin-status-error);
+  background-color: var(--olin-status-error);
+}
+
+/* Home */
+.homeStatus {
+  display: flex;
+  align-items: center;
+  gap: var(--ep-space-4);
+  padding: var(--ep-space-5);
+  background-color: var(--olin-surface-card);
+  backdrop-filter: var(--olin-surface-blur);
+  border: 1px solid var(--olin-surface-border);
+  border-radius: var(--olin-card-radius);
+  box-shadow: var(--olin-shadow-elevation);
+  font-size: 1rem;
+  font-family: var(--olin-font-body);
+  color: var(--olin-text-main);
+  font-weight: 500;
+}
+
+.statusDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--olin-status-success);
+  flex-shrink: 0;
+}
+
+/* Nutrition */
+.nutritionBox {
+  display: flex;
+  align-items: center;
+  gap: var(--ep-space-6);
+  background-color: transparent;
+  padding: var(--ep-space-4) 0; 
+}
+
+.nutritionIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nutritionData {
+  display: flex;
+  flex-direction: column;
+}
+
+.nutritionCalories {
+  font-size: 2rem;
+  font-family: var(--olin-font-headline);
+  font-weight: 600;
+  color: var(--olin-text-main);
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.nutritionTarget {
+  font-size: 1rem;
+  font-family: var(--olin-font-body);
+  color: var(--olin-text-muted);
+  margin-top: 4px;
+}
+
+.empty {
+  color: var(--olin-text-muted);
+  font-family: var(--olin-font-body);
+  font-size: 0.875rem;
+}

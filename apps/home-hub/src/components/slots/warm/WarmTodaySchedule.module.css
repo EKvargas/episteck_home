@@ -1,0 +1,164 @@
+/* src/components/slots/warm/WarmTodaySchedule.module.css */
+.card {
+  background-color: var(--olin-surface-card);
+  border: 1px solid var(--olin-surface-border);
+  border-radius: var(--olin-card-radius);
+  box-shadow: var(--olin-shadow-elevation);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card:hover {
+  border-color: var(--olin-surface-border-strong);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.titleArea {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.iconWrapper {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--olin-badge-bg);
+  color: var(--olin-accent);
+  border: 1px solid #eddcd0;
+}
+
+.titleText {
+  margin: 0;
+  font-family: var(--olin-font-headline);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--olin-text-main);
+  letter-spacing: -0.01em;
+}
+
+.subtitleText {
+  margin: 0;
+  font-family: var(--olin-font-body);
+  font-size: 0.75rem;
+  color: var(--olin-text-muted);
+}
+
+.countTag {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 0.5rem;
+  background-color: var(--olin-badge-bg);
+  color: var(--olin-badge-text);
+  font-weight: 600;
+  border: 1px solid rgba(196, 100, 60, 0.2);
+}
+
+.timelineList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 0.25rem;
+}
+
+.eventRow {
+  padding: 0.85rem 1rem;
+  border-radius: 0.9rem;
+  background-color: #fbf6f0;
+  border: 1px solid #ebdcd0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  transition: all 0.2s ease;
+}
+
+.eventRow:hover {
+  border-color: #d4c2b0;
+  background-color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(78, 48, 25, 0.04);
+}
+
+.eventLeft {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.timeTag {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.4rem;
+  background-color: var(--olin-badge-bg);
+  color: var(--olin-badge-text);
+  margin-top: 0.1rem;
+  white-space: nowrap;
+}
+
+.eventTitle {
+  margin: 0;
+  font-family: var(--olin-font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--olin-text-main);
+}
+
+.eventSubtitle {
+  margin: 0.15rem 0 0;
+  font-family: var(--olin-font-body);
+  font-size: 0.75rem;
+  color: var(--olin-text-muted);
+}
+
+.careTag {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.65rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.35rem;
+  background-color: #fae8dc;
+  color: #c4643c;
+  margin-left: 0.35rem;
+  font-weight: 600;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.statusTag {
+  font-family: var(--ep-font-mono, monospace);
+  font-size: 0.7rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.4rem;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.statusCompleted {
+  background-color: #eaf3ea;
+  color: #3c7849;
+}
+
+.statusActive {
+  background-color: #fdf0e6;
+  color: #c4643c;
+  border: 1px solid rgba(196, 100, 60, 0.3);
+}
+
+.statusUpcoming {
+  background-color: #f5ede4;
+  color: #79675b;
+}

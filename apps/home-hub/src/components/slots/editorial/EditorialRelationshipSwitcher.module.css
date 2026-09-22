@@ -1,0 +1,65 @@
+/* src/components/slots/editorial/EditorialRelationshipSwitcher.module.css */
+.container {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.35rem 1.25rem;
+  border-bottom: 2px solid #141414;
+  background-color: #ffffff;
+  border-radius: 0.25rem;
+  box-shadow: 2px 2px 0px #141414;
+}
+
+.itemButton {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.65rem;
+  background: none;
+  border: none;
+  font-family: var(--olin-font-headline);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #595959;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.itemButton:hover {
+  color: #141414;
+}
+
+.itemButtonActive {
+  color: #141414;
+  font-weight: 700;
+}
+
+/* Hand-drawn ink ring for active letterpress item */
+.inkRing {
+  position: absolute;
+  inset: 0.05rem;
+  border: 2px solid #781c22;
+  border-radius: 54% 46% 60% 40% / 45% 55% 45% 55%;
+  box-shadow: 0 0 0 1px rgba(120, 28, 34, 0.25);
+  pointer-events: none;
+  animation: inkSettle 0.25s ease-out;
+}
+
+@keyframes inkSettle {
+  0% { transform: scale(0.92); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@media (max-width: 640px) {
+  .container {
+    gap: 0.75rem;
+    padding: 0.25rem 0.75rem;
+  }
+  .itemButton {
+    font-size: 0.72rem;
+    padding: 0.25rem 0.45rem;
+  }
+}

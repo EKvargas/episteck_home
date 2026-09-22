@@ -1,0 +1,80 @@
+/* src/app/globals.css */
+@import '../styles/tokens.css';
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--olin-font-body, var(--ep-font-sans));
+  background: var(--olin-bg-gradient, var(--olin-bg-canvas));
+  color: var(--olin-text-main);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  transition: background 0.5s ease;
+}
+
+.ambient-light-field {
+  position: fixed;
+  inset: 0;
+  background: var(--olin-ambient-overlay);
+  pointer-events: none;
+  transition: background 0.6s ease;
+  z-index: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Pulse and Glowing Animations for Constellation / Ambient Future */
+@keyframes stellarGlow {
+  0%, 100% {
+    transform: scale(1.25);
+    filter: drop-shadow(0 0 14px var(--olin-accent));
+    opacity: 0.95;
+  }
+  50% {
+    transform: scale(1.35);
+    filter: drop-shadow(0 0 24px var(--olin-accent));
+    opacity: 1;
+  }
+}
+
+.stellar-active {
+  animation: stellarGlow 3.5s infinite ease-in-out;
+}
+
+/* Hand-drawn ink ring for Editorial Ledger */
+.ledger-ink-circle {
+  border: 2px solid var(--olin-accent);
+  border-radius: 54% 46% 60% 40% / 45% 55% 45% 55%;
+  box-shadow: 0 0 0 1px rgba(120, 28, 34, 0.2);
+}
+
+/* Rotary Switch Physical Marks for Nordic Hardware */
+.rotary-knob {
+  background: conic-gradient(from 180deg at 50% 50%, #202328 0deg, #373e46 90deg, #1b1e22 180deg, #373e46 270deg, #202328 360deg);
+  box-shadow: inset 0 2px 3px rgba(255,255,255,0.2), 0 8px 18px rgba(0,0,0,0.7);
+}
+
