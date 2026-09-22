@@ -98,6 +98,12 @@ def test_forged_actor_field_is_inert(loaded_backend):
 
 
 def test_forged_partition_field_is_inert(loaded_backend):
+    """A forged/wrong partition must yield ZERO candidates -- structurally the same
+    observable outcome as a genuine no-content case (correction 8's no-content/denied
+    distinction), not a distinguishable 'denied' error. This is itself the anti-oracle
+    property: an attacker probing with a forged partition sees exactly what an attacker
+    probing an empty real partition would see -- an empty result, not an error that
+    reveals the partition was recognized-but-wrong versus never-existed."""
     backend, corpus = loaded_backend
     p0 = corpus.persons[0]
     home = HomeStub(grants=(Grant(p0, p0, "NUTRITION", "VIEW", corpus.partitions[0]),))
@@ -106,7 +112,9 @@ def test_forged_partition_field_is_inert(loaded_backend):
         backend=backend, home=home, partition_id="FORGED-PARTITION-DOES-NOT-EXIST", actor_person_id=p0,
         subject_person_ids=(p0,), domains=DOMAINS, as_of=AS_OF,
     )
-    assert result.denied, "a forged partition must yield zero candidates and thus deny -- no cross-partition leakage"
+    assert not result.denied, "no candidates ever existed under the forged partition -- this is the no-content path, not a denial"
+    assert result.bundle is not None
+    assert result.bundle.content == (), "zero content, and no cross-partition leakage of any real candidate"
 
 
 def test_oversized_compound_operation_denies_whole_not_partial(loaded_backend):
