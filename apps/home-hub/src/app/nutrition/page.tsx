@@ -40,6 +40,21 @@ export default function NutritionPage() {
       </header>
 
       <main className={styles.grid}>
+        {/* Maternal Health Link for Ana Context */}
+        {activeContext.id === 'PSN-ana' && (
+          <div className={styles.card} style={{ gridColumn: '1 / -1', background: 'var(--olin-badge-bg)', border: '1px solid var(--olin-accent)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.25rem' }}>Maternal Health & Micronutrients</h3>
+                <p style={{ color: 'var(--olin-text-muted)', margin: '0.25rem 0 0' }}>Track prenatal vitamins, iron, and key pregnancy nutrients.</p>
+              </div>
+              <Link href="/nutrition/pregnancy" style={{ padding: '0.75rem 1.5rem', background: 'var(--olin-accent)', color: 'white', borderRadius: '8px', textDecoration: 'none', fontWeight: 500 }}>
+                View Dashboard
+              </Link>
+            </div>
+          </div>
+        )}
+
         {hasNutrition ? (
           <>
             {/* Caloric Hero */}
@@ -106,21 +121,6 @@ export default function NutritionPage() {
                 </div>
               </div>
             </div>
-
-            {/* Maternal Health Link for Ana Context */}
-            {activeContext.id === 'PSN-ana' && (
-              <div className={styles.card} style={{ gridColumn: '1 / -1', background: 'var(--olin-badge-bg)', border: '1px solid var(--olin-accent)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: '1.25rem' }}>Maternal Health & Micronutrients</h3>
-                    <p style={{ color: 'var(--olin-text-muted)', margin: '0.25rem 0 0' }}>Track prenatal vitamins, iron, and key pregnancy nutrients.</p>
-                  </div>
-                  <Link href="/nutrition/pregnancy" style={{ padding: '0.75rem 1.5rem', background: 'var(--olin-accent)', color: 'white', borderRadius: '8px', textDecoration: 'none', fontWeight: 500 }}>
-                    View Dashboard
-                  </Link>
-                </div>
-              </div>
-            )}
           </>
         ) : !isFamilyContext ? (
           <div className={styles.lockedState}>

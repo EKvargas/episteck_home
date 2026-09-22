@@ -7,10 +7,10 @@ import { CoverageCard } from '@/components/features/nutrition/CoverageCard';
 import styles from './page.module.css';
 
 export default function PregnancyNutritionPage() {
-  const { currentContext } = useAppContext();
+  const { activeContext } = useAppContext();
   
   // Fetch mock data based on current context
-  const coverageData = getMicronutrientCoverageMock(currentContext.id);
+  const coverageData = getMicronutrientCoverageMock(activeContext.id);
 
   return (
     <div className={styles.pageContainer}>
