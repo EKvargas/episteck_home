@@ -25,6 +25,7 @@ The target topology utilizes Next.js Server capabilities (Server Components and 
   - `/whoami` -> Home BFF
   - `/logout` -> Home BFF
   - `/delegation` -> Blocked / 404
+  - F2 refinement: routing becomes an explicit allowlist; the proposed `/bootstrap` is **not** publicly routed (Next.js calls it over loopback). See `HOME_HUB_F2_SESSION_BOOTSTRAP_PLAN.md` §11.
 
 ## 3. Trust-Boundary & Architecture Diagram
 Next.js acting as a presentation BFF implies it becomes a **trusted server runtime**.
@@ -118,6 +119,8 @@ Next.js will NOT receive direct Frappe machine credentials. Instead, we propose 
 
 **Important:** Context discoverability != domain authorization. Each domain service continues to authorize its own operations.
 
+**F2 design:** see `HOME_HUB_F2_SESSION_BOOTSTRAP_PLAN.md`. Approved (2026-09-23): one session-bound Control Plane read (`get_home_bootstrap`) instead of composing the existing APIs, because on the BFF's bearer-only path the existing APIs do not consult Home Delegated Session revocation.
+
 ## 7. Frontend Layer Architecture
 - `src/integration/session/`: Reads cookies, interfaces with backend for validation.
 - `src/integration/home/`: Adapters for viewer and context relationships (consuming the proposed BFF bootstrap).
@@ -200,7 +203,7 @@ Premature caching undermines revocation semantics.
 ## 14. Recommended Implementation Sequence
 * **F0 — DECIDED:** Option A (Co-located, `/app` + `/login` shared origin) and loopback `/delegation` reuse under strict invariants.
 * **F1 — Frontend Contracts:** Safe state/error model and `DataEnvelope` definitions.
-* **F2 — Session / Viewer Bootstrap:** Resolve the UI bootstrap gap by implementing the proposed Home BFF compose operation.
+* **F2 — Session / Viewer Bootstrap:** Resolve the UI bootstrap gap by implementing the proposed Home BFF compose operation. Planned as F2a-CP → F2a-BFF → F2b-Hub (`HOME_HUB_F2_SESSION_BOOTSTRAP_PLAN.md` §13).
 * **F3 — Context Migration:** Migrate `activeContext` to the `Person/Circle` resource-context model.
 * **F4 — Nutrition Read-Only Synthetic Adapter:** Implement live-service integration using synthetic records.
 * **F5 — Incremental UI Migration:** Migrate Today/Nutrition screens progressively (No production real-person data).
