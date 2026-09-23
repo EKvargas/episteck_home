@@ -41,7 +41,12 @@ class FakeDoc:
         }
 
 
-def _make_fake_frappe(current_user="person@example.invalid", enabled=True):
+def _make_fake_frappe(current_user="person@example.invalid", enabled=True, linked_people=None):
+    """``linked_people``: list of Person names linked to ``current_user``.
+
+    Defaults to exactly one Person so every existing test keeps its prior
+    (linked, non-ambiguous) assumption unless it opts into zero/ambiguous.
+    """
     fake = types.ModuleType("frappe")
     fake.session = SimpleNamespace(user=current_user)
     fake.PermissionError = _PermissionError
@@ -49,6 +54,9 @@ def _make_fake_frappe(current_user="person@example.invalid", enabled=True):
     fake.rows = {}
     fake.enabled_users = {current_user: enabled} if current_user else {}
     fake.committed = 0
+    if linked_people is None:
+        linked_people = ["PSN-0001"] if current_user else []
+    fake.people_by_user = {current_user: linked_people} if current_user else {}
 
     def throw(message, exc=Exception):
         raise exc(message)
@@ -62,6 +70,13 @@ def _make_fake_frappe(current_user="person@example.invalid", enabled=True):
     fake.throw = throw
     fake.whitelist = whitelist
     fake.get_doc = lambda data: FakeDoc(data, fake.rows)
+
+    def get_all(doctype, filters=None, fields=None, **kwargs):
+        assert doctype == "Person"
+        linked_user = (filters or {}).get("linked_user")
+        return [{"name": name} for name in fake.people_by_user.get(linked_user, [])]
+
+    fake.get_all = get_all
 
     class DB:
         @staticmethod
@@ -137,9 +152,11 @@ def test_open_session_denies_missing_user(session_module):
 
 
 def test_open_session_denies_disabled_user(session_module):
-    module, _ = session_module(enabled=False)
+    """CP-13: a disabled User must refuse before a session row is written."""
+    module, fake = session_module(enabled=False)
     with pytest.raises(_PermissionError):
         module.open_session()
+    assert fake.rows == {}
 
 
 def test_open_session_is_active_with_an_expiry(session_module):
@@ -166,6 +183,25 @@ def test_session_ids_are_distinct(session_module):
     assert module.open_session()["session_id"] != module.open_session()["session_id"]
 
 
+# ---------------------------------------------------------- open: B2 link invariant
+
+
+def test_open_session_denies_unlinked_user(session_module):
+    """CP-13: zero linked Persons must refuse before a session row is written."""
+    module, fake = session_module(linked_people=[])
+    with pytest.raises(_PermissionError):
+        module.open_session()
+    assert fake.rows == {}
+
+
+def test_open_session_denies_ambiguous_linked_user(session_module):
+    """CP-13: two linked Persons must refuse before a row is written (fail closed)."""
+    module, fake = session_module(linked_people=["PSN-0001", "PSN-0002"])
+    with pytest.raises(_PermissionError):
+        module.open_session()
+    assert fake.rows == {}
+
+
 # ------------------------------------------------------------------ close
 
 
@@ -175,6 +211,24 @@ def test_close_session_revokes_own_session(session_module):
     assert module.close_session(session_id) == {"closed": True}
     assert fake.rows[session_id]["status"] == "Revoked"
     assert fake.rows[session_id]["revoked_at"]
+
+
+def test_close_session_succeeds_after_person_unlinked(session_module):
+    """Revoking a session must not require Person linkage.
+
+    A session opened while the User had exactly one linked Person must still be
+    closable after an admin later unlinks that Person. Unlinking denies *use*
+    (get_home_bootstrap / delegated access) going forward — it must not also
+    trap an existing session so it can never be revoked or cleaned up.
+    """
+    module, fake = session_module()
+    session_id = module.open_session()["session_id"]
+
+    # Simulate the User being unlinked from Person after the session was opened.
+    fake.people_by_user[fake.session.user] = []
+
+    assert module.close_session(session_id) == {"closed": True}
+    assert fake.rows[session_id]["status"] == "Revoked"
 
 
 def test_close_session_refuses_another_users_session(session_module):

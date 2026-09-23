@@ -45,6 +45,21 @@ def _require_human() -> str:
     return user
 
 
+def _require_single_linked_person(user: str) -> None:
+    """``open_session``-only: refuse before a session row is created (B2).
+
+    ``close_session`` deliberately does NOT call this. A session must remain
+    closable even after its User is later unlinked from Person — unlinking
+    denies future *use* (``get_home_bootstrap`` / delegated access), not
+    cleanup of a session that already exists.
+    """
+    people = frappe.get_all(
+        "Person", filters={"linked_user": user}, fields=["name"], limit_page_length=0
+    )
+    if len(people) != 1:
+        frappe.throw("no linked person", frappe.PermissionError)
+
+
 @frappe.whitelist()
 def open_session(client: str | None = None) -> dict:
     """Open a delegated session for the CALLER. Takes no user parameter.
@@ -53,6 +68,7 @@ def open_session(client: str | None = None) -> dict:
     tokens. The caller learns nothing about any other session.
     """
     user = _require_human()
+    _require_single_linked_person(user)
 
     doc = frappe.get_doc(
         {

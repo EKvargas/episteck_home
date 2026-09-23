@@ -23,6 +23,10 @@ class FakeDoesNotExistError(Exception):
     pass
 
 
+class FakeValidationError(Exception):
+    pass
+
+
 class FakeDatabase:
     def __init__(self, frappe_module):
         self.frappe = frappe_module
@@ -57,6 +61,7 @@ def _make_fake_frappe():
     fake = types.ModuleType("frappe")
     fake.PermissionError = FakePermissionError
     fake.DoesNotExistError = FakeDoesNotExistError
+    fake.ValidationError = FakeValidationError
     # Default: the machine service calls with a delegated human session.
     fake.session = SimpleNamespace(user="home-mcp@example.invalid")
     fake.local = SimpleNamespace(
@@ -105,10 +110,21 @@ def _make_fake_frappe():
             "valid_to": None,
         }
     ]
+    # Home Delegated Session rows, keyed by session id. Shape mirrors
+    # test_auth_hook.py's fake.sessions so the reused auth_hook._user_for_session
+    # helper works unmodified against this fixture.
+    fake.home_delegated_sessions = {
+        "sess-actor": {
+            "user": "person@example.invalid",
+            "status": "Active",
+            "expires_at": None,
+        },
+    }
     fake.loaded_person_ids = []
     fake.get_all_calls = []
     fake.db = FakeDatabase(fake)
-    fake.utils = SimpleNamespace(today=lambda: "2026-09-15")
+    fake.utils = SimpleNamespace(today=lambda: "2026-09-15", now=lambda: "2026-09-15 12:00:00")
+    fake.get_request_header = lambda name: None
 
     def whitelist(*args, **kwargs):
         if args and callable(args[0]):
@@ -128,27 +144,42 @@ def _make_fake_frappe():
             return SimpleNamespace(name=name, **circle)
         raise AssertionError(f"unexpected document load: {doctype} {name}")
 
+    def _matches(row, filters):
+        for key, value in filters.items():
+            if isinstance(value, (list, tuple)) and len(value) == 2 and value[0] == "in":
+                if row.get(key) not in value[1]:
+                    return False
+            elif row.get(key) != value:
+                return False
+        return True
+
     def get_all(doctype, filters=None, fields=None, **kwargs):
         filters = filters or {}
         fake.get_all_calls.append((doctype, dict(filters)))
         if doctype == "Person":
+            fields = fields or ["name"]
             return [
-                {"name": person_id}
+                {field: ({"name": person_id, **person}).get(field) for field in fields}
                 for person_id, person in fake.people.items()
-                if all(person.get(key) == value for key, value in filters.items())
+                if _matches({"name": person_id, **person}, filters)
             ]
         if doctype == "Circle Membership":
             return [
                 {field: row.get(field) for field in fields}
                 for row in fake.memberships
-                if all(row.get(key) == value for key, value in filters.items())
+                if _matches(row, filters)
             ]
         if doctype == "Care Relationship":
             return [
                 {field: row.get(field) for field in fields}
                 for row in fake.care_relationships
-                if all(row.get(key) == value for key, value in filters.items())
+                if _matches(row, filters)
             ]
+        if doctype == "Home Delegated Session":
+            row = fake.home_delegated_sessions.get(filters.get("name"))
+            if not row or row["status"] != filters.get("status"):
+                return []
+            return [{"user": row["user"], "expires_at": row["expires_at"]}]
         if doctype == "Consent Grant":
             return []
         raise AssertionError(f"unexpected get_all query: {doctype} {filters}")
@@ -174,6 +205,7 @@ def home_api(monkeypatch):
     for module in (
         "episteck_home.policy.wrappers",
         "episteck_home.identity.actor",
+        "episteck_home.identity.auth_hook",
         "episteck_home.api",
     ):
         sys.modules.pop(module, None)
@@ -200,6 +232,7 @@ WHITELISTED = [
     "get_access_to_person",
     "get_care_dashboard",
     "whoami",
+    "get_home_bootstrap",
 ]
 
 
@@ -423,3 +456,325 @@ def test_check_access_delegates_subject_and_action_unchanged(home_api, monkeypat
     )
     api.check_access("PSN-OTHER", "MIND", "UPDATE")
     assert seen == [("PSN-ACTOR", "PSN-OTHER", "MIND", "UPDATE")]
+
+
+# --------------------------------------------------------------------------
+# get_home_bootstrap: F2a-CP (HOME_HUB_F2_SESSION_BOOTSTRAP_PLAN.md §12, CP-1..CP-12)
+#
+# session_id is an opaque selector, never identity/authority. The authenticated
+# OAuth user (frappe.session.user) is authoritative; the CP verifies the selected
+# Home Delegated Session belongs to that user, is Active, unexpired, and its User
+# is enabled, reusing auth_hook._user_for_session. It then derives the actor from
+# that SAME validated session_user (identity.actor._person_for_user), not from
+# resolve_actor()/resolve_principals() (see the security-review regression tests
+# below for why), and composes only the existing _circles_for / _care_for
+# helpers. No grants, no access evaluation.
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def bootstrap_direct_session(home_api):
+    """Direct human bearer call: the actor's own session, no delegation header."""
+    api, fake = home_api
+    fake.session.user = "person@example.invalid"
+    fake.local.episteck_delegated_user = None
+    fake.local.episteck_machine_caller = None
+    return api, fake
+
+
+def test_own_active_session_returns_viewer_circles_and_care(bootstrap_direct_session):
+    """CP-1."""
+    api, _ = bootstrap_direct_session
+    result = api.get_home_bootstrap("sess-actor")
+    assert result == {
+        "viewer": {"person_id": "PSN-ACTOR", "display_name": "Synthetic Actor"},
+        "circles": [{"circle_id": "CIR-HOME", "display_name": "Synthetic Household"}],
+        "care": [
+            {
+                "person_id": "PSN-SUBJECT",
+                "display_name": "Synthetic Subject",
+                "relationship_type": "CAREGIVER",
+            }
+        ],
+    }
+
+
+def test_another_users_session_id_is_denied(bootstrap_direct_session):
+    """CP-2: a session that exists but belongs to someone else."""
+    api, fake = bootstrap_direct_session
+    fake.home_delegated_sessions["sess-other"] = {
+        "user": "other@example.invalid",
+        "status": "Active",
+        "expires_at": None,
+    }
+    with pytest.raises(FakePermissionError):
+        api.get_home_bootstrap("sess-other")
+
+
+def test_revoked_session_is_denied(bootstrap_direct_session):
+    """CP-3."""
+    api, fake = bootstrap_direct_session
+    fake.home_delegated_sessions["sess-actor"]["status"] = "Revoked"
+    with pytest.raises(FakePermissionError):
+        api.get_home_bootstrap("sess-actor")
+
+
+def test_expired_session_is_denied(bootstrap_direct_session):
+    """CP-4."""
+    api, fake = bootstrap_direct_session
+    fake.home_delegated_sessions["sess-actor"]["expires_at"] = "2000-01-01 00:00:00"
+    with pytest.raises(FakePermissionError):
+        api.get_home_bootstrap("sess-actor")
+
+
+def test_disabled_user_is_denied(bootstrap_direct_session):
+    """CP-5."""
+    api, fake = bootstrap_direct_session
+    fake.users["person@example.invalid"]["enabled"] = 0
+    with pytest.raises(FakePermissionError):
+        api.get_home_bootstrap("sess-actor")
+
+
+def test_unlinked_actor_is_denied(bootstrap_direct_session):
+    """CP-6: session itself is valid, but the User has no linked Person."""
+    api, fake = bootstrap_direct_session
+    fake.people["PSN-ACTOR"]["linked_user"] = None
+    with pytest.raises(FakePermissionError):
+        api.get_home_bootstrap("sess-actor")
+
+
+def test_ambiguous_actor_link_is_denied(bootstrap_direct_session):
+    """CP-6: two Persons linked to the same User fails closed."""
+    api, fake = bootstrap_direct_session
+    fake.people["PSN-ACTOR-2"] = {
+        "full_name": "Duplicate",
+        "external_ref": None,
+        "linked_user": "person@example.invalid",
+    }
+    with pytest.raises(FakePermissionError):
+        api.get_home_bootstrap("sess-actor")
+
+
+def test_missing_session_id_is_denied(bootstrap_direct_session):
+    """Unknown session id collapses to the same refusal as revoked/foreign."""
+    api, _ = bootstrap_direct_session
+    with pytest.raises(FakePermissionError):
+        api.get_home_bootstrap("sess-does-not-exist")
+
+
+def test_get_home_bootstrap_takes_no_actor_parameter(home_api):
+    """CP-7: the signature itself is the control."""
+    api, _ = home_api
+    signature = inspect.signature(api.get_home_bootstrap)
+    assert set(signature.parameters) == {"session_id"}
+
+
+def test_get_home_bootstrap_never_evaluates_policy(bootstrap_direct_session, monkeypatch):
+    """CP-8: no grant/access evaluation, and no access-shaped keys in the response."""
+    api, _ = bootstrap_direct_session
+    calls = []
+    monkeypatch.setattr(
+        api,
+        "_check_access",
+        lambda *a, **k: calls.append(a) or {"allow": False, "reason": "unused"},
+    )
+    result = api.get_home_bootstrap("sess-actor")
+    assert calls == []
+    assert "access" not in result
+    assert "grants" not in result
+
+
+def test_circle_co_member_without_care_is_not_a_person_context(bootstrap_direct_session):
+    """CP-9: a Person who SHARES the actor's Circle but has no active Care
+    Relationship with the actor must not appear as a PERSON/care context.
+    Circle co-membership alone never grants bootstrap visibility.
+    """
+    api, fake = bootstrap_direct_session
+    fake.people["PSN-COMEMBER"] = {
+        "full_name": "Circle Co-member",
+        "external_ref": None,
+        "linked_user": None,
+    }
+    fake.memberships.append(
+        {"circle": "CIR-HOME", "person": "PSN-COMEMBER", "role_in_circle": "member"}
+    )
+    # Deliberately no Care Relationship for PSN-COMEMBER.
+
+    result = api.get_home_bootstrap("sess-actor")
+
+    care_ids = {row["person_id"] for row in result["care"]}
+    assert "PSN-COMEMBER" not in care_ids
+    # The legitimate care subject (also a CIR-HOME co-member, but WITH an active
+    # Care Relationship) still appears normally -- co-membership isn't what's
+    # being excluded here, the absence of a care relationship is.
+    assert "PSN-SUBJECT" in care_ids
+    # Circles never carry a member list or any Person expansion at all.
+    for circle in result["circles"]:
+        assert "members" not in circle
+        assert set(circle) == {"circle_id", "display_name"}
+
+
+def test_care_row_outside_validity_window_is_excluded(bootstrap_direct_session):
+    """CP-10."""
+    api, fake = bootstrap_direct_session
+    fake.people["PSN-EXPIRED"] = {
+        "full_name": "Expired Subject",
+        "external_ref": None,
+        "linked_user": None,
+    }
+    fake.care_relationships.append(
+        {
+            "caregiver_person": "PSN-ACTOR",
+            "subject_person": "PSN-EXPIRED",
+            "relationship_type": "CAREGIVER",
+            "valid_from": None,
+            "valid_to": "2020-01-01",
+        }
+    )
+    result = api.get_home_bootstrap("sess-actor")
+    care_ids = {row["person_id"] for row in result["care"]}
+    assert "PSN-EXPIRED" not in care_ids
+
+
+def test_response_excludes_sensitive_fields(bootstrap_direct_session):
+    """CP-11: no external_ref, User.name/email, principals, or validity dates."""
+    api, _ = bootstrap_direct_session
+    result = api.get_home_bootstrap("sess-actor")
+    assert set(result) == {"viewer", "circles", "care"}
+    assert set(result["viewer"]) == {"person_id", "display_name"}
+    for circle in result["circles"]:
+        assert set(circle) == {"circle_id", "display_name"}
+    for care_row in result["care"]:
+        assert set(care_row) == {"person_id", "display_name", "relationship_type"}
+
+
+def test_over_fifty_circles_is_a_validation_error(bootstrap_direct_session):
+    """CP-12."""
+    api, fake = bootstrap_direct_session
+    for i in range(51):
+        circle_id = f"CIR-{i:03d}"
+        fake.circles[circle_id] = {"title": f"Circle {i}", "circle_type": "HOUSEHOLD"}
+        fake.memberships.append(
+            {"circle": circle_id, "person": "PSN-ACTOR", "role_in_circle": "member"}
+        )
+    with pytest.raises(FakeValidationError):
+        api.get_home_bootstrap("sess-actor")
+
+
+def test_over_fifty_care_rows_is_a_validation_error(bootstrap_direct_session):
+    """CP-12."""
+    api, fake = bootstrap_direct_session
+    for i in range(51):
+        subject_id = f"PSN-CARE-{i:03d}"
+        fake.people[subject_id] = {
+            "full_name": f"Subject {i}",
+            "external_ref": None,
+            "linked_user": None,
+        }
+        fake.care_relationships.append(
+            {
+                "caregiver_person": "PSN-ACTOR",
+                "subject_person": subject_id,
+                "relationship_type": "CAREGIVER",
+                "valid_from": None,
+                "valid_to": None,
+            }
+        )
+    with pytest.raises(FakeValidationError):
+        api.get_home_bootstrap("sess-actor")
+
+
+def test_all_bootstrap_refusals_share_one_message(bootstrap_direct_session):
+    """Anti-oracle: foreign session, revoked, expired, disabled user, and
+    unlinked/ambiguous Person all raise the identical PermissionError text, so a
+    direct caller cannot distinguish any refusal reason from any other.
+    """
+    api, fake = bootstrap_direct_session
+
+    def refusal_message(mutate):
+        local_fake = _make_fake_frappe()
+        local_fake.session.user = "person@example.invalid"
+        local_fake.local.episteck_delegated_user = None
+        local_fake.local.episteck_machine_caller = None
+        mutate(local_fake)
+        import sys as _sys
+
+        _sys.modules["frappe"] = local_fake
+        for mod in (
+            "episteck_home.policy.wrappers",
+            "episteck_home.identity.actor",
+            "episteck_home.identity.auth_hook",
+            "episteck_home.api",
+        ):
+            _sys.modules.pop(mod, None)
+        local_api = importlib.import_module("episteck_home.api")
+        try:
+            local_api.get_home_bootstrap("sess-actor")
+        except FakePermissionError as error:
+            return str(error)
+        raise AssertionError("expected a refusal")
+
+    messages = {
+        refusal_message(lambda f: f.home_delegated_sessions.pop("sess-actor")),
+        refusal_message(
+            lambda f: f.home_delegated_sessions["sess-actor"].__setitem__(
+                "status", "Revoked"
+            )
+        ),
+        refusal_message(
+            lambda f: f.home_delegated_sessions["sess-actor"].__setitem__(
+                "expires_at", "2000-01-01 00:00:00"
+            )
+        ),
+        refusal_message(lambda f: f.users["person@example.invalid"].__setitem__("enabled", 0)),
+        refusal_message(lambda f: f.people["PSN-ACTOR"].__setitem__("linked_user", None)),
+    }
+    assert len(messages) == 1
+
+
+def test_dangling_care_subject_person_fails_closed_not_with_a_keyerror(
+    bootstrap_direct_session,
+):
+    """A Care Relationship pointing at a Person id that no longer exists must not
+    surface as a raw, unhandled KeyError. Every other failure path in this module
+    raises a typed, sanitized Frappe exception; this one should too.
+    """
+    api, fake = bootstrap_direct_session
+    fake.care_relationships.append(
+        {
+            "caregiver_person": "PSN-ACTOR",
+            "subject_person": "PSN-GHOST",
+            "relationship_type": "CAREGIVER",
+            "valid_from": None,
+            "valid_to": None,
+        }
+    )
+    # PSN-GHOST is deliberately absent from fake.people (orphaned reference).
+    with pytest.raises(FakeDoesNotExistError):
+        api.get_home_bootstrap("sess-actor")
+
+
+def test_bootstrap_ignores_a_stray_delegation_header_and_uses_the_session_owner(
+    bootstrap_direct_session,
+):
+    """A caller who legitimately owns ``sess-actor`` (PSN-ACTOR) but also carries an
+    ambient/stray delegation binding to a DIFFERENT person must still get their own
+    bootstrap, never the delegated person's. ``session_id`` ownership and the
+    returned identity must derive from the SAME validated principal
+    (``session_user``), not from two independently-resolved ones.
+
+    Regression for the actor/session-identity mismatch found in code review:
+    resolve_actor() prefers frappe.local.episteck_delegated_user over
+    frappe.session.user whenever a delegation header was presented, which let a
+    stray header substitute a different person's data into this caller's own,
+    already-validated session.
+    """
+    api, fake = bootstrap_direct_session
+    # A delegation header was (mis)routed to this request, binding a DIFFERENT
+    # person's User than the one that owns sess-actor.
+    fake.local.episteck_delegated_user = "other@example.invalid"
+    fake.local.episteck_machine_caller = "home-mcp@example.invalid"
+
+    result = api.get_home_bootstrap("sess-actor")
+
+    assert result["viewer"]["person_id"] == "PSN-ACTOR"
