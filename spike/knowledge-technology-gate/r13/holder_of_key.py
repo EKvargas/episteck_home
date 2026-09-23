@@ -37,10 +37,19 @@ identity should have used.
 Because of that caveat, R13 is NOT one verdict. `classify_r13()` (bottom of this module)
 splits it into two independent closed-set claims per correction 6: R13-A (cryptographic
 non-bearer proof-of-possession) is PASS -- fully provable in process by the P12 matrix;
-R13-B (machine/transport-identity binding) is UNKNOWN / INSUFFICIENT EVIDENCE -- because
-`claimed_service_identity` is a caller-supplied parameter, not a transport-authenticated
-channel, this experiment cannot establish it and the correction-7 secondary mTLS experiment
-is required. The two are never collapsed into a single "PASS with caveat."
+R13-B (machine/transport-identity binding) is UNKNOWN / INSUFFICIENT EVIDENCE for THIS
+IN-PROCESS experiment -- because `claimed_service_identity` is a caller-supplied parameter,
+not a transport-authenticated channel, this experiment cannot establish it. The two are
+never collapsed into a single "PASS with caveat."
+
+The correction-7 companion `r13/transport_identity.py` addresses the R13-B gap in a
+SEPARATE, secondary, single-host local mTLS experiment (Family 1 variant, explicitly NOT
+the primary realization): there the service identity is derived from a VERIFIED TLS peer
+certificate rather than a caller string, and a rogue certificate claiming the identity is
+rejected at the transport. Its outcome is classified independently by
+`transport_identity.classify_r13b_transport()`; it does NOT overwrite the in-process R13-B
+UNKNOWN below (that stays honest about its own instrumentation), and it selects no
+technology.
 """
 from __future__ import annotations
 
@@ -379,10 +388,14 @@ def classify_r13() -> R13Result:
                     "But `DomainVerifier.verify_and_execute` takes `claimed_service_identity` "
                     "as an explicit parameter, so in process the 'authenticated' identity is "
                     "ASSERTED by the caller, not derived from a real mTLS / transport-"
-                    "authenticated channel. This experiment therefore cannot show that a real "
-                    "caller could not present an identity it does not own -- that requires the "
-                    "correction-7 secondary mTLS (Family 1) experiment. Recorded UNKNOWN / "
-                    "INSUFFICIENT EVIDENCE, never a failure and never silently upgraded to PASS."
+                    "authenticated channel. This IN-PROCESS experiment therefore cannot show "
+                    "that a real caller could not present an identity it does not own. The "
+                    "correction-7 secondary mTLS (Family 1) experiment in "
+                    "`r13/transport_identity.py` addresses this SEPARATELY and LOCALLY (identity "
+                    "read from a verified peer certificate; see `classify_r13b_transport()` and "
+                    "the `r13b_transport` bench key); it does not change this in-process verdict. "
+                    "Recorded UNKNOWN / INSUFFICIENT EVIDENCE, never a failure and never silently "
+                    "upgraded to PASS."
                 ),
             ),
         )

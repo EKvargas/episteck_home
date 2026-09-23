@@ -266,6 +266,66 @@ def p13_contention(pg_availability) -> dict:
     }
 
 
+def r13b_transport_experiment() -> dict:
+    """Correction 7: run the SECONDARY local mTLS transport-identity experiment and
+    classify its R13-B outcome. Honest service identity must be read from a verified peer
+    certificate, and a rogue cert claiming that identity but signed by an untrusted CA must
+    be rejected at the transport. Local 127.0.0.1 loopback only, throwaway ephemeral CA,
+    selects no technology; recorded as evidence, never fabricated."""
+    import shutil
+    import tempfile
+    from pathlib import Path as _Path
+
+    from r13.transport_identity import (
+        EphemeralServiceCA,
+        RogueCA,
+        TransportIdentityServer,
+        classify_r13b_transport,
+        connect_as,
+    )
+
+    td = _Path(tempfile.mkdtemp(prefix="r13b-bench-"))
+    try:
+        ca = EphemeralServiceCA(td)
+        honest = ca.issue("svc-nutrition")
+
+        # honest arm
+        server = TransportIdentityServer(ca)
+        thread = server.serve_one()
+        connect_as(ca, honest, server.port, td, "bench-honest")
+        thread.join(timeout=5)
+        honest_result = server.result()
+        server.close()
+
+        # rogue arm: cert claims svc-nutrition but chains to an untrusted CA
+        rogue_ca = RogueCA(td / "rogue")
+        rogue_issued = rogue_ca.issue("svc-nutrition")
+        server2 = TransportIdentityServer(ca)
+        thread2 = server2.serve_one()
+        connect_as(rogue_ca, rogue_issued, server2.port, td, "bench-rogue")
+        thread2.join(timeout=5)
+        rogue_result = server2.result()
+        server2.close()
+
+        outcome = classify_r13b_transport(
+            honest_identity=honest_result.transport_identity,
+            honest_ok=honest_result.handshake_ok,
+            rogue_rejected=not rogue_result.handshake_ok,
+        )
+        return {
+            "experiment": "R13-B secondary local mTLS transport-identity (correction 7)",
+            "honest_transport_identity": honest_result.transport_identity,
+            "honest_handshake_ok": honest_result.handshake_ok,
+            "rogue_rejected_at_transport": not rogue_result.handshake_ok,
+            "rogue_server_detail": rogue_result.detail,
+            "verdict": outcome.verdict.value,
+            "evidence": outcome.evidence,
+            "limit": outcome.limit,
+        }
+    finally:
+        shutil.rmtree(td, ignore_errors=True)
+
+
 def barrier_evidence_for_size(size_label: str) -> dict:
     corpus = generate_corpus(size_label, seed=42)
     be = SQLiteKnowledgeBackend()
@@ -323,6 +383,7 @@ def main() -> None:
         "p13_contention": None,
         "r14_domain_read": None,
         "r13_claims": None,
+        "r13b_transport": None,
     }
 
     pg = detect_postgres()
@@ -372,6 +433,10 @@ def main() -> None:
     }
     for c in r13.claims:
         print(f"  {c.claim_id}: {c.verdict.value}")
+
+    print("R13-B secondary local mTLS transport-identity experiment (correction 7)...")
+    report["r13b_transport"] = r13b_transport_experiment()
+    print(f"  R13-B (transport): {report['r13b_transport']['verdict']}")
 
     out_path = OUT_DIR / "bench_results.json"
     out_path.write_text(json.dumps(report, indent=2))
