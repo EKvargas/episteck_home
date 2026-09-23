@@ -119,7 +119,7 @@ Next.js will NOT receive direct Frappe machine credentials. Instead, we propose 
 
 **Important:** Context discoverability != domain authorization. Each domain service continues to authorize its own operations.
 
-**F2 design:** see `HOME_HUB_F2_SESSION_BOOTSTRAP_PLAN.md`. It recommends one session-bound Control Plane read (`get_home_bootstrap`) over composing the existing APIs, because on the BFF's bearer-only path the existing APIs do not consult Home Delegated Session revocation.
+**F2 design:** see `HOME_HUB_F2_SESSION_BOOTSTRAP_PLAN.md`. Approved (2026-09-23): one session-bound Control Plane read (`get_home_bootstrap`) instead of composing the existing APIs, because on the BFF's bearer-only path the existing APIs do not consult Home Delegated Session revocation.
 
 ## 7. Frontend Layer Architecture
 - `src/integration/session/`: Reads cookies, interfaces with backend for validation.

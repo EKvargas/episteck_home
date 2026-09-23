@@ -1,6 +1,6 @@
 # Home Hub F2 — Session / Viewer Bootstrap: Architecture & Security Plan
 
-**Status:** `ARCHITECTURE REVIEW — NOT IMPLEMENTED`
+**Status:** `ARCHITECTURE APPROVED (Product Architect, 2026-09-23) — NOT IMPLEMENTED`
 **Baseline:** `main` @ `852a59157b8f12bb3b00468193436c8f49ae5946` (PR #36, F1)
 **Date:** 2026-09-23
 **Parent:** `HOME_HUB_INTEGRATION_FOUNDATION.md` (F0 decisions are final and are not reopened here)
@@ -12,6 +12,19 @@ contexts, and Next.js server-side consumption. No domain data, no Nutrition, no
 
 Everything marked **[VERIFIED]** was read in code at the baseline SHA. **[PROPOSED]** is
 design only. **[VERIFY LIVE]** must be proven against the running system before merge.
+
+### Product Architect decisions (2026-09-23)
+
+**Approved:**
+1. Option B: add the single session-bound Control Plane method `get_home_bootstrap(session_id)` (§2, §3).
+2. Fix `open_session` so that zero or ambiguous Person linkage is refused **before** a Home Delegated Session is created (B2).
+3. Add the `__Host-episteck_home_login` browser-binding cookie to close login CSRF (B3, §9).
+4. `/bootstrap` stays non-public and read-only (§4, §6, §11).
+5. The explicit nginx route allowlist stays (§11).
+6. The three-PR split F2a-CP → F2a-BFF → F2b-Hub stays (§13).
+7. The coordinated BFF + Hub + nginx deployment window stays (§13).
+
+**Infra decision:** the Hub container reaches the host BFF through rootless pasta with an explicit container→host TCP forward for port 9933 only, preferably `Network=pasta:-T,9933`. `Network=host` is **not** allowed, and broad `--map-gw` is **not** the default. The proof obligations and the STOP rule are in §11.
 
 ---
 
@@ -56,12 +69,10 @@ The brief prefers composing existing APIs with the stored OAuth token. The three
 | **B — one session-bound CP read** ✅ | `episteck_home.api.get_home_bootstrap(session_id)`, human OAuth bearer. The CP checks that `session_id` is an **Active, unexpired Home Delegated Session owned by `frappe.session.user`, with the User enabled**, using the same `_user_for_session` logic as the auth hook. It then composes the internal helpers `_circles_for` and `_care_for`. | **Honored on every call** | 1 | None (one transaction) | 1 whitelisted method, no actor parameter |
 | C — BFF machine credential + delegation | Full G1.6 dual-principal path | Honored | 2+K | Possible | New Frappe API user and secret on the BFF |
 
-**Recommendation: Option B.** It still uses the human OAuth token, as the brief requires.
+**Decision: Option B (APPROVED).** It still uses the human OAuth token, as the brief requires.
 It is still a business API: it reuses the existing `_circles_for` / `_care_for` helpers
 and makes no generic DocType reads. It closes B1, removes N+1 cross-region latency, and
-cannot partially fail. Option A remains the fallback only if a Control Plane change is
-rejected. In that case every sub-call carries a fresh in-process delegation, and any
-sub-call failure fails the whole bootstrap.
+cannot partially fail. Options A and C are not pursued.
 
 The same CP PR fixes **B2**: `open_session` must require exactly one linked Person
 (`actor._person_for_user`) and refuse otherwise with `PermissionError`. That makes the
@@ -78,7 +89,7 @@ callback comment true and removes the loop at its source.
 
 `get_home_bootstrap` contract [PROPOSED]:
 
-- **No actor parameter.** `session_id` is the caller's own opaque Home Delegated Session id. It is an ownership proof, not an identity. A missing, foreign, revoked, or expired session, or a disabled User, all raise the same `PermissionError` (no oracle).
+- **No actor parameter.** `session_id` is an **opaque selector** for a Home Delegated Session. It is neither an identity nor proof of anything. Authority comes only from the authenticated OAuth user (`frappe.session.user`), combined with the server-side checks that the selected session is owned by that user, `Active`, unexpired, and belongs to an enabled User. A missing, foreign, revoked, or expired session, or a disabled User, all raise the same `PermissionError` (no oracle).
 - Actor = `resolve_actor()`. Zero or ambiguous link → `PermissionError`.
 - Returns `viewer {person_id, display_name}` (`Person.full_name`), `circles` = `_circles_for(actor)` → `{circle_id, display_name}` (drop `circle_type` in F2), and `care` = `_care_for(actor)` (active rows only, `valid_from`/`valid_to` already applied) joined with the subject's `full_name` → `{person_id, display_name, relationship_type}`.
 - **Never** calls `check_access`, `_has_effective_access`, or `get_access_to_person`. Returns no grants, no `external_ref`, no `User.name`/email, no `principals`, no `valid_from`/`valid_to`, no circle member lists.
@@ -265,7 +276,8 @@ Referrer-Policy: no-referrer
 - `return_to`, `next`, `redirect`, `redirect_uri` and any other query parameters are ignored. There is no code path that reads them.
 - `BindResult` is no longer sent to the browser. It is logged as its static enum value. `ALREADY_BOUND` still yields 303: the Home Hub session is valid, and agent binding is orthogonal.
 - Failures keep today's statuses (400 / 403 / 503) with static bodies, **never** a redirect, and never a session cookie.
-- Tokens, `code`, and `state` never appear in `Location`, the body, or logs (nginx `episteck_noqs` already strips query strings). The 303 means `/callback?code=…` is not a history entry.
+- Tokens, `code`, and `state` never appear in `Location`, the body, or logs (nginx `episteck_noqs` already strips query strings).
+- Confidentiality of `/callback?code=…&state=…` does **not** rely on browser-history behavior. It relies on the fixed redirect target, `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, single-use `state` and `code` (plus PKCE), and query-stripped server logging.
 - Tests at `test_app.py` ~189–215 that assert the JSON body are **deliberately rewritten** to assert 303 + headers. All replay, PKCE, and failure-path tests keep their assertions.
 
 ---
@@ -290,7 +302,12 @@ location /             { return 404; }            # /bootstrap, /docs, /openapi.
 - `/bootstrap` is deliberately **not** public. Only the Next.js server calls it, over loopback.
 - The Next.js listener binds `127.0.0.1:<HUB_PORT>` only (suggest `9940`; `9931–9934` are taken). Rootless Quadlet under a dedicated `svc-home-hub` with `PublishPort=127.0.0.1:…`.
 - An `add_header` inside a `location` replaces server-level headers, so `/app` locations must repeat `nosniff`, `X-Frame-Options`, `Referrer-Policy` and add the CSP. HTML stays `no-store`; `/app/_next/static/` may be `immutable`.
-- **Open F2b infra decision:** a rootless Next.js container must reach the *host's* `127.0.0.1:9933`. The pasta default does not map host loopback. Options are host networking with `-H 127.0.0.1`, or pasta host-loopback mapping. Optionally extend the nft pattern (`deploy/gateway/episteck-gateway.nft`) so `9933` accepts only nginx + `svc-home-hub`, and `HUB_PORT` accepts only nginx.
+- **Infra decision (APPROVED):** the rootless Next.js container reaches the host's `127.0.0.1:9933` through pasta with an explicit container→host TCP forward for that single port, preferably `Network=pasta:-T,9933` (inside the container, `127.0.0.1:9933` forwards to host loopback `9933`). `Network=host` is **not** allowed, and broad `--map-gw` is **not** the default. F2b must prove on the **real deployment host** **[VERIFY LIVE]**:
+  1. Next.js reaches the host BFF on `127.0.0.1:9933` with this configuration.
+  2. Unrelated host-loopback ports (e.g. `9931`, `9932`, `9934`, Nutrition) stay unreachable from the container.
+  3. The Hub listener is exposed only as intended: to nginx on host loopback, and nowhere public.
+
+  **STOP rule:** if the installed Podman/pasta version cannot satisfy all three, stop and return evidence **before** choosing another topology. Optionally extend the nft pattern (`deploy/gateway/episteck-gateway.nft`) so `9933` accepts only nginx + `svc-home-hub`, and `HUB_PORT` accepts only nginx.
 - `next.config.ts` needs `basePath: '/app'` (today it has none, and routes live at `/`).
 
 ---
@@ -365,13 +382,13 @@ Three PRs, because they have different runtimes and different deploy paths:
 
 | Risk | Severity | Mitigation / status |
 | --- | --- | --- |
-| B1 revocation gap if Option A is chosen instead | High | Option B; Option A requires a delegation header per sub-call |
-| B3 login CSRF becomes consequential with `/app` | High | Binding cookie in F2a-BFF — **scope addition, needs sign-off** |
+| B1 revocation gap on the bearer-only path | High | Closed for `/bootstrap` by approved Option B |
+| B3 login CSRF becomes consequential with `/app` | High | Binding cookie in F2a-BFF — **approved** |
 | B2 redirect loop for unlinked users | Medium | `open_session` fix in F2a-CP |
 | B4 hourly re-authentication | Medium (UX) | Accepted for F2; refresh deferred; **[VERIFY LIVE]** token TTL and skip-consent |
 | Disabled User on the bearer path | Medium | Covered by the CP session check in Option B; **[VERIFY LIVE]** Frappe `validate_oauth` behavior |
 | XSS in `/app` reaches same-origin BFF routes | Medium | CSP, `/bootstrap` + `/delegation` non-public |
-| Container → host loopback reachability | Medium (delivery) | F2b infra decision (§11) |
+| Container → host loopback reachability | Medium (delivery) | `Network=pasta:-T,9933` approved; **[VERIFY LIVE]** the three invariants, or STOP (§11) |
 | Login still coupled to agent `claim_runtime` (503 blocks Hub login) | Low | Existing behavior; revisit when the Hub is primary |
 | Existing `/whoami` has the B1 gap | Low | Recorded; follow-up |
 | Care subjects reachable only via a grant are not listed | Low (product) | F3+ |
