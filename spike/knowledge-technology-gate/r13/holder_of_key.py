@@ -33,12 +33,21 @@ attacker who possesses a real key for service X but claims to be service Y (or v
 versa) -- this is exactly what P12 case 2a/2b require, and the verifier must reject any
 mismatch between the key that actually signed and the key Home's basis says the claimed
 identity should have used.
+
+Because of that caveat, R13 is NOT one verdict. `classify_r13()` (bottom of this module)
+splits it into two independent closed-set claims per correction 6: R13-A (cryptographic
+non-bearer proof-of-possession) is PASS -- fully provable in process by the P12 matrix;
+R13-B (machine/transport-identity binding) is UNKNOWN / INSUFFICIENT EVIDENCE -- because
+`claimed_service_identity` is a caller-supplied parameter, not a transport-authenticated
+channel, this experiment cannot establish it and the correction-7 secondary mTLS experiment
+is required. The two are never collapsed into a single "PASS with caveat."
 """
 from __future__ import annotations
 
 import hashlib
 import time
 from dataclasses import dataclass, field
+from enum import Enum
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
@@ -252,3 +261,129 @@ class DomainVerifier:
         CURRENT grants, it does not trust decision_id as proof of anything."""
         self.home_round_trips_triggered += 1
         return True  # actual re-evaluation performed by caller via home_stub.evaluate_plan
+
+
+# ---------------------------------------------------------------------------
+# R13 result split (correction 6, Product Architect review of PR #33)
+# ---------------------------------------------------------------------------
+# The first spike wiring reported R13 as a single "PASS" with the transport caveat buried
+# in prose. That collapsed two genuinely distinct claims into one verdict -- exactly the
+# "PASS with caveat" the closed-set classification rule (correction 12) forbids. R13
+# actually asserts TWO separable things, and this experiment can prove only one of them in
+# process. They are recorded as two independent closed-set results here so the report can
+# never present the unproven half as passing.
+#
+#   R13-A  Cryptographic non-bearer proof-of-possession.
+#          Claim: authority to execute is bound to POSSESSION OF A PRIVATE KEY, not to
+#          mere possession of a token/basis. A copied basis, a forged proof, a replayed
+#          proof, an expired basis, or a proof signed by the wrong key all fail closed;
+#          only a fresh Ed25519 signature by the exact key Home's basis names (re-derived
+#          from the basis, never nominated by the request) executes.
+#          Evidence: the full P12 adversarial matrix -- cases 1, 2a/2b, 3, 4, 5, 6 fail
+#          closed and case 7 succeeds -- all provable IN PROCESS because the cryptography
+#          is real (Ed25519 via `cryptography`) and self-contained. This half is PASS.
+#
+#   R13-B  Machine / transport-identity binding.
+#          Claim: the "authenticated service identity" the basis binds to is the identity
+#          a real transport channel (mTLS or equivalent) actually authenticated -- not an
+#          identity the caller merely asserts. This experiment CANNOT establish that:
+#          `DomainVerifier.verify_and_execute` takes `claimed_service_identity` as an
+#          explicit parameter, so in process the "authenticated" identity is stated by the
+#          caller, not derived from a bound channel. What IS proven is that the
+#          verification LOGIC rejects a mismatch between claimed identity, signing key, and
+#          the basis-bound pair (cases 2/2a/2b); what is NOT proven is that a real deployment
+#          could not present a claimed identity it does not actually own. That binding needs
+#          the correction-7 secondary mTLS experiment (Family 1 variant). This half is
+#          UNKNOWN / INSUFFICIENT EVIDENCE -- NOT a failure (nothing shows the property is
+#          unattainable), and NOT a pass (nothing shows it holds here). It is genuinely
+#          unmeasured with the available in-process instrumentation.
+
+
+class R13ClaimVerdict(str, Enum):
+    """Closed set, identical to backends.instrumentation.BarrierVerdict (correction 12).
+    Duplicated as an independent enum only to keep r13/ free of a backends/ import; the
+    string VALUES are deliberately identical so the report aggregates them uniformly."""
+
+    PASS = "PASS"
+    FAIL = "FAIL"
+    UNKNOWN = "UNKNOWN — INSUFFICIENT EVIDENCE"
+    NOT_EXECUTED = "NOT EXECUTED — ENVIRONMENT BLOCKED"
+    N_A = "N/A"
+
+
+@dataclass(frozen=True)
+class R13Claim:
+    """One of R13's two separable claims, each with its own closed-set verdict."""
+
+    claim_id: str  # "R13-A" | "R13-B"
+    title: str
+    verdict: R13ClaimVerdict
+    evidence: str  # what this experiment actually showed
+    limit: str  # the boundary of that evidence (empty for a clean PASS)
+
+
+@dataclass(frozen=True)
+class R13Result:
+    """R13 as TWO independent claims -- never one blended verdict (correction 6)."""
+
+    claims: tuple[R13Claim, ...]
+
+    @property
+    def overall_note(self) -> str:
+        return (
+            "R13 is reported as two independent closed-set claims (correction 6): the "
+            "cryptographic non-bearer proof-of-possession is demonstrated in process (R13-A "
+            "PASS); the machine/transport-identity binding is not establishable in process "
+            "because the authenticated identity is a caller-supplied parameter rather than a "
+            "transport-authenticated channel (R13-B UNKNOWN / INSUFFICIENT EVIDENCE). The two "
+            "are NOT collapsed into a single 'PASS with caveat'."
+        )
+
+
+def classify_r13() -> R13Result:
+    """Return R13's two-claim split. Static classification of what THIS in-process
+    experiment can and cannot establish -- the P12 adversarial suite is the executable
+    evidence backing R13-A; the `claimed_service_identity` parameter in
+    `DomainVerifier.verify_and_execute` is the structural reason R13-B stays UNKNOWN. No
+    number is fabricated and no technology is selected."""
+    return R13Result(
+        claims=(
+            R13Claim(
+                claim_id="R13-A",
+                title="Cryptographic non-bearer proof-of-possession (Ed25519 holder-of-key)",
+                verdict=R13ClaimVerdict.PASS,
+                evidence=(
+                    "Full P12 adversarial matrix passes in process: a copied basis without "
+                    "the correct key (case 1), a proof signed by the wrong key (2a), a right "
+                    "key presented under a wrong authenticated identity (2b), wrong "
+                    "audience/domain (3), cross-request replay (4), cross-actor reuse (5) and "
+                    "an expired basis (6) all fail closed, while only a fresh signature by the "
+                    "exact basis-bound key executes (7). The verifying key is re-derived from "
+                    "the basis Home minted, never nominated by the request; the private key is "
+                    "never transmitted. Real Ed25519 (`cryptography`), self-contained, so this "
+                    "claim needs no external environment."
+                ),
+                limit="",
+            ),
+            R13Claim(
+                claim_id="R13-B",
+                title="Machine / transport-identity binding (authenticated caller identity)",
+                verdict=R13ClaimVerdict.UNKNOWN,
+                evidence=(
+                    "The verification LOGIC correctly rejects any mismatch between the claimed "
+                    "identity, the signing key, and the basis-bound (identity, key) pair "
+                    "(cases 2/2a/2b) -- the decision logic a transport-bound deployment would "
+                    "also run."
+                ),
+                limit=(
+                    "But `DomainVerifier.verify_and_execute` takes `claimed_service_identity` "
+                    "as an explicit parameter, so in process the 'authenticated' identity is "
+                    "ASSERTED by the caller, not derived from a real mTLS / transport-"
+                    "authenticated channel. This experiment therefore cannot show that a real "
+                    "caller could not present an identity it does not own -- that requires the "
+                    "correction-7 secondary mTLS (Family 1) experiment. Recorded UNKNOWN / "
+                    "INSUFFICIENT EVIDENCE, never a failure and never silently upgraded to PASS."
+                ),
+            ),
+        )
+    )

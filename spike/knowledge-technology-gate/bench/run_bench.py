@@ -38,6 +38,7 @@ from backends.postgres_env import detect_postgres  # noqa: E402
 from backends.sqlite_backend import SQLiteKnowledgeBackend, SQLITE_PRAGMAS  # noqa: E402
 from bench.contention import INTERACTIVE_SAMPLE_COUNT, run_two_phase_contention  # noqa: E402
 from bench.r14_domain_read import measure_r14  # noqa: E402
+from r13.holder_of_key import classify_r13  # noqa: E402
 from corpus.generator import generate_corpus  # noqa: E402
 from domain_stub.stub import fan_out_concurrent, make_domain_stubs, total_domain_call_count  # noqa: E402
 from home_stub.stub import CALIBRATED_HOME_CROSSING_MS, AuthorizationOperation, Grant, HomeStub  # noqa: E402
@@ -321,6 +322,7 @@ def main() -> None:
         "barrier_evidence": [],
         "p13_contention": None,
         "r14_domain_read": None,
+        "r13_claims": None,
     }
 
     pg = detect_postgres()
@@ -355,6 +357,21 @@ def main() -> None:
     r14 = measure_r14()
     report["r14_domain_read"] = asdict(r14)
     print(f"  R14: {r14.classification}")
+
+    print("R13 two-claim split (correction 6: crypto PoP vs transport-identity binding)...")
+    r13 = classify_r13()
+    report["r13_claims"] = {
+        "overall_note": r13.overall_note,
+        "claims": [
+            {
+                "claim_id": c.claim_id, "title": c.title, "verdict": c.verdict.value,
+                "evidence": c.evidence, "limit": c.limit,
+            }
+            for c in r13.claims
+        ],
+    }
+    for c in r13.claims:
+        print(f"  {c.claim_id}: {c.verdict.value}")
 
     out_path = OUT_DIR / "bench_results.json"
     out_path.write_text(json.dumps(report, indent=2))
