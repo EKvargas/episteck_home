@@ -268,6 +268,29 @@ class SQLiteKnowledgeBackend(KnowledgeBackend):
             log.record(r["version_id"])
         return [dict(r) for r in rows]
 
+    def explain_content_barrier(self, authorized_version_ids: tuple[str, ...]) -> list[str]:
+        """Backend plan-evidence layer for the S1 exact-version content lookup (correction
+        10 -- Product Architect review of PR #33 required S1 to carry the same Layer B
+        corroboration S2 already had). Captures EXPLAIN QUERY PLAN for the exact query
+        `fetch_content` runs, so the report can show the content barrier is bounded by an
+        index on the authorized version IDs (`SEARCH ... USING INDEX ... (version_id=?)`)
+        rather than a global `SCAN assertion_version`. Corroboration only: a bounded plan
+        does not by itself prove zero unauthorized physical access -- Layer A remains the
+        authoritative, mandatory evidence.
+
+        The probe uses at least one placeholder so SQLite plans the IN-list form; the plan
+        shape is identical for 1 or many IDs (empirically: `SEARCH assertion_version USING
+        INDEX sqlite_autoindex_assertion_version_1 (version_id=?)`)."""
+        probe_ids = authorized_version_ids or ("__probe__",)
+        cur = self.conn.cursor()
+        ph = ",".join("?" * len(probe_ids))
+        plan = cur.execute(
+            f"EXPLAIN QUERY PLAN "
+            f"SELECT version_id, content_text FROM assertion_version WHERE version_id IN ({ph})",
+            list(probe_ids),
+        ).fetchall()
+        return [str(tuple(r)) for r in plan]
+
     def explain_fulltext_barrier(self, query: str) -> list[str]:
         """Backend plan-evidence layer (correction 1.B) -- corroboration only."""
         cur = self.conn.cursor()

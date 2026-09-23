@@ -33,7 +33,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from backends.common import AuthorizedSet, ContentAccessLog  # noqa: E402
-from backends.instrumentation import layer_a_from_log, layer_b_sqlite  # noqa: E402
+from backends.instrumentation import (  # noqa: E402
+    layer_a_from_log,
+    layer_b_sqlite,
+    layer_b_sqlite_exact_lookup,
+)
 from backends.postgres_env import detect_postgres  # noqa: E402
 from backends.sqlite_backend import SQLiteKnowledgeBackend, SQLITE_PRAGMAS  # noqa: E402
 from bench.contention import INTERACTIVE_SAMPLE_COUNT, run_two_phase_contention  # noqa: E402
@@ -346,6 +350,11 @@ def barrier_evidence_for_size(size_label: str) -> dict:
     log_exact = ContentAccessLog()
     be.fetch_content(authz, log=log_exact)
     layer_a_exact = layer_a_from_log(log_exact)
+    # Correction 10: S1 now carries the same Layer B backend-plan corroboration S2 does --
+    # capture the EXPLAIN QUERY PLAN for the exact-version content lookup and confirm it is
+    # bounded by an index on the authorized version IDs, not a global content scan.
+    exact_plan_rows = be.explain_content_barrier(authz.version_ids)
+    layer_b_exact = layer_b_sqlite_exact_lookup(exact_plan_rows)
 
     log_fts = ContentAccessLog()
     be.fetch_content_fulltext(authz, query="synthetic", log=log_fts)
@@ -359,6 +368,14 @@ def barrier_evidence_for_size(size_label: str) -> dict:
         "S1_exact_lookup": {
             "layer_a_verdict": layer_a_exact.verdict.value,
             "unauthorized_logical_content_ids_requested": layer_a_exact.unauthorized_logical_content_ids_requested,
+            "layer_b_verdict": layer_b_exact.verdict.value,
+            "layer_b_note": layer_b_exact.note,
+            "layer_b_plan": layer_b_exact.plan_text,
+            "combined_verdict": (
+                "FAIL"
+                if layer_b_exact.verdict.value == "FAIL"
+                else layer_a_exact.verdict.value
+            ),
         },
         "S2_fulltext_barrier": {
             "layer_a_verdict": layer_a_fts.verdict.value,

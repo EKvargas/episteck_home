@@ -153,6 +153,54 @@ def layer_b_sqlite(plan_rows: list[str]) -> LayerBEvidence:
     )
 
 
+def layer_b_sqlite_exact_lookup(plan_rows: list[str]) -> LayerBEvidence:
+    """Interpret SQLite EXPLAIN QUERY PLAN output for the S1 exact-version content barrier
+    (correction 10). Unlike the FTS barrier (S2), the S1 content fetch is a point lookup
+    keyed on the authorized version IDs, so a bounded plan is the EXPECTED, benign shape.
+
+    Bounded (PASS-by-pattern): the plan SEARCHes assertion_version via an index/primary
+    key on version_id -- empirically `SEARCH assertion_version USING INDEX
+    sqlite_autoindex_assertion_version_1 (version_id=?)` -- and never falls back to a bare
+    `SCAN assertion_version`. Unbounded (FAIL): a `SCAN assertion_version` means the
+    content barrier read the whole content table rather than seeking the authorized IDs.
+    Anything unrecognized -> UNKNOWN (never silently promoted to PASS).
+
+    Corroboration only (correction 1.B): a bounded access pattern is consistent with H3 but
+    does not by itself prove zero unauthorized physical row/page access -- Layer A is the
+    authoritative evidence. Reuses the shared LayerBEvidence / BarrierVerdict closed set.
+    """
+    plan_text = "\n".join(plan_rows)
+    if not plan_rows:
+        return LayerBEvidence(
+            backend="SQLite", plan_text="", access_pattern_bounded=None,
+            note="no plan captured",
+        )
+    unbounded_scan = any(
+        "SCAN assertion_version" in row and "SEARCH" not in row for row in plan_rows
+    )
+    if unbounded_scan:
+        return LayerBEvidence(
+            backend="SQLite", plan_text=plan_text, access_pattern_bounded=False,
+            note="content barrier plan shows a full SCAN of assertion_version rather than an "
+                 "index-bounded lookup on the authorized version IDs",
+        )
+    bounded_search = any(
+        "SEARCH assertion_version" in row and "version_id" in row for row in plan_rows
+    )
+    if bounded_search:
+        return LayerBEvidence(
+            backend="SQLite", plan_text=plan_text, access_pattern_bounded=True,
+            note="content barrier plan seeks assertion_version by index on version_id "
+                 "(`SEARCH ... USING INDEX ... (version_id=?)`); access is bounded by the "
+                 "authorized set, not a global content scan",
+        )
+    return LayerBEvidence(
+        backend="SQLite", plan_text=plan_text, access_pattern_bounded=None,
+        note="content barrier plan shape not recognized as either bounded index lookup or "
+             "unbounded scan; manual review required",
+    )
+
+
 def layer_b_postgres(plan_json_text: str) -> LayerBEvidence:
     """Interpret PostgreSQL EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) output.
 
