@@ -20,7 +20,11 @@ from __future__ import annotations
 
 import frappe
 
-from episteck_home.identity.actor import resolve_actor, resolve_principals
+from episteck_home.identity.actor import (
+    _person_for_user,
+    resolve_actor,
+    resolve_principals,
+)
 from episteck_home.identity.auth_hook import _user_for_session
 from episteck_home.policy.access import ACTIONS, DOMAINS
 from episteck_home.policy.wrappers import check_access as _check_access
@@ -367,20 +371,38 @@ def get_home_bootstrap(session_id: str):
     ``PermissionError`` (no oracle) — reusing ``auth_hook._user_for_session``, the
     same check the delegation path already relies on for revocation.
 
-    The actor is then resolved exactly like every other method here
-    (``resolve_actor()``): zero or ambiguous Person linkage denies.
+    The actor is then resolved directly from that SAME validated ``session_user``
+    (``_person_for_user``), not from ``resolve_actor()``/``resolve_principals()``.
+    Those prefer an ambient ``frappe.local.episteck_delegated_user`` whenever a
+    delegation header is present on the request — a second, independent
+    actor-resolution channel that would let a stray or misrouted delegation header
+    substitute a *different* person's data into a caller's own, already-validated
+    session. Deriving the actor from ``session_user`` ties "whose session is this"
+    and "whose data do we return" to the identical principal, so that substitution
+    is unrepresentable here too, matching the G1.6 invariant every other method in
+    this file already gives ("actor substitution is not merely blocked — it is
+    unrepresentable"). Zero or ambiguous Person linkage still denies.
 
     Discoverability != authorization. This composes only ``_circles_for`` and
     ``_care_for`` — it NEVER calls ``check_access``, ``_has_effective_access``, or
     ``get_access_to_person``, and returns no grants, no ``external_ref``, no
     ``User.name``/email, no ``principals``, no validity dates, no circle member
     lists.
+
+    ANTI-ORACLE: every refusal here — missing/foreign/revoked/expired session,
+    disabled User, or zero/ambiguous Person link — raises the identical
+    ``PermissionError("session not found")``. A caller cannot distinguish any of
+    these from any other. (The BFF's own §6 mapping collapses this one further, to
+    a single HTTP 401; until that exists, this method is the only enforcement
+    boundary a direct caller sees, so the messages are kept uniform here too.)
     """
     session_user = _user_for_session(session_id)
     if not session_user or session_user != frappe.session.user:
         frappe.throw("session not found", frappe.PermissionError)
 
-    actor = resolve_actor()
+    actor = _person_for_user(session_user)
+    if not actor:
+        frappe.throw("session not found", frappe.PermissionError)
 
     circles = _circles_for(actor)
     care = _care_for(actor)
@@ -389,6 +411,13 @@ def get_home_bootstrap(session_id: str):
 
     subject_ids = [row["person_id"] for row in care]
     names = _display_names([actor, *subject_ids])
+
+    # A Care Relationship or the actor's own Person row referencing an id that no
+    # longer exists is data corruption, not a caller error — fail closed with the
+    # same typed, sanitized exception every other missing-resource path in this
+    # module uses, rather than let a raw KeyError (and the orphaned id) escape.
+    if actor not in names or any(subject_id not in names for subject_id in subject_ids):
+        _not_found("Person")
 
     return {
         "viewer": {"person_id": actor, "display_name": names[actor]},
@@ -414,5 +443,6 @@ def _display_names(person_ids: list[str]) -> dict[str, str]:
         "Person",
         filters={"name": ["in", unique_ids]},
         fields=["name", "full_name"],
+        limit_page_length=0,
     )
     return {row["name"]: row["full_name"] for row in rows}

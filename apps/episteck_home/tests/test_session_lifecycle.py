@@ -152,6 +152,7 @@ def test_open_session_denies_missing_user(session_module):
 
 
 def test_open_session_denies_disabled_user(session_module):
+    """CP-13: a disabled User must refuse before a session row is written."""
     module, fake = session_module(enabled=False)
     with pytest.raises(_PermissionError):
         module.open_session()
@@ -186,7 +187,7 @@ def test_session_ids_are_distinct(session_module):
 
 
 def test_open_session_denies_unlinked_user(session_module):
-    """Zero linked Persons must refuse before a session row is written."""
+    """CP-13: zero linked Persons must refuse before a session row is written."""
     module, fake = session_module(linked_people=[])
     with pytest.raises(_PermissionError):
         module.open_session()
@@ -194,7 +195,7 @@ def test_open_session_denies_unlinked_user(session_module):
 
 
 def test_open_session_denies_ambiguous_linked_user(session_module):
-    """Two linked Persons must refuse before a session row is written (fail closed)."""
+    """CP-13: two linked Persons must refuse before a row is written (fail closed)."""
     module, fake = session_module(linked_people=["PSN-0001", "PSN-0002"])
     with pytest.raises(_PermissionError):
         module.open_session()

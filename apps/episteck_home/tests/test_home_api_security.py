@@ -662,3 +662,99 @@ def test_over_fifty_care_rows_is_a_validation_error(bootstrap_direct_session):
         )
     with pytest.raises(FakeValidationError):
         api.get_home_bootstrap("sess-actor")
+
+
+def test_all_bootstrap_refusals_share_one_message(bootstrap_direct_session):
+    """Anti-oracle: foreign session, revoked, expired, disabled user, and
+    unlinked/ambiguous Person all raise the identical PermissionError text, so a
+    direct caller cannot distinguish any refusal reason from any other.
+    """
+    api, fake = bootstrap_direct_session
+
+    def refusal_message(mutate):
+        local_fake = _make_fake_frappe()
+        local_fake.session.user = "person@example.invalid"
+        local_fake.local.episteck_delegated_user = None
+        local_fake.local.episteck_machine_caller = None
+        mutate(local_fake)
+        import sys as _sys
+
+        _sys.modules["frappe"] = local_fake
+        for mod in (
+            "episteck_home.policy.wrappers",
+            "episteck_home.identity.actor",
+            "episteck_home.identity.auth_hook",
+            "episteck_home.api",
+        ):
+            _sys.modules.pop(mod, None)
+        local_api = importlib.import_module("episteck_home.api")
+        try:
+            local_api.get_home_bootstrap("sess-actor")
+        except FakePermissionError as error:
+            return str(error)
+        raise AssertionError("expected a refusal")
+
+    messages = {
+        refusal_message(lambda f: f.home_delegated_sessions.pop("sess-actor")),
+        refusal_message(
+            lambda f: f.home_delegated_sessions["sess-actor"].__setitem__(
+                "status", "Revoked"
+            )
+        ),
+        refusal_message(
+            lambda f: f.home_delegated_sessions["sess-actor"].__setitem__(
+                "expires_at", "2000-01-01 00:00:00"
+            )
+        ),
+        refusal_message(lambda f: f.users["person@example.invalid"].__setitem__("enabled", 0)),
+        refusal_message(lambda f: f.people["PSN-ACTOR"].__setitem__("linked_user", None)),
+    }
+    assert len(messages) == 1
+
+
+def test_dangling_care_subject_person_fails_closed_not_with_a_keyerror(
+    bootstrap_direct_session,
+):
+    """A Care Relationship pointing at a Person id that no longer exists must not
+    surface as a raw, unhandled KeyError. Every other failure path in this module
+    raises a typed, sanitized Frappe exception; this one should too.
+    """
+    api, fake = bootstrap_direct_session
+    fake.care_relationships.append(
+        {
+            "caregiver_person": "PSN-ACTOR",
+            "subject_person": "PSN-GHOST",
+            "relationship_type": "CAREGIVER",
+            "valid_from": None,
+            "valid_to": None,
+        }
+    )
+    # PSN-GHOST is deliberately absent from fake.people (orphaned reference).
+    with pytest.raises(FakeDoesNotExistError):
+        api.get_home_bootstrap("sess-actor")
+
+
+def test_bootstrap_ignores_a_stray_delegation_header_and_uses_the_session_owner(
+    bootstrap_direct_session,
+):
+    """A caller who legitimately owns ``sess-actor`` (PSN-ACTOR) but also carries an
+    ambient/stray delegation binding to a DIFFERENT person must still get their own
+    bootstrap, never the delegated person's. ``session_id`` ownership and the
+    returned identity must derive from the SAME validated principal
+    (``session_user``), not from two independently-resolved ones.
+
+    Regression for the actor/session-identity mismatch found in code review:
+    resolve_actor() prefers frappe.local.episteck_delegated_user over
+    frappe.session.user whenever a delegation header was presented, which let a
+    stray header substitute a different person's data into this caller's own,
+    already-validated session.
+    """
+    api, fake = bootstrap_direct_session
+    # A delegation header was (mis)routed to this request, binding a DIFFERENT
+    # person's User than the one that owns sess-actor.
+    fake.local.episteck_delegated_user = "other@example.invalid"
+    fake.local.episteck_machine_caller = "home-mcp@example.invalid"
+
+    result = api.get_home_bootstrap("sess-actor")
+
+    assert result["viewer"]["person_id"] == "PSN-ACTOR"
