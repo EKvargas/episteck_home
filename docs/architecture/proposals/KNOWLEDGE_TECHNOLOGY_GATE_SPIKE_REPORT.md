@@ -13,6 +13,14 @@ pass. **Numbers from the original SQLite-only run that were contaminated by a ha
 replace them for any evidentiary purpose, but the superseded figures and why they were wrong
 remain in this document for traceability.
 
+**Revision note (R13 closure pass):** this pass adds one minimal end-to-end transport
+closure test for R13 §16.7 condition 5 (§14), records the Product Architect timing
+side-channel disposition (§21), and corrects §19/§20/§23/§25's interpretation of the
+timing and P13-PostgreSQL evidence — in particular, removing the earlier §25 framing that
+tied the PostgreSQL P13-R UNKNOWN to §17 item 9 and to entering Technology Gate selection
+at all; that UNKNOWN bears on §17 item 6, evaluated per-realization after selection. **No
+technology is selected by this pass either.**
+
 This report separates five kinds of evidence throughout, because they answer different
 questions and must not be conflated:
 
@@ -282,7 +290,7 @@ insecure" or that no PostgreSQL full-text barrier construction could ever work (
 materialized-CTE-first form, a different join hint, or a different extension might behave
 differently — untested, out of this spike's scope).
 
-## 14. R13 adversarial results (unchanged from original report)
+## 14. R13 adversarial results
 
 All 10 required cases plus case9/case10 structural checks pass, application-layer Ed25519
 holder-of-key. Not re-executed this pass (backend-independent; correction 12/§19
@@ -295,6 +303,57 @@ scope did not touch this experiment). See original findings, preserved:
 | 8 | OBSERVED — PASS |
 | 9 | PASS |
 | 10 | PASS (`home_auth_round_trip_count == 2`) |
+
+### §16.7 condition 5 minimum transport-backed closure test (this pass)
+
+The Architecture Review determined that the primary in-process P12 case 2b test
+(`test_case2b_correct_key_wrong_authenticated_identity_fails_closed`) does not establish a
+genuinely authenticated service identity, because `claimed_service_identity` there is a
+caller-supplied string — the exact reason `classify_r13()` records `R13-B` as
+`UNKNOWN — INSUFFICIENT EVIDENCE`. The secondary mTLS harness (correction 7,
+`r13/transport_identity.py`) establishes transport-derived identity, but its one
+composition test closed the TLS connection before calling
+`DomainVerifier.verify_and_execute` in process, so it never exercised the 2b arm over the
+authenticated stream itself.
+
+`scenarios/test_r13_transport_case2b_closure.py` (new, this pass) closes exactly that gap
+with one minimal test,
+`test_case2b_transport_authenticated_wrong_service_with_genuine_key_fails_closed`, plus a
+same-wire-path positive control. Both reuse `EphemeralServiceCA` /
+`TransportIdentityServer` primitives from `r13/transport_identity.py` and
+`DomainVerifier` / `HomeBasisMinter` / `TrustedKeyRegistry` / `sign_proof` from
+`r13/holder_of_key.py` **unmodified** — the only new code is test-only wire plumbing (a
+JSON basis+proof exchange sent over the already-authenticated TLS socket, verified by the
+unmodified `DomainVerifier`), not a new production or spike mechanism.
+
+**Attack arm result:** a client TLS-authenticated as `svc-attacker` (trusted certificate,
+real mTLS handshake — not forged, not rejected at transport) sent, over that same
+connection, a basis bound to `svc-nutrition` plus a proof signed with the GENUINE
+`svc-nutrition` Ed25519 private key, and a payload field falsely claiming
+`service_identity=svc-nutrition`. Results:
+
+| Assertion | Result |
+|---|---|
+| A. TLS handshake succeeds | **PASS** — trusted cert, real handshake |
+| B. `transport_identity == "svc-attacker"` | **PASS** — derived from `getpeercert()`, payload's false claim ignored |
+| C. the svc-nutrition proof is genuinely valid | **PASS** — verified independently of the `DomainVerifier` call |
+| D. `execution.executed == False` | **PASS** |
+| E. rejection reason is specifically the identity mismatch, not TLS/signature failure | **PASS** — `"claimed service identity != basis-bound identity (fail closed)"` |
+
+**Positive control, same wire path** (trusted `svc-nutrition` cert, fresh basis, genuine
+`svc-nutrition` proof): `execution.executed == True`. This rules out the attack-arm
+rejection being an artifact of the exchange harness itself rather than the identity
+mismatch.
+
+**Disposition:** §16.7 condition 5 is recorded **MET at the spike's experimental scope**.
+The primary in-process `R13-B` classification in `classify_r13()` is **unchanged and
+remains `UNKNOWN` by construction** — this closure test does not retroactively make the
+caller-supplied-string experiment authenticated; it is a separate, composed piece of
+evidence. The secondary local mTLS evidence closes the authenticated 2b obligation for
+this authorized synthetic spike specifically. **This is NOT production identity-fabric
+validation and selects no technology** — single-host 127.0.0.1 loopback, throwaway
+ephemeral CA, no production certificate authority, no external network, no long-lived key
+material.
 
 ## 15. Every B1–B6 security pass condition (updated)
 
@@ -458,11 +517,22 @@ N=200 each, Home latency injection disabled.
 | No-content | 1.122 | 1.559 | 1.796 |
 | Deny | 1.151 | 1.629 | 2.086 |
 
-Unchanged in kind from the original report (a small, measurable timing separation between
-allow/deny paths exists, though the absolute figures here are lower than the original
-report's ~5.7–7.5ms, likely reflecting host variance / prior warm-up conditions between
-runs — reported for completeness, not re-analyzed for the timing-side-channel finding,
-which is unchanged in substance: allow does strictly more work than deny).
+**Corrected interpretation.** The original prose claimed a stable allow/deny timing
+separation; these measurements do not re-establish that claim. The three distributions
+overlap substantially across their full p50/p95/p99 range (Allow p50 1.161 vs. Deny p50
+1.151; Allow p95 1.461 vs. No-content p95 1.559 vs. Deny p95 1.629; Allow p99 1.858 vs.
+No-content p99 1.796 vs. Deny p99 2.086) — these localhost, no-Home-latency-injection
+measurements neither establish a stable timing oracle between the three outcomes nor rule
+one out. The absolute figures are also lower than the original report's ~5.7–7.5ms,
+likely reflecting host variance / prior warm-up conditions between runs, which further
+undercuts treating either run's numbers as a settled distributional claim.
+
+**Product Architect disposition:** further evidence required before runtime approval —
+not a Technology Gate condition. See the dedicated subsection below (§21) for the full
+disposition and what future timing evidence would need to show. **No technology-selection
+consequence follows from these measurements** — the mitigation, if one is needed, is
+application/orchestration-level and does not discriminate between S1-SQLite and
+S1-PostgreSQL.
 
 ## 20. P13 — B4 cleanup contention, two-phase methodology, BOTH backends
 
@@ -537,6 +607,22 @@ methodology that separates warm-up decay from contention effect (e.g. many short
 alternating windows averaged, rather than two large sequential blocks) — not attempted
 here, left for a future pass if this remains decision-relevant.
 
+**Corrected §17 framing (this pass).** SQLite P13 answered the contract question its
+cleanup-contention experiment exists to answer: single-writer cleanup contention is
+measurable but bounded in the tested workload, with no busy/timeout/error failures —
+**PASS**. PostgreSQL P13-R remains genuinely **UNKNOWN — ORDER-CONFOUNDED**, but this is
+**not a universal prerequisite for entering Technology Gate selection**. The relevant §17
+criterion is **item 6** — the selected realization must meet the B6 §18A.8 latency
+targets, or those targets must be revised on measured evidence — so if S1-PostgreSQL is
+the realization ultimately selected, this UNKNOWN is unresolved evidence that must be
+addressed under item 6 before the Gate can close *for that selection*. §17 item 9 requires
+only that a shape and version-specific realization be selected with version-specific
+verification; it does **not** require a fair SQLite-vs-PostgreSQL comparative P13 result,
+so item 9 is not blocked by this UNKNOWN at all. (An earlier framing of this finding
+incorrectly tied the PostgreSQL P13-R UNKNOWN to item 9 and to a "fair comparison"
+requirement between the two realizations that §17 does not state; see the corrected §25
+below.)
+
 **Write-phase data** (baseline p50=1.373ms, cleanup-active p50=1.525ms; second measurement
 1.298/1.368ms) is small in absolute terms and did not show the same order sensitivity in
 either measurement — reported at face value, though it was not independently
@@ -552,20 +638,49 @@ measurements.
 
 # PART E — UNCHANGED FROM ORIGINAL REPORT
 
-## 21. R14, R13-A/B, allow/deny timing side-channel, teardown
+## 21. R14, R13-A/B, allow/deny timing side-channel, PA timing disposition, teardown
 
-Not re-executed or re-investigated this pass; findings preserved as originally reported:
+R14 and the base R13-A/B split are not re-executed or re-investigated this pass; findings
+preserved as originally reported, with the R13-B line updated for this pass's closure
+test:
 - R14 raw domain-read isolation: measured (`bench/report_data/r14_domain_read.json`), real
   but synthetic 10ms base latency injection, not a real domain service measurement.
-- R13-A (crypto proof-of-possession): PASS. R13-B (transport-identity): UNKNOWN —
-  INSUFFICIENT EVIDENCE for the primary claim; PASS for the secondary local mTLS
-  transport-identity experiment (correction 7).
+- R13-A (crypto proof-of-possession): PASS. R13-B (transport-identity, primary in-process
+  experiment): UNKNOWN — INSUFFICIENT EVIDENCE, unchanged by construction (`classify_r13()`
+  not modified). R13-B (secondary local mTLS experiment, correction 7): PASS. **This pass
+  additionally closes §16.7 condition 5 at the spike's experimental scope** via the new
+  end-to-end transport-authenticated P12 case 2b closure test (§14) — a composed result
+  building on the existing mTLS harness and holder-of-key verifier, not a change to either.
 - Allow/deny/no-content timing separation: present, not remediated (see §19 for this
-  pass's re-measured, smaller-magnitude figures).
+  pass's re-measured, smaller-magnitude figures and corrected interpretation).
 - Teardown: `teardown.py` unchanged; this pass additionally created and must drop the
   disposable `olin_knowledge_gate_spike` PostgreSQL database (not automated by
   `teardown.py`, which only handles SQLite files and a `spike_kn` schema drop — the
   database-level drop is a manual operator step, see §26).
+
+### Product Architect disposition: timing side-channel
+
+**TIMING SIDE-CHANNEL: REQUIRES FURTHER EVIDENCE — NOT A TECHNOLOGY-SELECTION BLOCKER.**
+
+Reason:
+- It is required acceptance evidence under PA-10d / B6.
+- It is not one of §16.7's eight Gate pass conditions.
+- It is not a §18A.11 technology disqualifier.
+- The mitigation, if the further evidence shows one is needed, is
+  application/orchestration-level and does not discriminate between S1-SQLite and
+  S1-PostgreSQL.
+
+It **must** be closed before Knowledge runtime implementation approval — it is a
+pre-runtime-approval obligation, not a precondition for entering Technology Gate
+selection.
+
+**Future required timing evidence (not run in this pass):**
+- allow / deny / no-content, measured under calibrated Home latency enabled (this pass's
+  §19 measurements have Home latency injection disabled)
+- compare full distributions, not averages
+- explicitly determine whether timing reveals information beyond already-visible response
+  semantics
+- if stable leakage remains, choose and test an application-level mitigation under PA-10d
 
 ---
 
@@ -584,12 +699,21 @@ Not re-executed or re-investigated this pass; findings preserved as originally r
    more nuanced (§16: one specific pre-existing query's planner choice, not a
    corpus-size/index-absence story) and does not support the original interpretation
    either way.
-4. **R13's transport-identity simulation fidelity** — unchanged, still open.
+4. **R13's transport-identity simulation fidelity** — **partially closed this pass.** The
+   §16.7 condition 5 end-to-end transport closure test (§14) demonstrates the composed
+   mechanism (transport-derived identity + Ed25519 holder-of-key) fails closed on the
+   decisive case 2b arm, at the spike's local-mTLS experimental scope. What remains open:
+   this is not evidence about a production identity fabric, service mesh, or key
+   distribution — only that the mechanism, composed, behaves correctly in a single-host
+   loopback harness. The primary in-process `R13-B` claim (`classify_r13()`) is unchanged
+   and stays UNKNOWN by construction.
 
 ## 23. What remains genuinely UNKNOWN after this pass
 
 - **P13 read-phase SQLite-vs-PostgreSQL comparison** (§20) — the decisive discriminator
-  Phase-1 §14.1 asks for is NOT established for PostgreSQL; order-confounded.
+  Phase-1 §14.1 asks for is NOT established for PostgreSQL; order-confounded. This is
+  relevant evidence under §17 item 6 (latency targets) if S1-PostgreSQL is the realization
+  selected; it is not a prerequisite for entering selection itself (§20, §25).
 - **S2-PostgreSQL disposition beyond the tested query shape** — untested whether a
   differently-constructed barrier query (materialized CTE, different join hint) could
   express the barrier correctly on PostgreSQL; this spike tested one shape only, mirroring
@@ -599,8 +723,10 @@ Not re-executed or re-investigated this pass; findings preserved as originally r
   data load; not confirmed as a general property of this schema shape.
 - **PostgreSQL S1/S2 latency at C-small/C-medium** — only C-large was decomposed in detail;
   no equivalent bench-matrix entries exist for the smaller sizes on PostgreSQL (§18).
-- Everything already listed as unchanged-UNKNOWN in §21 (R13-B primary claim, R14 real
-  domain measurement, generator cross-validation).
+- **Timing side-channel** (§21) — requires further evidence before Knowledge runtime
+  implementation approval; not a Technology Gate blocker (§21 PA disposition).
+- The primary in-process R13-B claim (§14, §21 — unchanged, still UNKNOWN by construction),
+  R14 real domain measurement, and generator cross-validation.
 
 ## 24. Whether any B1–B6 contradiction emerged
 
@@ -612,24 +738,52 @@ allowed for, now confirmed on a second backend.
 
 ## 25. Whether the empirical evidence is sufficient to begin final Technology Gate selection
 
-**No — the original report's negative answer stands, for updated reasons.** Against
-Phase-1 §17's acceptance criteria:
-- §17 item 9 (selected shape, version-specific realization AND verification) — both
-  realizations are now verified, but §14.1's decisive P13 comparison remains
-  order-confounded for reads (§20), so the two realizations are not yet FAIRLY compared on
-  the dimension Phase-1 itself calls decisive.
-- S2's disposition (§17 item 3) is now **FAIL on both tested backends** — a closed
-  question in the sense that both realizations were tested, but NOT a question resolved in
-  favor of native full-text on either backend; if S2-shaped access is required, neither
-  backend's native mechanism passed with the tested query construction.
+**These are two different questions, and this report previously ran them together:**
+*evidence sufficient to ENTER final Product Architect selection* is not the same claim as
+*the Technology Gate is CLOSED*. This section answers the first question. Closing the Gate
+(§17 items 1–9, all of them, for whichever realization is ultimately selected) is a
+separate, later determination the Product Architect makes once a realization is chosen and
+its applicable §17 criteria are satisfied.
+
+**Yes — empirical evidence is now ready for final Product Architect Technology Gate
+selection, subject to the selected realization satisfying its applicable §17 criteria
+once chosen.** Against Phase-1 §17's acceptance criteria, checked against what this pass
+and the R13 closure test (§14) actually established:
+
+- §16.7 condition 5 (the R13 non-bearer boundary holds) is now **MET at the spike's
+  experimental scope** (§14) — the previously outstanding closure gap for case 2b over an
+  authenticated transport is closed.
+- §17 item 9 (selected shape, version-specific realization AND verification) requires only
+  that a shape and version-specific realization be selected with version-specific
+  verification — it does **not** require a fair SQLite-vs-PostgreSQL comparative P13
+  result. Both realizations are executed and verified against this pass's synthetic
+  workload; item 9 is not blocked by the PostgreSQL P13-R UNKNOWN.
+- §17 item 6 (the selected realization meets the B6 §18A.8 latency targets, or those
+  targets are revised on measured evidence) is the criterion the PostgreSQL P13-R
+  UNKNOWN actually bears on (§20). **This is a per-realization criterion, evaluated after
+  a realization is selected** — it is not a precondition for entering selection, but if
+  S1-PostgreSQL is the realization chosen, this UNKNOWN is unresolved evidence that must
+  be addressed under item 6 before the Gate closes for that choice.
+- S2's disposition (§17 item 3) is now **FAIL on both tested backends** with the tested
+  query construction — a closed question in the sense that both realizations were tested,
+  not a question resolved in favor of native full-text on either backend. If S2-shaped
+  access is a hard requirement for the selected shape, this is a real constraint on that
+  selection, addressed at selection time rather than a blocker to starting selection.
 - The C-large latency comparison (§16–§18) reveals a planner-sensitivity finding that was
   not anticipated by the original report and has not been investigated for reproducibility
-  across instances/versions.
+  across instances/versions — relevant context for whichever realization is selected, not
+  a selection blocker itself.
+- The timing side-channel (§21) is a pre-runtime-implementation-approval obligation
+  (PA-10d/B6), not a §16.7 Gate pass condition and not a §18A.11 technology disqualifier —
+  it does not block entering selection.
 
-**What would close the remaining gap:** a P13 read methodology that separates warm-up
-decay from contention effect (§20); and, if S2-shaped retrieval remains a candidate
-requirement, a second S2-PostgreSQL query construction attempt with Product Architect
-review before any further tuning.
+**No technology has been selected by this report or this pass.** What remains before the
+Gate can be considered CLOSED for whichever realization is chosen: if S1-PostgreSQL, a
+P13 read methodology that separates warm-up decay from contention effect (§20) to satisfy
+§17 item 6; if S2-shaped retrieval remains a candidate requirement, a second
+S2-PostgreSQL query construction attempt with Product Architect review; and, before
+Knowledge runtime implementation (regardless of which realization is selected), closure
+of the timing side-channel evidence per the §21 PA disposition.
 
 ---
 
