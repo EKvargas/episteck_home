@@ -37,6 +37,7 @@ from backends.instrumentation import layer_a_from_log, layer_b_sqlite  # noqa: E
 from backends.postgres_env import detect_postgres  # noqa: E402
 from backends.sqlite_backend import SQLiteKnowledgeBackend, SQLITE_PRAGMAS  # noqa: E402
 from bench.contention import INTERACTIVE_SAMPLE_COUNT, run_two_phase_contention  # noqa: E402
+from bench.r14_domain_read import measure_r14  # noqa: E402
 from corpus.generator import generate_corpus  # noqa: E402
 from domain_stub.stub import fan_out_concurrent, make_domain_stubs, total_domain_call_count  # noqa: E402
 from home_stub.stub import CALIBRATED_HOME_CROSSING_MS, AuthorizationOperation, Grant, HomeStub  # noqa: E402
@@ -319,6 +320,7 @@ def main() -> None:
         "stages": [],
         "barrier_evidence": [],
         "p13_contention": None,
+        "r14_domain_read": None,
     }
 
     pg = detect_postgres()
@@ -348,6 +350,11 @@ def main() -> None:
 
     print("P13 B4-cleanup contention (SQLite measured; Postgres measured-if-reachable)...")
     report["p13_contention"] = p13_contention(pg)
+
+    print("R14 raw domain-repository read (real services/nutrition; else ENVIRONMENT BLOCKED)...")
+    r14 = measure_r14()
+    report["r14_domain_read"] = asdict(r14)
+    print(f"  R14: {r14.classification}")
 
     out_path = OUT_DIR / "bench_results.json"
     out_path.write_text(json.dumps(report, indent=2))

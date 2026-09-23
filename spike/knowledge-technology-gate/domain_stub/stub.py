@@ -1,10 +1,17 @@
 """Stubbed synthetic domain peers (Phase-1 doc SS16.2 "Home and domain peers stubbed").
 
-Measures R14 -- raw domain access latency EXCLUDING authorization -- which Phase-1 E6
-states is UNKNOWN today because the one measured figure (Nutrition's SQLite read)
-contains a Home crossing. This stub's `access()` call is deliberately just local
-processing time with NO Home call inside it, so R14 is isolated by construction rather
-than inferred by subtraction.
+This stub measures FAN-OUT TOPOLOGY LATENCY -- NOT R14 (correction 5). Its `access()`
+call is a calibrated `time.sleep`, a deliberately synthetic placeholder standing in for
+"a domain peer does some bounded local work," used ONLY to observe the concurrency shape
+of P2/P3/P4 (does wall clock approximate the slowest domain, or the sum?). It is not, and
+must never be reported as, a measurement of any real domain repository.
+
+R14 -- raw domain-repository read latency EXCLUDING authorization -- is measured
+SEPARATELY and for real against the actual `services/nutrition` SQLite repository in
+`bench/r14_domain_read.py`. Phase-1 E6 left R14 UNKNOWN because the one figure ever taken
+for a domain read had a Home crossing folded in; correction 5 resolves that with a real
+isolated read there, and downgrades this stub to what it always actually was: topology
+latency for the fan-out concurrency assertions below.
 
 Supports 1/3/5 independent domain configurations run CONCURRENTLY (P2/P3/P4), so wall
 clock approximates the slowest domain rather than the sum -- the property B6 SS18A.6
@@ -26,9 +33,10 @@ class DomainAccessResult:
 
 
 class DomainStub:
-    """One synthetic domain peer. `base_latency_ms` models a local indexed read, similar
-    in shape to Nutrition's own SQLite `SELECT` (Phase-1 E6) but WITHOUT any Home call --
-    that separation is the whole point of R14."""
+    """One synthetic domain peer. `base_latency_ms` is a calibrated placeholder for "a
+    domain peer does some bounded local work" -- it is fan-out TOPOLOGY latency, deliberately
+    synthetic, and is NOT a measurement of a real domain read (that is R14, measured for real
+    in bench/r14_domain_read.py; see this module's header and correction 5)."""
 
     def __init__(self, name: str, *, base_latency_ms: float = 2.0, jitter_ms: float = 0.5, seed: int = 0):
         self.name = name

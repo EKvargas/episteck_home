@@ -1,4 +1,12 @@
-"""P1-P5: baseline, R14 domain isolation, fan-out flat-crossing, source expansion."""
+"""P1-P5: baseline, fan-out topology (concurrency shape), flat-crossing, source expansion.
+
+Correction 5: the domain fan-out stage exercised here measures fan-out TOPOLOGY latency
+(is wall clock the slowest domain or the sum?), NOT R14. R14 -- raw domain-repository read
+latency excluding authorization -- is measured separately and for real against the actual
+services/nutrition SQLite repository in bench/r14_domain_read.py. These tests assert the
+concurrency shape and that the fan-out is a separately reported stage; they make no R14
+latency claim.
+"""
 from __future__ import annotations
 
 from home_stub.stub import Grant, HomeStub
@@ -46,8 +54,9 @@ def test_p1_knowledge_only_baseline(loaded_backend):
 
 
 def test_p2_knowledge_plus_one_domain_r14(loaded_backend):
-    """P2: Knowledge + one domain. R14 measured, reported separately from authorization.
-    Expected: 2 crossings; domain access reported separately."""
+    """P2: Knowledge + one domain. Domain fan-out is a separately reported stage, distinct
+    from authorization (its latency is fan-out topology, NOT R14 -- see module docstring and
+    correction 5). Expected: 2 crossings; domain access reported separately."""
     backend, corpus = loaded_backend
     home = HomeStub(grants=_full_grants(corpus))
     p0 = corpus.persons[0]
@@ -62,7 +71,7 @@ def test_p2_knowledge_plus_one_domain_r14(loaded_backend):
     assert result.home_auth_round_trip_count == 2
     assert result.domain_call_count == 1
     fanout_stage = [t for t in result.timings if t.stage == "domain_fanout"]
-    assert fanout_stage, "R14 must be a separately reported stage, not merged into auth"
+    assert fanout_stage, "domain fan-out must be a separately reported stage, not merged into auth"
 
 
 def test_p3_three_independent_domains_crossings_flat(loaded_backend):

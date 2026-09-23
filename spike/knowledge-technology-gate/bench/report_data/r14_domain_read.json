@@ -1,0 +1,33 @@
+{
+  "classification": "MEASURED",
+  "source": "real services/nutrition SqliteNutritionRepository against a throwaway on-disk SQLite DB seeded with synthetic profile + intake rows",
+  "measurements": [
+    {
+      "operation": "list_intake",
+      "classification": "MEASURED",
+      "sample_count": 200,
+      "warmup_count": 5,
+      "row_count": 50,
+      "p50_ms": 0.791,
+      "p95_ms": 1.3673,
+      "p99_ms": 4.5752,
+      "underpowered": false,
+      "contains_home_crossing": false,
+      "note": "Real SqliteNutritionRepository.list_intake over a synthetic single-day intake list; bounded indexed read (ix_intake on person_id,date,kind); no Home crossing in the call path."
+    },
+    {
+      "operation": "get_profile",
+      "classification": "MEASURED",
+      "sample_count": 200,
+      "warmup_count": 5,
+      "row_count": 1,
+      "p50_ms": 0.5886,
+      "p95_ms": 0.8786,
+      "p99_ms": 4.922,
+      "underpowered": false,
+      "contains_home_crossing": false,
+      "note": "Real SqliteNutritionRepository.get_profile PRIMARY KEY read of one synthetic profile row; no Home crossing in the call path."
+    }
+  ],
+  "note": "R14 isolated BY CONSTRUCTION: every timed operation is a pure local repository read with no Home authorization crossing inside it, resolving the Phase-1 E6 UNKNOWN (where the only measured domain figure had a Home crossing folded in). MEASURED only; no pass/fail threshold, no technology selected."
+}
