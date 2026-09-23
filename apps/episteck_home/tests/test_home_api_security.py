@@ -464,9 +464,11 @@ def test_check_access_delegates_subject_and_action_unchanged(home_api, monkeypat
 # session_id is an opaque selector, never identity/authority. The authenticated
 # OAuth user (frappe.session.user) is authoritative; the CP verifies the selected
 # Home Delegated Session belongs to that user, is Active, unexpired, and its User
-# is enabled, reusing auth_hook._user_for_session. Then it resolves the actor
-# exactly like every other method here (resolve_actor()) and composes only the
-# existing _circles_for / _care_for helpers. No grants, no access evaluation.
+# is enabled, reusing auth_hook._user_for_session. It then derives the actor from
+# that SAME validated session_user (identity.actor._person_for_user), not from
+# resolve_actor()/resolve_principals() (see the security-review regression tests
+# below for why), and composes only the existing _circles_for / _care_for
+# helpers. No grants, no access evaluation.
 # --------------------------------------------------------------------------
 
 
@@ -583,12 +585,30 @@ def test_get_home_bootstrap_never_evaluates_policy(bootstrap_direct_session, mon
 
 
 def test_circle_co_member_without_care_is_not_a_person_context(bootstrap_direct_session):
-    """CP-9: PSN-OTHER shares no circle with the actor and must not appear anywhere."""
-    api, _ = bootstrap_direct_session
+    """CP-9: a Person who SHARES the actor's Circle but has no active Care
+    Relationship with the actor must not appear as a PERSON/care context.
+    Circle co-membership alone never grants bootstrap visibility.
+    """
+    api, fake = bootstrap_direct_session
+    fake.people["PSN-COMEMBER"] = {
+        "full_name": "Circle Co-member",
+        "external_ref": None,
+        "linked_user": None,
+    }
+    fake.memberships.append(
+        {"circle": "CIR-HOME", "person": "PSN-COMEMBER", "role_in_circle": "member"}
+    )
+    # Deliberately no Care Relationship for PSN-COMEMBER.
+
     result = api.get_home_bootstrap("sess-actor")
+
     care_ids = {row["person_id"] for row in result["care"]}
-    assert "PSN-OTHER" not in care_ids
-    # Circles never carry a member list at all.
+    assert "PSN-COMEMBER" not in care_ids
+    # The legitimate care subject (also a CIR-HOME co-member, but WITH an active
+    # Care Relationship) still appears normally -- co-membership isn't what's
+    # being excluded here, the absence of a care relationship is.
+    assert "PSN-SUBJECT" in care_ids
+    # Circles never carry a member list or any Person expansion at all.
     for circle in result["circles"]:
         assert "members" not in circle
         assert set(circle) == {"circle_id", "display_name"}
