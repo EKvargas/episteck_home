@@ -82,21 +82,49 @@ CREATE INDEX idx_bind_source ON materialization_binding(source_version_id);
 class PostgresKnowledgeBackend(KnowledgeBackend):
     name = "S1-PostgreSQL"
 
-    def __init__(self, dsn: str, *, schema_name: str = "spike_kn"):
+    def __init__(self, dsn: str, *, schema_name: str = "spike_kn", create_schema: bool = True):
+        """`create_schema=True` (default) drops and recreates the disposable spike schema --
+        the ordinary path for a fresh backend that will `load_corpus`. `create_schema=False`
+        ATTACHES to an already-created, already-loaded schema without any DDL: this is what
+        P13's contention harness needs, where one connection loaded the corpus and many
+        additional connections must open against that SAME schema concurrently WITHOUT each
+        one dropping it (correction 4). See `connect_existing` for the convenience factory."""
         import psycopg  # imported lazily so SQLite-only runs never require it installed+working
 
         self.dsn = dsn
         self.schema_name = schema_name
         self.conn = psycopg.connect(dsn, autocommit=False)
-        with self.conn.cursor() as cur:
-            cur.execute(f"DROP SCHEMA IF EXISTS {schema_name} CASCADE")
-            cur.execute(f"CREATE SCHEMA {schema_name}")
-            cur.execute(f"SET search_path TO {schema_name}")
-        self.conn.commit()
-        with self.conn.cursor() as cur:
-            cur.execute(f"SET search_path TO {schema_name}")
-            cur.execute(_SCHEMA)
-        self.conn.commit()
+        if create_schema:
+            with self.conn.cursor() as cur:
+                cur.execute(f"DROP SCHEMA IF EXISTS {schema_name} CASCADE")
+                cur.execute(f"CREATE SCHEMA {schema_name}")
+                cur.execute(f"SET search_path TO {schema_name}")
+            self.conn.commit()
+            with self.conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {schema_name}")
+                cur.execute(_SCHEMA)
+            self.conn.commit()
+        else:
+            with self.conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {schema_name}")
+            self.conn.commit()
+
+    @classmethod
+    def connect_existing(cls, dsn: str, *, schema_name: str = "spike_kn") -> "PostgresKnowledgeBackend":
+        """Open a fresh connection to an ALREADY-created, ALREADY-loaded spike schema
+        without any DDL (correction 4, P13 contention harness). Does NOT drop or recreate
+        the schema and does NOT reload the corpus -- purely a new session against existing
+        state, so many readers plus one B4-cleanup writer can run concurrently against the
+        one loaded schema. `close()` on such a connection must NOT drop the schema; callers
+        use `close_session()` instead (see below)."""
+        return cls(dsn, schema_name=schema_name, create_schema=False)
+
+    def close_session(self) -> None:
+        """Close only this connection, leaving the shared schema intact -- the teardown a
+        `connect_existing` session uses so a concurrent reader/writer never drops the schema
+        out from under its peers (correction 4). The owning backend still uses `close()` to
+        drop the disposable schema at the very end."""
+        self.conn.close()
 
     def load_corpus(self, corpus: Corpus) -> None:
         with self.conn.cursor() as cur:

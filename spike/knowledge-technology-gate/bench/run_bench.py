@@ -23,8 +23,9 @@ NOT EXECUTED - ENVIRONMENT BLOCKED / N/A.
 from __future__ import annotations
 
 import json
-import statistics
+import sqlite3
 import sys
+import tempfile
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -35,6 +36,7 @@ from backends.common import AuthorizedSet, ContentAccessLog  # noqa: E402
 from backends.instrumentation import layer_a_from_log, layer_b_sqlite  # noqa: E402
 from backends.postgres_env import detect_postgres  # noqa: E402
 from backends.sqlite_backend import SQLiteKnowledgeBackend, SQLITE_PRAGMAS  # noqa: E402
+from bench.contention import INTERACTIVE_SAMPLE_COUNT, run_two_phase_contention  # noqa: E402
 from corpus.generator import generate_corpus  # noqa: E402
 from domain_stub.stub import fan_out_concurrent, make_domain_stubs, total_domain_call_count  # noqa: E402
 from home_stub.stub import CALIBRATED_HOME_CROSSING_MS, AuthorizationOperation, Grant, HomeStub  # noqa: E402
@@ -173,6 +175,95 @@ def bench_r13_execution() -> PercentileResult:
     return result
 
 
+def p13_contention(pg_availability) -> dict:
+    """Correction 4: the DECISIVE S1-SQLite vs S1-PostgreSQL discriminator, run TIMED here,
+    using the Product Architect's TWO-PHASE methodology (see bench/contention.py).
+
+    The first P13 wiring drove 200 pure-Python reader threads and produced a ~20s p50/p95/p99
+    cluster that was a CPython GIL serialization ARTIFACT, not backend contention. Replaced
+    by a sequential foreground loop concurrent with ONE bounded background B4 cleanup writer,
+    measured in TWO phases: P13-R (interactive reads during cleanup) and P13-W (interactive
+    writes during cleanup, where two writers genuinely contend for SQLite's single write
+    lock), each captured BOTH baseline (no cleanup) and cleanup-active so the report states
+    the delta/ratio attributable to contention rather than an absolute number. No new pass/
+    fail threshold is invented; classification reflects measurement validity only, and no
+    technology is selected.
+
+    Both arms drive the ONE shared, backend-agnostic harness over the SAME corpus so the
+    distributions are directly comparable (correction 9). SQLite is MEASURED against a real
+    on-disk WAL database (a `:memory:` db is per-connection, so multi-connection contention
+    needs a shared file). PostgreSQL is MEASURED only if `detect_postgres()` already reported
+    a reachable disposable instance; otherwise it is recorded NOT EXECUTED - ENVIRONMENT
+    BLOCKED with the named prerequisite, never fabricated (corrections 5/12). Each arm
+    records its explicit concurrency configuration (correction 8)."""
+    # C-medium seed=7 matches the pytest module: enough assertions that the foreground reads
+    # do real work and a suppression register large enough that the cleanup writer's dedicated
+    # _P13CLEANUP_* pool never collides with corpus rows.
+    corpus = generate_corpus("C-medium", seed=7)
+    arms: list[dict] = []
+
+    # --- SQLite arm (MEASURED) --------------------------------------------------------
+    with tempfile.TemporaryDirectory() as td:
+        db_path = Path(td) / "p13.db"
+        loader = SQLiteKnowledgeBackend(db_path)
+        loader.load_corpus(corpus)
+        loader.close()
+        sqlite_result = run_two_phase_contention(
+            backend_name="S1-SQLite",
+            open_backend=lambda: SQLiteKnowledgeBackend(db_path),
+            partition_id=corpus.partitions[0],
+            persons=corpus.persons,
+            concurrency_config=dict(SQLITE_PRAGMAS),
+            sample_count=INTERACTIVE_SAMPLE_COUNT,
+            is_operational_error=lambda e: isinstance(e, sqlite3.OperationalError),
+        )
+    arms.append(asdict(sqlite_result))
+
+    # --- PostgreSQL arm (MEASURED if reachable, else NOT EXECUTED - ENVIRONMENT BLOCKED) --
+    if getattr(pg_availability, "available", False):
+        from backends.postgres_backend import PostgresKnowledgeBackend
+
+        owner = PostgresKnowledgeBackend(pg_availability.dsn)
+        try:
+            owner.load_corpus(corpus)
+            pg_result = run_two_phase_contention(
+                backend_name="S1-PostgreSQL",
+                open_backend=lambda: PostgresKnowledgeBackend.connect_existing(
+                    pg_availability.dsn, schema_name=owner.schema_name
+                ),
+                partition_id=corpus.partitions[0],
+                persons=corpus.persons,
+                concurrency_config={"session": "autocommit=False, server defaults (correction 8)"},
+                sample_count=INTERACTIVE_SAMPLE_COUNT,
+            )
+            arms.append(asdict(pg_result))
+        finally:
+            owner.close()  # drops the disposable schema at the very end
+    else:
+        reason = getattr(pg_availability, "reason", str(pg_availability))
+        arms.append(
+            {
+                "backend_name": "S1-PostgreSQL",
+                "classification": "NOT EXECUTED — ENVIRONMENT BLOCKED",
+                "concurrency_config": {"session": "not opened — no reachable disposable Postgres"},
+                "note": (
+                    "P13 PostgreSQL arm not executed: "
+                    f"{reason}. Detect-never-provision (correction 5); a reachable disposable "
+                    "PostgreSQL DSN is the missing prerequisite. Not fabricated (correction 12)."
+                ),
+            }
+        )
+
+    return {
+        "scenario": "P13_b4_cleanup_contention",
+        "methodology": "two-phase (P13-R reads / P13-W writes), sequential foreground + one bounded background cleanup writer",
+        "corpus_size": "C-medium",
+        "corpus_seed": 7,
+        "interactive_sample_count": INTERACTIVE_SAMPLE_COUNT,
+        "arms": arms,
+    }
+
+
 def barrier_evidence_for_size(size_label: str) -> dict:
     corpus = generate_corpus(size_label, seed=42)
     be = SQLiteKnowledgeBackend()
@@ -227,6 +318,7 @@ def main() -> None:
         "postgres_availability": None,
         "stages": [],
         "barrier_evidence": [],
+        "p13_contention": None,
     }
 
     pg = detect_postgres()
@@ -253,6 +345,9 @@ def main() -> None:
 
     print("R13 execution (measured)...")
     report["stages"].append({"corpus_size": "N/A", **asdict(bench_r13_execution())})
+
+    print("P13 B4-cleanup contention (SQLite measured; Postgres measured-if-reachable)...")
+    report["p13_contention"] = p13_contention(pg)
 
     out_path = OUT_DIR / "bench_results.json"
     out_path.write_text(json.dumps(report, indent=2))

@@ -1,95 +1,153 @@
-"""P13: B4 asynchronous cleanup concurrent with interactive reads/writes -- the decisive
-discriminator between S1-SQLite and S1-PostgreSQL (Phase-1 doc SS8.3/SS14).
+"""P13: B4 asynchronous cleanup concurrent with interactive work -- the DECISIVE
+discriminator between S1-SQLite and S1-PostgreSQL (Phase-1 doc SS8.3/SS16.5).
 
-Measures interactive p50/p95/p99 WHILE a bounded cleanup obligation runs concurrently.
-SQLite configuration is fixed and documented (backends/sqlite_backend.py SQLITE_PRAGMAS,
-correction 8) -- WAL mode, matching what a real service would run, not hand-tuned to bias
-the outcome. PostgreSQL uses server defaults, also per correction 8.
+Correction 4 (Product Architect review of PR #33), with the PA's methodological refinement:
+the first P13 wiring used 200 pure-Python reader threads and produced a ~20s p50/p95/p99
+cluster that was a CPython GIL serialization ARTIFACT, not SQLite writer contention. The PA
+replaced that design with a TWO-PHASE, sequential-foreground methodology (see
+`bench/contention.py` for the full rationale):
 
-Sample sizes: correction 6 requires a justified, bounded count. This test uses 15
-interactive reads concurrent with 1 cleanup batch (10 deletes) -- correctness-focused
-(does contention cause failures/incorrect reads), not a full latency-distribution study;
-bench/run_bench.py performs the larger, timed run for percentile reporting.
+  * NO hundreds of reader threads. The interactive workload is a sequential foreground loop
+    (one worker, one connection) timing each operation individually.
+  * ONE background bounded B4 cleanup writer, batched (begin->delete bounded batch->commit->
+    optional inter-batch sleep OUTSIDE the txn), confirmed live via an Event before the
+    foreground begins measuring, kept active until the foreground stops it.
+  * TWO phases -- P13-R (interactive reads during cleanup) and P13-W (interactive writes
+    during cleanup, where two writers genuinely contend for SQLite's single write lock) --
+    each measured BOTH baseline (no cleanup) and cleanup-active, so the report states the
+    delta/ratio attributable to contention, not an absolute number.
+  * P13 invents NO new pass/fail threshold. The empirical numbers ARE the result; these
+    tests assert only that a VALID two-phase measurement was obtained (classification PASS =
+    measurement validity, not a technology verdict), and record busy/timeout/error counts as
+    evidence. No technology is selected here.
+
+Both backends run the IDENTICAL logical workload via the ONE shared harness so the SQLite
+arm, the PostgreSQL arm, and the bench-runner timed run exercise the same contention shape
+rather than drifting copies. SQLite is MEASURED against a real on-disk WAL database (a
+`:memory:` db is per-connection, so multi-connection contention needs a shared file).
+PostgreSQL runs the identical workload IF a disposable instance is reachable (detect, never
+provision -- correction 5); otherwise it is recorded NOT EXECUTED - ENVIRONMENT BLOCKED via
+pytest.skip with the named prerequisite, never fabricated (correction 12).
 """
 from __future__ import annotations
 
 import sqlite3
-import threading
-import time
 
-from backends.common import AuthorizedSet, ContentAccessLog
-from backends.sqlite_backend import SQLiteKnowledgeBackend
+import pytest
+
+from bench.contention import run_two_phase_contention
+from backends.postgres_env import detect_postgres
+from backends.sqlite_backend import SQLITE_PRAGMAS, SQLiteKnowledgeBackend
 from corpus.generator import generate_corpus
 
+# C-medium seed=7: 5,000 assertions and 344 suppression rows -- ample real work for the
+# foreground reads and a suppression register large enough that the bounded cleanup writer's
+# own dedicated pool never collides with corpus rows. Same corpus for both backends so the
+# arms are comparable (correction 9).
+P13_CORPUS_SIZE = "C-medium"
+P13_CORPUS_SEED = 7
+# Keep the pytest run tractable: a smaller-but-still-non-underpowered sample proves the
+# harness works end to end and produces both phases; the bench runner (bench/run_bench.py)
+# collects the full INTERACTIVE_SAMPLE_COUNT numbers for the report.
+P13_TEST_SAMPLE_COUNT = 60
 
-def test_p13_sqlite_interactive_reads_survive_concurrent_cleanup_write(tmp_path):
-    """A bounded B4-style cleanup (DELETE FROM suppression WHERE ... ) runs on one thread
-    while interactive metadata-planning reads run concurrently on others. Under WAL mode
-    (SQLITE_PRAGMAS), readers must not be blocked by the writer and must not see a
-    corrupted/partial view -- correctness under contention, measured not assumed."""
+
+def _assert_valid_two_phase(result) -> None:
+    """The shared assertions both arms make: a VALID two-phase contention measurement was
+    obtained (all four runs completed, both cleanup-active runs saw a confirmed-live writer,
+    nothing underpowered). This is measurement validity, NOT a technology verdict."""
+    assert result.classification == "PASS", (
+        f"{result.backend_name} P13 must obtain a valid two-phase measurement: "
+        f"{result.classification} -- {result.note}"
+    )
+    # All four foreground runs present with real percentiles.
+    for phase in (
+        result.read_baseline, result.read_cleanup_active,
+        result.write_baseline, result.write_cleanup_active,
+    ):
+        assert phase is not None
+        assert phase.samples_completed == phase.samples_requested, (
+            f"{phase.label}: only {phase.samples_completed}/{phase.samples_requested} completed"
+        )
+        assert phase.p50_ms is not None and phase.p95_ms is not None and phase.p99_ms is not None
+        assert not phase.underpowered
+    # Both cleanup-active runs overlapped a confirmed-live bounded cleanup writer that
+    # actually committed batches (proof the measured window was genuinely contended).
+    for ev in (result.read_cleanup_evidence, result.write_cleanup_evidence):
+        assert ev is not None
+        assert ev.confirmed_active, "cleanup writer never confirmed active before measurement"
+        assert ev.batches_committed > 0, "cleanup writer committed no batches"
+    # Deltas/ratios (the reported contention signal) are computed.
+    assert result.read_p95_delta_ms is not None and result.read_p95_ratio is not None
+    assert result.write_p95_delta_ms is not None and result.write_p95_ratio is not None
+
+
+def test_p13_sqlite_two_phase_contention_measurement(tmp_path):
+    """SQLite arm, MEASURED. One connection loads the corpus into a real on-disk WAL database
+    and closes; the shared harness then opens fresh connections for the sequential foreground
+    loops and the background bounded cleanup writer against that SAME file. Under WAL
+    (SQLITE_PRAGMAS, correction 8) the two-phase measurement must complete cleanly for both
+    interactive reads and interactive writes, baseline and cleanup-active -- classification
+    PASS means a valid contention measurement was obtained (not that SQLite 'won' anything;
+    P13 selects no technology)."""
     db_path = tmp_path / "p13.db"
-    corpus = generate_corpus("C-medium", seed=7)
+    corpus = generate_corpus(P13_CORPUS_SIZE, seed=P13_CORPUS_SEED)
 
-    writer_backend = SQLiteKnowledgeBackend(db_path)
-    writer_backend.load_corpus(corpus)
-    writer_backend.close()
+    loader = SQLiteKnowledgeBackend(db_path)
+    loader.load_corpus(corpus)
+    loader.close()
 
-    errors: list[Exception] = []
-    read_latencies_ms: list[float] = []
-    cleanup_done = threading.Event()
+    result = run_two_phase_contention(
+        backend_name="S1-SQLite",
+        open_backend=lambda: SQLiteKnowledgeBackend(db_path),
+        partition_id=corpus.partitions[0],
+        persons=corpus.persons,
+        concurrency_config=dict(SQLITE_PRAGMAS),
+        sample_count=P13_TEST_SAMPLE_COUNT,
+        # SQLITE_BUSY under contention is the operational contention signal (vs a harness
+        # bug); it is recorded as busy_count evidence, never hidden by an unbounded retry.
+        is_operational_error=lambda e: isinstance(e, sqlite3.OperationalError),
+    )
 
-    def cleanup_worker():
-        try:
-            be = SQLiteKnowledgeBackend(db_path)
-            cur = be.conn.cursor()
-            targets = [s.target_version_id for s in corpus.suppressions[:10]]
-            for vid in targets:
-                cur.execute("DELETE FROM suppression WHERE target_version_id = ?", (vid,))
-                time.sleep(0.002)  # spread the writes out so readers overlap with the writer window
-            be.conn.commit()
-            be.close()
-        except Exception as e:  # noqa: BLE001
-            errors.append(e)
-        finally:
-            cleanup_done.set()
+    _assert_valid_two_phase(result)
 
-    def read_worker(person_id: str):
-        try:
-            be = SQLiteKnowledgeBackend(db_path)
-            t0 = time.perf_counter()
-            planned = be.plan_metadata(
-                partition_id=corpus.partitions[0], subject_person_ids=(person_id,),
-                domains=("NUTRITION", "HEALTH", "CALENDAR", "FINANCE", "HOUSEHOLD"), as_of=2_000_000_000,
-            )
-            authz = AuthorizedSet(version_ids=planned.candidate_version_ids)
-            log = ContentAccessLog()
-            be.fetch_content(authz, log=log)
-            elapsed = (time.perf_counter() - t0) * 1000.0
-            read_latencies_ms.append(elapsed)
-            be.close()
-        except sqlite3.OperationalError as e:
-            errors.append(e)
 
-    cleanup_thread = threading.Thread(target=cleanup_worker)
-    read_threads = [
-        threading.Thread(target=read_worker, args=(corpus.persons[i % len(corpus.persons)],))
-        for i in range(15)
-    ]
+def test_p13_postgres_two_phase_contention_measurement():
+    """PostgreSQL arm, IDENTICAL logical workload -- MEASURED only if a disposable Postgres
+    is already reachable, otherwise NOT EXECUTED - ENVIRONMENT BLOCKED.
 
-    cleanup_thread.start()
-    for t in read_threads:
-        t.start()
-    cleanup_thread.join(timeout=10)
-    for t in read_threads:
-        t.join(timeout=10)
+    Detect, never provision (correction 5): if `detect_postgres()` reports unavailable this
+    test SKIPS with the named missing prerequisite -- a reportable NOT EXECUTED status, not a
+    pass and not a silent gap. When a DSN is reachable, one owner connection loads the corpus
+    into the disposable spike schema, then the harness opens `connect_existing` sessions for
+    the foreground loops and the cleanup writer against that SAME loaded schema (never
+    dropping it out from under peers), running the same two-phase contention shape as the
+    SQLite arm."""
+    availability = detect_postgres()
+    if not availability.available:
+        pytest.skip(
+            "S1-PostgreSQL P13 NOT EXECUTED - ENVIRONMENT BLOCKED: "
+            f"{availability.reason} (set {availability!r} prerequisite; detect-never-provision)"
+        )
 
-    assert cleanup_done.is_set(), "cleanup must complete within the timeout"
-    assert not errors, f"WAL mode must not produce operational errors under this contention: {errors}"
-    assert len(read_latencies_ms) == 15, "all interactive reads must complete, not be starved by the writer"
+    from backends.postgres_backend import PostgresKnowledgeBackend
 
-    read_latencies_ms.sort()
-    p50 = read_latencies_ms[len(read_latencies_ms) // 2]
-    p95 = read_latencies_ms[int(len(read_latencies_ms) * 0.95) - 1] if len(read_latencies_ms) >= 20 else read_latencies_ms[-1]
-    # n=15 is UNDERPOWERED for a real p95/p99 (correction 6) -- reported as informational,
-    # not asserted against a threshold. bench/run_bench.py runs the larger sample.
-    assert p50 >= 0 and p95 >= 0  # sanity; real numbers go in the report
+    corpus = generate_corpus(P13_CORPUS_SIZE, seed=P13_CORPUS_SEED)
+
+    owner = PostgresKnowledgeBackend(availability.dsn)
+    try:
+        owner.load_corpus(corpus)
+        result = run_two_phase_contention(
+            backend_name="S1-PostgreSQL",
+            open_backend=lambda: PostgresKnowledgeBackend.connect_existing(
+                availability.dsn, schema_name=owner.schema_name
+            ),
+            partition_id=corpus.partitions[0],
+            persons=corpus.persons,
+            concurrency_config={"session": "autocommit=False, server defaults (correction 8)"},
+            sample_count=P13_TEST_SAMPLE_COUNT,
+        )
+    finally:
+        owner.close()  # drops the disposable schema at the very end (correction 4)
+
+    _assert_valid_two_phase(result)

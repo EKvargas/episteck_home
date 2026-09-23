@@ -1,0 +1,111 @@
+{
+  "scenario": "P13_b4_cleanup_contention",
+  "methodology": "two-phase (P13-R reads / P13-W writes), sequential foreground + one bounded background cleanup writer",
+  "corpus_size": "C-medium",
+  "corpus_seed": 7,
+  "interactive_sample_count": 200,
+  "arms": [
+    {
+      "backend_name": "S1-SQLite",
+      "classification": "PASS",
+      "concurrency_config": {
+        "journal_mode": "WAL",
+        "synchronous": "NORMAL",
+        "busy_timeout": 5000
+      },
+      "read_baseline": {
+        "label": "baseline_read",
+        "cleanup_active": false,
+        "operation": "read",
+        "samples_requested": 200,
+        "samples_completed": 200,
+        "p50_ms": 20.926,
+        "p95_ms": 25.944,
+        "p99_ms": 28.06,
+        "busy_count": 0,
+        "timeout_count": 0,
+        "error_count": 0,
+        "errors": [],
+        "underpowered": false
+      },
+      "read_cleanup_active": {
+        "label": "cleanup_active_read",
+        "cleanup_active": true,
+        "operation": "read",
+        "samples_requested": 200,
+        "samples_completed": 200,
+        "p50_ms": 27.736,
+        "p95_ms": 32.455,
+        "p99_ms": 40.141,
+        "busy_count": 0,
+        "timeout_count": 0,
+        "error_count": 0,
+        "errors": [],
+        "underpowered": false
+      },
+      "write_baseline": {
+        "label": "baseline_write",
+        "cleanup_active": false,
+        "operation": "write",
+        "samples_requested": 200,
+        "samples_completed": 200,
+        "p50_ms": 0.056,
+        "p95_ms": 0.122,
+        "p99_ms": 0.602,
+        "busy_count": 0,
+        "timeout_count": 0,
+        "error_count": 0,
+        "errors": [],
+        "underpowered": false
+      },
+      "write_cleanup_active": {
+        "label": "cleanup_active_write",
+        "cleanup_active": true,
+        "operation": "write",
+        "samples_requested": 200,
+        "samples_completed": 200,
+        "p50_ms": 0.063,
+        "p95_ms": 0.134,
+        "p99_ms": 0.168,
+        "busy_count": 0,
+        "timeout_count": 0,
+        "error_count": 0,
+        "errors": [],
+        "underpowered": false
+      },
+      "read_cleanup_evidence": {
+        "confirmed_active": true,
+        "batches_committed": 3112,
+        "rows_deleted": 31120,
+        "duration_s": 5.6028,
+        "batch_size": 10,
+        "inter_batch_sleep_s": 0.001,
+        "transaction_shape": "begin -> DELETE bounded batch of suppression rows -> COMMIT -> inter-batch sleep (OUTSIDE txn) -> repeat; reinsert pool when drained",
+        "errors": []
+      },
+      "write_cleanup_evidence": {
+        "confirmed_active": true,
+        "batches_committed": 2,
+        "rows_deleted": 20,
+        "duration_s": 0.0384,
+        "batch_size": 10,
+        "inter_batch_sleep_s": 0.001,
+        "transaction_shape": "begin -> DELETE bounded batch of suppression rows -> COMMIT -> inter-batch sleep (OUTSIDE txn) -> repeat; reinsert pool when drained",
+        "errors": []
+      },
+      "read_p95_delta_ms": 6.511,
+      "read_p95_ratio": 1.251,
+      "write_p95_delta_ms": 0.012,
+      "write_p95_ratio": 1.098,
+      "note": "valid two-phase P13 contention measurement obtained: baseline and cleanup-active percentiles for both interactive reads and interactive writes, each foreground run a sequential loop overlapping a confirmed-live bounded B4 cleanup writer. Empirical numbers (deltas/ratios, busy/timeout counts) are the result; no technology is selected here."
+    },
+    {
+      "backend_name": "S1-PostgreSQL",
+      "classification": "NOT EXECUTED \u2014 ENVIRONMENT BLOCKED",
+      "concurrency_config": {
+        "session": "not opened \u2014 no reachable disposable Postgres"
+      },
+      "note": "P13 PostgreSQL arm not executed: no SPIKE_POSTGRES_DSN set; no reachable container daemon (docker/podman info failed) -- spike does not start one. Detect-never-provision (correction 5); a reachable disposable PostgreSQL DSN is the missing prerequisite. Not fabricated (correction 12)."
+    }
+  ]
+}
