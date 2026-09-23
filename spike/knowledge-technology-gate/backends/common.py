@@ -16,6 +16,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+# Correction 13 (Product Architect directive, PR #33 review): the original per-candidate
+# N+1 query pattern in plan_metadata() (one subject query + one domain query PER candidate)
+# was the dominant cost at C-large (20,201 SQL statements for 10,100 candidates) and the
+# dominant cost in P13's C-medium read phase (1,723 statements for 861 candidates) -- not
+# index absence, not corpus-size-driven storage cost, and not a fundamental SQLite-vs-
+# PostgreSQL difference. Both backends now batch subject/domain lookups using this SAME
+# fixed batch size so the comparison stays fair (requirement: identical batching strategy
+# on both realizations, not independently tuned).
+METADATA_BATCH_SIZE = 500
+
+
+def chunk_ids(ids: tuple[str, ...], size: int = METADATA_BATCH_SIZE) -> list[tuple[str, ...]]:
+    """Split `ids` into fixed-size batches, preserving order. A conservative fixed size
+    (500) is used rather than relying on either backend's maximum parameter count, so the
+    same chunking logic and batch count apply identically to SQLite and PostgreSQL."""
+    return [ids[i : i + size] for i in range(0, len(ids), size)]
+
 
 @dataclass(frozen=True)
 class CandidateRequirement:

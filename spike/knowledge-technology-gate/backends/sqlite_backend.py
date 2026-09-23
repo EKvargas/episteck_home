@@ -17,7 +17,14 @@ import sqlite3
 import time
 from pathlib import Path
 
-from .common import AuthorizedSet, CandidateRequirement, ContentAccessLog, KnowledgeBackend, PlannedMetadata
+from .common import (
+    AuthorizedSet,
+    CandidateRequirement,
+    ContentAccessLog,
+    KnowledgeBackend,
+    PlannedMetadata,
+    chunk_ids,
+)
 from .model import Corpus
 
 # Documented SQLite configuration (correction 8). Rationale per pragma:
@@ -195,21 +202,33 @@ class SQLiteKnowledgeBackend(KnowledgeBackend):
         rows = cur.execute(sql, params).fetchall()
         candidate_ids = tuple(r["version_id"] for r in rows)
 
-        requirements: list[CandidateRequirement] = []
-        for vid in candidate_ids:
-            subj_rows = cur.execute(
-                "SELECT subject_person_id FROM assertion_subject WHERE version_id = ?", (vid,)
-            ).fetchall()
-            dom_rows = cur.execute(
-                "SELECT domain FROM assertion_domain WHERE version_id = ?", (vid,)
-            ).fetchall()
-            requirements.append(
-                CandidateRequirement(
-                    version_id=vid,
-                    subject_person_ids=tuple(r["subject_person_id"] for r in subj_rows),
-                    domains=tuple(r["domain"] for r in dom_rows),
-                )
+        # Correction 13: batched subject/domain lookup (was one-query-per-candidate N+1;
+        # see common.py::chunk_ids docstring). Same fixed batch size and grouping strategy
+        # as the PostgreSQL realization -- semantics unchanged, each candidate still gets
+        # its COMPLETE subject/domain membership (correction 1), never content_text.
+        subjects_by_vid: dict[str, list[str]] = {vid: [] for vid in candidate_ids}
+        domains_by_vid: dict[str, list[str]] = {vid: [] for vid in candidate_ids}
+        for batch in chunk_ids(candidate_ids):
+            ph = ",".join("?" * len(batch))
+            for r in cur.execute(
+                f"SELECT version_id, subject_person_id FROM assertion_subject "
+                f"WHERE version_id IN ({ph})", batch,
+            ).fetchall():
+                subjects_by_vid[r["version_id"]].append(r["subject_person_id"])
+            for r in cur.execute(
+                f"SELECT version_id, domain FROM assertion_domain WHERE version_id IN ({ph})",
+                batch,
+            ).fetchall():
+                domains_by_vid[r["version_id"]].append(r["domain"])
+
+        requirements = [
+            CandidateRequirement(
+                version_id=vid,
+                subject_person_ids=tuple(subjects_by_vid[vid]),
+                domains=tuple(domains_by_vid[vid]),
             )
+            for vid in candidate_ids
+        ]
 
         # rows_returned: the logical count of candidate rows this query returned --
         # NOT a claim about physical rows/pages the backend touched internally

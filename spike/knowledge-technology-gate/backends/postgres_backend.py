@@ -14,7 +14,14 @@ Connection configuration (correction 8) is explicit below, documented per settin
 """
 from __future__ import annotations
 
-from .common import AuthorizedSet, CandidateRequirement, ContentAccessLog, KnowledgeBackend, PlannedMetadata
+from .common import (
+    AuthorizedSet,
+    CandidateRequirement,
+    ContentAccessLog,
+    KnowledgeBackend,
+    PlannedMetadata,
+    chunk_ids,
+)
 from .model import Corpus
 
 # Documented PostgreSQL session configuration (correction 8).
@@ -197,19 +204,35 @@ class PostgresKnowledgeBackend(KnowledgeBackend):
             rows = cur.fetchall()
             candidate_ids = tuple(r[0] for r in rows)
 
-            requirements: list[CandidateRequirement] = []
-            for vid in candidate_ids:
-                cur.execute("SELECT subject_person_id FROM assertion_subject WHERE version_id = %s", (vid,))
-                subj_rows = cur.fetchall()
-                cur.execute("SELECT domain FROM assertion_domain WHERE version_id = %s", (vid,))
-                dom_rows = cur.fetchall()
-                requirements.append(
-                    CandidateRequirement(
-                        version_id=vid,
-                        subject_person_ids=tuple(r[0] for r in subj_rows),
-                        domains=tuple(r[0] for r in dom_rows),
-                    )
+            # Correction 13: batched subject/domain lookup (was one-query-per-candidate N+1;
+            # see common.py::chunk_ids docstring). Same fixed batch size and grouping
+            # strategy as the SQLite realization -- semantics unchanged, each candidate
+            # still gets its COMPLETE subject/domain membership (correction 1), never
+            # content_text.
+            subjects_by_vid: dict[str, list[str]] = {vid: [] for vid in candidate_ids}
+            domains_by_vid: dict[str, list[str]] = {vid: [] for vid in candidate_ids}
+            for batch in chunk_ids(candidate_ids):
+                cur.execute(
+                    "SELECT version_id, subject_person_id FROM assertion_subject "
+                    "WHERE version_id = ANY(%s)", (list(batch),),
                 )
+                for r in cur.fetchall():
+                    subjects_by_vid[r[0]].append(r[1])
+                cur.execute(
+                    "SELECT version_id, domain FROM assertion_domain WHERE version_id = ANY(%s)",
+                    (list(batch),),
+                )
+                for r in cur.fetchall():
+                    domains_by_vid[r[0]].append(r[1])
+
+            requirements = [
+                CandidateRequirement(
+                    version_id=vid,
+                    subject_person_ids=tuple(subjects_by_vid[vid]),
+                    domains=tuple(domains_by_vid[vid]),
+                )
+                for vid in candidate_ids
+            ]
 
         # rows_returned: logical candidate-row count, NOT a physical-access claim
         # (correction 9). See explain_plan_evidence() for Layer B corroboration.
@@ -232,6 +255,32 @@ class PostgresKnowledgeBackend(KnowledgeBackend):
         for r in rows:
             log.record(r[0])
         return [{"version_id": r[0], "content_text": r[1]} for r in rows]
+
+    def explain_content_barrier(self, authorized_version_ids: tuple[str, ...]) -> str:
+        """Backend plan-evidence layer for the S1 exact-version content lookup (correction
+        10, PostgreSQL realization -- mirrors sqlite_backend.py's method of the same name).
+        Captures EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) for the exact query `fetch_content`
+        runs, so the report can show the content barrier is bounded (Index Scan on the
+        `assertion_version` primary key) rather than a global Seq Scan. Corroboration only,
+        per correction 1.B -- Layer A stays authoritative. Interpreted by
+        `backends.instrumentation.layer_b_postgres`."""
+        import json
+
+        probe_ids = authorized_version_ids or ("__probe__",)
+        with self.conn.cursor() as cur:
+            cur.execute(f"SET search_path TO {self.schema_name}")
+            cur.execute(
+                "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "
+                "SELECT version_id, content_text FROM assertion_version WHERE version_id = ANY(%s)",
+                (list(probe_ids),),
+            )
+            (plan_json,) = cur.fetchone()
+        # psycopg auto-parses FORMAT JSON into a Python list/dict; layer_b_postgres does
+        # substring matching on real JSON text (e.g. '"Node Type": "Seq Scan"'), so this must
+        # be json.dumps, not str() -- str() on the parsed object produces Python repr with
+        # single quotes, which never matches the double-quoted JSON patterns being searched
+        # for (caught by testing this directly against a live PostgreSQL instance).
+        return json.dumps(plan_json)
 
     def fetch_content_fulltext(
         self, authorized: AuthorizedSet, *, query: str, log: ContentAccessLog,
@@ -295,7 +344,14 @@ class PostgresKnowledgeBackend(KnowledgeBackend):
             )
             (plan_json,) = cur.fetchone()
             cur.execute("DROP TABLE pg_temp.authorized_scope_probe")
-        return str(plan_json)
+        # Same fix as explain_content_barrier: json.dumps, not str() -- psycopg auto-parses
+        # FORMAT JSON into a Python list/dict, and layer_b_postgres does real JSON parsing
+        # (json.loads) plus double-quoted substring checks; str() produces Python repr with
+        # single quotes, which is neither valid JSON nor matches those patterns (caught by
+        # testing this directly against a live PostgreSQL instance, S2-PostgreSQL closure).
+        import json
+
+        return json.dumps(plan_json)
 
     def resolve_source_expansion(
         self, *, partition_id: str, surviving_version_ids: tuple[str, ...],
