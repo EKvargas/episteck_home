@@ -263,3 +263,29 @@ def test_bff6_already_bound_still_returns_303_and_enum_absent(ctx):
     assert response.headers["location"] == "/app"
     assert BindResult.ALREADY_BOUND.value not in response.text
     assert "runtime_binding" not in response.text
+
+
+def test_bff20_app_logs_in_successfully_against_a_pre_migration_store(tmp_path):
+    import sqlite3
+
+    from home_bff.app import create_app
+    from home_bff.store import SessionStore, _SCHEMA_PRE_LOGIN_BINDING
+    from fastapi.testclient import TestClient
+
+    from tests.test_app import FakeClient, make_settings
+
+    path = str(tmp_path / "legacy.sqlite")
+    with sqlite3.connect(path) as db:
+        db.executescript(_SCHEMA_PRE_LOGIN_BINDING)
+        db.commit()
+
+    store = SessionStore(path)  # migrates on construction
+    app = create_app(make_settings(), store=store, client=FakeClient())
+    with TestClient(app, base_url="https://bff.invalid") as http:
+        from urllib.parse import parse_qs, urlparse
+
+        response = http.get("/login", follow_redirects=False)
+        state = parse_qs(urlparse(response.headers["location"]).query)["state"][0]
+        callback = http.get(f"/callback?code=c&state={state}", follow_redirects=False)
+        assert callback.status_code == 303
+        assert callback.headers["location"] == "/app"
