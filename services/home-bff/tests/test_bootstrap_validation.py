@@ -50,7 +50,25 @@ def test_viewer_is_always_first_person_context_even_with_no_care():
 
 
 @pytest.mark.parametrize(
-    "bad_person_id", ["PSN-1", "psn-00001", "PSN00001", "CIR-00001", "", "PSN-abcde"]
+    "bad_person_id",
+    [
+        "PSN-1",
+        "psn-00001",
+        "PSN00001",
+        "CIR-00001",
+        "",
+        "PSN-abcde",
+        # A trailing newline must NOT satisfy `$`-anchored matching: Python's
+        # `$` matches at end-of-string OR immediately before a trailing `\n`,
+        # so a naive `.match()` call would let this slip past as if it were
+        # "PSN-00001" for the purposes of format validation, even though the
+        # two strings are not equal and would defeat the viewer/duplicate
+        # equality guards downstream.
+        "PSN-00001\n",
+        # `\d` matches any Unicode decimal digit by default, not just ASCII
+        # 0-9. Arabic-Indic digits U+0661..U+0665 spell "12345".
+        "PSN-١٢٣٤٥",
+    ],
 )
 def test_invalid_person_id_format_rejects_whole_payload(bad_person_id):
     raw = {
@@ -62,12 +80,46 @@ def test_invalid_person_id_format_rejects_whole_payload(bad_person_id):
         validate_bootstrap_response(raw)
 
 
-@pytest.mark.parametrize("bad_circle_id", ["CIR-1", "cir-00001", "PSN-00001", ""])
+@pytest.mark.parametrize(
+    "bad_circle_id",
+    [
+        "CIR-1",
+        "cir-00001",
+        "PSN-00001",
+        "",
+        # Same trailing-newline bypass as person_id, for circle_id.
+        "CIR-00001\n",
+        # Same Unicode-digit bypass as person_id, for circle_id.
+        "CIR-١٢٣٤٥",
+    ],
+)
 def test_invalid_circle_id_format_rejects_whole_payload(bad_circle_id):
     raw = {
         "viewer": {"person_id": "PSN-00001", "display_name": "X"},
         "circles": [{"circle_id": bad_circle_id, "display_name": "Family"}],
         "care": [],
+    }
+    with pytest.raises(UpstreamMalformed):
+        validate_bootstrap_response(raw)
+
+
+def test_care_subject_with_trailing_newline_is_rejected_not_treated_as_distinct():
+    """Before the fix, "PSN-00001\\n" passed the format check (Python's `$`
+    tolerates a trailing newline), so it was treated as a DIFFERENT id than
+    the viewer's "PSN-00001" and silently accepted as a legitimate care
+    subject. It must now be rejected by the format check itself, so the
+    whole payload fails closed rather than admitting a near-duplicate id.
+    """
+    raw = {
+        "viewer": {"person_id": "PSN-00001", "display_name": "Erick"},
+        "circles": [],
+        "care": [
+            {
+                "person_id": "PSN-00001\n",
+                "display_name": "Erick",
+                "relationship_type": "CAREGIVER",
+            }
+        ],
     }
     with pytest.raises(UpstreamMalformed):
         validate_bootstrap_response(raw)
@@ -107,6 +159,31 @@ def test_unknown_relationship_type_rejects_whole_payload():
     raw = dict(VALID_RAW)
     raw["care"] = [
         {"person_id": "PSN-00007", "display_name": "Ana", "relationship_type": "FRIEND"}
+    ]
+    with pytest.raises(UpstreamMalformed):
+        validate_bootstrap_response(raw)
+
+
+@pytest.mark.parametrize(
+    "unhashable_relationship_type",
+    [["CAREGIVER"], {"type": "CAREGIVER"}],
+    ids=["list", "dict"],
+)
+def test_unhashable_relationship_type_rejects_whole_payload_not_typeerror(
+    unhashable_relationship_type,
+):
+    """A list or dict is unhashable, so a bare `x not in frozenset` raises
+    TypeError instead of returning False. This must be caught as an ordinary
+    malformed-shape rejection (UpstreamMalformed), never propagate as a raw
+    TypeError (which would surface as an unhandled 500 at the HTTP layer).
+    """
+    raw = dict(VALID_RAW)
+    raw["care"] = [
+        {
+            "person_id": "PSN-00007",
+            "display_name": "Ana",
+            "relationship_type": unhashable_relationship_type,
+        }
     ]
     with pytest.raises(UpstreamMalformed):
         validate_bootstrap_response(raw)

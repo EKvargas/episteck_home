@@ -333,6 +333,37 @@ def test_bff12_non_dict_care_entry_is_invalid_response(ctx):
     assert response.json() == {"error": "INVALID_RESPONSE"}
 
 
+@pytest.mark.parametrize(
+    "unhashable_relationship_type",
+    [["CAREGIVER"], {"type": "CAREGIVER"}],
+    ids=["list", "dict"],
+)
+def test_bff12_unhashable_relationship_type_is_invalid_response_not_500(
+    ctx, unhashable_relationship_type
+):
+    """A list/dict relationship_type is unhashable; `x not in frozenset(...)`
+    would raise TypeError if not guarded, which FastAPI would surface as an
+    unhandled 500 — breaking the "every malformed shape maps to 502
+    INVALID_RESPONSE" contract (BFF-12).
+    """
+    http, _, client = ctx
+    _log_in(http)
+    client.bootstrap_payload = {
+        "viewer": {"person_id": "PSN-00001", "display_name": "X"},
+        "circles": [],
+        "care": [
+            {
+                "person_id": "PSN-00007",
+                "display_name": "Ana",
+                "relationship_type": unhashable_relationship_type,
+            }
+        ],
+    }
+    response = http.get("/bootstrap")
+    assert response.status_code == 502
+    assert response.json() == {"error": "INVALID_RESPONSE"}
+
+
 # ------------------------------------------------------------------- BFF-13
 
 

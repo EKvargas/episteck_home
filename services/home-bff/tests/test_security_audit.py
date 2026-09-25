@@ -301,6 +301,12 @@ def test_no_secret_in_any_successful_response(ctx):
         ("GET", "/session"),
         ("GET", "/whoami"),
         ("POST", "/delegation"),
+        # /openapi.json always 404s (Task 8 disabled it), so there is no
+        # "successful response" here to check for a secret in the body — but
+        # a 404 is trivially clean by construction (FastAPI's default 404 has
+        # a fixed body), and keeping this probe in the list is a harmless
+        # defense-in-depth check against a future regression that re-exposes
+        # /openapi.json with a body that happens to echo request state.
         ("GET", "/openapi.json"),
     ]:
         response = http.request(method, path)

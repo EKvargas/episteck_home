@@ -10,8 +10,8 @@ import re
 
 from .frappe_client import UpstreamMalformed
 
-PERSON_ID_RE = re.compile(r"^PSN-\d{5,}$")
-CIRCLE_ID_RE = re.compile(r"^CIR-\d{5,}$")
+PERSON_ID_RE = re.compile(r"^PSN-[0-9]{5,}$")
+CIRCLE_ID_RE = re.compile(r"^CIR-[0-9]{5,}$")
 
 MAX_DISPLAY_NAME_LENGTH = 140
 MAX_CONTEXTS = 50
@@ -43,13 +43,13 @@ def _require_list(value, reason: str) -> list:
 
 
 def _validate_person_id(value, reason: str) -> str:
-    if not isinstance(value, str) or not PERSON_ID_RE.match(value):
+    if not isinstance(value, str) or not PERSON_ID_RE.fullmatch(value):
         _fail(reason)
     return value
 
 
 def _validate_circle_id(value, reason: str) -> str:
-    if not isinstance(value, str) or not CIRCLE_ID_RE.match(value):
+    if not isinstance(value, str) or not CIRCLE_ID_RE.fullmatch(value):
         _fail(reason)
     return value
 
@@ -114,7 +114,7 @@ def validate_bootstrap_response(raw: dict) -> dict:
             entry.get("display_name"), "care.display_name is malformed"
         )
         relationship_type = entry.get("relationship_type")
-        if relationship_type not in RELATIONSHIP_TYPES:
+        if not isinstance(relationship_type, str) or relationship_type not in RELATIONSHIP_TYPES:
             _fail("care.relationship_type is unknown")
 
         if subject_id == viewer_id:

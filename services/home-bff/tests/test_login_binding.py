@@ -113,9 +113,28 @@ def test_bff1_successful_callback_returns_303_with_flags_and_clears_binding(ctx)
     session_header = response.headers.get("set-cookie", "")
     assert sessions.COOKIE_NAME in session_header
 
-    binding_after = response.cookies.get(sessions.LOGIN_BINDING_COOKIE_NAME)
-    # Cleared: either absent, or present with an expiry in the past / empty value.
-    assert not binding_after or binding_after == ""
+    # A response can carry more than one Set-Cookie header (one setting the new
+    # session cookie, one clearing the login-binding cookie). Checking the
+    # TestClient's post-response cookie jar (response.cookies.get(...)) cannot
+    # distinguish "explicitly cleared via Set-Cookie" from "never touched at
+    # all" — both read back as empty/missing. Assert directly on the raw
+    # Set-Cookie header content instead, which positively proves the server
+    # sent a clearing directive (Max-Age=0 or an expiry in the past) for the
+    # login-binding cookie name specifically.
+    set_cookie_headers = response.headers.get_list("set-cookie")
+    binding_set_cookie_headers = [
+        header
+        for header in set_cookie_headers
+        if header.startswith(f"{sessions.LOGIN_BINDING_COOKIE_NAME}=")
+    ]
+    assert binding_set_cookie_headers, (
+        "no Set-Cookie header for the login-binding cookie was sent at all "
+        f"(headers were: {set_cookie_headers})"
+    )
+    binding_clear_header = binding_set_cookie_headers[0].lower()
+    assert "max-age=0" in binding_clear_header or "expires=thu, 01 jan 1970" in binding_clear_header, (
+        f"login-binding Set-Cookie was not an explicit clear: {binding_set_cookie_headers[0]}"
+    )
 
 
 def test_bff2_malicious_redirect_params_and_spoofed_host_still_redirect_to_app(ctx):

@@ -107,6 +107,18 @@ _MIGRATE_ADD_LOGIN_BINDING_HASH = (
 
 _BUSY_TIMEOUT_MS = 1_000
 
+# The very first `PRAGMA journal_mode = WAL` against a brand-new database file
+# is not fully protected by busy_timeout: switching journal modes takes an
+# exclusive lock on the file for a moment, and when several processes (public
+# app + mint app) construct a SessionStore against the same new file at the
+# same time, one of them can observe SQLITE_BUSY/"database is locked" during
+# that specific switch rather than simply queuing behind busy_timeout like an
+# ordinary write does. This is a narrow, well-understood SQLite startup race,
+# not a bug in the migration logic below it — so it gets its own short,
+# bounded retry rather than a change to the migration's exception handling.
+_WAL_SWITCH_MAX_ATTEMPTS = 5
+_WAL_SWITCH_RETRY_DELAY_SECONDS = 0.05
+
 
 @dataclass(frozen=True)
 class Transaction:
@@ -143,7 +155,7 @@ class SessionStore:
             db.execute(f"PRAGMA busy_timeout = {_BUSY_TIMEOUT_MS}")
             # WAL lets the mint process read the last committed binding while the
             # public process is preparing a short write transaction.
-            db.execute("PRAGMA journal_mode = WAL")
+            self._switch_to_wal_with_retry(db)
             db.executescript(_SCHEMA)
             self._migrate_login_binding_hash(db)
             db.commit()
@@ -153,6 +165,29 @@ class SessionStore:
             os.chmod(path, 0o600)
         except OSError:
             pass
+
+    def _switch_to_wal_with_retry(self, db: sqlite3.Connection) -> None:
+        """Switch to WAL, retrying a locked-database condition a few times.
+
+        Only the specific "database is locked"/"database is busy" failure is
+        retried; any other OperationalError is a real problem and propagates
+        immediately.
+        """
+        last_error: sqlite3.OperationalError | None = None
+        for attempt in range(_WAL_SWITCH_MAX_ATTEMPTS):
+            try:
+                db.execute("PRAGMA journal_mode = WAL")
+                return
+            except sqlite3.OperationalError as error:
+                message = str(error).lower()
+                if "locked" not in message and "busy" not in message:
+                    raise
+                last_error = error
+                if attempt < _WAL_SWITCH_MAX_ATTEMPTS - 1:
+                    time.sleep(_WAL_SWITCH_RETRY_DELAY_SECONDS * (attempt + 1))
+        raise StoreUnavailableError(
+            "runtime store unavailable: could not switch to WAL journal mode"
+        ) from last_error
 
     def _migrate_login_binding_hash(self, db: sqlite3.Connection) -> None:
         """Idempotent: a store created before this column existed gets it added.
