@@ -49,7 +49,7 @@ def ctx(tmp_path):
     client = FakeClient()
     app = create_app(make_settings(), store=store, client=client)
     with TestClient(app, base_url="https://bff.invalid") as http:
-        yield http, store, client
+        yield http, store, client, app
 
 
 # ==========================================================================
@@ -58,24 +58,24 @@ def ctx(tmp_path):
 
 
 def test_delegation_denied_with_no_cookie(ctx):
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     assert http.post("/delegation").status_code == 401
 
 
 def test_delegation_denied_with_forged_cookie(ctx):
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     http.cookies.set(sessions.COOKIE_NAME, "forged-session-id", domain="bff.invalid")
     assert http.post("/delegation").status_code == 401
 
 
 def test_delegation_denied_with_empty_cookie(ctx):
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     http.cookies.set(sessions.COOKIE_NAME, "", domain="bff.invalid")
     assert http.post("/delegation").status_code == 401
 
 
 def test_delegation_denied_after_logout(ctx):
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     complete_login(http)
     raw = http.cookies.get(sessions.COOKIE_NAME)
     http.post("/logout")
@@ -84,7 +84,7 @@ def test_delegation_denied_after_logout(ctx):
 
 
 def test_delegation_denied_when_session_expired(ctx):
-    http, store, _ = ctx
+    http, store, _, _ = ctx
     complete_login(http)
     raw = http.cookies.get(sessions.COOKIE_NAME)
     with sqlite3.connect(store._path) as db:
@@ -97,7 +97,7 @@ def test_delegation_denied_when_session_expired(ctx):
 
 def test_delegation_denied_for_a_deleted_session(ctx):
     """Server-side revocation denies the very next call."""
-    http, store, _ = ctx
+    http, store, _, _ = ctx
     complete_login(http)
     raw = http.cookies.get(sessions.COOKIE_NAME)
     store.delete_session(raw)
@@ -106,14 +106,14 @@ def test_delegation_denied_for_a_deleted_session(ctx):
 
 def test_delegation_cannot_be_reached_by_guessing_a_home_session_id(ctx):
     """Knowing the Home session id is not a credential; only the cookie is."""
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     http.cookies.set(sessions.COOKIE_NAME, "HDS-0001", domain="bff.invalid")
     assert http.post("/delegation").status_code == 401
 
 
 def test_delegation_requires_post_not_get(ctx):
     """A GET cannot be triggered by a bare cross-site image/link."""
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     complete_login(http)
     assert http.get("/delegation").status_code == 405
 
@@ -125,7 +125,7 @@ def test_delegation_requires_post_not_get(ctx):
 
 def test_samesite_lax_is_declared_on_the_session_cookie(ctx):
     """Lax is what makes a cross-site POST arrive with no cookie at all."""
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     state = login_and_get_state(http)
     response = http.get(f"/callback?code=c&state={state}", follow_redirects=False)
     assert "samesite=lax" in response.headers["set-cookie"].lower()
@@ -138,7 +138,7 @@ def test_cross_site_post_arrives_without_the_cookie_and_is_denied(ctx):
     reaches the app unauthenticated. That is exactly the no-cookie case, and it is
     denied.
     """
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     complete_login(http)
     saved = http.cookies.get(sessions.COOKIE_NAME)
     assert saved  # we do have a real session
@@ -157,7 +157,7 @@ def test_cross_site_post_arrives_without_the_cookie_and_is_denied(ctx):
 def test_delegation_is_not_reachable_by_simple_form_content_types(ctx):
     """A cross-site HTML form can only send these content types; none are accepted
     as a way to smuggle an actor, and all still require the session."""
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     for content_type in (
         "application/x-www-form-urlencoded",
         "multipart/form-data; boundary=x",
@@ -173,7 +173,7 @@ def test_delegation_is_not_reachable_by_simple_form_content_types(ctx):
 
 def test_cookie_is_not_readable_by_script(ctx):
     """HttpOnly: an XSS payload cannot exfiltrate the session to mint delegations."""
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     state = login_and_get_state(http)
     response = http.get(f"/callback?code=c&state={state}", follow_redirects=False)
     assert "httponly" in response.headers["set-cookie"].lower()
@@ -213,7 +213,7 @@ ACTOR_HEADERS = [
 
 @pytest.mark.parametrize("params", ACTOR_ATTEMPTS)
 def test_actor_cannot_be_supplied_in_the_query_string(ctx, params):
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     complete_login(http)
     body = http.get("/whoami", params=params).json()
     assert body["actor_person_id"] == "PSN-00001"
@@ -221,7 +221,7 @@ def test_actor_cannot_be_supplied_in_the_query_string(ctx, params):
 
 @pytest.mark.parametrize("headers", ACTOR_HEADERS)
 def test_actor_cannot_be_supplied_in_a_header(ctx, headers):
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     complete_login(http)
     body = http.get("/whoami", headers=headers).json()
     assert body["actor_person_id"] == "PSN-00001"
@@ -231,7 +231,7 @@ def test_actor_cannot_be_supplied_in_a_header(ctx, headers):
 def test_actor_in_a_body_cannot_steer_the_minted_delegation(ctx, params):
     from tests.test_app import _claims
 
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     complete_login(http)
     response = http.post("/delegation", json=params)
     assert response.status_code == 200
@@ -243,7 +243,7 @@ def test_actor_in_a_body_cannot_steer_the_minted_delegation(ctx, params):
 def test_actor_header_cannot_steer_the_minted_delegation(ctx, headers):
     from tests.test_app import _claims
 
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     complete_login(http)
     response = http.post("/delegation", headers=headers)
     assert response.status_code == 200
@@ -253,19 +253,13 @@ def test_actor_header_cannot_steer_the_minted_delegation(ctx, headers):
 def test_no_route_declares_an_actor_parameter(ctx):
     """Mechanical: the OpenAPI schema must contain no actor input anywhere.
 
-    The public app disables /openapi.json, so this test is satisfied by the 404.
-    If the endpoint is ever re-enabled in a test context, this check will validate
-    the schema for forbidden parameters.
+    Uses in-process schema introspection via app.openapi() to validate the complete
+    schema for forbidden parameters, regardless of whether /openapi.json is exposed.
     """
-    http, _, _ = ctx
-    response = http.get("/openapi.json")
+    http, _, _, app = ctx
+    schema = app.openapi()
 
-    # If OpenAPI is disabled (404), that's secure enough—no schema exposed.
-    if response.status_code == 404:
-        return
-
-    # If the endpoint exists, validate the schema for forbidden parameters.
-    schema = response.json()
+    # Validate the schema for forbidden parameters.
     forbidden = {
         "actor_person_id",
         "actor",
@@ -283,7 +277,7 @@ def test_no_route_declares_an_actor_parameter(ctx):
 
 
 def test_minted_delegation_never_contains_a_person_id(ctx):
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     complete_login(http)
     body = http.post("/delegation", json={"actor_person_id": "PSN-00002"}).json()
     assert "PSN-" not in body["delegation"]
@@ -300,7 +294,7 @@ def _assert_clean(text: str, where: str) -> None:
 
 
 def test_no_secret_in_any_successful_response(ctx):
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     complete_login(http)
     for method, path in [
         ("GET", "/health"),
@@ -315,14 +309,14 @@ def test_no_secret_in_any_successful_response(ctx):
 
 
 def test_no_secret_in_the_login_redirect(ctx):
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     response = http.get("/login", follow_redirects=False)
     _assert_clean(response.headers["location"], "login redirect")
     _assert_clean(response.text, "login body")
 
 
 def test_no_secret_in_callback_response_or_cookie(ctx):
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     state = login_and_get_state(http)
     response = http.get(f"/callback?code=c&state={state}", follow_redirects=False)
     _assert_clean(response.text, "callback body")
@@ -333,7 +327,7 @@ def test_no_secret_in_error_responses(ctx):
     """Failure paths are where leaks usually hide."""
     from home_bff.frappe_client import SessionOpenError, TokenExchangeError
 
-    http, _, client = ctx
+    http, _, client, _ = ctx
 
     client.exchange_error = TokenExchangeError(f"upstream echoed {SECRETS['client_secret']}")
     state = login_and_get_state(http)
@@ -348,7 +342,7 @@ def test_no_secret_in_error_responses(ctx):
 
 
 def test_no_secret_in_logs_on_the_happy_path(ctx, caplog):
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     with caplog.at_level(logging.DEBUG):
         complete_login(http)
         http.get("/whoami")
@@ -361,7 +355,7 @@ def test_no_secret_in_logs_on_failure_paths(ctx, caplog):
     """The two places we log a warning both carry upstream text — check them."""
     from home_bff.frappe_client import SessionOpenError, TokenExchangeError
 
-    http, _, client = ctx
+    http, _, client, _ = ctx
     with caplog.at_level(logging.DEBUG):
         client.exchange_error = TokenExchangeError(SECRETS["client_secret"])
         state = login_and_get_state(http)
@@ -383,7 +377,7 @@ def test_access_log_is_disabled_so_query_strings_are_not_recorded():
 
 
 def test_pkce_verifier_never_leaves_the_server(ctx):
-    http, store, _ = ctx
+    http, store, _, _ = ctx
     state = login_and_get_state(http)
     transaction = store.consume_transaction(state)
     assert transaction is not None
@@ -402,7 +396,7 @@ def test_pkce_verifier_never_leaves_the_server(ctx):
 
 
 def test_session_response_carries_no_token_fields(ctx):
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     complete_login(http)
     body = http.get("/session").json()
     assert set(body) == {"authenticated", "expires_at"}
@@ -414,13 +408,13 @@ def test_session_response_carries_no_token_fields(ctx):
 
 
 def test_health_body_is_a_fixed_two_key_shape(ctx):
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     body = http.get("/health").json()
     assert body == {"status": "ok", "service": "home-bff"}
 
 
 def test_health_reveals_no_configuration(ctx):
-    http, _, _ = ctx
+    http, _, _, _ = ctx
     text = http.get("/health").text
     for forbidden in (
         "super-secret",
@@ -436,7 +430,7 @@ def test_health_reveals_no_configuration(ctx):
 
 def test_health_requires_no_session_and_creates_none(ctx):
     """Health must be usable by a probe without minting state."""
-    http, store, _ = ctx
+    http, store, _, _ = ctx
     assert http.get("/health").status_code == 200
     assert http.cookies.get(sessions.COOKIE_NAME) is None
     with sqlite3.connect(store._path) as db:
@@ -445,7 +439,7 @@ def test_health_requires_no_session_and_creates_none(ctx):
 
 def test_health_does_not_reach_the_control_plane(ctx):
     """A liveness probe must not depend on, or exercise, upstream credentials."""
-    http, _, client = ctx
+    http, _, client, _ = ctx
 
     def boom(*args, **kwargs):
         raise AssertionError("health must not call upstream")
