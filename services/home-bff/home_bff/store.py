@@ -42,7 +42,7 @@ TRANSACTION_TTL_SECONDS = 600
 # Browser session lifetime. Matches the Control Plane's Home Delegated Session TTL.
 SESSION_TTL_SECONDS = 12 * 60 * 60
 
-_SCHEMA = """
+_SCHEMA_PRE_LOGIN_BINDING = """
 CREATE TABLE IF NOT EXISTS oauth_transaction (
     state          TEXT PRIMARY KEY,
     code_verifier  TEXT NOT NULL,
@@ -69,6 +69,42 @@ CREATE INDEX IF NOT EXISTS ix_tx_expiry ON oauth_transaction(expires_at);
 CREATE INDEX IF NOT EXISTS ix_session_expiry ON bff_session(expires_at);
 """
 
+# Same schema. New stores get the column from CREATE TABLE directly; existing
+# stores get it from the ALTER TABLE migration in __init__ below. Both converge
+# on this same shape, which is why the schema text lists it here too — a brand
+# new SessionStore() must never need a second migration pass on its own file.
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS oauth_transaction (
+    state               TEXT PRIMARY KEY,
+    code_verifier       TEXT NOT NULL,
+    nonce               TEXT NOT NULL,
+    redirect_uri        TEXT NOT NULL,
+    login_binding_hash  TEXT NOT NULL DEFAULT '',
+    created_at          INTEGER NOT NULL,
+    expires_at          INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS bff_session (
+    session_id           TEXT PRIMARY KEY,
+    home_session_id      TEXT NOT NULL,
+    access_token         TEXT NOT NULL,
+    refresh_token        TEXT,
+    created_at           INTEGER NOT NULL,
+    expires_at           INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS runtime_binding (
+    runtime_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    bound_at   INTEGER NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES bff_session(session_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS ix_tx_expiry ON oauth_transaction(expires_at);
+CREATE INDEX IF NOT EXISTS ix_session_expiry ON bff_session(expires_at);
+"""
+
+_MIGRATE_ADD_LOGIN_BINDING_HASH = (
+    "ALTER TABLE oauth_transaction ADD COLUMN login_binding_hash TEXT NOT NULL DEFAULT ''"
+)
+
 _BUSY_TIMEOUT_MS = 1_000
 
 
@@ -78,6 +114,7 @@ class Transaction:
     code_verifier: str
     nonce: str
     redirect_uri: str
+    login_binding_hash: str
 
 
 @dataclass(frozen=True)
@@ -103,10 +140,12 @@ class SessionStore:
         parent = Path(path).parent
         parent.mkdir(parents=True, exist_ok=True)
         with self._connection() as db:
+            db.execute(f"PRAGMA busy_timeout = {_BUSY_TIMEOUT_MS}")
             # WAL lets the mint process read the last committed binding while the
             # public process is preparing a short write transaction.
             db.execute("PRAGMA journal_mode = WAL")
             db.executescript(_SCHEMA)
+            self._migrate_login_binding_hash(db)
             db.commit()
         # Tokens live here. Keep them unreadable to other service accounts even if
         # the parent directory is ever loosened.
@@ -114,6 +153,22 @@ class SessionStore:
             os.chmod(path, 0o600)
         except OSError:
             pass
+
+    def _migrate_login_binding_hash(self, db: sqlite3.Connection) -> None:
+        """Idempotent: a store created before this column existed gets it added.
+
+        A store created fresh by _SCHEMA above already has the column, so this
+        ALTER is a no-op there — SQLite raises "duplicate column name", which is
+        the expected, harmless outcome, not a failure. Two processes (the public
+        app and the mint app) can run this at the same time against the same
+        file; busy_timeout above makes the second writer wait rather than error,
+        and a duplicate-column result is equally harmless whichever one wins.
+        """
+        try:
+            db.execute(_MIGRATE_ADD_LOGIN_BINDING_HASH)
+        except sqlite3.OperationalError as error:
+            if "duplicate column name" not in str(error).lower():
+                raise
 
     def _connect(self) -> sqlite3.Connection:
         """Open one configured connection for exactly one store operation."""
@@ -158,19 +213,27 @@ class SessionStore:
     # ---------------------------------------------------------------- transactions
 
     def begin_transaction(
-        self, *, state: str, code_verifier: str, nonce: str, redirect_uri: str
+        self,
+        *,
+        state: str,
+        code_verifier: str,
+        nonce: str,
+        redirect_uri: str,
+        login_binding_hash: str,
     ) -> None:
         now = _now()
         with self._mutation() as db:
             db.execute(
                 "INSERT INTO oauth_transaction"
-                " (state, code_verifier, nonce, redirect_uri, created_at, expires_at)"
-                " VALUES (?,?,?,?,?,?)",
+                " (state, code_verifier, nonce, redirect_uri, login_binding_hash,"
+                "  created_at, expires_at)"
+                " VALUES (?,?,?,?,?,?,?)",
                 (
                     state,
                     code_verifier,
                     nonce,
                     redirect_uri,
+                    login_binding_hash,
                     now,
                     now + TRANSACTION_TTL_SECONDS,
                 ),
@@ -196,6 +259,7 @@ class SessionStore:
                 code_verifier=row["code_verifier"],
                 nonce=row["nonce"],
                 redirect_uri=row["redirect_uri"],
+                login_binding_hash=row["login_binding_hash"],
             )
 
     # -------------------------------------------------------------------- sessions
