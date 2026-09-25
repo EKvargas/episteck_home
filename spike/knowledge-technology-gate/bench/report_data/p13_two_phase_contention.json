@@ -1,4 +1,23 @@
 {
+  "record_status": {
+    "status": "SUPERSEDED - NOT CANONICAL",
+    "written_by_commit": "77bfb03 (original SQLite-only P13 run)",
+    "reason": "Generated before the section 9 N+1 harness fix and before the PostgreSQL execution pass; never regenerated. Its S1-SQLite numbers (read p95 25.944 -> 32.455 ms, delta +6.511 ms, ratio 1.251; write p95 ratio 1.098) and its S1-PostgreSQL 'NOT EXECUTED' arm do not match spike report section 20.",
+    "canonical_source": "docs/architecture/proposals/KNOWLEDGE_TECHNOLOGY_GATE_SPIKE_REPORT.md section 20 (post-section-9 harness)",
+    "canonical_values_s1_sqlite": {
+      "read_baseline_p95_ms": 16.492,
+      "read_cleanup_active_p95_ms": 22.219,
+      "read_p95_delta_ms": 5.727,
+      "read_p95_ratio": 1.347,
+      "write_baseline_p95_ms": 0.125,
+      "write_cleanup_active_p95_ms": 0.107,
+      "write_p95_ratio": 0.856,
+      "busy_timeout_error": "0/0/0",
+      "classification": "PASS (order-effect check: baseline p50 11.58-11.94 ms, active p50 18.39-19.13 ms)"
+    },
+    "canonical_values_s1_postgresql": "Executed; read phase UNKNOWN - ORDER-CONFOUNDED, write phase PASS (report section 20). Not selected; not reopened.",
+    "decision_impact": "None. Both the superseded and canonical S1-SQLite values classify PASS with 0/0/0 busy/timeout/error and a bounded read-p95 increase of about 6 ms; the Technology Gate selection does not depend on which is used. Numbers below are preserved unmodified for traceability."
+  },
   "scenario": "P13_b4_cleanup_contention",
   "methodology": "two-phase (P13-R reads / P13-W writes), sequential foreground + one bounded background cleanup writer",
   "corpus_size": "C-medium",

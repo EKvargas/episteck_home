@@ -1,8 +1,16 @@
 # Knowledge Technology Gate — Empirical Spike Report
 
-Status: **EVIDENCE REPORT — SPIKE EXECUTED AGAINST BOTH BACKENDS. NO TECHNOLOGY SELECTED.**
+Status: **EVIDENCE REPORT — SPIKE EXECUTED AGAINST BOTH BACKENDS. TECHNOLOGY GATE CLOSED — SELECTION COMPLETE (Part G, §27): S1 relational canonical owner with structured retrieval, realized on SQLite 3.41.2. No implementation authorized.**
 
 Authorized by: TG-PA-7 (`KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md` §18.1).
+
+**Revision note (Gate closure record, 2026-09-25):** Parts A–F below are the evidence as
+reviewed and are unchanged, apart from one canonical-value note in §20. The Architecture
+Board accepted the final technology direction. Part G (§27) records that selection, the
+Phase-1 §17 criteria disposition, the separation between the selected realization and its
+tested configuration, and the pre-runtime obligations. Parts A–F still say "no technology
+selected" because they were written before selection; that wording is historical, and
+Part G supersedes it.
 
 **Revision note (this rewrite):** the original version of this report covered a SQLite-only
 run; PostgreSQL was NOT EXECUTED (no disposable instance available). This rewrite covers a
@@ -554,6 +562,15 @@ Single-pair measurement (200 samples per phase, post-§9 harness):
 Read p95 delta: +5.727ms (ratio 1.347). Write p95 delta: -0.018ms (ratio 0.856, i.e.
 noise-level, no material write contention observed).
 
+**Canonical-value note (Gate closure record hygiene).** The numbers in this table and in
+the order-effect table below are the **canonical** S1-SQLite P13 values. The committed
+`bench/report_data/p13_two_phase_contention.json` does not match them. That file was
+written in commit `77bfb03`, before the §9 N+1 fix and before the PostgreSQL pass, and was
+never regenerated. It shows read p95 25.944 → 32.455 ms (+6.511 ms, ratio 1.251) and marks
+PostgreSQL "NOT EXECUTED". It is now annotated `SUPERSEDED — NOT CANONICAL` and keeps its
+original numbers for traceability. **The mismatch has no decision impact:** both runs
+classify PASS with 0/0/0 busy/timeout/error and a bounded read-p95 increase of about 6 ms.
+
 **Order-effect symmetry check** (4-run alternating baseline/active/baseline/active, same
 corpus/workload/sample count, requested specifically because the PostgreSQL side showed an
 inversion — see below):
@@ -802,8 +819,124 @@ of the timing side-channel evidence per the §21 PA disposition.
 
 ---
 
-**NO TECHNOLOGY SELECTED BY THIS REPORT.**
+# PART G — TECHNOLOGY GATE CLOSURE RECORD
+
+## 27. Technology Gate closure record (2026-09-25)
+
+This part records the Architecture Board's decision. It adds no measurement, reruns nothing
+and reopens nothing. It interprets only evidence already in Parts A–F. PostgreSQL, S2, P13
+and R13 are **not reopened**.
+
+### 27.1 Selection
+
+| | Decision |
+|---|---|
+| **Selected shape** | **S1 — relational canonical owner with structured retrieval** (Phase-1 §5.3, §6, §14) |
+| **Selected realization** | **SQLite 3.41.2** (§3; `bench/report_data/bench_results.json` → `sqlite_version`) |
+| **Not selected** | S1-PostgreSQL (not reopened; its P13-R UNKNOWN (§20) and C-large planner finding (§16) are recorded evidence, not open Gate work). S2 native full-text (FAIL on both tested backends, §13). S3a/S3b remain DEFERRED as Phase-1 §13.2 recorded. |
+
+### 27.2 Phase-1 §17 acceptance criteria — disposition for S1 / SQLite 3.41.2
+
+| # | Criterion (Phase-1 §17) | Disposition | Basis |
+|---|---|---|---|
+| 1 | TG-PA-1 … TG-PA-7 dispositions recorded | **PASS** | Phase-1 §18 |
+| 2 | §16.8 spike report received | **PASS** | This report |
+| 3 | Every §16.7 pass condition **met** | **PASS** for S1 on SQLite | §15. Condition 5 (R13) is met **at the spike's experimental scope** (§14) |
+| 4 | `home_auth_round_trip_count` does not grow with `domain_call_count`, authorization unweakened | **PASS** | P1–P4 assert `== 2` at 0/1/3/5 domains (`scenarios/test_p1_p5_baseline_and_fanout.py`); R13 case 10 `== 2` (§14) |
+| 5 | R14 measured | **PASS** | §21; `r14_domain_read.json` |
+| 6 | B6 §18A.8 targets met at the corpus sizes that matter | **PASS — accepted for Technology Gate selection on conservative composed evidence.** Direct warm/cold end-to-end measurement remains a **REQUIRED PRE-RUNTIME obligation** (§27.4) | §27.2.1 |
+| 7 | No B6 §18A.11 disqualifier applies to the selected shape | **PASS** | §12, §15 (no per-candidate authorization, no global-retrieve-then-filter, suppression before candidacy, bindings testable without rebuild, crossings flat, lazy expansion). S2's barrier failure disqualified S2, which is not selected |
+| 8 | Protected metadata resolvable without content (R2); bindings testable without rebuild | **PASS** | §15 (H2, H6) |
+| 9 | Shape **and** version-specific realization selected, with version-specific verification | **PASS** | §27.1. All SQLite evidence in this report was produced on 3.41.2 (§3), re-verified against the same base interpreter at closure |
+| 10 | B1–B6 remain unamended by the selection | **PASS** | §24. No contradiction emerged |
+
+#### 27.2.1 Item 6 — conservative composed evidence
+
+The composition sums per-stage **p95s**, which overstates the true combined p95. It uses
+**two** calibrated Home crossings at p95 (2 × 112.240 ms) and the worst measured fan-out
+p95 (13.190 ms, n=3). All inputs are from §17 and use the tested SQLite configuration.
+
+| Corpus | metadata p95 | content p95 | 2 × Home p95 | fan-out p95 | R13 p95 | **Composed p95** | Target |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| C-small (realistic first year) | 0.427 | 0.064 | 224.480 | 13.190 | 0.154 | **≈ 238 ms** | ≤ 500 |
+| C-medium (mature multi-year, ~50× realistic) | 16.802 | 2.175 | 224.480 | 13.190 | 0.154 | **≈ 257 ms** | ≤ 500 |
+| C-large (*deliberately beyond any realistic corpus*, Phase-1 §16.3) | 218.256 | 69.532 | 224.480 | 13.190 | 0.154 | ≈ 526 ms | not a size that matters |
+
+The same composition at p99 gives ≈ 262 ms at C-medium, against a ≤ 800 ms target. B4
+cleanup contention adds about 6 ms of read p95 (§20 canonical). The realistic sizes leave
+more than 240 ms of headroom against the p95 target.
+
+C-large exceeds 500 ms only on the deliberately pessimistic sum-of-p95s. It is recorded
+here openly because it marks where structured retrieval starts to approach the target,
+which is the evolution trigger Phase-1 §13.3 requires. It does not bear on item 6, which is
+scoped to "the corpus sizes that matter".
+
+**Why this is composed rather than measured:** the Home crossing is CALIBRATED/INJECTED
+(Phase-1 E7), not measured on a realistic topology, and no warm/cold end-to-end pre-LLM
+orchestration run exists (§17 composition convention). That limitation is what §27.4 item 1
+carries forward.
+
+### 27.3 SQLite configuration — selected vs tested vs production
+
+| | Value | Status |
+|---|---|---|
+| **SELECTED** | **SQLite 3.41.2** as the S1 relational canonical-owner realization | Selected by this Gate |
+| **EMPIRICALLY TESTED CONFIGURATION** | `journal_mode=WAL`, `synchronous=NORMAL`, `busy_timeout=5000` | The configuration all SQLite evidence in this report was measured under. **Not part of the selection** |
+| **PRODUCTION DURABILITY CONFIGURATION** | — | **NOT YET APPROVED BY THIS GATE** |
+
+**Reason:** B4 requires suppression to be a **durable** positive record that commits
+immediately (B4 §1, principle 1). In WAL mode, `synchronous=NORMAL` does not sync the WAL
+at every commit. The most recent committed transactions can therefore be lost on power
+loss or OS crash. An application crash does not lose them. So the tested configuration is
+not shown to satisfy B4's durability requirement, and this Gate does not claim it does.
+
+**Before runtime implementation approval**, the implementation must do one of the
+following:
+
+- choose and test a durability configuration that satisfies B4 (for example, evaluate
+  `synchronous=FULL`), re-validating **only** the minimum affected
+  performance/contention evidence: the P13 write/cleanup path and the §27.2.1 composition
+  inputs it touches; or
+- provide an equivalent durable control-state mechanism that satisfies B4.
+
+### 27.4 Pre-runtime obligations (carried forward, not discharged by this Gate)
+
+1. **Direct end-to-end latency confirmation.** Measure warm and cold pre-LLM orchestration
+   end to end, on a realistic topology, with the selected runtime realization. This
+   confirms item 6 by direct measurement. It is **not run now**.
+2. **Production durability mode.** Required decision per §27.3.
+3. **Timing side-channel closure.** Per the §21 Product Architect disposition (PA-10d / B6).
+4. **Production R13 mechanism.** §14 established the non-bearer boundary only at the
+   spike's local-mTLS experimental scope. The production identity fabric, key distribution
+   and the §11.4.1 binding realization remain pre-runtime work.
+
+### 27.5 What closing the Gate does not authorize
+
+Closing the Technology Gate authorizes **no** implementation, migration, schema deployment
+or production runtime (Phase-1 §17: selection is a separate decision from implementation
+approval). The Process register remains OPEN independently. B1–B6 remain RESOLVED and
+unamended.
+
+**Teardown:** the disposable PostgreSQL database `olin_knowledge_gate_spike` is
+intentionally **not** dropped by this closure record (§26). Dropping it is a separate
+operator step.
+
+### 27.6 Gate status
+
+**TECHNOLOGY GATE CLOSED — SELECTION COMPLETE**
+
+- **SQLite 3.41.2 is selected** as the S1 relational canonical-owner realization.
+- **Production durability mode remains a pre-runtime decision** (§27.3).
+- **Direct end-to-end latency confirmation remains a pre-runtime obligation** (§27.4.1).
+- **Timing side-channel closure remains pre-runtime** (§27.4.3).
+- **The production R13 mechanism remains pre-runtime** (§27.4.4).
+- **Closing the Gate does not authorize implementation, migration, schema deployment or
+  production runtime** (§27.5).
+
+---
+
+**TECHNOLOGY GATE CLOSED — SELECTION COMPLETE: S1 / SQLite 3.41.2 (§27).**
 
 **SPIKE EXECUTED AGAINST BOTH SQLITE AND POSTGRESQL, WITH KNOWN REMAINING GAPS (§23).**
 
-**NO PRODUCTION CHANGE.**
+**NO KNOWLEDGE RUNTIME IMPLEMENTED. NO PRODUCTION CHANGE.**

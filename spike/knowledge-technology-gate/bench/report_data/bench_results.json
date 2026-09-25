@@ -1,9 +1,16 @@
 {
+  "sqlite_version": {
+    "sqlite_library_version": "3.41.2",
+    "python_sqlite3_module_version": "2.6.0",
+    "python_version": "3.11.8",
+    "source": "Python 3.11.8 bundled stdlib sqlite3 (sqlite3.sqlite_version); recorded post-hoc for evidence-record hygiene at Technology Gate closure, re-verified 2026-09-25 against the same base interpreter. Matches spike report section 3."
+  },
   "sqlite_configuration": {
     "journal_mode": "WAL",
     "synchronous": "NORMAL",
     "busy_timeout": 5000
   },
+  "sqlite_configuration_status": "EMPIRICALLY TESTED CONFIGURATION ONLY. Not the production durability configuration; production durability mode is NOT approved by the Technology Gate and remains a pre-runtime decision under B4 (see spike report Part G, section 27.3).",
   "calibrated_home_crossing_ms": 111.57,
   "measurement_policy": {
     "warmup_count": 3,

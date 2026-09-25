@@ -7,7 +7,8 @@ correction/deletion. It is **not** a duplicate store for structured domain facts
 
 > The dependency-free contracts live in `packages/home-contracts`. They provide no
 > storage, extraction, indexing, retrieval, embeddings, or service runtime. **No**
-> Mem0 / Graphiti / RAGFlow / Postgres+pgvector / Docling is installed.
+> Knowledge store is installed: not SQLite, Mem0, Graphiti, RAGFlow, Postgres/pgvector
+> or Docling.
 
 ## Concepts
 
@@ -84,13 +85,28 @@ The module also formalizes `KnowledgeScopeType`, `KnowledgeScope`,
 `KnowledgeEpisode`, `KnowledgeClaim`, `KnowledgeProvenance`, `KnowledgeStatus`,
 `AuthorizedDomain`, `DocumentEvidence`, and `SourceReference`.
 
-## Candidate technology (documented, NOT selected/installed)
-- **Episteck Knowledge governance layer** — always Episteck-owned (Person/Circle/Consent).
-- **Mem0 (OSS)** — candidate for conversational memory extraction/search.
-- **Docling** — candidate for document parsing.
-- **Postgres + pgvector** — candidate for hybrid document/context retrieval.
-- **Graphiti** — deferred candidate for temporal/relational context if later justified.
-- **RAGFlow** — **not selected** (heavier deployment; Episteck needs custom
-  Person/Circle/Consent governance a turnkey RAG stack won't provide).
+## Technology direction (selected by the Knowledge Technology Gate; NOT installed)
+The [Knowledge Technology Gate](proposals/KNOWLEDGE_TECHNOLOGY_GATE.md) is **CLOSED —
+SELECTION COMPLETE** (2026-09-25). See the
+[closure record](proposals/KNOWLEDGE_TECHNOLOGY_GATE_SPIKE_REPORT.md#27-technology-gate-closure-record-2026-09-25).
 
-Decision is deferred to the **Knowledge Technology Gate** (see ROADMAP).
+- **Selected:** S1 — relational canonical owner with structured retrieval, realized
+  on **SQLite 3.41.2**. The **Episteck Knowledge governance layer** stays
+  Episteck-owned (Person/Circle/Consent).
+- **Not approved:** the production durability configuration. The spike's tested
+  configuration (WAL / `synchronous=NORMAL` / `busy_timeout=5000`) is not approved
+  for production.
+- **Pre-runtime obligations:**
+  - production durability mode that satisfies B4
+  - direct end-to-end latency confirmation
+  - timing side-channel closure
+  - production R13 mechanism
+- **Not authorized:** selection authorizes no implementation, migration, schema
+  deployment or runtime.
+
+Candidates evaluated and **not selected**:
+- **PostgreSQL** (with or without pgvector): spiked as S1-PostgreSQL and not selected.
+  pgvector stays deferred until a measured semantic-retrieval need exists.
+- **Mem0 / RAGFlow:** hard-eliminated as canonical owner.
+- **Graphiti:** not shortlisted.
+- **Docling:** deferred to document ingestion.

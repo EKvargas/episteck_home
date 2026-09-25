@@ -1,20 +1,35 @@
 # Knowledge Technology Gate
 
-Status: **OPEN — PHASE 1 COMPLETE / EMPIRICAL SPIKE AUTHORIZED**
+Status: **TECHNOLOGY GATE CLOSED — SELECTION COMPLETE**
 
-Runtime implementation: NOT APPROVED
+Technology selection: **S1 — relational canonical owner with structured retrieval, realized on SQLite 3.41.2**
 
-Technology selection: NOT APPROVED
+Production durability configuration: **NOT APPROVED** (pre-runtime decision under B4)
 
-Benchmark: **AUTHORIZED (TG-PA-7), NOT IMPLEMENTED**
+Runtime implementation: **NOT APPROVED**
 
-Date opened: 2026-09-19
+Benchmark / spike: **EXECUTED** ([spike report](KNOWLEDGE_TECHNOLOGY_GATE_SPIKE_REPORT.md)); no new benchmark campaign authorized
+
+Date opened: 2026-09-19 · Date closed: 2026-09-25
+
+**Closure (2026-09-25).** The Architecture Board accepted the final technology direction: **S1 — relational canonical owner with structured retrieval, on SQLite 3.41.2.** The closure record is [spike report Part G §27](KNOWLEDGE_TECHNOLOGY_GATE_SPIKE_REPORT.md#27-technology-gate-closure-record-2026-09-25). It covers the Phase-1 §17 items 1–10 (all PASS; item 6 is **PASS — accepted for Technology Gate selection on conservative composed evidence**) and separates three things:
+- **selected:** SQLite 3.41.2
+- **empirically tested configuration:** WAL, `synchronous=NORMAL`, `busy_timeout=5000`
+- **production durability configuration:** not yet approved by this Gate
+
+**Pre-runtime obligations, not discharged by closure:**
+- choose and test a production durability configuration that satisfies B4, or provide an equivalent durable control-state mechanism
+- confirm latency by direct warm/cold end-to-end pre-LLM measurement on a realistic topology with the selected runtime realization
+- close the timing side-channel (PA-10d / B6)
+- design the production R13 mechanism
+
+**Closing the Gate authorizes no implementation, migration, schema deployment or production runtime.** PostgreSQL, S2, P13 and R13 are not reopened. B1–B6 remain RESOLVED and unamended.
 
 **Phase 1 — COMPLETE, accepted 2026-09-22.** See [Knowledge Technology Gate Phase 1](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md): candidate classifications, spike candidates, an R13 mechanism family and experimental realization, a placement recommendation and an isolated synthetic spike design. The Architecture Board required **twelve corrections**, all incorporated (Phase-1 §22), then **accepted the investigation and the corrections**.
 
 Final dispositions: **TG-PA-1** ACCEPT WITH CORRECTIONS · **TG-PA-2** MODIFIED / ACCEPTED AS REVISED · **TG-PA-3** ACCEPT · **TG-PA-4** ACCEPT WITH BENCHMARK-ENVIRONMENT CLARIFICATION · **TG-PA-5** ACCEPT WITH EXPERIMENTAL REALIZATION · **TG-PA-6** ACCEPT WITH MODIFICATIONS · **TG-PA-7** **APPROVED — isolated synthetic spike authorized** (scope and exclusions in Phase-1 §18.1).
 
-**The Technology Gate itself is NOT resolved.** Selection requires the spike's empirical evidence plus the acceptance criteria in Phase-1 §17. **No technology is selected, the spike is not implemented, and no runtime, production schema, migration or deployment is approved.** B1–B6 remain RESOLVED and unamended.
+*(Historical, superseded by the 2026-09-25 closure above:)* The Technology Gate itself was not resolved at Phase-1 acceptance. Selection required the spike's empirical evidence plus the acceptance criteria in Phase-1 §17. No runtime, production schema, migration or deployment is approved. B1–B6 remain RESOLVED and unamended.
 
 Repository: EKvargas/episteck_home
 
@@ -346,14 +361,15 @@ Explicitly excluded from this first vertical:
 - Finance
 - autonomous extraction from all conversations
 
-## Technology candidates — not approved
+## Technology candidates
 
-All entries are **UNSELECTED**. The hypotheses below preserve review input; they are not approved architecture decisions or installation instructions.
+**Selected (2026-09-25): S1 — relational canonical owner with structured retrieval, on SQLite 3.41.2** ([closure record](KNOWLEDGE_TECHNOLOGY_GATE_SPIKE_REPORT.md#27-technology-gate-closure-record-2026-09-25)). Selection does not install anything or approve a runtime. The production durability configuration is not approved. The table below is the pre-spike hypothesis register and is kept for traceability. The "Plain Postgres" hypothesis was **not** the selected direction.
 
 | Candidate | Status | Current review hypothesis |
 |---|---|---|
-| Plain Postgres | UNSELECTED | Leading minimal baseline after architecture blockers close; bounded authorized preference retrieval may require no semantic search. |
-| Postgres + pgvector | UNSELECTED | Add only if measured semantic retrieval needs justify it, with candidate isolation verified rather than assumed. |
+| SQLite (S1 realization) | **SELECTED — SQLite 3.41.2** | Canonical owner with structured retrieval. Tested configuration (WAL / `synchronous=NORMAL` / `busy_timeout=5000`) is **not** the approved production durability mode |
+| Plain Postgres | NOT SELECTED | Pre-spike hypothesis only. Executed in the spike as S1-PostgreSQL and not selected; not reopened. |
+| Postgres + pgvector | UNSELECTED / DEFERRED | Add only if measured semantic retrieval needs justify it, with candidate isolation verified rather than assumed. |
 | Mem0 OSS | UNSELECTED | May later be evaluated as a proposal/extraction helper, never the canonical authority. |
 | Docling | UNSELECTED | Relevant later for document ingestion; unnecessary for the initial conversational preference vertical. |
 | Graphiti | UNSELECTED | Requires a demonstrated graph/multi-hop workload that warrants added infrastructure. |
@@ -361,7 +377,7 @@ All entries are **UNSELECTED**. The hypotheses below preserve review input; they
 
 The historical review contains the supporting technology analysis and primary-source references. Existing accepted decisions, including the rejection of adopting a turnkey RAG stack now, are not reversed by keeping candidates visible in this register. Any later selection requires explicit Product Architect disposition and version-specific verification.
 
-**Phase 1 investigation (2026-09-22, Board-reviewed).** [KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md) re-derives these hypotheses against accepted B1–B6 and current primary sources. After Board review it classifies candidates in **three distinct categories**: **HARD ELIMINATED as canonical owner** (Mem0, RAGFlow) · **NOT SHORTLISTED for the first vertical** (Graphiti, graph databases — a weaker claim than elimination) · **DEFERRED / RE-ENTERABLE** (exact vector, ANN, dedicated search engines, Docling). Spike candidates are **S1-SQLite, S1-PostgreSQL and S2 full-text (conditional)**; **ANN is deferred** because static index partitioning cannot express dynamic intra-partition authorization. **No entry above is selected**, and this table is unchanged until the Product Architect closes TG-PA-1 … TG-PA-7.
+**Phase 1 investigation (2026-09-22, Board-reviewed).** [KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md) re-derives these hypotheses against accepted B1–B6 and current primary sources. After Board review it classifies candidates in **three distinct categories**: **HARD ELIMINATED as canonical owner** (Mem0, RAGFlow) · **NOT SHORTLISTED for the first vertical** (Graphiti, graph databases — a weaker claim than elimination) · **DEFERRED / RE-ENTERABLE** (exact vector, ANN, dedicated search engines, Docling). Spike candidates are **S1-SQLite, S1-PostgreSQL and S2 full-text (conditional)**; **ANN is deferred** because static index partitioning cannot express dynamic intra-partition authorization. At Phase 1 no entry was selected. Selection followed the spike (2026-09-25; see the table header above).
 
 ## Workflow Orchestration / Flowable
 
@@ -496,7 +512,7 @@ No installation, deployment, replication, configuration, process triggering, or 
 
 ## Gate completion and change boundary
 
-**The B1–B6 architecture prerequisites are now closed.** The next work is the **Knowledge Technology Gate** itself, which remains OPEN and is now authorized to begin.
+**The B1–B6 architecture prerequisites are now closed.** The next work is the **Knowledge Technology Gate** itself, which was then OPEN and authorized to begin (since CLOSED — SELECTION COMPLETE, 2026-09-25).
 
 The Gate must evaluate candidates against the accepted B1–B6 requirements, including at minimum:
 
@@ -520,12 +536,12 @@ The Gate must evaluate candidates against the accepted B1–B6 requirements, inc
 
 **No candidate is selected by this closure.** Technology selection and runtime implementation require their own separate approval; B1–B6 acceptance supplies neither. Agreed acceptance scenarios (B6 §19, P1–P8) must precede technology selection.
 
-**Gate progress.** Phase 1 — candidate investigation and benchmark/spike design — is **COMPLETE and accepted**, recorded in [KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md) with final dispositions TG-PA-1 … TG-PA-7. **TG-PA-7 authorizes an isolated synthetic spike** (scope and exclusions in Phase-1 §18.1). Phase 2 is that spike, followed by selection against Phase-1 §17's acceptance criteria. **The Gate remains OPEN; no technology is selected and the spike is not implemented.**
+**Gate progress.** Phase 1 — candidate investigation and benchmark/spike design — is **COMPLETE and accepted**, recorded in [KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md) with final dispositions TG-PA-1 … TG-PA-7. **TG-PA-7 authorizes an isolated synthetic spike** (scope and exclusions in Phase-1 §18.1). Phase 2 was that spike, followed by selection against Phase-1 §17's acceptance criteria. **The spike was executed and the Gate is now CLOSED — SELECTION COMPLETE (2026-09-25): S1 on SQLite 3.41.2.** Production durability mode, direct end-to-end latency confirmation, timing side-channel closure and the production R13 mechanism remain pre-runtime obligations. See the closure summary at the top of this register.
 
 The original gate-opening task changed only the independent review artifact and this gate register. The B1 follow-up changes only [KNOWLEDGE_B1_SECURITY_SCOPE.md](KNOWLEDGE_B1_SECURITY_SCOPE.md) and B1 status/references in this register. It does not modify canonical architecture documents, existing ADRs, `packages/home-contracts/`, `services/`, `deploy/`, or production configuration.
 
-**NO KNOWLEDGE TECHNOLOGY SELECTED**
+**TECHNOLOGY GATE CLOSED — SELECTION COMPLETE: S1 / SQLite 3.41.2**
 
-**NO KNOWLEDGE RUNTIME IMPLEMENTED**
+**NO KNOWLEDGE RUNTIME IMPLEMENTED OR APPROVED**
 
 **NO PRODUCTION CHANGE**
