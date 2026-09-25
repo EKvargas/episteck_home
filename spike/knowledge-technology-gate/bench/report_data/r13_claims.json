@@ -1,0 +1,19 @@
+{
+  "overall_note": "R13 is reported as two independent closed-set claims (correction 6): the cryptographic non-bearer proof-of-possession is demonstrated in process (R13-A PASS); the machine/transport-identity binding is not establishable in process because the authenticated identity is a caller-supplied parameter rather than a transport-authenticated channel (R13-B UNKNOWN / INSUFFICIENT EVIDENCE). The two are NOT collapsed into a single 'PASS with caveat'.",
+  "claims": [
+    {
+      "claim_id": "R13-A",
+      "title": "Cryptographic non-bearer proof-of-possession (Ed25519 holder-of-key)",
+      "verdict": "PASS",
+      "evidence": "Full P12 adversarial matrix passes in process: a copied basis without the correct key (case 1), a proof signed by the wrong key (2a), a right key presented under a wrong authenticated identity (2b), wrong audience/domain (3), cross-request replay (4), cross-actor reuse (5) and an expired basis (6) all fail closed, while only a fresh signature by the exact basis-bound key executes (7). The verifying key is re-derived from the basis Home minted, never nominated by the request; the private key is never transmitted. Real Ed25519 (`cryptography`), self-contained, so this claim needs no external environment.",
+      "limit": ""
+    },
+    {
+      "claim_id": "R13-B",
+      "title": "Machine / transport-identity binding (authenticated caller identity)",
+      "verdict": "UNKNOWN \u2014 INSUFFICIENT EVIDENCE",
+      "evidence": "The verification LOGIC correctly rejects any mismatch between the claimed identity, the signing key, and the basis-bound (identity, key) pair (cases 2/2a/2b) -- the decision logic a transport-bound deployment would also run.",
+      "limit": "But `DomainVerifier.verify_and_execute` takes `claimed_service_identity` as an explicit parameter, so in process the 'authenticated' identity is ASSERTED by the caller, not derived from a real mTLS / transport-authenticated channel. This experiment therefore cannot show that a real caller could not present an identity it does not own -- that requires the correction-7 secondary mTLS (Family 1) experiment. Recorded UNKNOWN / INSUFFICIENT EVIDENCE, never a failure and never silently upgraded to PASS."
+    }
+  ]
+}

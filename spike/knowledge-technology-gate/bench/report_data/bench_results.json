@@ -1,0 +1,506 @@
+{
+  "sqlite_version": {
+    "sqlite_library_version": "3.41.2",
+    "python_sqlite3_module_version": "2.6.0",
+    "python_version": "3.11.8",
+    "source": "Python 3.11.8 bundled stdlib sqlite3 (sqlite3.sqlite_version); recorded post-hoc for evidence-record hygiene at Technology Gate closure, re-verified 2026-09-25 against the same base interpreter. Matches spike report section 3."
+  },
+  "sqlite_configuration": {
+    "journal_mode": "WAL",
+    "synchronous": "NORMAL",
+    "busy_timeout": 5000
+  },
+  "sqlite_configuration_status": "EMPIRICALLY TESTED CONFIGURATION ONLY. Not the production durability configuration; production durability mode is NOT approved by the Technology Gate and remains a pre-runtime decision under B4 (see spike report Part G, section 27.3).",
+  "calibrated_home_crossing_ms": 111.57,
+  "measurement_policy": {
+    "warmup_count": 3,
+    "measurement_count": 30,
+    "underpowered_threshold": 30
+  },
+  "postgres_availability": {
+    "available": true,
+    "reason": "connected via $SPIKE_POSTGRES_DSN",
+    "dsn": "host=127.0.0.1 port=5432 dbname=olin_knowledge_gate_spike user=postgres",
+    "version": "PostgreSQL 15.8, compiled by Visual C++ build 1941, 64-bit"
+  },
+  "stages": [
+    {
+      "corpus_size": "C-small",
+      "stage": "metadata_planning_sqlite",
+      "warmup_count": 3,
+      "measurement_count": 30,
+      "p50_ms": 0.253,
+      "p95_ms": 0.427,
+      "p99_ms": 0.432,
+      "underpowered": false,
+      "samples_measured_local": "MEASURED"
+    },
+    {
+      "corpus_size": "C-small",
+      "stage": "content_access_sqlite",
+      "warmup_count": 3,
+      "measurement_count": 30,
+      "p50_ms": 0.057,
+      "p95_ms": 0.064,
+      "p99_ms": 0.065,
+      "underpowered": false,
+      "samples_measured_local": "MEASURED"
+    },
+    {
+      "corpus_size": "C-medium",
+      "stage": "metadata_planning_sqlite",
+      "warmup_count": 3,
+      "measurement_count": 30,
+      "p50_ms": 10.631,
+      "p95_ms": 16.802,
+      "p99_ms": 21.496,
+      "underpowered": false,
+      "samples_measured_local": "MEASURED"
+    },
+    {
+      "corpus_size": "C-medium",
+      "stage": "content_access_sqlite",
+      "warmup_count": 3,
+      "measurement_count": 30,
+      "p50_ms": 1.932,
+      "p95_ms": 2.175,
+      "p99_ms": 2.679,
+      "underpowered": false,
+      "samples_measured_local": "MEASURED"
+    },
+    {
+      "corpus_size": "C-large",
+      "stage": "metadata_planning_sqlite",
+      "warmup_count": 3,
+      "measurement_count": 30,
+      "p50_ms": 204.505,
+      "p95_ms": 218.256,
+      "p99_ms": 221.883,
+      "underpowered": false,
+      "samples_measured_local": "MEASURED"
+    },
+    {
+      "corpus_size": "C-large",
+      "stage": "content_access_sqlite",
+      "warmup_count": 3,
+      "measurement_count": 30,
+      "p50_ms": 27.223,
+      "p95_ms": 69.532,
+      "p99_ms": 70.259,
+      "underpowered": false,
+      "samples_measured_local": "MEASURED"
+    },
+    {
+      "corpus_size": "N/A",
+      "stage": "home_crossing_calibrated",
+      "warmup_count": 3,
+      "measurement_count": 10,
+      "p50_ms": 112.091,
+      "p95_ms": 112.24,
+      "p99_ms": 112.24,
+      "underpowered": true,
+      "samples_measured_local": "CALIBRATED"
+    },
+    {
+      "corpus_size": "N/A",
+      "stage": "domain_fanout_n1_measured",
+      "warmup_count": 3,
+      "measurement_count": 15,
+      "p50_ms": 11.427,
+      "p95_ms": 12.47,
+      "p99_ms": 12.47,
+      "underpowered": true,
+      "samples_measured_local": "MEASURED"
+    },
+    {
+      "corpus_size": "N/A",
+      "stage": "domain_fanout_n3_measured",
+      "warmup_count": 3,
+      "measurement_count": 15,
+      "p50_ms": 12.348,
+      "p95_ms": 13.19,
+      "p99_ms": 13.19,
+      "underpowered": true,
+      "samples_measured_local": "MEASURED"
+    },
+    {
+      "corpus_size": "N/A",
+      "stage": "domain_fanout_n5_measured",
+      "warmup_count": 3,
+      "measurement_count": 15,
+      "p50_ms": 12.364,
+      "p95_ms": 12.814,
+      "p99_ms": 12.814,
+      "underpowered": true,
+      "samples_measured_local": "MEASURED"
+    },
+    {
+      "corpus_size": "N/A",
+      "stage": "r13_execution_measured",
+      "warmup_count": 3,
+      "measurement_count": 30,
+      "p50_ms": 0.141,
+      "p95_ms": 0.154,
+      "p99_ms": 0.168,
+      "underpowered": false,
+      "samples_measured_local": "MEASURED"
+    }
+  ],
+  "barrier_evidence": [
+    {
+      "corpus_size": "C-small",
+      "S1_exact_lookup": {
+        "layer_a_verdict": "PASS",
+        "unauthorized_logical_content_ids_requested": 0,
+        "layer_b_verdict": "PASS",
+        "layer_b_note": "content barrier plan seeks assertion_version by index on version_id (`SEARCH ... USING INDEX ... (version_id=?)`); access is bounded by the authorized set, not a global content scan",
+        "layer_b_plan": "(3, 0, 0, 'SEARCH assertion_version USING INDEX sqlite_autoindex_assertion_version_1 (version_id=?)')",
+        "combined_verdict": "PASS"
+      },
+      "S2_fulltext_barrier": {
+        "layer_a_verdict": "PASS",
+        "layer_a_unauthorized_requested": 0,
+        "layer_b_verdict": "FAIL",
+        "layer_b_note": "FTS5 MATCH requires scanning the virtual table's own index structure regardless of join order with the authorized-scope temp table; SQLite's planner does not push the join as a pre-filter into FTS5's xFilter. Empirically confirmed: EXPLAIN QUERY PLAN shows 'SCAN <fts> VIRTUAL TABLE INDEX 0:M2' even when authorized_scope is joined first.",
+        "combined_verdict": "FAIL"
+      }
+    },
+    {
+      "corpus_size": "C-medium",
+      "S1_exact_lookup": {
+        "layer_a_verdict": "PASS",
+        "unauthorized_logical_content_ids_requested": 0,
+        "layer_b_verdict": "PASS",
+        "layer_b_note": "content barrier plan seeks assertion_version by index on version_id (`SEARCH ... USING INDEX ... (version_id=?)`); access is bounded by the authorized set, not a global content scan",
+        "layer_b_plan": "(3, 0, 0, 'SEARCH assertion_version USING INDEX sqlite_autoindex_assertion_version_1 (version_id=?)')",
+        "combined_verdict": "PASS"
+      },
+      "S2_fulltext_barrier": {
+        "layer_a_verdict": "PASS",
+        "layer_a_unauthorized_requested": 0,
+        "layer_b_verdict": "FAIL",
+        "layer_b_note": "FTS5 MATCH requires scanning the virtual table's own index structure regardless of join order with the authorized-scope temp table; SQLite's planner does not push the join as a pre-filter into FTS5's xFilter. Empirically confirmed: EXPLAIN QUERY PLAN shows 'SCAN <fts> VIRTUAL TABLE INDEX 0:M2' even when authorized_scope is joined first.",
+        "combined_verdict": "FAIL"
+      }
+    },
+    {
+      "corpus_size": "C-large",
+      "S1_exact_lookup": {
+        "layer_a_verdict": "PASS",
+        "unauthorized_logical_content_ids_requested": 0,
+        "layer_b_verdict": "PASS",
+        "layer_b_note": "content barrier plan seeks assertion_version by index on version_id (`SEARCH ... USING INDEX ... (version_id=?)`); access is bounded by the authorized set, not a global content scan",
+        "layer_b_plan": "(3, 0, 0, 'SEARCH assertion_version USING INDEX sqlite_autoindex_assertion_version_1 (version_id=?)')",
+        "combined_verdict": "PASS"
+      },
+      "S2_fulltext_barrier": {
+        "layer_a_verdict": "PASS",
+        "layer_a_unauthorized_requested": 0,
+        "layer_b_verdict": "FAIL",
+        "layer_b_note": "FTS5 MATCH requires scanning the virtual table's own index structure regardless of join order with the authorized-scope temp table; SQLite's planner does not push the join as a pre-filter into FTS5's xFilter. Empirically confirmed: EXPLAIN QUERY PLAN shows 'SCAN <fts> VIRTUAL TABLE INDEX 0:M2' even when authorized_scope is joined first.",
+        "combined_verdict": "FAIL"
+      }
+    }
+  ],
+  "p13_contention": {
+    "scenario": "P13_b4_cleanup_contention",
+    "methodology": "two-phase (P13-R reads / P13-W writes), sequential foreground + one bounded background cleanup writer",
+    "corpus_size": "C-medium",
+    "corpus_seed": 7,
+    "interactive_sample_count": 200,
+    "arms": [
+      {
+        "backend_name": "S1-SQLite",
+        "classification": "PASS",
+        "concurrency_config": {
+          "journal_mode": "WAL",
+          "synchronous": "NORMAL",
+          "busy_timeout": 5000
+        },
+        "read_baseline": {
+          "label": "baseline_read",
+          "cleanup_active": false,
+          "operation": "read",
+          "samples_requested": 200,
+          "samples_completed": 200,
+          "p50_ms": 12.376,
+          "p95_ms": 16.492,
+          "p99_ms": 50.678,
+          "busy_count": 0,
+          "timeout_count": 0,
+          "error_count": 0,
+          "errors": [],
+          "underpowered": false
+        },
+        "read_cleanup_active": {
+          "label": "cleanup_active_read",
+          "cleanup_active": true,
+          "operation": "read",
+          "samples_requested": 200,
+          "samples_completed": 200,
+          "p50_ms": 19.454,
+          "p95_ms": 22.219,
+          "p99_ms": 58.153,
+          "busy_count": 0,
+          "timeout_count": 0,
+          "error_count": 0,
+          "errors": [],
+          "underpowered": false
+        },
+        "write_baseline": {
+          "label": "baseline_write",
+          "cleanup_active": false,
+          "operation": "write",
+          "samples_requested": 200,
+          "samples_completed": 200,
+          "p50_ms": 0.066,
+          "p95_ms": 0.125,
+          "p99_ms": 0.184,
+          "busy_count": 0,
+          "timeout_count": 0,
+          "error_count": 0,
+          "errors": [],
+          "underpowered": false
+        },
+        "write_cleanup_active": {
+          "label": "cleanup_active_write",
+          "cleanup_active": true,
+          "operation": "write",
+          "samples_requested": 200,
+          "samples_completed": 200,
+          "p50_ms": 0.057,
+          "p95_ms": 0.107,
+          "p99_ms": 0.155,
+          "busy_count": 0,
+          "timeout_count": 0,
+          "error_count": 0,
+          "errors": [],
+          "underpowered": false
+        },
+        "read_cleanup_evidence": {
+          "confirmed_active": true,
+          "batches_committed": 1946,
+          "rows_deleted": 19460,
+          "duration_s": 4.1475,
+          "batch_size": 10,
+          "inter_batch_sleep_s": 0.001,
+          "transaction_shape": "begin -> DELETE bounded batch of suppression rows -> COMMIT -> inter-batch sleep (OUTSIDE txn) -> repeat; reinsert pool when drained",
+          "errors": []
+        },
+        "write_cleanup_evidence": {
+          "confirmed_active": true,
+          "batches_committed": 9,
+          "rows_deleted": 90,
+          "duration_s": 0.0371,
+          "batch_size": 10,
+          "inter_batch_sleep_s": 0.001,
+          "transaction_shape": "begin -> DELETE bounded batch of suppression rows -> COMMIT -> inter-batch sleep (OUTSIDE txn) -> repeat; reinsert pool when drained",
+          "errors": []
+        },
+        "read_p95_delta_ms": 5.727,
+        "read_p95_ratio": 1.347,
+        "write_p95_delta_ms": -0.018,
+        "write_p95_ratio": 0.856,
+        "note": "valid two-phase P13 contention measurement obtained: baseline and cleanup-active percentiles for both interactive reads and interactive writes, each foreground run a sequential loop overlapping a confirmed-live bounded B4 cleanup writer. Empirical numbers (deltas/ratios, busy/timeout counts) are the result; no technology is selected here."
+      },
+      {
+        "backend_name": "S1-PostgreSQL",
+        "classification": "PASS",
+        "concurrency_config": {
+          "session": "autocommit=False, server defaults (correction 8)"
+        },
+        "read_baseline": {
+          "label": "baseline_read",
+          "cleanup_active": false,
+          "operation": "read",
+          "samples_requested": 200,
+          "samples_completed": 200,
+          "p50_ms": 79.511,
+          "p95_ms": 119.089,
+          "p99_ms": 148.528,
+          "busy_count": 0,
+          "timeout_count": 0,
+          "error_count": 0,
+          "errors": [],
+          "underpowered": false
+        },
+        "read_cleanup_active": {
+          "label": "cleanup_active_read",
+          "cleanup_active": true,
+          "operation": "read",
+          "samples_requested": 200,
+          "samples_completed": 200,
+          "p50_ms": 158.357,
+          "p95_ms": 215.371,
+          "p99_ms": 223.381,
+          "busy_count": 0,
+          "timeout_count": 0,
+          "error_count": 0,
+          "errors": [],
+          "underpowered": false
+        },
+        "write_baseline": {
+          "label": "baseline_write",
+          "cleanup_active": false,
+          "operation": "write",
+          "samples_requested": 200,
+          "samples_completed": 200,
+          "p50_ms": 1.373,
+          "p95_ms": 2.18,
+          "p99_ms": 2.644,
+          "busy_count": 0,
+          "timeout_count": 0,
+          "error_count": 0,
+          "errors": [],
+          "underpowered": false
+        },
+        "write_cleanup_active": {
+          "label": "cleanup_active_write",
+          "cleanup_active": true,
+          "operation": "write",
+          "samples_requested": 200,
+          "samples_completed": 200,
+          "p50_ms": 1.525,
+          "p95_ms": 2.186,
+          "p99_ms": 3.075,
+          "busy_count": 0,
+          "timeout_count": 0,
+          "error_count": 0,
+          "errors": [],
+          "underpowered": false
+        },
+        "read_cleanup_evidence": {
+          "confirmed_active": true,
+          "batches_committed": 4450,
+          "rows_deleted": 44500,
+          "duration_s": 27.8831,
+          "batch_size": 10,
+          "inter_batch_sleep_s": 0.001,
+          "transaction_shape": "begin -> DELETE bounded batch of suppression rows -> COMMIT -> inter-batch sleep (OUTSIDE txn) -> repeat; reinsert pool when drained",
+          "errors": []
+        },
+        "write_cleanup_evidence": {
+          "confirmed_active": true,
+          "batches_committed": 81,
+          "rows_deleted": 810,
+          "duration_s": 0.5731,
+          "batch_size": 10,
+          "inter_batch_sleep_s": 0.001,
+          "transaction_shape": "begin -> DELETE bounded batch of suppression rows -> COMMIT -> inter-batch sleep (OUTSIDE txn) -> repeat; reinsert pool when drained",
+          "errors": []
+        },
+        "read_p95_delta_ms": 96.282,
+        "read_p95_ratio": 1.808,
+        "write_p95_delta_ms": 0.006,
+        "write_p95_ratio": 1.003,
+        "note": "valid two-phase P13 contention measurement obtained: baseline and cleanup-active percentiles for both interactive reads and interactive writes, each foreground run a sequential loop overlapping a confirmed-live bounded B4 cleanup writer. Empirical numbers (deltas/ratios, busy/timeout counts) are the result; no technology is selected here."
+      }
+    ]
+  },
+  "r14_domain_read": {
+    "classification": "MEASURED",
+    "source": "real services/nutrition SqliteNutritionRepository against a throwaway on-disk SQLite DB seeded with synthetic profile + intake rows",
+    "measurements": [
+      {
+        "operation": "list_intake",
+        "classification": "MEASURED",
+        "sample_count": 200,
+        "warmup_count": 5,
+        "row_count": 50,
+        "p50_ms": 0.9586,
+        "p95_ms": 1.4637,
+        "p99_ms": 5.3512,
+        "underpowered": false,
+        "contains_home_crossing": false,
+        "note": "Real SqliteNutritionRepository.list_intake over a synthetic single-day intake list; bounded indexed read (ix_intake on person_id,date,kind); no Home crossing in the call path."
+      },
+      {
+        "operation": "get_profile",
+        "classification": "MEASURED",
+        "sample_count": 200,
+        "warmup_count": 5,
+        "row_count": 1,
+        "p50_ms": 0.8085,
+        "p95_ms": 1.2677,
+        "p99_ms": 7.8459,
+        "underpowered": false,
+        "contains_home_crossing": false,
+        "note": "Real SqliteNutritionRepository.get_profile PRIMARY KEY read of one synthetic profile row; no Home crossing in the call path."
+      }
+    ],
+    "note": "R14 isolated BY CONSTRUCTION: every timed operation is a pure local repository read with no Home authorization crossing inside it, resolving the Phase-1 E6 UNKNOWN (where the only measured domain figure had a Home crossing folded in). MEASURED only; no pass/fail threshold, no technology selected."
+  },
+  "r13_claims": {
+    "overall_note": "R13 is reported as two independent closed-set claims (correction 6): the cryptographic non-bearer proof-of-possession is demonstrated in process (R13-A PASS); the machine/transport-identity binding is not establishable in process because the authenticated identity is a caller-supplied parameter rather than a transport-authenticated channel (R13-B UNKNOWN / INSUFFICIENT EVIDENCE). The two are NOT collapsed into a single 'PASS with caveat'.",
+    "claims": [
+      {
+        "claim_id": "R13-A",
+        "title": "Cryptographic non-bearer proof-of-possession (Ed25519 holder-of-key)",
+        "verdict": "PASS",
+        "evidence": "Full P12 adversarial matrix passes in process: a copied basis without the correct key (case 1), a proof signed by the wrong key (2a), a right key presented under a wrong authenticated identity (2b), wrong audience/domain (3), cross-request replay (4), cross-actor reuse (5) and an expired basis (6) all fail closed, while only a fresh signature by the exact basis-bound key executes (7). The verifying key is re-derived from the basis Home minted, never nominated by the request; the private key is never transmitted. Real Ed25519 (`cryptography`), self-contained, so this claim needs no external environment.",
+        "limit": ""
+      },
+      {
+        "claim_id": "R13-B",
+        "title": "Machine / transport-identity binding (authenticated caller identity)",
+        "verdict": "UNKNOWN \u2014 INSUFFICIENT EVIDENCE",
+        "evidence": "The verification LOGIC correctly rejects any mismatch between the claimed identity, the signing key, and the basis-bound (identity, key) pair (cases 2/2a/2b) -- the decision logic a transport-bound deployment would also run.",
+        "limit": "But `DomainVerifier.verify_and_execute` takes `claimed_service_identity` as an explicit parameter, so in process the 'authenticated' identity is ASSERTED by the caller, not derived from a real mTLS / transport-authenticated channel. This IN-PROCESS experiment therefore cannot show that a real caller could not present an identity it does not own. The correction-7 secondary mTLS (Family 1) experiment in `r13/transport_identity.py` addresses this SEPARATELY and LOCALLY (identity read from a verified peer certificate; see `classify_r13b_transport()` and the `r13b_transport` bench key); it does not change this in-process verdict. Recorded UNKNOWN / INSUFFICIENT EVIDENCE, never a failure and never silently upgraded to PASS."
+      }
+    ]
+  },
+  "r13b_transport": {
+    "experiment": "R13-B secondary local mTLS transport-identity (correction 7)",
+    "honest_transport_identity": "svc-nutrition",
+    "honest_handshake_ok": true,
+    "rogue_rejected_at_transport": true,
+    "rogue_server_detail": "peer rejected at transport: SSLError",
+    "verdict": "PASS",
+    "evidence": "Local mTLS harness: an honest service's authenticated identity ('svc-nutrition') was read from its VERIFIED peer certificate, not from any request field, and a rogue certificate that claimed the same identity but chained to an untrusted CA was rejected at the transport layer before any identity was accepted. The authenticated identity is therefore not caller-nominatable in this harness.",
+    "limit": "SECONDARY LOCAL EXPERIMENT ONLY: single-host 127.0.0.1 loopback mTLS with a throwaway EC CA. It demonstrates the transport-binding MECHANISM locally; it is NOT evidence about a production identity fabric, service mesh, or key distribution, and selects no technology. R13-B for the in-process experiment remains UNKNOWN by construction (classify_r13)."
+  },
+  "content_access_outcomes": {
+    "experiment": "content-access outcome timing distributions (correction 8)",
+    "outcomes_distinguished": [
+      "allow",
+      "deny",
+      "no_content"
+    ],
+    "latency_composition": "MEASURED-LOCAL: HomeStub inject_latency=False, so the ~111.57ms CALIBRATED Home crossing is EXCLUDED and composed separately (correction 7). These are local orchestration barrier costs per outcome, not composed end-to-end totals.",
+    "no_content_semantics": "no_content exercises orchestration.run_knowledge_query's labeled empty-Plan path (`if not surviving_ids:`): the single candidate is suppressed, so suppression-before-candidacy yields an empty authorized set and the orchestrator returns denied=False with empty content WITHOUT crossing to Home. Distinct from deny (Home refuses; denied=True).",
+    "measurement_count_per_outcome": 200,
+    "warmup_count": 3,
+    "distributions": {
+      "allow": {
+        "stage": "content_access_outcome_allow",
+        "warmup_count": 3,
+        "measurement_count": 200,
+        "p50_ms": 1.161,
+        "p95_ms": 1.461,
+        "p99_ms": 1.858,
+        "underpowered": false,
+        "samples_measured_local": "MEASURED"
+      },
+      "no_content": {
+        "stage": "content_access_outcome_no_content",
+        "warmup_count": 3,
+        "measurement_count": 200,
+        "p50_ms": 1.122,
+        "p95_ms": 1.559,
+        "p99_ms": 1.796,
+        "underpowered": false,
+        "samples_measured_local": "MEASURED"
+      },
+      "deny": {
+        "stage": "content_access_outcome_deny",
+        "warmup_count": 3,
+        "measurement_count": 200,
+        "p50_ms": 1.151,
+        "p95_ms": 1.629,
+        "p99_ms": 2.086,
+        "underpowered": false,
+        "samples_measured_local": "MEASURED"
+      }
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "experiment": "R13-B secondary local mTLS transport-identity (correction 7)",
+  "honest_transport_identity": "svc-nutrition",
+  "honest_handshake_ok": true,
+  "rogue_rejected_at_transport": true,
+  "rogue_server_detail": "peer rejected at transport: SSLError",
+  "verdict": "PASS",
+  "evidence": "Local mTLS harness: an honest service's authenticated identity ('svc-nutrition') was read from its VERIFIED peer certificate, not from any request field, and a rogue certificate that claimed the same identity but chained to an untrusted CA was rejected at the transport layer before any identity was accepted. The authenticated identity is therefore not caller-nominatable in this harness.",
+  "limit": "SECONDARY LOCAL EXPERIMENT ONLY: single-host 127.0.0.1 loopback mTLS with a throwaway EC CA. It demonstrates the transport-binding MECHANISM locally; it is NOT evidence about a production identity fabric, service mesh, or key distribution, and selects no technology. R13-B for the in-process experiment remains UNKNOWN by construction (classify_r13)."
+}

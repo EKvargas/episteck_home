@@ -1,0 +1,44 @@
+{
+  "experiment": "content-access outcome timing distributions (correction 8)",
+  "outcomes_distinguished": [
+    "allow",
+    "deny",
+    "no_content"
+  ],
+  "latency_composition": "MEASURED-LOCAL: HomeStub inject_latency=False, so the ~111.57ms CALIBRATED Home crossing is EXCLUDED and composed separately (correction 7). These are local orchestration barrier costs per outcome, not composed end-to-end totals.",
+  "no_content_semantics": "no_content exercises orchestration.run_knowledge_query's labeled empty-Plan path (`if not surviving_ids:`): the single candidate is suppressed, so suppression-before-candidacy yields an empty authorized set and the orchestrator returns denied=False with empty content WITHOUT crossing to Home. Distinct from deny (Home refuses; denied=True).",
+  "measurement_count_per_outcome": 200,
+  "warmup_count": 3,
+  "distributions": {
+    "allow": {
+      "stage": "content_access_outcome_allow",
+      "warmup_count": 3,
+      "measurement_count": 200,
+      "p50_ms": 1.03,
+      "p95_ms": 1.2,
+      "p99_ms": 1.377,
+      "underpowered": false,
+      "samples_measured_local": "MEASURED"
+    },
+    "no_content": {
+      "stage": "content_access_outcome_no_content",
+      "warmup_count": 3,
+      "measurement_count": 200,
+      "p50_ms": 0.912,
+      "p95_ms": 1.165,
+      "p99_ms": 1.787,
+      "underpowered": false,
+      "samples_measured_local": "MEASURED"
+    },
+    "deny": {
+      "stage": "content_access_outcome_deny",
+      "warmup_count": 3,
+      "measurement_count": 200,
+      "p50_ms": 0.987,
+      "p95_ms": 1.413,
+      "p99_ms": 1.767,
+      "underpowered": false,
+      "samples_measured_local": "MEASURED"
+    }
+  }
+}
