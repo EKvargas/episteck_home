@@ -44,6 +44,29 @@ COOKIE_FLAGS = {
     "path": "/",
 }
 
+# Login-CSRF browser-binding cookie (B3 / §9). Bound to the browser that started
+# /login, not to the OAuth transaction's identity. The __Host- prefix forbids a
+# Domain attribute and requires Secure + Path=/, which is why COOKIE_FLAGS below
+# carries no "domain" key — that omission is load-bearing, not an oversight.
+LOGIN_BINDING_COOKIE_NAME = "__Host-episteck_home_login"
+LOGIN_BINDING_MAX_AGE_SECONDS = 600
+LOGIN_BINDING_COOKIE_FLAGS = {
+    "httponly": True,
+    "secure": True,
+    "samesite": "lax",
+    "path": "/",
+}
+
+
+def new_login_binding() -> str:
+    """Opaque, high-entropy value carried only in the binding cookie."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_login_binding(value: str) -> str:
+    """The transaction stores only this. The raw value never leaves the cookie."""
+    return hashlib.sha256(value.encode()).hexdigest()
+
 
 class UnknownAudienceError(ValueError):
     """Raised when a delegation is requested for an unrecognised audience."""
