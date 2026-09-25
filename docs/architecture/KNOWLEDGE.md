@@ -96,11 +96,16 @@ SELECTION COMPLETE** (2026-09-25). See the
 - **Not approved:** the production durability configuration. The spike's tested
   configuration (WAL / `synchronous=NORMAL` / `busy_timeout=5000`) is not approved
   for production.
-- **Pre-runtime obligations:**
-  - production durability mode that satisfies B4
-  - direct end-to-end latency confirmation
-  - timing side-channel closure
-  - production R13 mechanism
+- **Pre-runtime obligations** (all six must be resolved before runtime
+  implementation approval):
+  1. production durability mode or mechanism satisfying B4
+  2. direct warm/cold end-to-end latency confirmation
+  3. timing side-channel closure
+  4. production R13 mechanism
+  5. real R14 / domain measurement (the spike used a synthetic 10 ms injection)
+  6. restore-freshness realization (a B4 C1 anti-resurrection / control-state
+     freshness authority or equivalent proof; the spike verified fail-closed
+     behavior only)
 - **Not authorized:** selection authorizes no implementation, migration, schema
   deployment or runtime.
 

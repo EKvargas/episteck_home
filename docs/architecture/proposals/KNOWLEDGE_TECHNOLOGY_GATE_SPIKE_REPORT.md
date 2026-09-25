@@ -843,7 +843,7 @@ and R13 are **not reopened**.
 | 2 | §16.8 spike report received | **PASS** | This report |
 | 3 | Every §16.7 pass condition **met** | **PASS** for S1 on SQLite | §15. Condition 5 (R13) is met **at the spike's experimental scope** (§14) |
 | 4 | `home_auth_round_trip_count` does not grow with `domain_call_count`, authorization unweakened | **PASS** | P1–P4 assert `== 2` at 0/1/3/5 domains (`scenarios/test_p1_p5_baseline_and_fanout.py`); R13 case 10 `== 2` (§14) |
-| 5 | R14 measured | **PASS** | §21; `r14_domain_read.json` |
+| 5 | R14 measured | **PASS** at spike scope (synthetic 10 ms injection); real measurement is pre-runtime obligation 5 (§27.4) | §21; `r14_domain_read.json` |
 | 6 | B6 §18A.8 targets met at the corpus sizes that matter | **PASS — accepted for Technology Gate selection on conservative composed evidence.** Direct warm/cold end-to-end measurement remains a **REQUIRED PRE-RUNTIME obligation** (§27.4) | §27.2.1 |
 | 7 | No B6 §18A.11 disqualifier applies to the selected shape | **PASS** | §12, §15 (no per-candidate authorization, no global-retrieve-then-filter, suppression before candidacy, bindings testable without rebuild, crossings flat, lazy expansion). S2's barrier failure disqualified S2, which is not selected |
 | 8 | Protected metadata resolvable without content (R2); bindings testable without rebuild | **PASS** | §15 (H2, H6) |
@@ -873,7 +873,7 @@ scoped to "the corpus sizes that matter".
 
 **Why this is composed rather than measured:** the Home crossing is CALIBRATED/INJECTED
 (Phase-1 E7), not measured on a realistic topology, and no warm/cold end-to-end pre-LLM
-orchestration run exists (§17 composition convention). That limitation is what §27.4 item 1
+orchestration run exists (§17 composition convention). That limitation is what §27.4 item 2
 carries forward.
 
 ### 27.3 SQLite configuration — selected vs tested vs production
@@ -901,14 +901,23 @@ following:
 
 ### 27.4 Pre-runtime obligations (carried forward, not discharged by this Gate)
 
-1. **Direct end-to-end latency confirmation.** Measure warm and cold pre-LLM orchestration
-   end to end, on a realistic topology, with the selected runtime realization. This
-   confirms item 6 by direct measurement. It is **not run now**.
-2. **Production durability mode.** Required decision per §27.3.
+All six must be resolved before Knowledge runtime implementation approval.
+
+1. **Production durability mode or mechanism satisfying B4.** Required decision per §27.3.
+2. **Direct warm/cold end-to-end latency confirmation.** Measure warm and cold pre-LLM
+   orchestration end to end, on a realistic topology, with the selected runtime
+   realization. This confirms item 6 by direct measurement. It is **not run now**.
 3. **Timing side-channel closure.** Per the §21 Product Architect disposition (PA-10d / B6).
 4. **Production R13 mechanism.** §14 established the non-bearer boundary only at the
    spike's local-mTLS experimental scope. The production identity fabric, key distribution
    and the §11.4.1 binding realization remain pre-runtime work.
+5. **Real R14 / domain measurement.** The spike's R14 used a synthetic 10 ms domain latency
+   injection (§21). An actual applicable domain-service read must be measured on the
+   realistic topology.
+6. **Restore-freshness realization.** B4 C1 requires a concrete anti-resurrection /
+   control-state freshness authority, or an equivalent freshness proof. The spike verified
+   fail-closed behavior when freshness cannot be proven (§15, H7). It did not select or
+   implement the production mechanism.
 
 ### 27.5 What closing the Gate does not authorize
 
@@ -926,10 +935,13 @@ operator step.
 **TECHNOLOGY GATE CLOSED — SELECTION COMPLETE**
 
 - **SQLite 3.41.2 is selected** as the S1 relational canonical-owner realization.
-- **Production durability mode remains a pre-runtime decision** (§27.3).
-- **Direct end-to-end latency confirmation remains a pre-runtime obligation** (§27.4.1).
-- **Timing side-channel closure remains pre-runtime** (§27.4.3).
-- **The production R13 mechanism remains pre-runtime** (§27.4.4).
+- **Six pre-runtime obligations remain** (§27.4):
+  1. production durability mode or mechanism satisfying B4 (§27.3)
+  2. direct warm/cold end-to-end latency confirmation
+  3. timing side-channel closure
+  4. production R13 mechanism
+  5. real R14 / domain measurement
+  6. restore-freshness realization
 - **Closing the Gate does not authorize implementation, migration, schema deployment or
   production runtime** (§27.5).
 

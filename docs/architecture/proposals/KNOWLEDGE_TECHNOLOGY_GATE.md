@@ -17,11 +17,13 @@ Date opened: 2026-09-19 · Date closed: 2026-09-25
 - **empirically tested configuration:** WAL, `synchronous=NORMAL`, `busy_timeout=5000`
 - **production durability configuration:** not yet approved by this Gate
 
-**Pre-runtime obligations, not discharged by closure:**
-- choose and test a production durability configuration that satisfies B4, or provide an equivalent durable control-state mechanism
-- confirm latency by direct warm/cold end-to-end pre-LLM measurement on a realistic topology with the selected runtime realization
-- close the timing side-channel (PA-10d / B6)
-- design the production R13 mechanism
+**Pre-runtime obligations, not discharged by closure** (all six must be resolved before Knowledge runtime implementation approval; spike report §27.4):
+1. **Production durability mode or mechanism satisfying B4:** choose and test a production durability configuration, or provide an equivalent durable control-state mechanism
+2. **Direct warm/cold end-to-end latency confirmation:** pre-LLM orchestration measured on a realistic topology with the selected runtime realization
+3. **Timing side-channel closure** (PA-10d / B6)
+4. **Production R13 mechanism**
+5. **Real R14 / domain measurement:** the spike's R14 used a synthetic 10 ms domain latency injection, so measure an actual applicable domain-service read on the realistic topology
+6. **Restore-freshness realization:** B4 C1 requires a concrete anti-resurrection / control-state freshness authority or an equivalent freshness proof. The spike verified fail-closed behavior when freshness cannot be proven but did not select or implement the production mechanism.
 
 **Closing the Gate authorizes no implementation, migration, schema deployment or production runtime.** PostgreSQL, S2, P13 and R13 are not reopened. B1–B6 remain RESOLVED and unamended.
 
@@ -536,7 +538,7 @@ The Gate must evaluate candidates against the accepted B1–B6 requirements, inc
 
 **No candidate is selected by this closure.** Technology selection and runtime implementation require their own separate approval; B1–B6 acceptance supplies neither. Agreed acceptance scenarios (B6 §19, P1–P8) must precede technology selection.
 
-**Gate progress.** Phase 1 — candidate investigation and benchmark/spike design — is **COMPLETE and accepted**, recorded in [KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md) with final dispositions TG-PA-1 … TG-PA-7. **TG-PA-7 authorizes an isolated synthetic spike** (scope and exclusions in Phase-1 §18.1). Phase 2 was that spike, followed by selection against Phase-1 §17's acceptance criteria. **The spike was executed and the Gate is now CLOSED — SELECTION COMPLETE (2026-09-25): S1 on SQLite 3.41.2.** Production durability mode, direct end-to-end latency confirmation, timing side-channel closure and the production R13 mechanism remain pre-runtime obligations. See the closure summary at the top of this register.
+**Gate progress.** Phase 1 — candidate investigation and benchmark/spike design — is **COMPLETE and accepted**, recorded in [KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md) with final dispositions TG-PA-1 … TG-PA-7. **TG-PA-7 authorizes an isolated synthetic spike** (scope and exclusions in Phase-1 §18.1). Phase 2 was that spike, followed by selection against Phase-1 §17's acceptance criteria. **The spike was executed and the Gate is now CLOSED — SELECTION COMPLETE (2026-09-25): S1 on SQLite 3.41.2.** Six pre-runtime obligations remain: production durability mode or mechanism satisfying B4, direct warm/cold end-to-end latency confirmation, timing side-channel closure, the production R13 mechanism, real R14 / domain measurement, and restore-freshness realization. See the closure summary at the top of this register.
 
 The original gate-opening task changed only the independent review artifact and this gate register. The B1 follow-up changes only [KNOWLEDGE_B1_SECURITY_SCOPE.md](KNOWLEDGE_B1_SECURITY_SCOPE.md) and B1 status/references in this register. It does not modify canonical architecture documents, existing ADRs, `packages/home-contracts/`, `services/`, `deploy/`, or production configuration.
 
