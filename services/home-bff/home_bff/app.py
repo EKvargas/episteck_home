@@ -28,11 +28,15 @@ from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Response
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from . import sessions
+from .bootstrap import validate_bootstrap_response
 from .config import Settings
 from .frappe_client import (
     HomeOAuthClient,
     SessionOpenError,
     TokenExchangeError,
+    UpstreamMalformed,
+    UpstreamRefused,
+    UpstreamUnavailable,
 )
 from .oauth import authorization_params, new_pkce_pair, new_state
 from .runtime import RUNTIME_ID
@@ -275,6 +279,68 @@ def create_app(
         except SessionOpenError:
             # The Home session was revoked or the user unlinked: deny immediately.
             raise HTTPException(403, "session is no longer authorized") from None
+
+    @app.get("/bootstrap")
+    def bootstrap(
+        session_id: str | None = Cookie(default=None, alias=sessions.COOKIE_NAME),
+        store: SessionStore = Depends(get_store),
+        client: HomeOAuthClient = Depends(get_client),
+    ):
+        """The single trusted-server read that answers "what can this viewer see".
+
+        This signature has no identity-naming parameter of any kind (BFF-9): the
+        ONLY identity input is the session cookie. Query strings, headers, and any
+        request body are never inspected here, so nothing a caller sends can name
+        a different person (BFF-8).
+        """
+        if session_id is None:
+            return JSONResponse(
+                {"error": "SESSION_REQUIRED"},
+                status_code=401,
+                headers={"Cache-Control": "no-store"},
+            )
+
+        session = store.get_session(session_id)
+        if session is None:
+            return JSONResponse(
+                {"error": "SESSION_INVALID"},
+                status_code=401,
+                headers={"Cache-Control": "no-store"},
+            )
+
+        try:
+            raw = client.get_home_bootstrap(session.access_token, session.home_session_id)
+        except UpstreamRefused:
+            # Read-only: a CP refusal never deletes the local session or runtime
+            # binding. The CP is the authority; the next login replaces the cookie.
+            return JSONResponse(
+                {"error": "SESSION_INVALID"},
+                status_code=401,
+                headers={"Cache-Control": "no-store"},
+            )
+        except UpstreamUnavailable:
+            return JSONResponse(
+                {"error": "SERVICE_UNAVAILABLE"},
+                status_code=503,
+                headers={"Cache-Control": "no-store"},
+            )
+        except UpstreamMalformed:
+            return JSONResponse(
+                {"error": "INVALID_RESPONSE"},
+                status_code=502,
+                headers={"Cache-Control": "no-store"},
+            )
+
+        try:
+            wire = validate_bootstrap_response(raw)
+        except UpstreamMalformed:
+            return JSONResponse(
+                {"error": "INVALID_RESPONSE"},
+                status_code=502,
+                headers={"Cache-Control": "no-store"},
+            )
+
+        return JSONResponse(wire, headers={"Cache-Control": "no-store"})
 
     @app.post("/delegation")
     def mint_delegation(
