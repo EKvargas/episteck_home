@@ -380,6 +380,7 @@ def test_pkce_verifier_never_leaves_the_server(ctx):
         code_verifier=transaction.code_verifier,
         nonce=transaction.nonce,
         redirect_uri=transaction.redirect_uri,
+        login_binding_hash=transaction.login_binding_hash,
     )
     response = http.get("/login", follow_redirects=False)
     assert transaction.code_verifier not in response.headers["location"]

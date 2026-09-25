@@ -21,6 +21,7 @@ handed to the runtime, not to a prompt (proposal §H).
 """
 from __future__ import annotations
 
+import hmac
 import logging
 
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Response
@@ -81,6 +82,7 @@ def create_app(
         pkce = new_pkce_pair()
         state = new_state()
         nonce = new_state()
+        login_binding = sessions.new_login_binding()
 
         # The verifier is persisted here and NEVER put in the redirect. The browser
         # carries only `state`, which is an opaque lookup key with no authority.
@@ -89,6 +91,7 @@ def create_app(
             code_verifier=pkce.verifier,
             nonce=nonce,
             redirect_uri=settings.redirect_uri,
+            login_binding_hash=sessions.hash_login_binding(login_binding),
         )
 
         params = authorization_params(
@@ -101,32 +104,56 @@ def create_app(
         params["nonce"] = nonce
 
         query = "&".join(f"{k}={_quote(v)}" for k, v in params.items())
-        return RedirectResponse(
+        result = RedirectResponse(
             f"{app.state.client.authorize_url}?{query}", status_code=302
         )
+        result.set_cookie(
+            sessions.LOGIN_BINDING_COOKIE_NAME,
+            login_binding,
+            max_age=sessions.LOGIN_BINDING_MAX_AGE_SECONDS,
+            **sessions.LOGIN_BINDING_COOKIE_FLAGS,
+        )
+        return result
 
     # ---------------------------------------------------------------- callback
 
     @app.get("/callback")
     def callback(
-        response: Response,
         code: str | None = Query(default=None),
         state: str | None = Query(default=None),
         error: str | None = Query(default=None),
+        login_binding: str | None = Cookie(
+            default=None, alias=sessions.LOGIN_BINDING_COOKIE_NAME
+        ),
         store: SessionStore = Depends(get_store),
         client: HomeOAuthClient = Depends(get_client),
     ):
+        def _failure(status_code: int, detail: str) -> Response:
+            """Every callback exit clears the binding cookie, success or failure."""
+            failure = JSONResponse({"detail": detail}, status_code=status_code)
+            _clear_login_binding_cookie(failure)
+            return failure
+
         if error:
-            raise HTTPException(400, "authorization was denied")
+            return _failure(400, "authorization was denied")
 
         # 1+2. Validate state AND single-use in one atomic step. A replayed state
         # finds nothing, because consume_transaction deletes as it reads.
         transaction = store.consume_transaction(state or "")
         if transaction is None:
-            raise HTTPException(400, "invalid or already-used authorization state")
+            return _failure(400, "invalid or already-used authorization state")
+
+        # B3 / §9: the transaction is already consumed above regardless of outcome,
+        # so a missing or mismatched binding still burns the state — it cannot be
+        # retried by fixing just the cookie.
+        presented_hash = sessions.hash_login_binding(login_binding or "")
+        if not login_binding or not hmac.compare_digest(
+            presented_hash, transaction.login_binding_hash
+        ):
+            return _failure(400, "login could not be verified")
 
         if not code:
-            raise HTTPException(400, "authorization code missing")
+            return _failure(400, "authorization code missing")
 
         # 3+4. Server-side exchange, always with the verifier minted for THIS state.
         try:
@@ -141,7 +168,7 @@ def create_app(
             logger.warning(
                 "token exchange failed (%s)", type(exchange_error).__name__
             )
-            raise HTTPException(400, "authorization could not be completed") from None
+            return _failure(400, "authorization could not be completed")
 
         # 6-9. The Control Plane resolves the User from the token and maps it to a
         # Person. Zero links, two links, or a disabled user all surface here as a
@@ -154,9 +181,7 @@ def create_app(
             logger.warning(
                 "home session refused (%s)", type(session_error).__name__
             )
-            raise HTTPException(
-                403, "this account is not linked to a Home person"
-            ) from None
+            return _failure(403, "this account is not linked to a Home person")
 
         # 10+11. Opaque cookie only. Tokens stay in the server-side store.
         session = store.create_session(
@@ -175,14 +200,18 @@ def create_app(
                 store.delete_session(session.session_id)
             except StoreUnavailableError:
                 pass
-            raise HTTPException(
-                503, "runtime binding could not be completed"
-            ) from None
+            return _failure(503, "runtime binding could not be completed")
 
-        result = JSONResponse(
-            {"status": "authenticated", "runtime_binding": binding.value}
-        )
+        # ALREADY_BOUND is still success: the Home Hub session is valid, and agent
+        # binding is orthogonal. `binding` is logged only as its static enum value,
+        # never returned to the browser.
+        logger.info("runtime binding outcome: %s", binding.value)
+
+        result = Response(status_code=303, headers={"Location": "/app"})
+        result.headers["Cache-Control"] = "no-store"
+        result.headers["Referrer-Policy"] = "no-referrer"
         _set_session_cookie(result, session.session_id)
+        _clear_login_binding_cookie(result)
         return result
 
     # ----------------------------------------------------------------- logout
@@ -298,4 +327,14 @@ def _clear_session_cookie(response: Response) -> None:
         secure=sessions.COOKIE_FLAGS["secure"],
         httponly=sessions.COOKIE_FLAGS["httponly"],
         samesite=sessions.COOKIE_FLAGS["samesite"],
+    )
+
+
+def _clear_login_binding_cookie(response: Response) -> None:
+    response.delete_cookie(
+        sessions.LOGIN_BINDING_COOKIE_NAME,
+        path=sessions.LOGIN_BINDING_COOKIE_FLAGS["path"],
+        secure=sessions.LOGIN_BINDING_COOKIE_FLAGS["secure"],
+        httponly=sessions.LOGIN_BINDING_COOKIE_FLAGS["httponly"],
+        samesite=sessions.LOGIN_BINDING_COOKIE_FLAGS["samesite"],
     )
