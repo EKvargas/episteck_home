@@ -238,3 +238,169 @@ def test_bff18_bootstrap_has_no_store_cache_control(ctx):
     _log_in(http)
     response = http.get("/bootstrap")
     assert response.headers["cache-control"] == "no-store"
+
+
+# ------------------------------------------------------------------- BFF-12
+
+
+@pytest.mark.parametrize(
+    "bad_payload",
+    [
+        {"viewer": {"person_id": "PSN-00001"}, "circles": [], "care": []},  # missing display_name
+        {"viewer": {"person_id": "PSN-1", "display_name": "X"}, "circles": [], "care": []},  # bad id
+        {
+            "viewer": {"person_id": "PSN-00001", "display_name": "X"},
+            "circles": [],
+            "care": [
+                {
+                    "person_id": "PSN-00007",
+                    "display_name": "Ana",
+                    "relationship_type": "FRIEND",
+                }
+            ],
+        },  # unknown enum
+        {
+            "viewer": {"person_id": "PSN-00001", "display_name": "X"},
+            "circles": [{"circle_id": "PSN-00007", "display_name": "Not a circle"}],
+            "care": [],
+        },  # circle id in personId namespace
+        {
+            "viewer": {"person_id": "PSN-00001", "display_name": "X"},
+            "circles": [],
+            "care": [
+                {
+                    "person_id": "PSN-00001",
+                    "display_name": "X",
+                    "relationship_type": "CAREGIVER",
+                }
+            ],
+        },  # care subject == viewer
+        {
+            "viewer": {"person_id": "PSN-00001", "display_name": "X"},
+            "circles": [],
+            "care": [
+                {
+                    "person_id": "PSN-00007",
+                    "display_name": "Ana",
+                    "relationship_type": "CAREGIVER",
+                },
+                {
+                    "person_id": "PSN-00007",
+                    "display_name": "Ana",
+                    "relationship_type": "GUARDIAN",
+                },
+            ],
+        },  # duplicate
+        {
+            "viewer": {"person_id": "PSN-00001", "display_name": "X"},
+            "circles": [
+                {"circle_id": f"CIR-{i:05d}", "display_name": "C"} for i in range(51)
+            ],
+            "care": [],
+        },  # over bound
+    ],
+    ids=[
+        "missing-field",
+        "bad-id-format",
+        "unknown-enum",
+        "circle-id-in-person-namespace",
+        "care-subject-equals-viewer",
+        "duplicate-care-subject",
+        "over-bound-circles",
+    ],
+)
+def test_bff12_every_malformed_shape_is_invalid_response_never_partial(ctx, bad_payload):
+    http, _, client = ctx
+    _log_in(http)
+    client.bootstrap_payload = bad_payload
+
+    response = http.get("/bootstrap")
+
+    assert response.status_code == 502
+    assert response.json() == {"error": "INVALID_RESPONSE"}
+
+
+def test_bff12_non_dict_care_entry_is_invalid_response(ctx):
+    http, _, client = ctx
+    _log_in(http)
+    client.bootstrap_payload = {
+        "viewer": {"person_id": "PSN-00001", "display_name": "X"},
+        "circles": [],
+        "care": ["not-a-dict"],
+    }
+    response = http.get("/bootstrap")
+    assert response.status_code == 502
+    assert response.json() == {"error": "INVALID_RESPONSE"}
+
+
+# ------------------------------------------------------------------- BFF-13
+
+
+def test_bff13_extra_access_and_external_ref_fields_are_dropped(ctx):
+    http, _, client = ctx
+    _log_in(http)
+    client.bootstrap_payload = {
+        "viewer": {
+            "person_id": "PSN-00001",
+            "display_name": "Erick",
+            "external_ref": "leak-me-not",
+        },
+        "circles": [],
+        "care": [],
+        "access": {"nutrition": ["VIEW"]},
+        "grants": ["should-not-appear"],
+    }
+    response = http.get("/bootstrap")
+    assert response.status_code == 200
+    body = response.json()
+    assert "access" not in body
+    assert "grants" not in body
+    assert "external_ref" not in body["viewer"]
+    import json
+
+    text = json.dumps(body)
+    assert "leak-me-not" not in text
+    assert "should-not-appear" not in text
+
+
+# ------------------------------------------------------------------- BFF-14
+
+
+def test_bff14_response_bytes_contain_no_secrets(ctx):
+    http, store, client = ctx
+    _log_in(http)
+    session = store.get_session(http.cookies.get(sessions.COOKIE_NAME))
+    response = http.get("/bootstrap")
+
+    assert session.access_token not in response.text
+    assert session.home_session_id not in response.text
+    assert http.cookies.get(sessions.COOKIE_NAME) not in response.text
+    assert "client_secret" not in response.text
+    assert "super-secret" not in response.text
+
+
+# ------------------------------------------------------------------- BFF-15
+
+
+def test_bff15_logs_across_bootstrap_failure_paths_contain_no_secrets(ctx, caplog):
+    http, store, client = ctx
+    _log_in(http)
+    session = store.get_session(http.cookies.get(sessions.COOKIE_NAME))
+
+    with caplog.at_level("DEBUG"):
+        client.bootstrap_error = UpstreamRefused("refused")
+        http.get("/bootstrap")
+
+        client.bootstrap_error = UpstreamUnavailable("down")
+        http.get("/bootstrap")
+
+        client.bootstrap_error = None
+        client.bootstrap_payload = {"viewer": {}, "circles": [], "care": []}
+        http.get("/bootstrap")
+
+    log_text = "\n".join(record.getMessage() for record in caplog.records)
+    assert session.access_token not in log_text
+    assert session.home_session_id not in log_text
+    assert http.cookies.get(sessions.COOKIE_NAME) not in log_text
+    assert "super-secret" not in log_text
+    assert "PSN-" not in log_text
