@@ -536,7 +536,7 @@ The Gate must evaluate candidates against the accepted B1–B6 requirements, inc
 | Lazy source expansion | B6 §18A.7 |
 | The ten performance disqualification criteria | B6 §18A.11 |
 
-**No candidate is selected by this closure.** Technology selection and runtime implementation require their own separate approval; B1–B6 acceptance supplies neither. Agreed acceptance scenarios (B6 §19, P1–P8) must precede technology selection.
+**Closing B1–B6 did not select a technology.** B1–B6 acceptance by itself supplied neither technology selection nor runtime implementation approval, and the agreed acceptance scenarios (B6 §19, P1–P8) had to precede selection. Selection was made afterwards by this Technology Gate's own process (Phase 1, the spike, and the §17 closure record; see Gate progress below). Runtime implementation still requires its own separate approval.
 
 **Gate progress.** Phase 1 — candidate investigation and benchmark/spike design — is **COMPLETE and accepted**, recorded in [KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md](KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md) with final dispositions TG-PA-1 … TG-PA-7. **TG-PA-7 authorizes an isolated synthetic spike** (scope and exclusions in Phase-1 §18.1). Phase 2 was that spike, followed by selection against Phase-1 §17's acceptance criteria. **The spike was executed and the Gate is now CLOSED — SELECTION COMPLETE (2026-09-25): S1 on SQLite 3.41.2.** Six pre-runtime obligations remain: production durability mode or mechanism satisfying B4, direct warm/cold end-to-end latency confirmation, timing side-channel closure, the production R13 mechanism, real R14 / domain measurement, and restore-freshness realization. See the closure summary at the top of this register.
 

@@ -530,10 +530,32 @@ def content_access_outcome_distributions() -> dict:
     }
 
 
+def sqlite_version_metadata() -> dict:
+    """Runtime-derived SQLite version record for the evidence artifact (not hardcoded)."""
+    return {
+        "sqlite_library_version": sqlite3.sqlite_version,
+        # sqlite3.version is deprecated in Python 3.12 and removed in 3.14.
+        "python_sqlite3_module_version": getattr(sqlite3, "version", None),
+        "python_version": sys.version.split()[0],
+        "source": "Recorded at bench run time from the running interpreter's sqlite3 module.",
+    }
+
+
+def sqlite_configuration_status() -> str:
+    pragmas = ", ".join(f"{k}={v}" for k, v in SQLITE_PRAGMAS.items())
+    return (
+        f"EMPIRICALLY TESTED CONFIGURATION ONLY ({pragmas}). Not the production durability "
+        "configuration; production durability mode is NOT approved by the Technology Gate "
+        "and remains a pre-runtime decision under B4 (see spike report Part G, section 27.3)."
+    )
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     report: dict = {
+        "sqlite_version": sqlite_version_metadata(),
         "sqlite_configuration": SQLITE_PRAGMAS,
+        "sqlite_configuration_status": sqlite_configuration_status(),
         "calibrated_home_crossing_ms": CALIBRATED_HOME_CROSSING_MS,
         "measurement_policy": {
             "warmup_count": WARMUP_COUNT,
