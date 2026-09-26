@@ -1,6 +1,6 @@
 # Knowledge pre-runtime obligation #6 — Restore-freshness realization
 
-Status: ARCHITECTURE ACCEPTED BY ARCHITECTURE BOARD (2026-09-26) — OPERATIONAL CLOSURE PENDING the physical-store capability probe (WS-1..7) and store selection. No runtime implementation approval.
+Status: ARCHITECTURE ACCEPTED BY ARCHITECTURE BOARD; POST-PROBE GCS SELECTED; WS-1..WS-6 PASS; pre-runtime obligation #6 CLOSED; obligation #1 OPEN. Production GCS is not provisioned; Knowledge runtime implementation is not authorized.
 
 Date: 2026-09-26
 
@@ -8,15 +8,17 @@ Revision: 2026-09-26 — Architecture Board preliminary review corrections incor
 
 Revision: 2026-09-26 — Architecture Board review of PR #40 corrections incorporated: READY now requires an unexpired freshness / writer lease issued only by successful verification, so a journal outage ends READY at lease expiry and the split-brain stale-read bound is enforceable (§6.1, §8, §9.4, §10.1); the store completeness semantics required to derive H(p) are an explicit store property and probe item (S-6, WS-5); Board disposition recorded (§15, §16).
 
+Revision: 2026-09-26 — Post-probe Board disposition added (§15.1): GCS selected for the physical journal, WS-1..WS-6 PASS, WS-7 informational, obligation #6 CLOSED. The PR #40 RF-D1..RF-D6 decision and its then-conditional store language remain as historical architecture history; no runtime semantics changed.
+
 Repository: `EKvargas/episteck_home`
 
-Main baseline: `2f5c7ebef2b7b7eade39ee6f1a4fe067ab26d534` (merge of PR #33, Technology Gate closure), verified current `origin/main`.
+PR #40 main baseline: `2f5c7ebef2b7b7eade39ee6f1a4fe067ab26d534` (merge of PR #33, Technology Gate closure), verified as current `origin/main` at that review.
 
-Branch: `docs/knowledge-restore-freshness`
+PR #40 branch: `docs/knowledge-restore-freshness`
 
 Obligation: [Technology Gate §27.4 item 6](KNOWLEDGE_TECHNOLOGY_GATE_SPIKE_REPORT.md#274-pre-runtime-obligations-carried-forward-not-discharged-by-this-gate) — restore-freshness realization (B4 C1)
 
-This is an architecture proposal. It implements nothing, creates no schema, deploys nothing, reruns no benchmark, **selects no infrastructure**, and changes no accepted decision. The Person/Circle model, B1–B6 and the S1 / SQLite 3.41.2 selection are not reopened. All scenarios are synthetic.
+At PR #40, this architecture proposal implemented nothing, created no schema, deployed nothing, reran no benchmark, and selected no physical infrastructure. The later probe selected **GCS as the physical mechanism** (§15.1), but production infrastructure does not yet exist and Knowledge runtime is not authorized. The Person/Circle model, B1–B6, and the S1 / SQLite 3.41.2 selection are not reopened. All scenarios are synthetic. Sections describing unselected candidates or pending probe work record the **pre-probe PR #40 state**; §15.1 and §17 give the current disposition.
 
 ## 0. Summary
 
@@ -26,7 +28,7 @@ This is an architecture proposal. It implements nothing, creates no schema, depl
 2. **Every Knowledge process start is treated as a potential restore.** Knowledge serves nothing from a partition until it proves, from the journal's verified immutable history, that its locally applied control revision equals the journal revision. Missing entries are replayed first.
 3. READY also requires an **unexpired freshness / writer lease**, renewed only by successful verification. During a journal outage a READY partition serves only until its lease expires, then becomes UNVERIFIED and fails closed (§6.1).
 4. Anything that cannot be proven — journal unreachable, chain broken, gap, generation mismatch, local state *ahead* of the journal, or missing key — **fails closed** for the affected partitions. There is no best-effort fallback.
-5. **The physical store is not selected here.** The required property is an independently credentialed off-host store with enforceable non-overwrite / immutable-history semantics. Candidates are Hetzner Object Storage with Versioning plus Object Lock/Retention, and Hetzner Storage Box only if a narrow probe proves an equivalent mechanism (§5.3). That probe closes the physical question.
+5. **At PR #40, the physical store was not yet selected.** The required property was an independently credentialed off-host store with enforceable non-overwrite / immutable-history semantics. The candidate screen and required probe are preserved in §5.3 and §12.2. The later Board disposition selected GCS and closed the physical question (§15.1).
 
 Knowledge owns the freshness authority logically (B5 PA-3). Physically it lives outside the Knowledge host.
 
@@ -38,7 +40,7 @@ Re-derived from the baseline, not from prior summaries.
 
 | # | Fact | Evidence | Consequence |
 |---|---|---|---|
-| F1 | B4 C1 invariant: restored data must not become usable unless control state is provably at least as current as the restored payload. Unknown freshness fails closed. No mechanism is selected. | [B4 §1.1 C1, §12.1](KNOWLEDGE_B4_FORGET_DELETE.md#121-the-restore-freshness-invariant-c1) | This proposal selects the mechanism, but not the physical store. |
+| F1 | B4 C1 invariant: restored data must not become usable unless control state is provably at least as current as the restored payload. Unknown freshness fails closed. At the B4 decision point, no mechanism was selected. | [B4 §1.1 C1, §12.1](KNOWLEDGE_B4_FORGET_DELETE.md#121-the-restore-freshness-invariant-c1) | PR #40 selected the mechanism but left the physical store conditional; the later probe selected GCS (§15.1). |
 | F2 | Knowledge owns the restore-freshness authority, "explicitly separable from its ordinary payload persistence". Its currency must be establishable "without relying solely on the same snapshot that carries the restored payload". Partial availability is allowed. | [B5 §11.3, PA-3](KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md#113-restore-freshness-authority-b4-c1) | Logical owner fixed. Physical persistence may differ (B5 §6.2 point 4). |
 | F3 | B6 §16: five evidence requirements — a positive currency claim, independence from the payload's backup lineage, a comparison, partial availability, and explicit abstention. | [B6 §16](KNOWLEDGE_B6_TRUSTED_RETRIEVAL.md#16-restore-freshness-enforcement) | Acceptance criteria for this design (§6, §12). |
 | F4 | S1 / SQLite 3.41.2 selected. The tested config (WAL / `synchronous=NORMAL`) is not approved for production because the WAL tail can be lost on OS crash or power loss. §27.3 allows either a durability config **or "an equivalent durable control-state mechanism that satisfies B4"**. | [Spike report §27.3](KNOWLEDGE_TECHNOLOGY_GATE_SPIKE_REPORT.md#273-sqlite-configuration--selected-vs-tested-vs-production) | This design constrains #1 for B4-bearing control state only (§11). |
@@ -181,7 +183,7 @@ The journal *revision* is a per-partition counter over KN control mutations. It 
 
 **Must not contain:** plaintext, excerpts, titles, locators, embeddings, free-text reasons, actor identity, capacity, or Person ids. Actor and decision history stays in the KN DB on its own D3 schedule, which keeps the journal inside B4 §10 / D3 by construction.
 
-### 5.3 Physical journal store — conditional, not selected
+### 5.3 Physical journal store — PR #40 conditional decision (historical)
 
 **Required property:** an **independently credentialed, off-host store with enforceable non-overwrite / immutable-history semantics.** Concretely:
 
@@ -195,14 +197,14 @@ The journal *revision* is a per-partition counter over KN control mutations. It 
 | S-6 | **Authoritative, complete history reads.** The store must provide the consistency semantics required to derive `H(p)`: (a) an acknowledged create is readable from any fresh connection; (b) enumeration and/or lookup cannot hide an entry whose create was acknowledged before the query began — in particular, a "not found" for the next revision must be authoritative, not the product of eventual or stale listing; (c) the implementation can distinguish a **complete, verified chain head** from an incomplete, truncated, paginated or stale listing. If a read cannot be shown to be authoritative and complete, `H(p)` is UNKNOWN and fails closed. The mechanism is not prescribed. |
 | S-7 | Unavailability is distinguishable from rejection |
 
-**Candidates, none selected:**
+**Candidates at PR #40, none selected then:**
 
 | Candidate | Status | Notes |
 |---|---|---|
 | **Hetzner Object Storage with Versioning + Object Lock / Retention** | Candidate | S3-compatible explicit immutable-object semantics (object lock / retention, versioning, conditional create) map directly onto S-3/S-4. EU, and the same provider as the existing backup target. To be confirmed by the probe. |
 | **Hetzner Storage Box** (separate sub-account) | Candidate **only if** the probe proves S-3/S-4 through an appropriate mechanism | Already in use for restic, but plain SFTP does not by itself guarantee store-enforced non-overwrite or non-deletion. It qualifies only if a concrete mechanism (for example sub-account permissions combined with provider snapshots, or equivalent) is proven to deliver S-3/S-4. A generic Storage Box namespace is **not** accepted. |
 
-**No infrastructure is selected in this proposal.** A narrow capability probe (§12.2) closes the physical storage question. If neither candidate passes, the physical question stays open and #6 cannot move to runtime approval; the architecture does not change.
+**At PR #40, no physical infrastructure was selected.** The narrow capability probe (§12.2) was required to close the physical storage question. The candidate rows above preserve that pre-probe decision state. The later Board selected GCS as the physical mechanism (§15.1); production GCS infrastructure still does not exist and runtime is still unauthorized.
 
 The store implements one interface, whichever is chosen: `append_exclusive(entry)`, `list(partition_id, generation)`, `read(entry identity)`.
 
@@ -294,7 +296,7 @@ Rules:
 |---|---|---|
 | Logical ownership of the freshness authority, journal content, revision semantics and verification | **Knowledge (KN)** | B5 PA-3, row 15 |
 | Authoritative local register and payload | KN SQLite on Nuremberg (TG-PA-4) | B5 §6.1, Gate §27.1 |
-| Physical persistence of the journal | **Not selected.** Conditional on the §12.2 probe; candidates in §5.3 | B5 §6.2 point 4 (physical placement may differ when the boundary is intact) |
+| Physical persistence of the journal | **At PR #40:** not selected, conditional on §12.2. **Post-probe:** GCS selected (§15.1); production infrastructure not provisioned. | B5 §6.2 point 4 (physical placement may differ when the boundary is intact) |
 | Writer / reader of the journal | KN only | B5 row 15 "KN only" |
 | Journal key and credential custody | KN secrets on the host. Key escrowed off-host by the operator with the restic repository password. | The DR secret class already exists (F8). This is **not** B4 D2 key management. |
 | Home | No role. Home does not hold, check or attest Knowledge freshness, and Knowledge does not journal Home authority. | B5 §6.2 points 2–3; §5.1 |
@@ -457,7 +459,7 @@ A destructive **re-baseline** is not defined by this proposal. A re-baseline wou
 
 ### 12.2 Narrow physical-store capability probe (closes the storage question; before runtime implementation approval)
 
-Run against a non-production account for each candidate in §5.3:
+The PR #40 probe specification required non-production testing of candidate physical stores:
 
 | ID | Property | Requirement |
 |---|---|---|
@@ -471,6 +473,8 @@ Run against a non-production account for each candidate in §5.3:
 
 A candidate is selectable only if WS-1..6 pass, with WS-5 established from the store's documented consistency guarantees as well as observed behavior. WS-7 informs, it does not gate. The probe chooses a store; it cannot change the architecture. The state machine itself is validated by the RF tests at implementation time, using local fault injection, and needs no infrastructure.
 
+The later GCS live probe met the physical-store capability gates, and the Board selected GCS (§15.1). The disposable verifier tested store listing/lookup and revision/hash-link behavior; it did not implement Knowledge runtime payload partition/generation/epoch validation. Runtime must enforce the identity and fail-closed rules in §6 and §9.4.
+
 ## 13. Operational implications
 
 - **One new DR secret:** the KN journal key, escrowed with the restic repository password. Without it, a restore is BLOCKED, just as a restore is impossible without the restic password.
@@ -481,11 +485,11 @@ A candidate is selectable only if WS-1..6 pass, with WS-5 established from the s
 - **Retrieval latency:** unchanged (in-memory readiness flag). The Forget path adds one off-host append (WS-7). Start-up adds chain verification, bounded by checkpoints (U3).
 - **Volume:** control mutations are rare in a personal deployment, so the journal stays small.
 
-## 14. What remains unresolved
+## 14. PR #40 open-item register and post-probe status
 
 | ID | Item | Owner / when |
 |---|---|---|
-| U1 | Physical store selection via WS-1..7 (§12.2) | Before runtime implementation approval |
+| U1 | Physical store selection via WS-1..7 (§12.2) | **CLOSED post-probe:** Board selected GCS (§15.1). No production infrastructure or runtime approval follows. |
 | U2 | Destructive re-baseline procedure (§10.3) | Board (RF-D4). Deferred; BLOCKED until then. |
 | U3 | Journal checkpointing / compaction, so start-up verification stays bounded and superseded entries can expire under B4 D3 without breaking chain verification; interaction with store retention periods | Implementation design |
 | U4 | Residual if the chosen store's immutability is weaker than claimed or an operator with provider-admin access deletes entries while the live DB is also lost | Bounded by WS-1..2 and account separation. Accepted residual for the personal deployment. Revisit for commercial. |
@@ -497,11 +501,13 @@ A candidate is selectable only if WS-1..6 pass, with WS-5 established from the s
 
 R13 interaction: none. The journal credential is a KN storage credential and never an authorization basis.
 
-## 15. Architecture Board disposition
+## 15. Architecture Board disposition — PR #40 decision and post-probe update
 
 Decision owner: Architecture Board
 
 Decision date: 2026-09-26 (review of PR #40, after the corrections recorded in the revision notes)
+
+The RF-D1..RF-D6 table below is the **historical PR #40 decision**. In particular, RF-D5's conditional store choice and then-unselected infrastructure are preserved as decided before the physical-store probe. The current disposition is in §15.1.
 
 | ID | Disposition | Decision |
 |---|---|---|
@@ -512,23 +518,28 @@ Decision date: 2026-09-26 (review of PR #40, after the corrections recorded in t
 | **RF-D5** | **ACCEPT AS CONDITIONAL STORAGE DECISION — no infrastructure selected** | The required property is an independently credentialed off-host store with enforceable non-overwrite / immutable-history semantics (S-1..S-7), including the authoritative-completeness semantics of S-6 needed to derive `H(p)`. Candidates: Hetzner Object Storage with Versioning + Object Lock / Retention; Hetzner Storage Box only if a narrow capability probe proves the required semantics through an appropriate mechanism. The physical store is selected only after that probe (WS-1..7) closes the storage question. |
 | **RF-D6** | **ACCEPT — obligation #1 remains open** | Obligation #1 is re-scoped, not closed: restore-freshness substantially constrains #1 (non-use durability no longer depends on SQLite `synchronous`) but does not close it. Ordinary acknowledged writes and durable erasure/cleanup evidence still require the production SQLite durability decision (§11). |
 
-**Status of pre-runtime obligation #6:**
+### 15.1 2026-09-26 post-probe Board disposition — current
 
-- **Architecture: ACCEPTED** after the corrections recorded in the revision notes.
-- **Operational closure: PENDING** the narrow WS-1..7 physical-store capability probe (§12.2) and the selection of a conforming store.
-- Obligation #6 is **not fully discharged** until that probe selects a store satisfying S-1..S-7.
-- **No runtime implementation approval** is granted by this disposition.
+The Board **SELECTED Google Cloud Storage** as the Knowledge control journal physical store under a dedicated GCP project, a private regional **Standard** bucket in **`europe-west3`**, uniform bucket-level access, public access prevention, Object Versioning disabled, and locked bucket retention. The journal service identity has exactly `storage.objects.create`, `storage.objects.get`, and `storage.objects.list`; it has no user-managed service-account key. Operator/admin authority is separate. The production retention duration remains **undecided**. [Probe report](KNOWLEDGE_JOURNAL_STORE_PROBE_REPORT.md#12-google-cloud-storage--live-non-production-ws-1ws-7-probe).
+
+**WS-1..WS-6: PASS for the physical-store capability gates; WS-7: informational. Pre-runtime obligation #6: CLOSED. Pre-runtime obligation #1: OPEN.** The live probe established the GCS store behavior, including WS-5 listing/lookup completeness, but the disposable verifier did not validate payload partition/generation/epoch identity. Full Knowledge runtime must validate object-key and payload identity against the expected writer generation/epoch; a mismatch is `BLOCKED` under the unchanged §6 and §9.4 rules. Production GCS infrastructure **does not yet exist**, and Knowledge runtime implementation is **not authorized**. No B1–B6, SQLite, freshness-lease, writer-epoch quarantine, journal-first, or RF-D4 decision is changed.
+
+**Status of pre-runtime obligation #6 — current:**
+
+- **Architecture: ACCEPTED** by the PR #40 Board decision.
+- **Operational closure: CLOSED** by the later conforming GCS physical-store probe and Board selection.
+- **Runtime implementation approval: NOT GRANTED.** Obligation #1 remains OPEN, and production GCS is not provisioned.
 
 ## 16. Answers
 
-**A. Is pre-runtime obligation #6 ready to CLOSE?**
-**Architecturally accepted; operationally not yet discharged.** The mechanism, invariant, lease rule, owner, scope, state machine and failure semantics are accepted (§15). Obligation #6 remains open until the narrow WS-1..7 probe selects a store satisfying S-1..S-7. That probe can only select a conforming store; it cannot reopen the design. Runtime implementation approval is not granted.
+**A. Is pre-runtime obligation #6 closed?**
+**Yes — CLOSED by the 2026-09-26 post-probe Board disposition (§15.1).** At PR #40 the architecture was accepted but operational closure was pending a physical-store probe; that historical condition has now been satisfied by GCS selection. The mechanism, invariant, lease rule, owner, scope, state machine and failure semantics are unchanged. Runtime implementation approval is not granted.
 
 **B. Does this also close #1?**
 **No — it partially constrains #1.** Non-use durability no longer depends on SQLite `synchronous`. #1 stays open for ordinary acknowledged writes and durable erasure/cleanup evidence, resolved through the production SQLite durability decision and the already-specified P13 write-path re-validation (RF-D6).
 
 **C. Is an empirical spike required before accepting the architecture?**
-**No.** The architecture's correctness rests on the write-ahead ordering, the immutable chained history and the every-start proof, not on measured performance. A **narrow physical-store capability probe** (§12.2) is required **before physical store selection and runtime implementation approval**. No benchmark rerun, and no Technology Gate evidence is reopened.
+**No.** The architecture's correctness rests on the write-ahead ordering, the immutable chained history and the every-start proof, not on measured performance. At PR #40 a narrow physical-store capability probe (§12.2) was required before physical selection; that probe is complete and GCS is selected (§15.1). It does not authorize runtime implementation. No benchmark was rerun, and no Technology Gate evidence is reopened.
 
 ## 17. Verification
 
@@ -536,20 +547,36 @@ Decision date: 2026-09-26 (review of PR #40, after the corrections recorded in t
 {
   "task": "knowledge_pre_runtime_obligation_6_restore_freshness",
   "baseline_main_sha": "2f5c7ebef2b7b7eade39ee6f1a4fe067ab26d534",
-  "status": "ARCHITECTURE ACCEPTED — operational closure pending WS-1..7 store probe and store selection",
+  "status": "ARCHITECTURE ACCEPTED; GCS SELECTED; obligation #6 CLOSED; obligation #1 OPEN; runtime NOT AUTHORIZED",
+  "original_pr40_store_status": "conditional physical-store decision before the later probe (RF-D5)",
   "recommended": "independent off-host append-only immutable hash-chained control journal; journal-before-commit-before-ack; every start treated as potential restore; per-partition fail-closed state machine",
   "freshness_fact": "READY(p) iff local applied control revision == journal revision proven from immutable chained history AND generation/chain valid AND no required entry missing; no mutable latest-counter pointer trusted",
   "forget_completion": "never acknowledged before durable journal acceptance; FORGET_INCOMPLETE otherwise; optional local block is not completion; no hidden pending queue",
   "journal_scope": "Knowledge-owned control mutations relevant to anti-resurrection / re-admission; no Home authorization or grants",
   "logical_owner": "Knowledge (B5 PA-3)",
-  "physical_store": "NOT SELECTED — conditional on capability probe WS-1..7; candidates: Hetzner Object Storage (Versioning + Object Lock/Retention), Hetzner Storage Box only if probe proves required semantics",
-  "obligation_6": "architecture ACCEPTED; not discharged until WS-1..7 selects a conforming store",
+  "physical_store": "Google Cloud Storage — SELECTED by post-probe Board disposition",
+  "physical_store_topology": {
+    "project": "dedicated GCP project",
+    "bucket": "private regional Standard, europe-west3",
+    "uniform_bucket_level_access": true,
+    "public_access_prevention": true,
+    "object_versioning": false,
+    "locked_bucket_retention": true,
+    "journal_service_permissions": ["storage.objects.create", "storage.objects.get", "storage.objects.list"],
+    "user_managed_service_account_key": false
+  },
+  "physical_store_probe_completed": true,
+  "ws_1_through_6": "PASS — physical-store capability",
+  "ws_7": "INFORMATIONAL",
+  "obligation_6": "CLOSED by GCS physical-store probe and Board selection",
   "ready_rule": "L(p)==H(p) from authoritative complete history AND valid chain/generation AND no missing entry AND unexpired lease renewed only by successful verification; lease expiry -> UNVERIFIED",
   "runtime_implementation_approved": false,
-  "obligation_1": "substantially constrained, remains open (RF-D6 ACCEPT)",
+  "obligation_1": "OPEN; substantially constrained (RF-D6 ACCEPT)",
+  "production_retention_duration": "UNDECIDED",
+  "runtime_identity_validation": "NOT IMPLEMENTED OR PROBED; key/payload partition and generation/epoch mismatches must be BLOCKED",
   "spike_required_before_acceptance": false,
-  "store_probe_required_before_store_selection_and_runtime_approval": true,
-  "infrastructure_selected": false,
+  "physical_store_selected": true,
+  "production_gcs_provisioned": false,
   "technology_gate_reopened": false,
   "sqlite_selection_reopened": false,
   "b1_b6_amended": false,
@@ -569,4 +596,4 @@ git diff --name-only origin/main...HEAD
 git status --short --branch
 ```
 
-Expected changed path: `docs/architecture/proposals/KNOWLEDGE_RESTORE_FRESHNESS.md` only.
+For the historical PR #40, this was the sole changed path. The later PR #43 also updates the probe reports and preserves the original raw observations and probe code.
