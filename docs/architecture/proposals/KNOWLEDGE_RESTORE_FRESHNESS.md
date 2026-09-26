@@ -1,10 +1,12 @@
 # Knowledge pre-runtime obligation #6 — Restore-freshness realization
 
-Status: PROPOSED — ARCHITECTURE BOARD REVIEW REQUESTED (not accepted)
+Status: ARCHITECTURE ACCEPTED BY ARCHITECTURE BOARD (2026-09-26) — OPERATIONAL CLOSURE PENDING the physical-store capability probe (WS-1..7) and store selection. No runtime implementation approval.
 
 Date: 2026-09-26
 
 Revision: 2026-09-26 — Architecture Board preliminary review corrections incorporated: Forget completion requires durable journal acceptance (RF-D2); journal scope limited to Knowledge-owned control mutations (RF-D3); physical store made a conditional decision with no infrastructure selected (RF-D5); freshness invariant defined over immutable, chained history rather than a mutable latest-counter pointer (§5.2, §6); RF-D6 kept.
+
+Revision: 2026-09-26 — Architecture Board review of PR #40 corrections incorporated: READY now requires an unexpired freshness / writer lease issued only by successful verification, so a journal outage ends READY at lease expiry and the split-brain stale-read bound is enforceable (§6.1, §8, §9.4, §10.1); the store completeness semantics required to derive H(p) are an explicit store property and probe item (S-6, WS-5); Board disposition recorded (§15, §16).
 
 Repository: `EKvargas/episteck_home`
 
@@ -22,8 +24,9 @@ This is an architecture proposal. It implements nothing, creates no schema, depl
 
 1. Every Knowledge-owned **control mutation** that matters for anti-resurrection or re-admission is first appended to an **off-host, independently credentialed, append-only, hash-chained control journal**. The store must enforce non-overwrite and immutable history. Only after the journal has **durably accepted** the entry does the local SQLite commit happen and the operation get acknowledged. **A Forget is never reported as complete before that.** The journal sits outside the Knowledge host's failure domain and outside the restic snapshot lineage.
 2. **Every Knowledge process start is treated as a potential restore.** Knowledge serves nothing from a partition until it proves, from the journal's verified immutable history, that its locally applied control revision equals the journal revision. Missing entries are replayed first.
-3. Anything that cannot be proven — journal unreachable, chain broken, gap, generation mismatch, local state *ahead* of the journal, or missing key — **fails closed** for the affected partitions. There is no best-effort fallback.
-4. **The physical store is not selected here.** The required property is an independently credentialed off-host store with enforceable non-overwrite / immutable-history semantics. Candidates are Hetzner Object Storage with Versioning plus Object Lock/Retention, and Hetzner Storage Box only if a narrow probe proves an equivalent mechanism (§5.3). That probe closes the physical question.
+3. READY also requires an **unexpired freshness / writer lease**, renewed only by successful verification. During a journal outage a READY partition serves only until its lease expires, then becomes UNVERIFIED and fails closed (§6.1).
+4. Anything that cannot be proven — journal unreachable, chain broken, gap, generation mismatch, local state *ahead* of the journal, or missing key — **fails closed** for the affected partitions. There is no best-effort fallback.
+5. **The physical store is not selected here.** The required property is an independently credentialed off-host store with enforceable non-overwrite / immutable-history semantics. Candidates are Hetzner Object Storage with Versioning plus Object Lock/Retention, and Hetzner Storage Box only if a narrow probe proves an equivalent mechanism (§5.3). That probe closes the physical question.
 
 Knowledge owns the freshness authority logically (B5 PA-3). Physically it lives outside the Knowledge host.
 
@@ -96,12 +99,12 @@ Adversary scope: operational failure and operator error on a personal deployment
 | Backup restore (core scenario, §3.1) | X resurrects. | X stays suppressed. |
 | Accidental rollback (old file copied over) | Silent resurrection. | Caught on the next start, like a restore. |
 | Re-import / reindex after restore | A forgotten source is re-ingested. | Admission is blocked until READY. After READY it is checked against the replayed register (B4 §8). |
-| Journal temporarily unavailable | — | At start: **UNVERIFIED**, Knowledge withheld, retry. While READY: keep serving (continuity). A new Forget returns **INCOMPLETE**, never success (§10.2). |
-| Journal permanently lost | — | While READY: generation succession from continuity (§9.3). While not READY: **BLOCKED** (§10.3). |
+| Journal temporarily unavailable | — | At start: **UNVERIFIED**, Knowledge withheld, retry. While READY: keep serving **only until the lease expires**, then READY → UNVERIFIED and fail closed; back to READY on successful verification (§6.1). A new Forget returns **INCOMPLETE**, never success (§10.2). |
+| Journal permanently lost | — | While READY with a valid lease: generation succession from continuity (§9.3). Otherwise UNVERIFIED, then **BLOCKED** once loss is confirmed (§10.3). |
 | Journal entry overwrite or deletion attempt | Tail entries lost or rewritten. | Prevented by the store's enforced non-overwrite / immutable-history property, which is a precondition of store selection (§5.3). Anything that slips through is detected as a chain, gap or `L > H` failure → BLOCKED. |
 | Partition / account restore | Old rows for one partition re-enter a current DB. | Only that partition goes UNVERIFIED and reconciles. Other partitions are unaffected (§9.2). |
 | Partial restore | For example, DB restored but key missing, or journal from the wrong account. | BLOCKED (key / generation mismatch). |
-| Split brain (restore while the original is alive) | Two writers, stale reads on one of them. | The store's non-overwrite semantics make each `(partition, generation, revision)` slot single-writer. The loser goes BLOCKED. Readiness lease bounds the stale-read window (§9.4). |
+| Split brain (restore while the original is alive) | Two writers, stale reads on one of them. | The store's non-overwrite semantics make each `(partition, generation, revision)` slot single-writer. The loser goes BLOCKED. The lease plus epoch quarantine make the stale-read bound enforceable: no Forget is acknowledged while an older instance can hold a valid lease (§9.4). |
 
 ### 3.1 Core scenario, traced
 
@@ -189,7 +192,7 @@ The journal *revision* is a per-partition counter over KN control mutations. It 
 | S-3 | **Store-enforced** non-overwrite: an existing entry identity cannot be replaced (a conditional create fails), independent of client behavior |
 | S-4 | **Store-enforced** immutable history: the KN credential cannot delete or truncate accepted entries within the retention period |
 | S-5 | Durable acceptance: a successful append response means the entry is durably stored and readable from a fresh connection |
-| S-6 | Enumerable history: entries for a partition can be listed and read so the chain can be verified from genesis or a verified checkpoint |
+| S-6 | **Authoritative, complete history reads.** The store must provide the consistency semantics required to derive `H(p)`: (a) an acknowledged create is readable from any fresh connection; (b) enumeration and/or lookup cannot hide an entry whose create was acknowledged before the query began — in particular, a "not found" for the next revision must be authoritative, not the product of eventual or stale listing; (c) the implementation can distinguish a **complete, verified chain head** from an incomplete, truncated, paginated or stale listing. If a read cannot be shown to be authoritative and complete, `H(p)` is UNKNOWN and fails closed. The mechanism is not prescribed. |
 | S-7 | Unavailability is distinguishable from rejection |
 
 **Candidates, none selected:**
@@ -206,7 +209,7 @@ The store implements one interface, whichever is chosen: `append_exclusive(entry
 ### 5.4 Control commit protocol
 
 ```text
-1. KN (single writer) builds the entry for READY partition p:
+1. KN (single writer) builds the entry for partition p, which must be READY with a valid lease (§6.1) and outside epoch quarantine (§9.4):
      revision = L(p)+1, previous_entry_hash = hash(entry L(p)), event_id, payload, integrity.
 2. store.append_exclusive(entry) — must return durable, non-overwritable acceptance
       identity already exists → another writer exists → partition BLOCKED (§9.4)
@@ -235,6 +238,7 @@ re-imported into, extracted into, reindexed) only while READY(p), where
 READY(p)  ⇔  local applied control revision L(p) = independently proven journal revision H(p)
           ∧  journal generation and hash chain for p are valid
           ∧  no required entry is missing (no gap, no entry above H(p) left unlinked)
+          ∧  the freshness / writer lease for p is unexpired (§6.1)
 
 Every other outcome — including any UNKNOWN — fails closed.
 
@@ -255,6 +259,34 @@ Detection coverage:
 | Truncated tail | Prevented by S-4. If the live DB survived: `L > H` → BLOCKED |
 | Wrong or replaced journal | Generation or genesis mismatch, or integrity failure under the KN key → BLOCKED |
 | Mutable pointer rolled back | Not applicable: no pointer is trusted |
+| Stale or incomplete listing hides an accepted higher revision | Prevented by S-6 (authoritative completeness). If the store cannot give an authoritative answer, `H(p)` is UNKNOWN → fail closed |
+
+### 6.1 Freshness / writer lease
+
+A proof of `L(p) = H(p)` is only true at the moment it is made. Readiness therefore carries a **lease** that bounds how long that proof may be relied on without re-verification.
+
+```text
+verification(p)  = the full §6 derivation of H(p) from authoritative journal state (S-6),
+                   plus confirmation that the current writer_epoch registered in the
+                   journal is this instance's own epoch, and L(p) = H(p).
+
+t_v(p)           = local monotonic-clock time at which the last SUCCESSFUL verification(p)
+                   request was SENT (not when its answer arrived — conservative).
+
+lease_valid(p)   ⇔  now_monotonic < t_v(p) + LEASE − DRIFT_MARGIN
+```
+
+Rules:
+
+1. **A lease is only ever issued or renewed by a successful verification.** Nothing else renews it: not a successful append, not a cached head hint, not a local timer, not reachability alone.
+2. A READY instance re-verifies every partition on a period shorter than `LEASE`.
+3. **Journal temporarily unreachable while READY:** the partition keeps serving **only until its lease expires**. At expiry, if verification has still not succeeded: **READY → UNVERIFIED**, and Knowledge reads, disclosure and admission for that partition fail closed with the explicit "restore freshness unproven" abstention.
+4. **Journal reachable again:** UNVERIFIED → VERIFYING → READY on a successful verification (via RECONCILING if `L < H` from this instance's own epoch, which cannot occur for a single writer and is otherwise a contradiction).
+5. **Contradictions are not lease matters.** A newer writer epoch, a moved revision from another epoch, `L > H`, a gap, or a chain or integrity failure found during verification → **BLOCKED**, whether or not the lease is still valid.
+6. The lease check is an in-memory comparison against the local monotonic clock at the retrieval entry. It adds no network call to the B6 hot path.
+7. A control mutation (§5.4) requires READY **with a valid lease** at the moment it is sequenced.
+
+`LEASE` and `DRIFT_MARGIN` are implementation parameters (§14 U5). Their existence, and the rule that expiry fails closed, are architecture.
 
 ## 7. Logical ownership vs physical persistence
 
@@ -283,24 +315,29 @@ stateDiagram-v2
     VERIFYING --> READY: L equals H and chain valid
     RECONCILING --> READY: replay complete, L equals H, erasure re-queued
     RECONCILING --> BLOCKED: replay failure
-    READY --> BLOCKED: writer conflict or lease verification contradiction
-    READY --> UNVERIFIED: restart without reachable journal
+    READY --> READY: periodic verification succeeds, lease renewed
+    READY --> UNVERIFIED: lease expires without successful verification
+    READY --> BLOCKED: newer writer epoch, moved revision, L greater than H, gap, chain or integrity failure
+    UNVERIFIED --> BLOCKED: verification finds a contradiction
     BLOCKED --> VERIFYING: operator-approved procedure only
 ```
+
+A restart always begins at STARTING, so a restart without a reachable journal ends in UNVERIFIED through VERIFYING.
 
 | State | Knowledge reads / disclosure | Admissions / import / extraction / reindex | New control mutations (e.g. Forget) | Erasure execution |
 |---|---|---|---|---|
 | STARTING, VERIFYING | **Denied** | **Denied** | **INCOMPLETE** (§10.2) | Allowed (restriction-only) |
 | UNVERIFIED | **Denied** — explicit abstention "restore freshness unproven" | **Denied** | **INCOMPLETE** | Allowed |
 | RECONCILING | **Denied** | **Denied** | **INCOMPLETE** | Allowed |
-| READY | Allowed (subject to B1–B6) | Allowed, checked in-plan | Normal protocol (§5.4) | Allowed |
+| READY (lease valid) | Allowed (subject to B1–B6) | Allowed, checked in-plan | Normal protocol (§5.4); INCOMPLETE during epoch quarantine (§9.4) | Allowed |
 | BLOCKED | **Denied** | **Denied** | **INCOMPLETE** | Allowed |
 
 Rules:
 
 - Erasure is allowed in every state because it can only reduce data.
 - Outside READY a Forget never succeeds. Knowledge content of that partition is already unusable, so non-use holds regardless; the result is still reported as INCOMPLETE.
-- The readiness flag is an in-memory, per-partition check at the retrieval entry. It adds no network call to the B6 hot path.
+- There is no READY state with an expired lease: expiry is itself the READY → UNVERIFIED transition.
+- The readiness check (state plus lease expiry, §6.1) is an in-memory, per-partition check at the retrieval entry. It adds no network call to the B6 hot path.
 - Other domains (Nutrition etc.) are unaffected in every state (B4 §12.1 partial availability).
 
 ## 9. Backup / restore behavior
@@ -315,11 +352,19 @@ Any operation that writes payload or control rows from outside the live control 
 
 ### 9.3 Journal generation succession
 
-A journal can be moved or replaced only by a **READY** KN instance. It writes the full current journal (or a verified checkpoint, §14 U3) to the new generation, plus a succession entry linking the old generation's verified revision and hash to the new generation. Continuity is the proof: a READY instance has held `L = H` since its last verification. A non-READY instance can never create a generation.
+A journal can be moved or replaced only by a **READY** KN instance **with a valid lease** for every partition carried over. It writes the full current journal (or a verified checkpoint, §14 U3) to the new generation, plus a succession entry linking the old generation's verified revision and hash to the new generation. Continuity is the proof: a READY instance has held `L = H` since its last verification, within one lease. A non-READY instance, or one whose lease has expired, can never create a generation. If the old journal is permanently lost and the lease expires before succession completes, the partition becomes UNVERIFIED and then, once loss is confirmed, falls under §10.3.
 
 ### 9.4 Single writer and split brain
 
-Each start registers a new `writer_epoch` in the journal. Appends are create-exclusive per entry identity, enforced by the store (S-3), so two writers cannot both commit the same revision. The loser gets a conflict and goes BLOCKED. A READY instance re-verifies its revision and epoch against the journal at a bounded lease interval. On a newer epoch or a moved revision it goes BLOCKED. That bounds stale reads on a fenced-too-late old host to one lease interval. The restore runbook requires fencing the old host first. The lease interval is an implementation parameter (§14 U5).
+Each start registers a new `writer_epoch` in the journal, as an immutable entry under the same S-3/S-4/S-6 guarantees. Appends are create-exclusive per entry identity, enforced by the store (S-3), so two writers cannot both commit the same revision. The loser gets a conflict and goes BLOCKED.
+
+The stale-read bound is enforced by the lease (§6.1), not by operator discipline:
+
+1. **An old instance cannot renew its lease after a new epoch exists.** Renewal requires a successful verification, and verification after the new epoch's registration observes that epoch (S-6) → BLOCKED. An old instance that cannot reach the journal cannot renew either. Either way, the old instance stops serving no later than `t_v + LEASE − DRIFT_MARGIN` of its last successful verification — which was sent **before** the new epoch was registered.
+2. **Epoch quarantine.** A new epoch does not acknowledge any control mutation (Forgets return `FORGET_INCOMPLETE`) until `LEASE` has elapsed on its own monotonic clock since its epoch registration was accepted. Any older instance's lease was issued before that registration and has therefore expired. Reads by the new instance may begin as soon as it is READY, because its own state is freshly verified.
+3. Result: **no control mutation is ever acknowledged while an older instance can still hold a valid lease**, so an acknowledged Forget is never served by a fenced-too-late host. Unacknowledged history (anything already visible before the Forget was requested) is bounded by one lease on the old host.
+
+This rests on bounded clock *rate* drift between hosts, not on synchronized wall clocks; `DRIFT_MARGIN` absorbs it. The restore runbook still requires fencing the old host first, as defense in depth. `LEASE` and `DRIFT_MARGIN` are implementation parameters (§14 U5).
 
 ## 10. Failure semantics
 
@@ -327,7 +372,11 @@ Each start registers a new `writer_epoch` in the journal. Appends are create-exc
 
 | Condition | Result | Exit |
 |---|---|---|
-| Journal unreachable at start | UNVERIFIED. Knowledge withheld, with an explicit abstention naming unproven restore freshness. | Automatic on reachability |
+| Journal unreachable at start | UNVERIFIED. Knowledge withheld, with an explicit abstention naming unproven restore freshness. | Automatic on successful verification |
+| Journal unreachable while READY, lease still valid | Keep serving until lease expiry; Forget returns `FORGET_INCOMPLETE` (§10.2) | Automatic on successful verification (lease renewed) |
+| Journal unreachable at lease expiry | READY → UNVERIFIED. Reads, disclosure and admission for the partition fail closed with the explicit abstention. | Automatic on successful verification |
+| Store cannot give an authoritative complete head (S-6) | `H(p)` UNKNOWN → UNVERIFIED (never READY) | Automatic when an authoritative answer is obtained |
+| Newer writer epoch or moved revision observed | BLOCKED, regardless of lease | Operator: fence, then restart the survivor |
 | Integrity failure, broken chain, gap | BLOCKED | Operator: repair or recover the journal |
 | Generation mismatch without valid succession | BLOCKED | Operator: supply the correct journal |
 | `L(p) > H(p)` | BLOCKED (journal truncated or wrong journal) | Operator: recover the journal, or a §9.3 succession from a READY instance |
@@ -389,7 +438,7 @@ A destructive **re-baseline** is not defined by this proposal. A re-baseline wou
 | RF-10 | After restore, re-import of a source forgotten after the snapshot | Blocked at admission (B4 Scenario E) |
 | RF-11 | Queued extraction/reindex jobs restored from the snapshot | Not run before READY. Re-checked after. |
 | RF-12 | Journal outage during a Forget | Result is `FORGET_INCOMPLETE`, never success. Optional local block applied and disclosed as incomplete. No automatic promotion. After recovery, a new authorized submission completes it. |
-| RF-13 | Two writers (restore while the original is alive) | Exclusive-create conflict. Loser BLOCKED within one lease. |
+| RF-13 | Two writers (restore while the original is alive) | Exclusive-create conflict. The old instance stops serving within one lease of its last verification. The new epoch acknowledges no Forget during quarantine. |
 | RF-14 | Single-partition restore | Only that partition reconciles |
 | RF-15 | Journal key missing | BLOCKED |
 | RF-16 | Static inspection of journal entries | No plaintext, excerpts, embeddings, actor ids, Person ids or Home grant data |
@@ -399,6 +448,12 @@ A destructive **re-baseline** is not defined by this proposal. A re-baseline wou
 | RF-20 | Plain restart, no restore | L = H. READY after chain verification. |
 | RF-21 | A mutable "latest" hint is rolled back while the entries remain | Readiness is derived from history; the rolled-back hint is ignored |
 | RF-22 | Ambiguous append (timeout after send) | Entry identity re-read before retry; no duplicate, no false success |
+| RF-23 | Journal becomes unreachable while READY | Serving continues until lease expiry; at expiry READY → UNVERIFIED and all reads, disclosure and admission for the partition fail closed with the explicit abstention |
+| RF-24 | Journal reachable again after RF-23 | Successful verification → READY, lease renewed |
+| RF-25 | Old host partitioned from the journal while a new instance forgets X | Old host stops serving at its lease expiry; new instance returns `FORGET_INCOMPLETE` until quarantine ends; X is never served after an acknowledged Forget |
+| RF-26 | Old host can reach the journal and verifies after a new epoch registers | BLOCKED immediately, regardless of remaining lease |
+| RF-27 | Store listing is stale or paginated and omits an accepted higher revision | Head not accepted as complete; `H(p)` UNKNOWN → UNVERIFIED, never READY |
+| RF-28 | Wall clock changed on the host | Lease measured on the monotonic clock; no extension |
 
 ### 12.2 Narrow physical-store capability probe (closes the storage question; before runtime implementation approval)
 
@@ -410,11 +465,11 @@ Run against a non-production account for each candidate in §5.3:
 | WS-2 | The KN credential cannot delete, overwrite or shorten retention of an accepted entry | S-4 |
 | WS-3 | A successful append response is followed by a successful read from a fresh connection; the provider documents durable acceptance | S-5 |
 | WS-4 | The journal credential cannot read, write or delete the restic repository, and vice versa | S-2 |
-| WS-5 | Entries for a partition can be enumerated for chain verification | S-6 |
+| WS-5 | **Completeness / consistency for deriving H(p).** Verify that (a) an acknowledged create is readable from a fresh connection immediately; (b) enumeration and/or lookup of a partition's entries never hides an entry whose create was acknowledged before the query began, including a higher revision written from a different connection or client; (c) a "not found" for revision r+1 is authoritative under the store's documented consistency model; (d) the implementation can detect an incomplete, truncated, paginated or stale listing and treat the head as UNKNOWN. Reliance on eventual or stale listing behavior happening to be correct does not pass. | S-6 |
 | WS-6 | Unavailability, timeout and rejection are distinguishable | S-7 |
 | WS-7 | Append latency p95 from Nuremberg | Forget-path cost only; not on the B6 retrieval path |
 
-A candidate is selectable only if WS-1..6 pass. WS-7 informs, it does not gate. The probe chooses a store; it cannot change the architecture. The state machine itself is validated by the RF tests at implementation time, using local fault injection, and needs no infrastructure.
+A candidate is selectable only if WS-1..6 pass, with WS-5 established from the store's documented consistency guarantees as well as observed behavior. WS-7 informs, it does not gate. The probe chooses a store; it cannot change the architecture. The state machine itself is validated by the RF tests at implementation time, using local fault injection, and needs no infrastructure.
 
 ## 13. Operational implications
 
@@ -422,7 +477,7 @@ A candidate is selectable only if WS-1..6 pass. WS-7 informs, it does not gate. 
 - **One new credential:** the journal store credential for the Knowledge service user. It is separate from `/etc/episteck/backup` and cannot touch backups (S-2).
 - **Restore runbook additions:** fence the old host, restore the DB, install the journal key and credential, start. Never touch the journal. Expect UNVERIFIED if the store is unreachable.
 - **Monitoring:** alert on any partition in UNVERIFIED/BLOCKED, and on any local block without a completed Forget. The daily backup run also compares `L(p)` with `H(p)` and alerts on inequality.
-- **Availability coupling:** a store outage makes Forget return INCOMPLETE and makes restarts during that window UNVERIFIED. Retrieval on a running READY instance is unaffected.
+- **Availability coupling:** a store outage makes Forget return INCOMPLETE immediately and makes restarts during that window UNVERIFIED. Retrieval on a running READY instance continues **only until each partition's lease expires**; an outage longer than `LEASE` makes Knowledge unavailable (fail closed) until the store is reachable and verification succeeds. `LEASE` trades outage tolerance against the split-brain stale-read bound, and every start or failover adds one `LEASE` of epoch quarantine before Forgets can complete.
 - **Retrieval latency:** unchanged (in-memory readiness flag). The Forget path adds one off-host append (WS-7). Start-up adds chain verification, bounded by checkpoints (U3).
 - **Volume:** control mutations are rare in a personal deployment, so the journal stays small.
 
@@ -434,7 +489,7 @@ A candidate is selectable only if WS-1..6 pass. WS-7 informs, it does not gate. 
 | U2 | Destructive re-baseline procedure (§10.3) | Board (RF-D4). Deferred; BLOCKED until then. |
 | U3 | Journal checkpointing / compaction, so start-up verification stays bounded and superseded entries can expire under B4 D3 without breaking chain verification; interaction with store retention periods | Implementation design |
 | U4 | Residual if the chosen store's immutability is weaker than claimed or an operator with provider-admin access deletes entries while the live DB is also lost | Bounded by WS-1..2 and account separation. Accepted residual for the personal deployment. Revisit for commercial. |
-| U5 | Readiness lease interval (split-brain stale-read bound) and journal key rotation | Implementation parameters |
+| U5 | Values of `LEASE`, `DRIFT_MARGIN` and the re-verification period (§6.1, §9.4), and journal key rotation. The lease rule and fail-closed expiry are architecture; only the values are open. | Implementation parameters |
 | U6 | B4 C2 matching-state mechanism: still unselected by B4. The journal carries whatever C2 selects. | B4 C2 follow-up. Not this obligation. |
 | U7 | Obligation #1 remainder (§11) | Separate decision using the §27.3 re-validation |
 | U8 | Metadata the journal reveals to the store operator: partition count, control-event counts and timing | Timing / metadata work (#3). Not solved here. |
@@ -442,21 +497,32 @@ A candidate is selectable only if WS-1..6 pass. WS-7 informs, it does not gate. 
 
 R13 interaction: none. The journal credential is a KN storage credential and never an authorization basis.
 
-## 15. Proposed Architecture Board disposition
+## 15. Architecture Board disposition
 
-| ID | Proposed decision |
-|---|---|
-| **RF-D1** | **ACCEPT** the independent control journal: journal-before-local-commit-before-ack; freshness proven from immutable, hash-chained history (never from a mutable latest-counter pointer); every start treated as a potential restore; per-partition fail-closed state machine where READY(p) requires local applied control revision = independently proven journal revision, a valid generation and chain, and no missing required entry; any UNKNOWN fails closed (§5, §6, §8). |
-| **RF-D2** | **ACCEPT** that a Forget MUST NOT be acknowledged as successfully completed until the independent journal has durably accepted its control event. During journal unavailability the external result is `FORGET_INCOMPLETE` (unavailable / incomplete), never success. An immediate local fail-closed block may be applied as an additional safety measure, but it is not a completed Forget and is disclosed as incomplete. No hidden pending queue is introduced unless that queue itself has equivalent independent durability (§10.2). |
-| **RF-D3** | **CONFIRM** the journal scope as Knowledge-owned control mutations relevant to anti-resurrection / re-admission (§5.1). Home-owned authorization, grants, consent, Circle membership and partition resolution are **not** moved into Knowledge and are never journaled; Home remains their sole authority and is freshly re-evaluated per B6. This is a scope definition, not a semantic change to B1–B5. |
-| **RF-D4** | **DEFER** destructive re-baseline. BLOCKED partitions with a permanently lost journal stay BLOCKED until a separately approved procedure exists. |
-| **RF-D5** | **CONDITIONAL STORAGE DECISION — no infrastructure selected.** The required property is an independently credentialed off-host store with enforceable non-overwrite / immutable-history semantics (S-1..S-7). Candidates: Hetzner Object Storage with Versioning + Object Lock / Retention; Hetzner Storage Box only if a narrow capability probe proves the required semantics through an appropriate mechanism. The physical store is selected only after that probe (WS-1..7) closes the storage question. |
-| **RF-D6** | **RE-SCOPE, DO NOT CLOSE** obligation #1: restore-freshness substantially constrains #1 (non-use durability no longer depends on SQLite `synchronous`) but does not close it. Ordinary acknowledged writes and durable erasure/cleanup evidence still require the production SQLite durability decision (§11). |
+Decision owner: Architecture Board
+
+Decision date: 2026-09-26 (review of PR #40, after the corrections recorded in the revision notes)
+
+| ID | Disposition | Decision |
+|---|---|---|
+| **RF-D1** | **ACCEPT** | The independent control journal: journal-before-local-commit-before-ack; freshness proven from immutable, hash-chained history (never from a mutable latest-counter pointer); every start treated as a potential restore; per-partition fail-closed state machine where READY(p) requires local applied control revision = independently proven journal revision, a valid generation and chain, no missing required entry, and an unexpired freshness / writer lease issued only by successful verification; lease expiry during a journal outage moves READY → UNVERIFIED and fails closed; any UNKNOWN fails closed (§5, §6, §6.1, §8, §9.4). |
+| **RF-D2** | **ACCEPT** | A Forget MUST NOT be acknowledged as successfully completed until the independent journal has durably accepted its control event. During journal unavailability the external result is `FORGET_INCOMPLETE` (unavailable / incomplete), never success. An immediate local fail-closed block may be applied as an additional safety measure, but it is not a completed Forget and is disclosed as incomplete. No hidden pending queue is introduced unless that queue itself has equivalent independent durability (§10.2). |
+| **RF-D3** | **ACCEPT** | The journal scope is Knowledge-owned control mutations relevant to anti-resurrection / re-admission (§5.1). Home-owned authorization, grants, consent, Circle membership and partition resolution are **not** moved into Knowledge and are never journaled; Home remains their sole authority and is freshly re-evaluated per B6. This is a scope definition, not a semantic change to B1–B5. |
+| **RF-D4** | **DEFER** | Destructive re-baseline. BLOCKED partitions with a permanently lost journal stay BLOCKED until a separately approved procedure exists. |
+| **RF-D5** | **ACCEPT AS CONDITIONAL STORAGE DECISION — no infrastructure selected** | The required property is an independently credentialed off-host store with enforceable non-overwrite / immutable-history semantics (S-1..S-7), including the authoritative-completeness semantics of S-6 needed to derive `H(p)`. Candidates: Hetzner Object Storage with Versioning + Object Lock / Retention; Hetzner Storage Box only if a narrow capability probe proves the required semantics through an appropriate mechanism. The physical store is selected only after that probe (WS-1..7) closes the storage question. |
+| **RF-D6** | **ACCEPT — obligation #1 remains open** | Obligation #1 is re-scoped, not closed: restore-freshness substantially constrains #1 (non-use durability no longer depends on SQLite `synchronous`) but does not close it. Ordinary acknowledged writes and durable erasure/cleanup evidence still require the production SQLite durability decision (§11). |
+
+**Status of pre-runtime obligation #6:**
+
+- **Architecture: ACCEPTED** after the corrections recorded in the revision notes.
+- **Operational closure: PENDING** the narrow WS-1..7 physical-store capability probe (§12.2) and the selection of a conforming store.
+- Obligation #6 is **not fully discharged** until that probe selects a store satisfying S-1..S-7.
+- **No runtime implementation approval** is granted by this disposition.
 
 ## 16. Answers
 
 **A. Is pre-runtime obligation #6 ready to CLOSE?**
-**Ready to close as architecture on acceptance of RF-D1..D4 and D6, with RF-D5 recorded as a conditional storage decision.** The mechanism, invariant, owner, scope, state machine and failure semantics are fully specified. The physical store remains open until the narrow probe (WS-1..7) selects one of the candidates. That probe can only select a store meeting S-1..S-7; it cannot reopen the design. The Board may close #6 architecturally with store selection recorded as a pre-runtime condition, or keep #6 open until the probe completes. Either way, runtime implementation approval requires the probe.
+**Architecturally accepted; operationally not yet discharged.** The mechanism, invariant, lease rule, owner, scope, state machine and failure semantics are accepted (§15). Obligation #6 remains open until the narrow WS-1..7 probe selects a store satisfying S-1..S-7. That probe can only select a conforming store; it cannot reopen the design. Runtime implementation approval is not granted.
 
 **B. Does this also close #1?**
 **No — it partially constrains #1.** Non-use durability no longer depends on SQLite `synchronous`. #1 stays open for ordinary acknowledged writes and durable erasure/cleanup evidence, resolved through the production SQLite durability decision and the already-specified P13 write-path re-validation (RF-D6).
@@ -470,15 +536,17 @@ R13 interaction: none. The journal credential is a KN storage credential and nev
 {
   "task": "knowledge_pre_runtime_obligation_6_restore_freshness",
   "baseline_main_sha": "2f5c7ebef2b7b7eade39ee6f1a4fe067ab26d534",
-  "status": "PROPOSED — Architecture Board review",
+  "status": "ARCHITECTURE ACCEPTED — operational closure pending WS-1..7 store probe and store selection",
   "recommended": "independent off-host append-only immutable hash-chained control journal; journal-before-commit-before-ack; every start treated as potential restore; per-partition fail-closed state machine",
   "freshness_fact": "READY(p) iff local applied control revision == journal revision proven from immutable chained history AND generation/chain valid AND no required entry missing; no mutable latest-counter pointer trusted",
   "forget_completion": "never acknowledged before durable journal acceptance; FORGET_INCOMPLETE otherwise; optional local block is not completion; no hidden pending queue",
   "journal_scope": "Knowledge-owned control mutations relevant to anti-resurrection / re-admission; no Home authorization or grants",
   "logical_owner": "Knowledge (B5 PA-3)",
   "physical_store": "NOT SELECTED — conditional on capability probe WS-1..7; candidates: Hetzner Object Storage (Versioning + Object Lock/Retention), Hetzner Storage Box only if probe proves required semantics",
-  "obligation_6": "ready to close as architecture; physical store selection is a pre-runtime condition",
-  "obligation_1": "substantially constrained, not closed (RF-D6)",
+  "obligation_6": "architecture ACCEPTED; not discharged until WS-1..7 selects a conforming store",
+  "ready_rule": "L(p)==H(p) from authoritative complete history AND valid chain/generation AND no missing entry AND unexpired lease renewed only by successful verification; lease expiry -> UNVERIFIED",
+  "runtime_implementation_approved": false,
+  "obligation_1": "substantially constrained, remains open (RF-D6 ACCEPT)",
   "spike_required_before_acceptance": false,
   "store_probe_required_before_store_selection_and_runtime_approval": true,
   "infrastructure_selected": false,
