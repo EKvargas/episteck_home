@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import shutil
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -17,7 +19,7 @@ import requests
 PROJECT = "episteck-kn-probe-260926-5512"
 BUCKET = PROJECT
 SERVICE = f"kn-journal-probe@{PROJECT}.iam.gserviceaccount.com"
-GCLOUD = r"C:\Users\D064974\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd"
+GCLOUD = os.environ.get("GCLOUD_BIN") or shutil.which("gcloud") or shutil.which("gcloud.cmd")
 ROOT = "TEST-PARTITION-0001"
 API = "https://storage.googleapis.com/storage/v1"
 UPLOAD = "https://storage.googleapis.com/upload/storage/v1"
@@ -25,6 +27,8 @@ OUT = Path(__file__).with_name("gcs_live_observations.json")
 
 
 def access_token(service: bool) -> str:
+    if GCLOUD is None:
+        raise RuntimeError("gcloud not found; set GCLOUD_BIN to the installed executable")
     args = [GCLOUD, "auth", "print-access-token"]
     if service:
         args.append(f"--impersonate-service-account={SERVICE}")

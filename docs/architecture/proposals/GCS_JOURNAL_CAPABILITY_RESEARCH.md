@@ -1,6 +1,6 @@
 # Google Cloud Storage control-journal capability research — Phase 0C
 
-Status: **Phase 0C documentation screen retained below; Board-approved live result and current selection in the addendum**
+Status: **GCS SELECTED by Architecture Board; Phase 0C screen and live evidence retained below**
 
 Reviewed: 2026-09-26
 
@@ -104,11 +104,26 @@ The actual resource was disposable project/bucket `episteck-kn-probe-260926-5512
 
 The [GCS list API](https://docs.cloud.google.com/storage/docs/json_api/v1/objects/list) remains non-snapshot across pages. The successful WS-5 result is for the accepted S-6 proof boundary: documented strong visibility of entries acknowledged before a query, exhaustive pages, contiguous history, and a final exact next-revision lookup. A request error or uncertain boundary still means `H(p) = UNKNOWN`.
 
-**Disposition:** GCS is **SELECTABLE** under the tested isolated configuration; pre-runtime obligation #6 can be marked **OPERATIONALLY CLOSED**. Obligation #1 remains **OPEN**, and no Knowledge runtime is implemented. Cleanup is pending the latest synthetic object's retention expiry at `2026-09-26T16:29:42.402Z`; the bucket then contains only disposable data. The existing Hetzner Storage Box and backups were untouched.
+**Current Board disposition:** GCS is **SELECTED** under the tested isolated configuration. **Pre-runtime obligation #6: CLOSED. Pre-runtime obligation #1: OPEN.** The selection is of a physical mechanism, not an authorization for Knowledge runtime or production GCS provisioning. Cleanup is pending the latest synthetic object's retention expiry at `2026-09-26T16:29:42.402Z`; the bucket contains only disposable data. The existing Hetzner Storage Box and backups were untouched.
 
 Verify the addendum:
 
 ```powershell
-rg -n '^## Live non-production|SELECTABLE|16:29:42' docs/architecture/proposals/GCS_JOURNAL_CAPABILITY_RESEARCH.md
+rg -n '^## Live non-production|SELECTED|16:29:42' docs/architecture/proposals/GCS_JOURNAL_CAPABILITY_RESEARCH.md
 git diff --no-index --check -- /dev/null docs/architecture/proposals/GCS_JOURNAL_CAPABILITY_RESEARCH.md
+```
+
+## Selected topology and cleanup boundary
+
+The Board-selected topology is a **dedicated GCP project**, private regional **Standard** GCS bucket in **`europe-west3`**, uniform bucket-level access, public access prevention, Object Versioning **disabled**, and **locked bucket retention**. A journal-only service account receives exactly `storage.objects.create`, `storage.objects.get`, and `storage.objects.list`, with no user-managed key; an operator/admin identity is separate. The **production retention duration is not selected here**. Production GCS infrastructure does not yet exist, and Knowledge runtime is not authorized.
+
+At the first required UTC check, `2026-09-26T15:41:41Z`, retention had **48 minutes 1 second** remaining. No destructive cleanup was attempted. The disposable project/bucket `episteck-kn-probe-260926-5512`, disabled probe identity, custom role, and 111 synthetic objects remain cleanup pending until after `2026-09-26T16:29:42.402Z` and a fresh exact-resource inventory. The detailed cleanup boundary is in [the main report §13](KNOWLEDGE_JOURNAL_STORE_PROBE_REPORT.md#13-architecture-board-selection-and-pending-disposable-cleanup).
+
+The seven-file privacy audit removed the unnecessary personal operator address and replaced the probe's local user-profile `gcloud` path with `PATH`/`GCLOUD_BIN` discovery. Only environment-specific invocation/path material was sanitized after execution; raw observation JSON remains the evidence. The scan found no committed live bearer/OAuth token value, private key, service-account JSON key, refresh token, or credential file.
+
+Verify the selected topology text:
+
+```powershell
+rg -n 'SELECTED|production retention|cleanup pending|GCLOUD_BIN' docs/architecture/proposals/GCS_JOURNAL_CAPABILITY_RESEARCH.md spike/knowledge-journal-store-probe/gcs_live_probe.py
+git diff --check
 ```

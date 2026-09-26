@@ -1,6 +1,6 @@
 # Knowledge control journal physical-store probe — documentation and live evidence
 
-Status: **GCS SELECTABLE; WS-1..WS-6 PASS; obligation #6 OPERATIONALLY CLOSED; disposable cleanup pending**
+Status: **GCS SELECTED by Architecture Board; WS-1..WS-6 PASS; pre-runtime obligation #6 CLOSED; disposable cleanup pending**
 
 Date: 2026-09-26
 
@@ -278,7 +278,7 @@ Probe time: **2026-09-26 15:19–15:33 UTC**. This is the Architecture Board-app
 
 | Item | Observed configuration |
 |---|---|
-| Operator CLI | Google Cloud SDK **586.0.0**, Python **3.11.8**, authenticated as `episteck@gmail.com`. The pre-existing active `episteck-home-mail` project was inspected read-only and **was not used for probe resources**. |
+| Operator CLI | Google Cloud SDK **586.0.0**, Python **3.11.8**, authenticated operator identity. A pre-existing Mail project was inspected read-only and **was not used for probe resources**. The operator's personal account identifier is omitted from durable evidence. |
 | Disposable project | `episteck-kn-probe-260926-5512`, project number `620163540160`, active, billing enabled. The operator had `roles/owner` on this project and `roles/billing.admin` on the linked billing account. No parent resource appeared in the project description. |
 | Bucket | `gs://episteck-kn-probe-260926-5512/`, **EUROPE-WEST3**, regional **STANDARD**, private; uniform bucket-level access `true`, public access prevention `enforced`, Object Versioning absent/disabled, no lifecycle rule. Default soft delete was changed from 7 days to **0 seconds** for disposable cleanup. |
 | Retention | Bucket retention `3600` seconds, effective `2026-09-26T15:23:55.127Z`, **`isLocked: true`**. The first noninteractive lock command aborted; the subsequent explicitly confirmed interactive command succeeded. No production retention duration was chosen. |
@@ -307,7 +307,7 @@ The list API is **not a scan snapshot**: an object created after a page was read
 
 At inventory, the bucket contained **111 synthetic objects / 2,642 bytes** with no next listing page. The latest object was created `2026-09-26T15:29:42.402Z`; its earliest retention expiry is **2026-09-26T16:29:42.402Z** (18:29:42 Berlin). Until then, protected objects and the locked bucket cannot be deleted; the project may retain the protective lien. The service account is disabled. No object or bucket has been deleted. After expiry, an operator may enumerate and remove **only** this disposable bucket's objects, bucket, service account/custom role, and project, checking the resolved project/bucket names before destructive cleanup. The pre-existing Mail project and Hetzner backup resources are outside cleanup scope. At the documented [regional Standard price](https://cloud.google.com/storage/pricing), 2,642 bytes for the one-hour hold and a few hundred operations imply **well below US$0.01** in storage/operation charges; taxes, billing rounding and incidental network charges may differ. This project remains billing-enabled until explicit cleanup.
 
-**Final physical-store disposition:** **GCS is SELECTABLE** for the Knowledge control journal under the tested dedicated-project, private `europe-west3` regional Standard, versioning-disabled, locked-retention, journal-only credential configuration. WS-1..WS-6 are **PASS**; WS-7 is informational. **Pre-runtime obligation #6 can be marked OPERATIONALLY CLOSED** on this physical-store evidence. Obligation #1 remains **OPEN**. No Knowledge runtime, production schema, production infrastructure, B1–B6 change, or merge was performed. The Hetzner Object Storage and Storage Box+Borg eliminations remain in force and the restic backups remain untouched.
+**Final physical-store disposition:** The Architecture Board **SELECTED GCS** for the Knowledge control journal under the tested dedicated-project, private `europe-west3` regional Standard, versioning-disabled, locked-retention, journal-only credential mechanism. WS-1..WS-6 are **PASS**; WS-7 is informational. **Pre-runtime obligation #6: CLOSED. Pre-runtime obligation #1: OPEN.** The live probe selected the physical mechanism, not a production deployment. Production GCS infrastructure does not yet exist; Knowledge runtime implementation is **not authorized**. No production retention duration, production schema, B1–B6 change, or merge was made. The Hetzner eliminations remain in force and restic backups remain untouched.
 
 ### Verify live evidence
 
@@ -315,4 +315,24 @@ At inventory, the bucket contained **111 synthetic objects / 2,642 bytes** with 
 python -c "import json,pathlib; p=pathlib.Path('spike/knowledge-journal-store-probe'); [json.loads((p/f).read_text(encoding='utf-8')) for f in ('gcs_live_observations.json','gcs_failure_observations.json')]; print('RAW_JSON=OK')"
 git diff --check
 git status --short --branch
+```
+
+## 13. Architecture Board selection and pending disposable cleanup
+
+The Board's disposition supersedes the earlier `SELECTABLE` probe recommendation: **GCS is SELECTED**. The selected production **topology**, when separately authorized, is a dedicated GCP project with a private regional Standard bucket in `europe-west3`, uniform bucket-level access, public access prevention, Object Versioning disabled, and locked bucket retention. The Knowledge journal identity must have **exactly** `storage.objects.create`, `storage.objects.get`, and `storage.objects.list`, with no user-managed service-account key or inherited broader permission. Operator/admin authority is separate from the journal service identity. The production retention duration remains **undecided**; the disposable probe's 3,600-second period is not a production choice. **No production GCS project or bucket exists, and Knowledge runtime remains unauthorized.**
+
+**Pre-runtime obligation #6: CLOSED. Pre-runtime obligation #1: OPEN.** WS-1..WS-6 remain PASS; WS-7 remains informational. This Board selection changes the current store disposition only; it does not change the accepted restore-freshness architecture or the negative Hetzner findings.
+
+At the required first time check on **2026-09-26 15:41:41 UTC**, the latest recorded retention expiry (`2026-09-26 16:29:42.402 UTC`) was still **48 minutes 1 second away**. No destructive cloud cleanup was attempted. The disabled service account, 111 synthetic objects, locked disposable bucket, custom role, and billing-enabled disposable project remain **cleanup pending**. After expiry, cleanup must reverify the exact project/bucket, enumerate resources, and remove only those disposable resources; confirm project shutdown and billing state. The existing Mail project, all other Google resources, Hetzner Storage Box, restic, and production credentials are outside scope.
+
+Privacy audit of all seven PR files found one hard-coded local user-profile path and one personal operator email in durable text. The email was removed and the script now discovers `gcloud` on `PATH` or via `GCLOUD_BIN`. **Only environment-specific invocation/path material was sanitized after execution**; the committed raw JSON observations remain the actual probe evidence, and the probe logic and results are unchanged. No bearer/OAuth token value, private key, service-account JSON key, refresh token, or credential file was found in the seven-file scan. Disposable project/bucket IDs, technically useful service-account identity, statuses, timestamps, generations, hashes, and timings remain for traceability.
+
+An independent read-only consistency check of the raw JSON and client source confirmed the WS-1 `200/412/403` and `200/412` race, the corrected WS-2 `403` and protected operator `403`s, WS-3 exact-byte comparison results, all 12 successful LIST pages across the normal/gap/tamper cases, the append-after-LIST event **before** `head_lookup_5=200`, `head_lookup_6=404`, gap/tamper `BLOCKED`, and interrupted pagination `UNVERIFIED`. The client consumes `nextPageToken`, checks contiguous hashes, and uses exact `r+1` lookup; no mutable head pointer or transactional-list claim is present. The real GCS statuses and locally injected `ReadTimeout`/`429`/`503` are distinguished, and workstation latency remains explicitly non-Nuremberg. A fresh read-only IAM check found no journal service project role, one bucket custom role with exactly the three permissions, zero user-managed keys, and the probe account disabled. No live GCS data operation was rerun for this audit.
+
+Verify the Board update and sanitation:
+
+```powershell
+rg -n 'GCS SELECTED|obligation #6: CLOSED|obligation #1: OPEN|cleanup pending' docs/architecture/proposals/KNOWLEDGE_JOURNAL_STORE_PROBE_REPORT.md
+python -c "import ast,pathlib; ast.parse(pathlib.Path('spike/knowledge-journal-store-probe/gcs_live_probe.py').read_text(encoding='utf-8')); print('PROBE_SCRIPT_SYNTAX=OK')"
+git diff --check
 ```
