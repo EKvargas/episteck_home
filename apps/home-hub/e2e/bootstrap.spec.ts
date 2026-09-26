@@ -81,6 +81,24 @@ test('calendar source manager identifies fictional accounts', async ({ page }) =
   expect(await page.locator('body').innerText()).not.toMatch(/Connected Calendars|Federated multi-account synchronization|Synchronized with Family Circle|synced with iOS/i);
 });
 
+test('calendar month view describes mock events without claiming provider aggregation', async ({ page }) => {
+  await setSessionCookie(page, 'authenticated');
+  await page.goto('/app/calendar');
+  await page.getByRole('button', { name: 'Month', exact: true }).click();
+  await expect(page.getByRole('note', { name: 'Demo mock data' })).toBeVisible();
+  await expect(page.getByText('Demo month view using mock events modeled after multiple calendar sources.')).toBeVisible();
+  expect(await page.locator('body').innerText()).not.toMatch(/\b(?:aggregating|synchronized|synced|imported|fetched)\b/i);
+});
+
+test('calendar event details describe a demo meal plan without claiming synchronization', async ({ page }) => {
+  await setSessionCookie(page, 'authenticated');
+  await page.goto('/app/calendar');
+  await page.getByText('Family Dinner: Wild Baked Salmon & Asparagus', { exact: true }).click();
+  await expect(page.getByRole('note', { name: 'Demo mock data' })).toBeVisible();
+  await expect(page.getByText('Demo meal-plan note. Prototype oven timing: 17:45.')).toBeVisible();
+  expect(await page.locator('body').innerText()).not.toMatch(/\b(?:aggregating|synchronized|synced|imported|fetched)\b/i);
+});
+
 test('public kiosk images resolve beneath /app', async ({ page }) => {
   await setSessionCookie(page, 'authenticated');
   await page.goto('/app/kiosk');

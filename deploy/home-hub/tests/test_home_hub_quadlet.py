@@ -78,6 +78,7 @@ def test_docker_context_excludes_local_credentials():
         '.npmrc', '**/.npmrc',
         '*.pem', '*.key', '*.p12', '*.pfx',
         '**/*private*key*', '**/*credentials*',
+        '**/id_rsa*', '**/id_ed25519*', '**/id_ecdsa*', '**/id_dsa*',
     ):
         assert pattern in patterns
 

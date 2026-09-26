@@ -5,7 +5,7 @@ export interface DataEnvelope<T> {
   authorization: 'GRANTED' | 'DENIED' | 'INDETERMINATE';
   freshness: 'FRESH' | 'STALE' | 'UNKNOWN';
   environment: 'MOCK' | 'LIVE';
-  
+
   updatedAt?: string;
   sourceSummary?: string;
   errorCode?: SafeUIErrorCode;
@@ -21,7 +21,7 @@ export const EnvelopeFactory = {
       environment,
     };
   },
-  
+
   ready<T>(data: T, environment: 'MOCK' | 'LIVE' = 'MOCK', updatedAt?: string): DataEnvelope<T> {
     return {
       delivery: 'READY',
@@ -32,7 +32,7 @@ export const EnvelopeFactory = {
       data,
     };
   },
-  
+
   error<T>(errorCode: SafeUIErrorCode, environment: 'MOCK' | 'LIVE' = 'MOCK'): DataEnvelope<T> {
     return {
       delivery: 'ERROR',

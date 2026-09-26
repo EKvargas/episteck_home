@@ -35,7 +35,7 @@ import styles from './page.module.css';
 export default function CalendarPage() {
   const { activeContext, setContext, availableContexts } = useAppContext();
 
-  // Active filters for connected calendar sources
+  // Active filters for mock calendar sources
   const [activeSources, setActiveSources] = useState<Record<CalendarSourceId, boolean>>({
     'erick-work': true,
     'erick-personal': true,
@@ -53,7 +53,7 @@ export default function CalendarPage() {
   // Selected event for detail drawer
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
 
-  // Connected accounts modal
+  // Demo sources modal
   const [showAccountsModal, setShowAccountsModal] = useState(false);
 
   // Dismissed insights
@@ -206,7 +206,7 @@ export default function CalendarPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             {maskWorkTitles ? <EyeSlash size={16} /> : <Eye size={16} />}
             <span>
-              Work Calendar Privacy: <strong>{maskWorkTitles ? 'Masked as "Busy" in Family View' : 'Full titles visible'}</strong>
+              Demo work-title display: <strong>{maskWorkTitles ? 'Shown as "Busy" in Family View' : 'Full mock titles visible'}</strong>
             </span>
           </div>
           <button 
@@ -334,7 +334,7 @@ export default function CalendarPage() {
             <div className={styles.trackHeader}>
               <h2 className={styles.trackOwnerTitle}>
                 Ana
-                <span className={styles.trackSubTag}>Gmail &amp; iPhone iCloud</span>
+                <span className={styles.trackSubTag}>Demo Gmail &amp; iPhone iCloud</span>
               </h2>
               <span style={{ fontSize: '0.78rem', color: 'var(--olin-text-muted)', fontWeight: 600 }}>
                 {anaEvents.length} events
@@ -373,7 +373,7 @@ export default function CalendarPage() {
                           {getProviderIcon(account.provider, 11)} {account.name}
                         </span>
                         {ev.isCareLink && (
-                          <span className={styles.careBadge}>Care Circle Link</span>
+                          <span className={styles.careBadge}>Demo care event</span>
                         )}
                         {ev.location && (
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
@@ -472,7 +472,7 @@ export default function CalendarPage() {
           <CalendarIcon size={40} style={{ opacity: 0.5, marginBottom: '0.5rem' }} />
           <h2 style={{ fontSize: '1.2rem', color: 'var(--olin-text-main)', margin: '0 0 0.5rem 0' }}>Month Overview: September 2026</h2>
           <p style={{ maxWidth: '400px', margin: '0 auto', fontSize: '0.85rem' }}>
-            Aggregating 12 events across Google Workspace, Gmail, Apple iCloud, and Family Circle.
+            Demo month view using mock events modeled after multiple calendar sources.
           </p>
         </main>
       )}
@@ -563,7 +563,7 @@ export default function CalendarPage() {
 
             {selectedEvent.isCareLink && (
               <div className={styles.drawerSection} style={{ background: 'rgba(168, 85, 247, 0.1)' }}>
-                <span className={styles.drawerLabel} style={{ color: '#9333ea' }}>Care Relationship Link</span>
+                <span className={styles.drawerLabel} style={{ color: '#9333ea' }}>Demo care context</span>
                 <span className={styles.drawerValue} style={{ fontSize: '0.85rem' }}>
                   Demo appointment for the selected care context. This mock calendar does not check consent or sync telemetry.
                 </span>
@@ -573,7 +573,7 @@ export default function CalendarPage() {
         </div>
       )}
 
-      {/* Connected Accounts Manager Modal */}
+      {/* Demo Sources Manager Modal */}
       {showAccountsModal && (
         <div className={styles.modalOverlay} onClick={() => setShowAccountsModal(false)}>
           <div className={styles.accountsModal} onClick={e => e.stopPropagation()}>
