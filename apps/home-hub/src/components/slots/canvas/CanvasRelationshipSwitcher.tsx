@@ -2,6 +2,7 @@
 import React from 'react';
 import { RelationshipSwitcherProps } from '../types';
 import styles from './CanvasRelationshipSwitcher.module.css';
+import { contextAccessibleLabel } from '../contextLabel';
 
 export function CanvasRelationshipSwitcher({ contexts, activeContextId, onSelectContext }: RelationshipSwitcherProps) {
   return (
@@ -13,7 +14,7 @@ export function CanvasRelationshipSwitcher({ contexts, activeContextId, onSelect
           : context.mode === 'PERSONAL' ? styles.activeErick : styles.activeAna;
         return (
           <button key={context.id} type="button" role="tab" aria-selected={active}
-            aria-label={`${context.name} ${context.mode === 'FAMILY' ? 'Circle' : context.mode === 'PERSONAL' ? 'Personal' : 'Care'} Context`}
+            aria-label={contextAccessibleLabel(context.name, context.mode)}
             onClick={() => onSelectContext(context.id)}
             className={`${styles.nodeButton} ${active ? activeClass : ''}`}>
             {context.name}

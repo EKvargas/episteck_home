@@ -59,6 +59,26 @@ test('rejects identifiers with trailing line terminators', () => {
   assert.throws(() => parseBootstrapWire(circleId));
 });
 
+test('display names use the F2a Unicode code-point length limit', () => {
+  for (const [label, name, accepted] of [
+    ['140 BMP code points', 'a'.repeat(140), true],
+    ['141 BMP code points', 'a'.repeat(141), false],
+    ['70 supplementary code points', '😀'.repeat(70), true],
+    ['71 supplementary code points', '😀'.repeat(71), true],
+    ['140 supplementary code points', '😀'.repeat(140), true],
+    ['141 supplementary code points', '😀'.repeat(141), false],
+  ] as const) {
+    const payload = JSON.parse(JSON.stringify(fixture));
+    payload.viewer.displayName = name;
+    payload.personContexts[0].displayName = name;
+    if (accepted) {
+      assert.equal(parseBootstrapWire(payload).viewer.displayName, name, label);
+    } else {
+      assert.throws(() => parseBootstrapWire(payload), label);
+    }
+  }
+});
+
 test('rejects dangling, duplicate, and non-viewer-first contexts', () => {
   const dangling = JSON.parse(JSON.stringify(fixture));
   dangling.personContexts.pop();

@@ -9,6 +9,7 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getBootstrapForRequest } from '@/integration/home/bootstrap.server';
 import { ServiceUnavailableBoundary } from '@/integration/components/boundaries/ServiceUnavailableBoundary';
+import { SERVER_CONFIGURATION } from '@/integration/state/Environment.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,10 +54,8 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const [result, requestHeaders] = await Promise.all([getBootstrapForRequest(), headers()]);
-  // Next prefixes absolute internal redirect paths with basePath. This relative
-  // reference climbs above /app so the browser resolves exactly to origin-root.
   if (result.errorCode === 'SESSION_REQUIRED' || result.errorCode === 'SESSION_INVALID') {
-    redirect('../../../../../../login');
+    redirect(new URL('/login', SERVER_CONFIGURATION.publicOrigin).toString());
   }
   const bootstrap = result.delivery === 'READY' ? result.data : undefined;
   const nonce = requestHeaders.get('x-nonce') ?? undefined;

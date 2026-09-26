@@ -1,10 +1,10 @@
 import 'server-only';
 import { cookies } from 'next/headers';
 import { loadBootstrap } from './bootstrap-loader';
-import { SERVER_ENVIRONMENT_MODE } from '../state/Environment.server';
+import { SERVER_CONFIGURATION } from '../state/Environment.server';
 
 export async function getBootstrapForRequest() {
-  if (SERVER_ENVIRONMENT_MODE === 'MOCK') {
+  if (SERVER_CONFIGURATION.mode === 'MOCK') {
     return loadBootstrap({
       mode: 'MOCK',
       cookieValue: undefined,
@@ -18,7 +18,7 @@ export async function getBootstrapForRequest() {
   return loadBootstrap({
     mode: 'LIVE',
     cookieValue: sessionCookie,
-    bffBaseUrl: process.env.HOME_HUB_BFF_BASE_URL,
+    bffBaseUrl: SERVER_CONFIGURATION.bffBaseUrl,
     fetcher: fetch,
   });
 }

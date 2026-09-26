@@ -2,6 +2,7 @@
 import React from 'react';
 import { RelationshipSwitcherProps } from '../types';
 import styles from './WarmRelationshipSwitcher.module.css';
+import { contextAccessibleLabel } from '../contextLabel';
 
 export function WarmRelationshipSwitcher({ contexts, activeContextId, onSelectContext }: RelationshipSwitcherProps) {
   return (
@@ -13,7 +14,7 @@ export function WarmRelationshipSwitcher({ contexts, activeContextId, onSelectCo
         const sizeClass = !family && context.mode === 'PERSONAL' ? styles.portraitCircleLarge : styles.portraitCircleSmall;
         return (
           <button key={context.id} type="button" role="tab" aria-selected={active}
-            aria-label={`${context.name} ${context.mode === 'FAMILY' ? 'Circle' : context.mode === 'PERSONAL' ? 'Personal' : 'Care'} Context`}
+            aria-label={contextAccessibleLabel(context.name, context.mode)}
             onClick={() => onSelectContext(context.id)} className={styles.portraitButton}>
             <span className={`${styles.portraitCircle} ${sizeClass} ${active ? family || context.mode !== 'PERSONAL' ? styles.activeCircle : styles.activeCircleLarge : ''}`}>
               <span className={`${styles.portraitEmoji} ${sizeClass === styles.portraitCircleLarge ? styles.portraitEmojiLarge : styles.portraitEmojiSmall}`}>

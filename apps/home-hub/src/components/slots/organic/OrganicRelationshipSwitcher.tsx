@@ -2,6 +2,7 @@
 import React from 'react';
 import { RelationshipSwitcherProps } from '../types';
 import styles from './OrganicRelationshipSwitcher.module.css';
+import { contextAccessibleLabel } from '../contextLabel';
 
 export function OrganicRelationshipSwitcher({ contexts, activeContextId, onSelectContext }: RelationshipSwitcherProps) {
   return (
@@ -12,7 +13,7 @@ export function OrganicRelationshipSwitcher({ contexts, activeContextId, onSelec
         const sizeClass = context.mode === 'PERSONAL' ? styles.potTileLarge : styles.potTileSmall;
         return (
           <button key={context.id} type="button" role="tab" aria-selected={active}
-            aria-label={`${context.name} ${context.mode === 'FAMILY' ? 'Circle' : context.mode === 'PERSONAL' ? 'Personal' : 'Care'} Context`}
+            aria-label={contextAccessibleLabel(context.name, context.mode)}
             onClick={() => onSelectContext(context.id)} className={styles.potButton}>
             <span className={`${styles.potTile} ${sizeClass} ${active ? context.mode === 'PERSONAL' ? styles.activePotLarge : styles.activePot : ''}`}>
               <span className={`${styles.potEmoji} ${sizeClass === styles.potTileLarge ? styles.potEmojiLarge : styles.potEmojiSmall}`}>

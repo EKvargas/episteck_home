@@ -3,13 +3,16 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 ## F2b server integration
 
 The Hub is mounted at `/app`. In local development, `HOME_HUB_DATA_MODE` defaults
-to `MOCK`; mock mode never calls `fetch`. A production build or server requires
-`HOME_HUB_DATA_MODE=LIVE` and fails closed otherwise. LIVE mode also requires the
-trusted server-side `HOME_HUB_BFF_BASE_URL` origin, such as
-`http://127.0.0.1:9933`; it is never sent to browser code. The server forwards
-only the `episteck_home_session` cookie to that origin's `/bootstrap` endpoint.
+to `MOCK`; mock mode never calls `fetch`. Production requires `LIVE`, a loopback
+`HOME_HUB_BFF_BASE_URL` such as `http://127.0.0.1:9933`, and a trusted
+`HOME_HUB_PUBLIC_ORIGIN` such as `https://bff.home.episteck.com`. Configuration
+is checked during build and server initialization. Neither origin is sent to
+browser code. The server forwards only the `episteck_home_session` cookie to the
+BFF `/bootstrap` endpoint.
 
-The current prototype still renders existing mock domain panels. As a temporary
+The current prototype still renders existing mock domain panels. Nutrition
+screens are explicitly labeled DEMO · MOCK DATA and do not represent the
+selected real Person's Nutrition data. As a temporary
 F2 compatibility seam, the existing local scope switcher uses an in-memory
 default/selection for presentation, while its visible Person and Circle options,
 viewer, and care relationship list come from the validated bootstrap. Care
@@ -20,8 +23,11 @@ The Next.js proxy adds a nonce based CSP for `/app`, along with the current
 security headers. Inline style attributes remain allowed because the existing
 screens use React style props; script execution uses per request nonces.
 
-F2b server boundary checks: `npm test`, `npm run lint`, `npx tsc --noEmit`, and
-`npm run test:e2e`. The inactive Quadlet and the separate real-host pasta proof
+F2b checks: `npm test`, `npm run lint`, `npx tsc --noEmit`,
+`npm run test:server-boundary`, `npm run test:startup-config`, and
+`npm run test:e2e`. Build the image with `podman build -f Dockerfile -t
+localhost/episteck-home-hub:COMMIT_SHA .` from this directory. The inactive
+Quadlet and separate real-host pasta proof
 are documented in [`deploy/home-hub/README.md`](../../deploy/home-hub/README.md).
 
 ## Getting Started

@@ -20,7 +20,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function validDisplayName(value: unknown): value is string {
   return typeof value === 'string'
     && value.length > 0
-    && value.length <= 140
+    && Array.from(value).length <= 140
     && !controlCharacters.test(value);
 }
 

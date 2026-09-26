@@ -21,6 +21,7 @@ export default defineConfig({
       env: {
         HOME_HUB_DATA_MODE: 'LIVE',
         HOME_HUB_BFF_BASE_URL: 'http://127.0.0.1:3323',
+        HOME_HUB_PUBLIC_ORIGIN: 'http://127.0.0.1:3322',
       },
     },
   ],

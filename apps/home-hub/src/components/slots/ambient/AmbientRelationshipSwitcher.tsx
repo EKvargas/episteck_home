@@ -2,6 +2,7 @@
 import React from 'react';
 import { RelationshipSwitcherProps } from '../types';
 import styles from './AmbientRelationshipSwitcher.module.css';
+import { contextAccessibleLabel } from '../contextLabel';
 
 export function AmbientRelationshipSwitcher({ contexts, activeContextId, onSelectContext }: RelationshipSwitcherProps) {
   return (
@@ -15,7 +16,7 @@ export function AmbientRelationshipSwitcher({ contexts, activeContextId, onSelec
         const labelClass = family ? styles.activeFamilyLabel : context.mode === 'PERSONAL' ? styles.activeErickLabel : styles.activeAnaLabel;
         return (
           <button key={context.id} type="button" role="tab" aria-selected={active}
-            aria-label={`${context.name} ${family ? 'Circle' : context.mode === 'PERSONAL' ? 'Personal' : 'Care'} Context`}
+            aria-label={contextAccessibleLabel(context.name, context.mode)}
             onClick={() => onSelectContext(context.id)} className={styles.nodeButton}>
             <span className={`${sizeClass} ${active ? activeClass : ''}`}>
               {context.mode === 'FAMILY' ? '◉' : context.mode === 'PERSONAL' ? '✦' : '●'}

@@ -50,6 +50,9 @@ export default function PregnancyNutritionPage() {
         <p className={styles.subtitle}>
           Focusing on key nutrients for maternal wellness
         </p>
+        <p role="note" style={{ margin: '0.75rem 0 0', padding: '0.75rem 1rem', border: '2px solid var(--olin-accent)', borderRadius: '8px', fontWeight: 700 }}>
+          DEMO · MOCK DATA — not Nutrition service data and not data for the selected Person.
+        </p>
       </header>
 
       <main>

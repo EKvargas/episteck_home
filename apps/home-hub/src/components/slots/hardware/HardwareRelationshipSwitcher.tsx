@@ -2,6 +2,7 @@
 import React from 'react';
 import { RelationshipSwitcherProps } from '../types';
 import styles from './HardwareRelationshipSwitcher.module.css';
+import { contextAccessibleLabel } from '../contextLabel';
 
 export function HardwareRelationshipSwitcher({ contexts, activeContextId, onSelectContext }: RelationshipSwitcherProps) {
   return (
@@ -12,7 +13,7 @@ export function HardwareRelationshipSwitcher({ contexts, activeContextId, onSele
           const active = context.id === activeContextId;
           return (
             <button key={context.id} type="button" role="tab" aria-selected={active}
-              aria-label={`${context.name} ${context.mode === 'FAMILY' ? 'Circle' : context.mode === 'PERSONAL' ? 'Personal' : 'Care'} Context`}
+              aria-label={contextAccessibleLabel(context.name, context.mode)}
               onClick={() => onSelectContext(context.id)}
               className={`${styles.contextButton} ${active ? styles.contextButtonActive : ''}`}>
               {context.name}

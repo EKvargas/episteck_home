@@ -2,6 +2,7 @@
 import React from 'react';
 import { RelationshipSwitcherProps } from '../types';
 import styles from './EditorialRelationshipSwitcher.module.css';
+import { contextAccessibleLabel } from '../contextLabel';
 
 export function EditorialRelationshipSwitcher({ contexts, activeContextId, onSelectContext }: RelationshipSwitcherProps) {
   return (
@@ -10,7 +11,7 @@ export function EditorialRelationshipSwitcher({ contexts, activeContextId, onSel
         const active = context.id === activeContextId;
         return (
           <button key={context.id} type="button" role="tab" aria-selected={active}
-            aria-label={`${context.name} ${context.mode === 'FAMILY' ? 'Circle' : context.mode === 'PERSONAL' ? 'Personal' : 'Care'} Context`}
+            aria-label={contextAccessibleLabel(context.name, context.mode)}
             onClick={() => onSelectContext(context.id)}
             className={`${styles.itemButton} ${active ? styles.itemButtonActive : ''}`}>
             {context.name}{active && <span className={styles.inkRing} aria-hidden="true" />}

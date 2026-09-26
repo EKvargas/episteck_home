@@ -32,9 +32,9 @@ export default function NutritionPage() {
         </div>
         
         {hasNutrition && (
-          <div className={styles.provenanceBadge} title="Canonical data source">
+          <div className={styles.provenanceBadge} role="note" aria-label="Demo mock data, not from Nutrition service">
             <Database size={16} weight="fill" />
-            <span className={styles.provenanceText}>Source: </span>svc-nutrition
+            <span>DEMO · MOCK DATA</span>
           </div>
         )}
       </header>
@@ -154,7 +154,7 @@ export default function NutritionPage() {
               </div>
               <div className={styles.provenanceBadge} title="Integration provider">
                 <Database size={16} weight="fill" />
-                Provider: {data.familyMeal!.source}
+                Demo provider: local mock content
               </div>
             </div>
           </div>
