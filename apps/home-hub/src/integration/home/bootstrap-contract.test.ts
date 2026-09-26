@@ -92,3 +92,15 @@ test('rejects dangling, duplicate, and non-viewer-first contexts', () => {
   notViewerFirst.personContexts.reverse();
   assert.throws(() => parseBootstrapWire(notViewerFirst));
 });
+
+test('rejects duplicate Circle IDs as a whole bootstrap payload', () => {
+  for (const displayName of ['Synthetic Circle', 'Different name']) {
+    const duplicate = JSON.parse(JSON.stringify(fixture));
+    duplicate.circleContexts.push({
+      type: 'CIRCLE',
+      circleId: duplicate.circleContexts[0].circleId,
+      displayName,
+    });
+    assert.throws(() => parseBootstrapWire(duplicate), /invalid bootstrap/);
+  }
+});
