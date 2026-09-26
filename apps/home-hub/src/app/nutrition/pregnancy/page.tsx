@@ -30,7 +30,7 @@ export default function PregnancyNutritionPage() {
           <div style={{ background: 'var(--olin-surface-hover)', padding: '3rem', borderRadius: '12px', display: 'inline-block' }}>
             <h3 style={{ margin: '0 0 1rem 0' }}>Pregnancy Nutrition</h3>
             <p style={{ color: 'var(--olin-text-muted)', margin: 0 }}>
-              Pregnancy Nutrition is currently available in Ana&apos;s care context.
+              This demo panel is shown in the prototype care context. Context selection does not grant data access.
             </p>
             {/* 
               Context usage comment (Product Owner requirement):

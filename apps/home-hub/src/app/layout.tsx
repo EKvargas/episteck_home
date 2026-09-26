@@ -73,7 +73,7 @@ export default async function RootLayout({
         <ThemeProvider>
           {bootstrap ? (
             <AppProvider bootstrap={bootstrap}>
-              <AppShell>{children}</AppShell>
+              <AppShell demoContent>{children}</AppShell>
             </AppProvider>
           ) : (
             <AppShell><ServiceUnavailableBoundary /></AppShell>

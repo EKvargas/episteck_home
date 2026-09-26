@@ -101,7 +101,7 @@ export const calendarAccountsMock: Record<CalendarSourceId, CalendarAccount> = {
     badgeBorder: 'rgba(16, 185, 129, 0.3)',
     lastSynced: '8 minutes ago',
     privacyDefault: 'FULL_DETAILS',
-    description: 'Apple CalDAV calendar synced with iOS Reminders and Clinic passes',
+    description: 'Mock Apple calendar entry with fictional reminders and clinic visits',
   },
   'household': {
     id: 'household',
@@ -232,7 +232,7 @@ export const calendarEventsMock: CalendarEvent[] = [
     owner: 'Ana',
     location: 'Maternal & Wellness Clinic, Room 302',
     attendees: ['Dr. Weber', 'Erick (Care Escort)'],
-    notes: 'Active care consent link active. Ultrasound checkup.',
+    notes: 'Demo ultrasound appointment; no consent or care access is evaluated.',
     isCareLink: true,
     isConflict: true,
     category: 'care',

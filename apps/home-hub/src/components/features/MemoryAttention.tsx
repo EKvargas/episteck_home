@@ -39,14 +39,14 @@ export function MemoryAttention({
   const handleAction = (type: 'ACCEPT' | 'REJECT' | 'KEEP_OLD') => {
     if (type === 'ACCEPT') {
       const msg = item.type === 'CORRECTION' 
-        ? 'Preference updated in Olin’s Memory' 
+        ? 'Preference updated in this demo view only'
         : item.type === 'SHARED'
-        ? 'Shared decision acknowledged'
-        : 'Saved to your active Memory';
+        ? 'Demo decision acknowledged'
+        : 'Saved in this demo view only';
       setFeedback(msg);
       onAccept?.(item);
     } else if (type === 'KEEP_OLD') {
-      setFeedback('Kept previous memory intact');
+      setFeedback('Kept previous demo memory');
     } else {
       setFeedback('Dismissed');
     }

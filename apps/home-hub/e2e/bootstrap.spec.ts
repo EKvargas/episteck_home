@@ -33,6 +33,54 @@ test('prototype Nutrition content is clearly marked as demo mock data', async ({
   await expect(page.getByText('svc-nutrition', { exact: true })).toHaveCount(0);
 });
 
+test('prototype routes label domain content and make no consent or live-source claims', async ({ page }) => {
+  await setSessionCookie(page, 'authenticated');
+  const forbiddenClaims = /Consent Granted|Consent required|Full Clinical Consent|authorized|Active care consent|Care Circle Access|Home Secure|Source: FHIR Gateway|Source: Device Gateway|Provenance: svc-nutrition|Live Status|live data|Active Care Link|Shared with you/i;
+  for (const path of [
+    '/app', '/app/health', '/app/nutrition', '/app/nutrition/pregnancy',
+    '/app/calendar', '/app/memory', '/app/ask', '/app/kiosk', '/app/settings/privacy',
+  ]) {
+    await page.goto(path);
+    await expect(page.getByRole('note', { name: 'Demo mock data' })).toBeVisible();
+    const visibleText = await page.locator('body').innerText();
+    expect(visibleText, path).not.toMatch(forbiddenClaims);
+  }
+  for (const path of ['/app', '/app/health', '/app/nutrition']) {
+    await page.goto(path);
+    const careTab = page.getByRole('tab', { name: 'Synthetic Care Context' });
+    await careTab.click();
+    await expect(page.getByRole('note', { name: 'Demo mock data' })).toBeVisible();
+    expect(await page.locator('body').innerText(), `${path} care context`).not.toMatch(forbiddenClaims);
+    if (path === '/app/nutrition') {
+      await page.getByRole('link', { name: 'View Dashboard' }).click();
+      await expect(page).toHaveURL(/\/app\/nutrition\/pregnancy$/);
+      await expect(page.getByRole('note', { name: 'Demo mock data' })).toBeVisible();
+      expect(await page.locator('body').innerText(), 'pregnancy care context').not.toMatch(forbiddenClaims);
+    }
+  }
+});
+
+test('mock assistant actions do not claim live device or domain writes', async ({ page }) => {
+  await setSessionCookie(page, 'authenticated');
+  await page.goto('/app');
+  await page.getByRole('button', { name: /Ask Olin/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'Ask Olin' });
+  await expect(dialog.getByText('Mock assistant conversation')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Lock front door' }).click();
+  await expect(dialog.getByText('No device command was sent.', { exact: false })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Log lunch (420 kcal)' }).click();
+  await expect(dialog.getByText('no nutrition or health record was updated.', { exact: false })).toBeVisible();
+  expect(await dialog.innerText()).not.toMatch(/commanded the Home Assistant|via Nutrition domain service|live data/i);
+});
+
+test('calendar source manager identifies fictional accounts', async ({ page }) => {
+  await setSessionCookie(page, 'authenticated');
+  await page.goto('/app/calendar');
+  await page.getByRole('button', { name: 'Demo Sources (5)' }).click();
+  await expect(page.getByText('Fictional Google, Apple iCloud, and Work entries; no accounts are connected.')).toBeVisible();
+  expect(await page.locator('body').innerText()).not.toMatch(/Connected Calendars|Federated multi-account synchronization|Synchronized with Family Circle|synced with iOS/i);
+});
+
 test('public kiosk images resolve beneath /app', async ({ page }) => {
   await setSessionCookie(page, 'authenticated');
   await page.goto('/app/kiosk');

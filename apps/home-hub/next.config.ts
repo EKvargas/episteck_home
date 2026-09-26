@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 import { getHomeHubServerConfiguration } from './src/integration/home/server-config.ts';
 
-// next.config is evaluated for both production builds and `next start`, before
-// route handling begins. Keep the same check in instrumentation for standalone.
+// Build-time validation catches invalid build settings. The standalone
+// prelisten entrypoint calls the same validator against runtime values.
 getHomeHubServerConfiguration();
 
 const nextConfig: NextConfig = {

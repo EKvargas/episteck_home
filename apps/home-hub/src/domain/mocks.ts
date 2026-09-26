@@ -14,7 +14,7 @@ export const viewerMock: Viewer = {
   name: 'Erick',
 };
 
-// Represents contexts the viewer is authorized to see
+// Prototype display contexts only; these do not establish domain access.
 export const availableContextsMock: ContextOption[] = [
   { id: 'PSN-me', name: 'Erick', mode: 'PERSONAL' },
   { id: 'PSN-ana', name: 'Ana', mode: 'CARE_FOR_ANOTHER_PERSON' },
@@ -109,7 +109,7 @@ export const getTodaySummaryMock = (contextId: string): TodaySummary => {
     return {
       greeting: "Good afternoon, Ana",
       subtitle: "Care & Support Sharing Context",
-      privacyTag: "Care Circle Access",
+      privacyTag: "Care context preview",
       privacyIcon: "heart",
       scheduleTitle: "Ana's Agenda & Care",
       scheduleSubtitle: "Appointments and shared wellness",
@@ -143,7 +143,7 @@ export const getTodaySummaryMock = (contextId: string): TodaySummary => {
           doctor: "Dr. Weber",
           clinic: "Maternal & Wellness Clinic",
           room: "Room 304",
-          description: "Maternal & Wellness Clinic, Room 304. Erick authorized to receive appointment completion chimes.",
+          description: "Demo consultation at Maternal & Wellness Clinic, Room 304. No notifications or permissions are active.",
           nextCheckup: "Oct 02"
         },
         restRhythm: {

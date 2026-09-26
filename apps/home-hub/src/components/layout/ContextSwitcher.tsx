@@ -32,7 +32,7 @@ export function ContextSwitcher() {
   const getLabel = (mode: string) => {
     if (mode === 'PERSONAL') return 'You';
     if (mode === 'FAMILY') return 'Family overview';
-    if (mode === 'CARE_FOR_ANOTHER_PERSON') return 'Shared with you';
+    if (mode === 'CARE_FOR_ANOTHER_PERSON') return 'Care context preview';
     return '';
   };
 

@@ -126,7 +126,7 @@ export default function TodayPage() {
         <div className={styles.headerRight}>
           <div className={styles.homeBadge}>
             <span className={styles.greenPulse} aria-hidden="true" />
-            <span>Home Secure · {data.physicalHome.livingRoom.temp}</span>
+            <span>Prototype home · {data.physicalHome.livingRoom.temp}</span>
           </div>
 
           <div className={styles.privacyBadge}>
@@ -186,24 +186,24 @@ export default function TodayPage() {
             personContext={personKey}
             title={
               personKey === 'erick'
-                ? 'Nutrition & Metabolic Truth'
+                ? 'Demo Nutrition & Metabolic Preview'
                 : personKey === 'ana'
                 ? 'Care for Ana · Clinical & Wellness'
                 : 'Family Dining & Nourishment'
             }
             subtitle={
               personKey === 'erick'
-                ? 'Domain Service: Nutrition Truth & Metabolic Balance'
+                ? 'Mock nutrition data'
                 : personKey === 'ana'
-                ? 'Care Relationship Circle · Consent Granted'
-                : 'Mealie Recipe Domain · Shared Household Ledger'
+                ? 'Demo care context · mock wellness data'
+                : 'Demo family meal plan'
             }
             targetTag={
               personKey === 'erick'
                 ? 'Target: 2,000 kcal'
                 : personKey === 'ana'
-                ? 'Active Care Link'
-                : 'Meal Planned'
+                ? 'Care context demo'
+                : 'Demo meal plan'
             }
             nutrition={data.nutrition}
             care={data.care}

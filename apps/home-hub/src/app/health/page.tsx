@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Database, LockKey, Moon, Drop, Stethoscope } from '@phosphor-icons/react';
+import { Database, Moon, Drop, Stethoscope } from '@phosphor-icons/react';
 import { useAppContext } from '@/components/providers/AppProvider';
 import { getDemoContextId, getTodaySummaryMock } from '@/domain/mocks';
 import { DefaultRelationshipSwitcher } from '@/components/slots/default/DefaultRelationshipSwitcher';
@@ -11,7 +11,7 @@ export default function HealthPage() {
   const { activeContext, setContext, availableContexts } = useAppContext();
   const data = getTodaySummaryMock(getDemoContextId(activeContext.mode));
 
-  // Architecture check: if context has no care data, it is heavily restricted or unconfigured.
+  // Mock content availability is a presentation choice, never an authorization result.
   const hasCare = !!data.care;
 
   return (
@@ -32,16 +32,16 @@ export default function HealthPage() {
       <main className={styles.grid}>
         {hasCare ? (
           <>
-            {/* Clinical Consultation (FHIR) */}
+            {/* Demo clinical consultation */}
             <div className={styles.card} style={{ gridColumn: '1 / -1', borderLeft: '4px solid var(--olin-accent)' }}>
               <div className={styles.cardHeader}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Stethoscope size={24} weight="duotone" color="var(--olin-accent)" />
-                  <h2 className={styles.cardTitle}>Clinical Truth</h2>
+                  <h2 className={styles.cardTitle}>Demo Clinical Preview</h2>
                 </div>
-                <div className={styles.provenanceBadge} title="Canonical data source">
+                <div className={styles.provenanceBadge}>
                   <Database size={12} weight="fill" />
-                  Source: FHIR Gateway
+                  Demo health data
                 </div>
               </div>
               <p style={{ color: 'var(--olin-text-muted)', fontSize: '0.9rem', marginBottom: '1rem', maxWidth: '600px', lineHeight: 1.5 }}>
@@ -64,16 +64,16 @@ export default function HealthPage() {
               </div>
             </div>
 
-            {/* Rest & Recovery (Device Gateway) */}
+            {/* Demo rest and recovery */}
             <div className={styles.card}>
               <div className={styles.cardHeader}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Moon size={24} weight="duotone" color="var(--olin-accent)" />
                   <h2 className={styles.cardTitle}>Rest Rhythm</h2>
                 </div>
-                <div className={styles.provenanceBadge} title="Device telemetry source">
+                <div className={styles.provenanceBadge}>
                   <Database size={12} weight="fill" />
-                  Source: Device Gateway
+                  Mock rest data
                 </div>
               </div>
               
@@ -117,10 +117,9 @@ export default function HealthPage() {
           </>
         ) : (
           <div className={styles.lockedState}>
-            <LockKey size={48} weight="duotone" />
-            <span className={styles.lockedText}>Consent required to view clinical health</span>
+            <span className={styles.lockedText}>No demo health panel for this context</span>
             <span style={{ fontSize: '0.875rem', maxWidth: '400px', lineHeight: 1.5 }}>
-              This domain is strictly protected. An explicit ConsentGrant from the Control Plane is required to view FHIR and device telemetry data.
+              This prototype does not evaluate health data access.
             </span>
           </div>
         )}

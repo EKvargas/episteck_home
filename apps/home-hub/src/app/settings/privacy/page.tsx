@@ -11,7 +11,7 @@ export default function PrivacySettingsPage() {
     <div className={styles.container}>
       <header className={styles.header}>
         <h1 className={styles.title}>Settings</h1>
-        <p className={styles.subtitle}>Manage appearance, privacy, and personal data permissions.</p>
+        <p className={styles.subtitle}>Preview appearance and privacy controls. Permission controls are not active in this prototype.</p>
       </header>
 
       {/* Settings Sub-tabs */}
@@ -34,7 +34,7 @@ export default function PrivacySettingsPage() {
             <div>
               <h2 id="memory-status-title" className={styles.cardTitle}>What Olin remembers</h2>
               <p className={styles.cardSubtitle}>
-                Durable personal preferences and household context used to adapt responses.
+                Mock personal preferences and household context used in demo responses.
               </p>
             </div>
           </div>
@@ -60,7 +60,7 @@ export default function PrivacySettingsPage() {
         <div className={styles.actionRow}>
           <p className={styles.privacyNote}>
             <Lock size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
-            Only authorized members of the Vargas Household have access. Memories are never shared externally or trained on public models.
+            These memory counts and controls are demo content. This screen does not establish access or data-sharing policy.
           </p>
 
           <Link href="/memory" className={styles.linkBtn}>
@@ -77,16 +77,16 @@ export default function PrivacySettingsPage() {
               <ShieldCheck size={22} weight="fill" />
             </div>
             <div>
-              <h2 className={styles.cardTitle}>Home Control Plane Consent</h2>
+              <h2 className={styles.cardTitle}>Consent design preview</h2>
               <p className={styles.cardSubtitle}>
-                Domain services (Health, Nutrition, Physical Home) enforce local cryptographic consent grants.
+                Domain access and consent enforcement are outside this F2 prototype.
               </p>
             </div>
           </div>
         </div>
 
         <div style={{ fontSize: '0.85rem', color: 'var(--olin-text-muted)', lineHeight: 1.5 }}>
-          Active Circle: <strong>Vargas Household</strong> · Care Relationship: <strong>Erick ➔ Ana (Full Clinical Consent)</strong>.
+          Demo Circle: <strong>Vargas Household</strong> · Care relationship display: <strong>Erick and Ana</strong>. No domain permission is inferred.
         </div>
       </section>
     </div>

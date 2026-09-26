@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { EnvelopeFactory } from './DataEnvelope';
+import { EnvelopeFactory } from './DataEnvelope.ts';
 
 test('UNKNOWN != ZERO', () => {
   const env = EnvelopeFactory.loading();

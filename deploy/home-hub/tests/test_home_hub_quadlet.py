@@ -44,9 +44,42 @@ def test_home_hub_dockerfile_builds_standalone_with_build_dependencies_only():
     assert '/.next/standalone ./' in dockerfile
     assert '/.next/static ./.next/static' in dockerfile
     assert 'USER node' in dockerfile
-    assert 'CMD ["node", "server.js"]' in dockerfile
+    assert 'CMD ["node", "--experimental-strip-types", "prelisten.mjs"]' in dockerfile
     assert 'TOKEN=' not in dockerfile
     assert 'SECRET=' not in dockerfile
+
+
+def test_docker_build_workdir_is_owned_before_switching_to_node():
+    dockerfile = (ROOT.parent.parent / 'apps' / 'home-hub' / 'Dockerfile').read_text(encoding='utf-8')
+    deps, builder_and_runner = dockerfile.split('FROM deps AS builder', 1)
+    builder, runner = builder_and_runner.split('FROM node:22-bookworm-slim AS runner', 1)
+    before_node, after_node = deps.split('USER node', 1)
+    assert (
+        'chown node:node /srv/home-hub' in before_node
+        or 'install -d -o node -g node /srv/home-hub' in before_node
+    )
+    assert 'RUN npm ci --include=dev' in after_node
+    assert 'RUN npm run build' in builder
+    assert 'USER root' not in builder
+    assert runner.index('USER node') < runner.index('CMD [')
+    assert 'COPY --from=builder --chown=node:node' in runner
+    assert 'npm ci' not in runner and 'npm install' not in runner
+    assert 'chmod 777' not in dockerfile
+
+
+def test_docker_context_excludes_local_credentials():
+    patterns = set(
+        line.strip()
+        for line in (ROOT.parent.parent / 'apps' / 'home-hub' / '.dockerignore').read_text(encoding='utf-8').splitlines()
+        if line.strip() and not line.startswith('#')
+    )
+    for pattern in (
+        '.env', '.env.*', '**/.env', '**/.env.*',
+        '.npmrc', '**/.npmrc',
+        '*.pem', '*.key', '*.p12', '*.pfx',
+        '**/*private*key*', '**/*credentials*',
+    ):
+        assert pattern in patterns
 
 
 def test_nginx_app_routes_preserve_upstream_csp_and_inherited_security_headers():

@@ -113,7 +113,7 @@ export default function CalendarPage() {
             {currentDateDisplay}
           </h1>
           <span className={styles.subtitle}>
-            Unified schedule synchronized across Google, Apple iCloud, and Work
+            Mock schedule preview using fictional calendar sources
           </span>
         </div>
 
@@ -167,10 +167,10 @@ export default function CalendarPage() {
             type="button"
             className={styles.manageSourcesBtn}
             onClick={() => setShowAccountsModal(true)}
-            title="Connected Accounts"
+            title="Demo calendar sources"
           >
             <Gear size={15} />
-            Connected Sources (5)
+            Demo Sources (5)
           </button>
         </div>
       </header>
@@ -397,7 +397,7 @@ export default function CalendarPage() {
                   Joint Household Schedule (Erick + Ana)
                 </h2>
                 <span style={{ fontSize: '0.78rem', color: 'var(--olin-text-muted)', fontWeight: 600 }}>
-                  Synchronized with Family Circle
+                  Mock family schedule
                 </span>
               </div>
 
@@ -502,31 +502,31 @@ export default function CalendarPage() {
               </span>
             </div>
 
-            {/* Source Account & Provider Provenance */}
+            {/* Demo source labels */}
             <div className={styles.drawerSection}>
-              <span className={styles.drawerLabel}>Calendar Provider &amp; Source</span>
+              <span className={styles.drawerLabel}>Mock calendar source</span>
               <span className={styles.drawerValue} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 {getProviderIcon(calendarAccountsMock[selectedEvent.sourceId].provider, 18)}
                 {calendarAccountsMock[selectedEvent.sourceId].name}
               </span>
               <span style={{ fontSize: '0.78rem', color: 'var(--olin-text-muted)', marginTop: '2px' }}>
-                Account: {calendarAccountsMock[selectedEvent.sourceId].accountEmail}
+                Demo account: {calendarAccountsMock[selectedEvent.sourceId].accountEmail}
               </span>
             </div>
 
             {/* Privacy & Circle Visibility */}
             <div className={styles.drawerSection}>
-              <span className={styles.drawerLabel}>Circle Privacy Status</span>
+              <span className={styles.drawerLabel}>Prototype circle display</span>
               <span className={styles.drawerValue}>
                 {selectedEvent.sourceId === 'erick-work' ? (
                   <>
                     <EyeSlash size={15} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
-                    Work Protected · Masked as &ldquo;{selectedEvent.maskedTitle}&rdquo; for household members.
+                    Mock work title shown as &ldquo;{selectedEvent.maskedTitle}&rdquo;. No access policy is enforced here.
                   </>
                 ) : (
                   <>
                     <Eye size={15} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
-                    Visible in full detail to Vargas Household circle.
+                    Demo event shown in this circle preview. No sharing decision is made here.
                   </>
                 )}
               </span>
@@ -565,7 +565,7 @@ export default function CalendarPage() {
               <div className={styles.drawerSection} style={{ background: 'rgba(168, 85, 247, 0.1)' }}>
                 <span className={styles.drawerLabel} style={{ color: '#9333ea' }}>Care Relationship Link</span>
                 <span className={styles.drawerValue} style={{ fontSize: '0.85rem' }}>
-                  Erick has granted care proxy consent for this appointment with Dr. Weber. Telemetry and return status sync to Today screen.
+                  Demo appointment for the selected care context. This mock calendar does not check consent or sync telemetry.
                 </span>
               </div>
             )}
@@ -580,10 +580,10 @@ export default function CalendarPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h2 style={{ fontSize: '1.35rem', fontWeight: 700, margin: 0, color: 'var(--olin-text-main)' }}>
-                  Connected Calendars
+                  Demo calendar sources
                 </h2>
                 <p style={{ fontSize: '0.82rem', color: 'var(--olin-text-muted)', margin: '2px 0 0 0' }}>
-                  Federated multi-account synchronization across Google, Apple iCloud, and Work
+                  Fictional Google, Apple iCloud, and Work entries; no accounts are connected.
                 </p>
               </div>
               <button 
@@ -619,10 +619,10 @@ export default function CalendarPage() {
 
                   <div style={{ textAlign: 'right' }}>
                     <span className={styles.syncTag}>
-                      <CheckCircle size={14} weight="fill" /> Active
+                      <CheckCircle size={14} weight="fill" /> Mock source
                     </span>
                     <span style={{ fontSize: '0.72rem', color: 'var(--olin-text-muted)' }}>
-                      {acc.lastSynced}
+                      Demo only
                     </span>
                   </div>
                 </div>

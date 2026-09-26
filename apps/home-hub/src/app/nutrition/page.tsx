@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Database, LockKey, Basket, Fire, Drop } from '@phosphor-icons/react';
+import { Database, Basket, Fire, Drop } from '@phosphor-icons/react';
 import { useAppContext } from '@/components/providers/AppProvider';
 import { getDemoContextId, getTodaySummaryMock } from '@/domain/mocks';
 import { DefaultRelationshipSwitcher } from '@/components/slots/default/DefaultRelationshipSwitcher';
@@ -12,7 +12,7 @@ export default function NutritionPage() {
   const { activeContext, setContext, availableContexts } = useAppContext();
   const data = getTodaySummaryMock(getDemoContextId(activeContext.mode));
 
-  // Architecture check: if context has no nutrition AND no meal plan, it's restricted or unavailable.
+  // Mock content availability is a presentation choice, never an authorization result.
   const hasNutrition = !!data.nutrition;
   const hasMeal = !!data.familyMeal;
   const isFamilyContext = activeContext.mode === 'FAMILY';
@@ -31,12 +31,10 @@ export default function NutritionPage() {
           </div>
         </div>
         
-        {hasNutrition && (
-          <div className={styles.provenanceBadge} role="note" aria-label="Demo mock data, not from Nutrition service">
-            <Database size={16} weight="fill" />
-            <span>DEMO · MOCK DATA</span>
-          </div>
-        )}
+        <div className={styles.provenanceBadge} role="note" aria-label="Mock nutrition data">
+          <Database size={16} weight="fill" />
+          <span>DEMO · MOCK DATA</span>
+        </div>
       </header>
 
       <main className={styles.grid}>
@@ -130,9 +128,8 @@ export default function NutritionPage() {
           </>
         ) : !isFamilyContext ? (
           <div className={styles.lockedState}>
-            <LockKey size={48} weight="duotone" />
-            <span className={styles.lockedText}>Consent required to view clinical nutrition</span>
-            <span style={{ fontSize: '0.875rem' }}>This domain requires an explicit ConsentGrant from the Control Plane.</span>
+            <span className={styles.lockedText}>No demo nutrition panel for this context</span>
+            <span style={{ fontSize: '0.875rem' }}>This prototype does not evaluate nutrition data access.</span>
           </div>
         ) : null}
 

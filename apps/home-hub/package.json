@@ -5,9 +5,10 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node test-support/stage-standalone.mjs",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/integration/home/bootstrap-contract.test.ts src/integration/home/bootstrap-loader.test.ts src/integration/home/configuration.test.ts src/components/slots/contextLabel.test.ts",
+    "test": "node --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test",
     "test:e2e": "playwright test",
     "test:server-boundary": "node test-support/verify-server-only-client-import.mjs",
     "test:startup-config": "node test-support/verify-production-startup-config.mjs"

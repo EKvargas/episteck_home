@@ -1,4 +1,4 @@
-import { SafeUIErrorCode } from './SafeUIErrorCode';
+import type { SafeUIErrorCode } from './SafeUIErrorCode.ts';
 
 export interface DataEnvelope<T> {
   delivery: 'LOADING' | 'READY' | 'ERROR';

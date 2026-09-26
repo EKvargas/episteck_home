@@ -1,6 +1,7 @@
 FROM node:22-bookworm-slim AS deps
 
 WORKDIR /srv/home-hub
+RUN chown node:node /srv/home-hub
 COPY --chown=node:node package.json package-lock.json ./
 USER node
 RUN npm ci --include=dev
@@ -19,7 +20,6 @@ RUN npm run build
 
 FROM node:22-bookworm-slim AS runner
 ENV NODE_ENV=production \
-    HOME_HUB_DATA_MODE=LIVE \
     NEXT_TELEMETRY_DISABLED=1 \
     HOSTNAME=0.0.0.0 \
     PORT=3000
@@ -31,4 +31,4 @@ COPY --from=builder --chown=node:node /srv/home-hub/.next/static ./.next/static
 
 USER node
 EXPOSE 3000
-CMD ["node", "server.js"]
+CMD ["node", "--experimental-strip-types", "prelisten.mjs"]

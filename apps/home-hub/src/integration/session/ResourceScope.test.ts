@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ResourceScope } from './ResourceScope';
+import type { ResourceScope } from './ResourceScope.ts';
 
 test('PERSON scope cannot silently become CIRCLE', () => {
   const scope: ResourceScope = {

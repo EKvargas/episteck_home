@@ -21,7 +21,7 @@ export function EditorialPhysicalHome({
           </div>
           <div>
             <h2 className={styles.titleText}>Physical Home</h2>
-            <p className={styles.subtitleText}>Gateway: 4 online nodes · Atmosphere stable</p>
+            <p className={styles.subtitleText}>Prototype home telemetry · Mock atmosphere</p>
           </div>
         </div>
         <span className={styles.statusPill}>EVERYTHING NORMAL</span>

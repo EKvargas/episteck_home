@@ -88,7 +88,7 @@ export function AskOlin() {
         <div className={styles.header}>
           <h1 className={styles.title}>Ask Olin</h1>
           <span className={styles.contextSubtitle}>
-            Viewing {activeContext.name} · {activeContext.mode === 'PERSONAL' ? 'You' : (activeContext.mode === 'FAMILY' ? 'Family overview' : 'Shared with you')}
+            Viewing {activeContext.name} · {activeContext.mode === 'PERSONAL' ? 'You' : (activeContext.mode === 'FAMILY' ? 'Family overview' : 'Care context preview')}
           </span>
         </div>
 
