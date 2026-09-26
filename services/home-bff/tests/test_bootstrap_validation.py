@@ -240,6 +240,43 @@ def test_duplicate_care_subject_rejects_whole_payload():
         validate_bootstrap_response(raw)
 
 
+def test_unique_circle_ids_pass():
+    raw = dict(VALID_RAW)
+    raw["circles"] = [
+        {"circle_id": "CIR-00001", "display_name": "Family"},
+        {"circle_id": "CIR-00002", "display_name": "Care"},
+    ]
+
+    result = validate_bootstrap_response(raw)
+
+    assert result["circleContexts"] == [
+        {"type": "CIRCLE", "circleId": "CIR-00001", "displayName": "Family"},
+        {"type": "CIRCLE", "circleId": "CIR-00002", "displayName": "Care"},
+    ]
+
+
+@pytest.mark.parametrize(
+    "circles",
+    [
+        [
+            {"circle_id": "CIR-00001", "display_name": "Family"},
+            {"circle_id": "CIR-00001", "display_name": "Family"},
+        ],
+        [
+            {"circle_id": "CIR-00001", "display_name": "Family"},
+            {"circle_id": "CIR-00001", "display_name": "Care"},
+        ],
+    ],
+    ids=["same-display-name", "different-display-name"],
+)
+def test_duplicate_circle_ids_reject_whole_payload(circles):
+    raw = dict(VALID_RAW)
+    raw["circles"] = circles
+
+    with pytest.raises(UpstreamMalformed):
+        validate_bootstrap_response(raw)
+
+
 def test_care_relationship_referencing_unknown_person_id_rejects_whole_payload():
     """A subjectPersonId with no matching personContexts entry is a dangling ref."""
     raw = {
