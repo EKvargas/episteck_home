@@ -1,0 +1,48 @@
+{
+  "environment": "localhost fault injection plus disposable GCS bucket",
+  "events": [
+    {
+      "error_reason": null,
+      "generation": "1790436582397796",
+      "label": "ambiguous_server_create",
+      "latency_ms": 685.151,
+      "md5Hash": "C3nM6mrogqy4dBcZxXDK7Q==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "ambiguous_authoritative_read",
+      "latency_ms": 497.233,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": "At least one of the pre-conditions you specified did not hold.",
+      "label": "ambiguous_safe_retry",
+      "latency_ms": 693.104,
+      "principal": "service",
+      "status": 412
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "interrupted_page_1",
+      "latency_ms": 435.568,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    }
+  ],
+  "injected_client_outcome": "UNKNOWN: post-send response discarded",
+  "interrupted_page_has_next_token": true,
+  "interrupted_page_status": 200,
+  "interrupted_verification_state": "UNVERIFIED",
+  "reconciliation_exact_bytes": true,
+  "reconciliation_status": 200,
+  "safe_retry_conflict_status": 412,
+  "server_create_status_hidden_from_client": 200,
+  "throttle_injected_status": 429,
+  "timeout": "ReadTimeout",
+  "unavailable_injected_status": 503
+}

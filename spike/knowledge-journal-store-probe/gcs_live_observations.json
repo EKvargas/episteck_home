@@ -1,0 +1,1662 @@
+{
+  "between_scan_and_lookup_5": 200,
+  "bucket": "episteck-kn-probe-260926-5512",
+  "chain_put_2": 200,
+  "chain_put_3": 200,
+  "completed_utc": "2026-09-26T15:28:43.418854+00:00",
+  "concurrent_append_4": 200,
+  "environment": "local Windows workstation; network location not confirmed as Nuremberg",
+  "events": [
+    {
+      "error_reason": null,
+      "generation": "1790436406296674",
+      "label": "ws1_first",
+      "latency_ms": 809.871,
+      "md5Hash": "OGxsk89P5sg/I7NVe9EMDg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": "At least one of the pre-conditions you specified did not hold.",
+      "label": "ws1_duplicate",
+      "latency_ms": 681.229,
+      "principal": "service",
+      "status": 412
+    },
+    {
+      "error_reason": "kn-journal-probe@episteck-kn-probe-260926-5512.iam.gserviceaccount.com does not have storage.objects.delete access to the Google Cloud Storage object.",
+      "label": "ws1_unconditional",
+      "latency_ms": 696.122,
+      "principal": "service",
+      "status": 403
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436408597791",
+      "label": "ws1_race_1",
+      "latency_ms": 899.919,
+      "md5Hash": "fLhB6DNj3dBwIBPUW/+5Ag==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": "At least one of the pre-conditions you specified did not hold.",
+      "label": "ws1_race_2",
+      "latency_ms": 912.913,
+      "principal": "service",
+      "status": 412
+    },
+    {
+      "error_reason": null,
+      "label": "ws1_after",
+      "latency_ms": 455.105,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436406296674",
+      "label": "ws3_metadata",
+      "latency_ms": 461.868,
+      "md5Hash": "OGxsk89P5sg/I7NVe9EMDg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "ws3_fresh_read",
+      "latency_ms": 479.84,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": "kn-journal-probe@episteck-kn-probe-260926-5512.iam.gserviceaccount.com does not have storage.objects.delete access to the Google Cloud Storage object. Permission 'storage.objects.delete' denied on resource '//storage.googleapis.com/projects/_/buckets/episteck-kn-probe-260926-5512/objects/TEST-PARTITION-0001/generation-test-1/revision-000001' (or it may not exist).",
+      "label": "ws2_delete",
+      "latency_ms": 675.594,
+      "principal": "service",
+      "status": 403
+    },
+    {
+      "error_reason": "kn-journal-probe@episteck-kn-probe-260926-5512.iam.gserviceaccount.com does not have storage.objects.update access to the Google Cloud Storage object. Permission 'storage.objects.update' denied on resource '//storage.googleapis.com/projects/_/buckets/episteck-kn-probe-260926-5512/objects/TEST-PARTITION-0001/generation-test-1/revision-000001' (or it may not exist).",
+      "label": "ws2_metadata_patch",
+      "latency_ms": 693.615,
+      "principal": "service",
+      "status": 403
+    },
+    {
+      "error_reason": "Missing retain until time. Both mode and retain until time are required.",
+      "label": "ws2_retention_patch",
+      "latency_ms": 462.125,
+      "principal": "service",
+      "status": 400
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "admin_get_bucket_iam",
+      "latency_ms": 554.866,
+      "md5Hash": null,
+      "principal": "admin",
+      "status": 200
+    },
+    {
+      "error_reason": "kn-journal-probe@episteck-kn-probe-260926-5512.iam.gserviceaccount.com does not have storage.buckets.setIamPolicy access to the Google Cloud Storage bucket. Permission 'storage.buckets.setIamPolicy' denied on resource '//storage.googleapis.com/projects/_/buckets/episteck-kn-probe-260926-5512' (or it may not exist).",
+      "label": "ws2_bucket_iam_put",
+      "latency_ms": 689.458,
+      "principal": "service",
+      "status": 403
+    },
+    {
+      "error_reason": "kn-journal-probe@episteck-kn-probe-260926-5512.iam.gserviceaccount.com does not have storage.buckets.update access to the Google Cloud Storage bucket. Permission 'storage.buckets.update' denied on resource '//storage.googleapis.com/projects/_/buckets/episteck-kn-probe-260926-5512' (or it may not exist).",
+      "label": "ws2_bucket_retention_patch",
+      "latency_ms": 695.537,
+      "principal": "service",
+      "status": 403
+    },
+    {
+      "error_reason": "kn-journal-probe@episteck-kn-probe-260926-5512.iam.gserviceaccount.com does not have storage.buckets.delete access to the Google Cloud project. Permission 'storage.buckets.delete' denied on resource '//storage.googleapis.com/projects/_/buckets/episteck-kn-probe-260926-5512' (or it may not exist).",
+      "label": "ws2_bucket_delete",
+      "latency_ms": 692.205,
+      "principal": "service",
+      "status": 403
+    },
+    {
+      "error_reason": "Object 'episteck-kn-probe-260926-5512/TEST-PARTITION-0001/generation-test-1/revision-000001' is subject to bucket's retention policy or object retention and cannot be deleted or overwritten until 2026-09-26T09:26:46.301023-07:00",
+      "label": "ws2_admin_delete_protected",
+      "latency_ms": 497.74,
+      "principal": "admin",
+      "status": 403
+    },
+    {
+      "error_reason": "Cannot reduce retention duration of a locked Retention Policy for bucket 'episteck-kn-probe-260926-5512'.",
+      "label": "ws2_admin_shorten_locked",
+      "latency_ms": 474.698,
+      "principal": "admin",
+      "status": 403
+    },
+    {
+      "error_reason": null,
+      "label": "ws2_still_intact",
+      "latency_ms": 451.004,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436416602418",
+      "label": "chain_put_2",
+      "latency_ms": 696.154,
+      "md5Hash": "Vr8XeuUKAyyJaSGPxWxOAQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436417402141",
+      "label": "chain_put_3",
+      "latency_ms": 788.157,
+      "md5Hash": "d/9EODndAPwsL4+3JBedVg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "scan_page_0",
+      "latency_ms": 449.274,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436418600444",
+      "label": "concurrent_append_4",
+      "latency_ms": 747.169,
+      "md5Hash": "7KCZtFlQ5/oa5HEgpC0XbQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "scan_page_1",
+      "latency_ms": 470.701,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "scan_page_2",
+      "latency_ms": 479.646,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "scan_page_3",
+      "latency_ms": 484.161,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "chain_read_1",
+      "latency_ms": 480.14,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "chain_read_2",
+      "latency_ms": 465.119,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "chain_read_3",
+      "latency_ms": 484.015,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "chain_read_4",
+      "latency_ms": 477.815,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "head_lookup_5",
+      "latency_ms": 472.979,
+      "principal": "service",
+      "status": 404
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "scan_page_0",
+      "latency_ms": 446.276,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "scan_page_1",
+      "latency_ms": 492.055,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "scan_page_2",
+      "latency_ms": 460.172,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "scan_page_3",
+      "latency_ms": 445.472,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "chain_read_1",
+      "latency_ms": 472.528,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "chain_read_2",
+      "latency_ms": 477.792,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "chain_read_3",
+      "latency_ms": 454.156,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "chain_read_4",
+      "latency_ms": 472.37,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436426898981",
+      "label": "between_scan_and_lookup_5",
+      "latency_ms": 744.475,
+      "md5Hash": "0yuBZtJmIpamd+Hl/1tGyw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "head_lookup_5",
+      "latency_ms": 454.048,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "head_lookup_6",
+      "latency_ms": 469.73,
+      "principal": "service",
+      "status": 404
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436428498214",
+      "label": "gap_revision_1",
+      "latency_ms": 672.07,
+      "md5Hash": "OGxsk89P5sg/I7NVe9EMDg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436429200126",
+      "label": "gap_revision_3",
+      "latency_ms": 697.847,
+      "md5Hash": "T3NHNERXtEuUniPpCx/gsg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "scan_page_0",
+      "latency_ms": 505.394,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "scan_page_1",
+      "latency_ms": 458.779,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436430899937",
+      "label": "tamper_revision_1",
+      "latency_ms": 732.623,
+      "md5Hash": "OGxsk89P5sg/I7NVe9EMDg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436431605166",
+      "label": "tamper_revision_2",
+      "latency_ms": 710.802,
+      "md5Hash": "bbUT3Lrn/lrKzRaoC4q9gw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "scan_page_0",
+      "latency_ms": 474.777,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "scan_page_1",
+      "latency_ms": 454.947,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "chain_read_1",
+      "latency_ms": 468.446,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "chain_read_2",
+      "latency_ms": 477.274,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": "No such object: episteck-kn-probe-260926-5512/TEST-PARTITION-0001/generation-test-1/revision-999999",
+      "label": "ws6_missing",
+      "latency_ms": 445.962,
+      "principal": "service",
+      "status": 404
+    },
+    {
+      "label": "ws6_unreachable",
+      "latency_ms": 206.386,
+      "principal": "service",
+      "status": null,
+      "transport_error": "ConnectTimeout"
+    },
+    {
+      "error_reason": null,
+      "label": "ws6_ambiguous_reconciliation",
+      "latency_ms": 470.873,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "ws6_incomplete_first_page",
+      "latency_ms": 485.897,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436435798147",
+      "label": "latency_append_0",
+      "latency_ms": 690.637,
+      "md5Hash": "+EmHTJu1MGKHUUGU6Em/tQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "latency_get_0",
+      "latency_ms": 572.462,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436437115154",
+      "label": "latency_append_1",
+      "latency_ms": 801.461,
+      "md5Hash": "S8k/tIGJLBJgakgfxToK2Q==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "latency_get_1",
+      "latency_ms": 473.892,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436438501235",
+      "label": "latency_append_2",
+      "latency_ms": 956.132,
+      "md5Hash": "2bNJeFV+9BGeGRcn8GfHRg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "latency_get_2",
+      "latency_ms": 470.453,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436439799688",
+      "label": "latency_append_3",
+      "latency_ms": 782.601,
+      "md5Hash": "h/sYiU/FFhXv72Dq4GGxLw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "latency_get_3",
+      "latency_ms": 589.549,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436441199788",
+      "label": "latency_append_4",
+      "latency_ms": 746.583,
+      "md5Hash": "eC1UA6bkgoSTT2qodi99gA==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "latency_get_4",
+      "latency_ms": 526.227,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436442494738",
+      "label": "latency_append_5",
+      "latency_ms": 820.915,
+      "md5Hash": "gakUoLyy66yNIdJXREKGGQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "latency_get_5",
+      "latency_ms": 523.987,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436443812114",
+      "label": "latency_append_6",
+      "latency_ms": 762.373,
+      "md5Hash": "Xlf6ou73OnaO8AEaYpspwQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "latency_get_6",
+      "latency_ms": 484.39,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436444997066",
+      "label": "latency_append_7",
+      "latency_ms": 669.38,
+      "md5Hash": "Wt1ipflZw7JrUKUP++Iqcw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "latency_get_7",
+      "latency_ms": 458.53,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436446103355",
+      "label": "latency_append_8",
+      "latency_ms": 647.012,
+      "md5Hash": "ZGPc1CpgnDUjM480jbjXZA==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "latency_get_8",
+      "latency_ms": 474.987,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436447301541",
+      "label": "latency_append_9",
+      "latency_ms": 719.166,
+      "md5Hash": "1/VPJ7FcozUi1zQaR1uVqg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "latency_get_9",
+      "latency_ms": 484.156,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436448496337",
+      "label": "latency_append_10",
+      "latency_ms": 708.441,
+      "md5Hash": "cAIRxxuNv1QS46j85YqdrA==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "latency_get_10",
+      "latency_ms": 477.401,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436449695483",
+      "label": "latency_append_11",
+      "latency_ms": 732.244,
+      "md5Hash": "c30h1GCHd2GCgBkr0mJ4Hw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "latency_get_11",
+      "latency_ms": 509.434,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436450898128",
+      "label": "latency_append_12",
+      "latency_ms": 679.114,
+      "md5Hash": "xM8fHX9DWcttkSUqHn2sJg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "latency_get_12",
+      "latency_ms": 462.908,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436452104706",
+      "label": "latency_append_13",
+      "latency_ms": 747.138,
+      "md5Hash": "HvGXkWtSiwPG+jPUDUF2Qg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "latency_get_13",
+      "latency_ms": 461.61,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436453297062",
+      "label": "latency_append_14",
+      "latency_ms": 724.971,
+      "md5Hash": "FzEAwWlIzimwQ9W5t9Y4LA==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "latency_get_14",
+      "latency_ms": 452.468,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436454499072",
+      "label": "latency_append_15",
+      "latency_ms": 746.704,
+      "md5Hash": "CSv75B3NzpGQoUX8ZxnTKA==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "latency_get_15",
+      "latency_ms": 475.275,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436455708348",
+      "label": "latency_append_16",
+      "latency_ms": 780.975,
+      "md5Hash": "+qNcWZhnIRaMgpW8ulO0JA==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "latency_get_16",
+      "latency_ms": 516.758,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436456998064",
+      "label": "latency_append_17",
+      "latency_ms": 718.174,
+      "md5Hash": "mlyMvIeWFwJga3+JGWK1ng==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "latency_get_17",
+      "latency_ms": 491.085,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436458200903",
+      "label": "latency_append_18",
+      "latency_ms": 713.209,
+      "md5Hash": "BoxVQHQsi4njCj94z7Is+Q==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "latency_get_18",
+      "latency_ms": 473.671,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436459397231",
+      "label": "latency_append_19",
+      "latency_ms": 717.138,
+      "md5Hash": "6Wz2C3BYXAX0YLhCPPwiew==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "label": "latency_get_19",
+      "latency_ms": 489.847,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436460598107",
+      "label": "latency_append_20",
+      "latency_ms": 710.011,
+      "md5Hash": "o4ijPy9mwvsse+oGzpxnFg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436461304361",
+      "label": "latency_append_21",
+      "latency_ms": 702.572,
+      "md5Hash": "OXRN+Ap4kRu1WE9o3DIcfg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436462000787",
+      "label": "latency_append_22",
+      "latency_ms": 695.953,
+      "md5Hash": "Z+dDz76N+YW2aqMKs2fAkg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436462697040",
+      "label": "latency_append_23",
+      "latency_ms": 704.7,
+      "md5Hash": "uI/OrlYPgy0E6SqPnFoGsw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436463404167",
+      "label": "latency_append_24",
+      "latency_ms": 697.833,
+      "md5Hash": "aMdsXLpY8X/tOv0Cgj/OhQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436464097173",
+      "label": "latency_append_25",
+      "latency_ms": 687.183,
+      "md5Hash": "ttxJWCvnPCzwkACnWuYxcw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436464801662",
+      "label": "latency_append_26",
+      "latency_ms": 710.569,
+      "md5Hash": "wVGMk4BcWy7MiC0yrbW8XA==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436465501433",
+      "label": "latency_append_27",
+      "latency_ms": 694.084,
+      "md5Hash": "bT/3N/SLDpluUnPvJXQTvQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436466197312",
+      "label": "latency_append_28",
+      "latency_ms": 693.695,
+      "md5Hash": "edxEH0j3DALA4qjd/JNYqw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436466900265",
+      "label": "latency_append_29",
+      "latency_ms": 701.801,
+      "md5Hash": "Y72i4NfY6ZTot6KpuJnDmw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436467599669",
+      "label": "latency_append_30",
+      "latency_ms": 696.724,
+      "md5Hash": "KA9iapUtObYx0JSyVdgMdg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436468303970",
+      "label": "latency_append_31",
+      "latency_ms": 720.954,
+      "md5Hash": "4Lw9QNHJDhK2X5lZPPYRLw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436469102782",
+      "label": "latency_append_32",
+      "latency_ms": 783.919,
+      "md5Hash": "06qf9qrKhTUS+SmMCagycw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436469799029",
+      "label": "latency_append_33",
+      "latency_ms": 688.946,
+      "md5Hash": "kX/6BYw/3J/kAodazWF6/w==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436470498468",
+      "label": "latency_append_34",
+      "latency_ms": 697.832,
+      "md5Hash": "OU2D3JlN2ML+VXR+JLQ3Mw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436471198967",
+      "label": "latency_append_35",
+      "latency_ms": 708.517,
+      "md5Hash": "B2q7NtJxXu+PRvAT8f8Z+A==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436471900363",
+      "label": "latency_append_36",
+      "latency_ms": 691.817,
+      "md5Hash": "+0HSQZq5En2aQVzl6epppQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436472597281",
+      "label": "latency_append_37",
+      "latency_ms": 694.742,
+      "md5Hash": "SEANRPTfc5g2v3/agP+zjQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436473295966",
+      "label": "latency_append_38",
+      "latency_ms": 701.2,
+      "md5Hash": "pwwdY4edvWvws0+si2Lxtw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436474001276",
+      "label": "latency_append_39",
+      "latency_ms": 702.372,
+      "md5Hash": "G5/+EBaG3V+9qSLy9FQmiw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436474701354",
+      "label": "latency_append_40",
+      "latency_ms": 703.942,
+      "md5Hash": "xCVCoSgBuC6E7pcxIdXI6g==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436475398653",
+      "label": "latency_append_41",
+      "latency_ms": 691.925,
+      "md5Hash": "M6fNA0+x4+lPZN1JWfzDkA==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436476097167",
+      "label": "latency_append_42",
+      "latency_ms": 696.453,
+      "md5Hash": "LYGQTO1ix2D3YCZusdYG8Q==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436476811978",
+      "label": "latency_append_43",
+      "latency_ms": 715.017,
+      "md5Hash": "QsPE0uG7cG0jm1Fi6fv5dA==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436477495754",
+      "label": "latency_append_44",
+      "latency_ms": 681.422,
+      "md5Hash": "mDJRsOvpdzLiN7PWBW+MDw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436478200260",
+      "label": "latency_append_45",
+      "latency_ms": 702.951,
+      "md5Hash": "k8Dd8gX9YRV/79jA7rKUCg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436478900162",
+      "label": "latency_append_46",
+      "latency_ms": 700.829,
+      "md5Hash": "Ql3b9e+1/1LclhZroJBr3Q==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436479599879",
+      "label": "latency_append_47",
+      "latency_ms": 698.548,
+      "md5Hash": "dRpPxYt2WKc7ZoXqNuKbZQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436480295505",
+      "label": "latency_append_48",
+      "latency_ms": 694.724,
+      "md5Hash": "4j71fndAbMjxg3NzrGOwTA==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436481099403",
+      "label": "latency_append_49",
+      "latency_ms": 800.368,
+      "md5Hash": "GDFq9dg0zTF/H9f3GZQJ1Q==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436481794116",
+      "label": "latency_append_50",
+      "latency_ms": 695.032,
+      "md5Hash": "UKZJeVJTuYTn+Ile8Ruo0g==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436482497360",
+      "label": "latency_append_51",
+      "latency_ms": 705.638,
+      "md5Hash": "NJj3Vjsn7We96IR6bgK5Ug==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436483396086",
+      "label": "latency_append_52",
+      "latency_ms": 891.414,
+      "md5Hash": "8TeCDcAJQ6C4KSoGCK1hGQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436484101078",
+      "label": "latency_append_53",
+      "latency_ms": 709.574,
+      "md5Hash": "fKaq10YEvltxoqMJ9XKqgg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436484898733",
+      "label": "latency_append_54",
+      "latency_ms": 791.786,
+      "md5Hash": "ZaTdmEDwHWTG4IKcDfzl/g==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436485599852",
+      "label": "latency_append_55",
+      "latency_ms": 704.072,
+      "md5Hash": "hy755eVuvgYGdS6O11vSbw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436486299744",
+      "label": "latency_append_56",
+      "latency_ms": 694.353,
+      "md5Hash": "82AsUrY3LgHo+8WYQGA8VQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436486999913",
+      "label": "latency_append_57",
+      "latency_ms": 698.266,
+      "md5Hash": "XiWxdxkOOHDRjAPp4oDUcg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436487899441",
+      "label": "latency_append_58",
+      "latency_ms": 900.268,
+      "md5Hash": "mca6mb6wr3W5PvSGAQbqbQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436488696024",
+      "label": "latency_append_59",
+      "latency_ms": 867.043,
+      "md5Hash": "RrPhpKvCJM6ZUlf8/sbfGg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436489600781",
+      "label": "latency_append_60",
+      "latency_ms": 829.474,
+      "md5Hash": "KcfDzValIBagfhM+N6+KCg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436490299663",
+      "label": "latency_append_61",
+      "latency_ms": 704.786,
+      "md5Hash": "8V1m7Rxo8G+myhWCpsCArw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436491101323",
+      "label": "latency_append_62",
+      "latency_ms": 796.36,
+      "md5Hash": "9wYr96WHazcAxgGsGhyW8A==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436491898062",
+      "label": "latency_append_63",
+      "latency_ms": 795.379,
+      "md5Hash": "sUOHkpsEitBpJ0xxLYJ9HA==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436492600653",
+      "label": "latency_append_64",
+      "latency_ms": 706.474,
+      "md5Hash": "pB+aHig+O6ENGuQ51Mpb7A==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436493294543",
+      "label": "latency_append_65",
+      "latency_ms": 687.578,
+      "md5Hash": "CArVEqKdVQtRACiV23xdUQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436494000970",
+      "label": "latency_append_66",
+      "latency_ms": 707.2,
+      "md5Hash": "sGgLb72D+I5lw3v1OPmzfg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436494698968",
+      "label": "latency_append_67",
+      "latency_ms": 725.903,
+      "md5Hash": "YgmigphOt0K0X4BsMcEqmw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436495509985",
+      "label": "latency_append_68",
+      "latency_ms": 780.24,
+      "md5Hash": "593PqFlv3x2xEpweDmyzKw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436496195128",
+      "label": "latency_append_69",
+      "latency_ms": 684.841,
+      "md5Hash": "gKTBcMRLs8ocjEfcydOmQw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436496900556",
+      "label": "latency_append_70",
+      "latency_ms": 706.991,
+      "md5Hash": "Kn+oHSKNgVcdUFAAIIjqgg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436497597394",
+      "label": "latency_append_71",
+      "latency_ms": 690.955,
+      "md5Hash": "FgYOAIQ/LcjIeeIT38gO3w==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436498297032",
+      "label": "latency_append_72",
+      "latency_ms": 700.282,
+      "md5Hash": "/FphJx2ijiTnZr+SuVQI5A==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436498994379",
+      "label": "latency_append_73",
+      "latency_ms": 696.145,
+      "md5Hash": "7bDzx6RCMIoFsPV4RuvN7g==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436499694109",
+      "label": "latency_append_74",
+      "latency_ms": 779.669,
+      "md5Hash": "XgoJvLyxeBC2FI/kENzOxQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436500498311",
+      "label": "latency_append_75",
+      "latency_ms": 722.826,
+      "md5Hash": "kPQq9qOpuUqCbj45nsDgng==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436501198086",
+      "label": "latency_append_76",
+      "latency_ms": 698.059,
+      "md5Hash": "nhKzEcOV3ettpISFhpliPg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436501896885",
+      "label": "latency_append_77",
+      "latency_ms": 697.433,
+      "md5Hash": "hNXQ4H19m2EvHPPxWXoeyA==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436502600852",
+      "label": "latency_append_78",
+      "latency_ms": 702.741,
+      "md5Hash": "kRcI65Ia20kvEJp6bZ28Xg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436503298236",
+      "label": "latency_append_79",
+      "latency_ms": 695.442,
+      "md5Hash": "8puQmoRXJRa8wg7Sss5BvQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436503998542",
+      "label": "latency_append_80",
+      "latency_ms": 698.298,
+      "md5Hash": "KXQzySdwlOX4zOo0u+qn9w==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436504699278",
+      "label": "latency_append_81",
+      "latency_ms": 701.698,
+      "md5Hash": "EIvpn03AwxtHKM8IwDLGNg==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436505399902",
+      "label": "latency_append_82",
+      "latency_ms": 706.164,
+      "md5Hash": "Y2o7YFMoqx0OqDpsXHvYpw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436506098224",
+      "label": "latency_append_83",
+      "latency_ms": 690.464,
+      "md5Hash": "KdN4BMv37ctmMu7bxfceYQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436506900118",
+      "label": "latency_append_84",
+      "latency_ms": 805.065,
+      "md5Hash": "QEsyGdtiVaBEKaPOCoC2jQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436507804223",
+      "label": "latency_append_85",
+      "latency_ms": 900.055,
+      "md5Hash": "c38tY/b3fXdaucpKmmCRsA==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436508699194",
+      "label": "latency_append_86",
+      "latency_ms": 912.123,
+      "md5Hash": "ZxeBQqRe+7WEe98Gc8VoKA==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436509500915",
+      "label": "latency_append_87",
+      "latency_ms": 781.926,
+      "md5Hash": "ToHEWaywCVjjqVn0YdnV5w==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436510198279",
+      "label": "latency_append_88",
+      "latency_ms": 704.752,
+      "md5Hash": "e6Y8Lug9WRb/fxSBJD7bQw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436510995254",
+      "label": "latency_append_89",
+      "latency_ms": 785.012,
+      "md5Hash": "Nd4JLkeNBv0Ln22zOqAMAQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436511694081",
+      "label": "latency_append_90",
+      "latency_ms": 767.042,
+      "md5Hash": "DqSsr5naBmTmBY6hhBs8SQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436512512810",
+      "label": "latency_append_91",
+      "latency_ms": 749.006,
+      "md5Hash": "TJrbmNo2rTaRYasHmYvQpA==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436513192412",
+      "label": "latency_append_92",
+      "latency_ms": 678.364,
+      "md5Hash": "6zsAIAHnpB9c9A0/NFdFEw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436513897788",
+      "label": "latency_append_93",
+      "latency_ms": 714.77,
+      "md5Hash": "/vNiM4g+DD3zwUZdLD9KWw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436514596474",
+      "label": "latency_append_94",
+      "latency_ms": 689.019,
+      "md5Hash": "uKIdxLG6hHhCu/dLtcxXXQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436515296355",
+      "label": "latency_append_95",
+      "latency_ms": 696.877,
+      "md5Hash": "hsUxBkiSNQM6LZYPUnZdHw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436515996827",
+      "label": "latency_append_96",
+      "latency_ms": 703.576,
+      "md5Hash": "2TntiCZVGVWRJQJXBhjwQw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436516698231",
+      "label": "latency_append_97",
+      "latency_ms": 704.717,
+      "md5Hash": "dFedYDm/Xwuv9Tfl38hKaw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436517400784",
+      "label": "latency_append_98",
+      "latency_ms": 692.181,
+      "md5Hash": "33sNJZarUXFJ8aiVOr6qaw==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": "1790436518098706",
+      "label": "latency_append_99",
+      "latency_ms": 702.099,
+      "md5Hash": "NK1iFqcwVJuVW9SZz98jzQ==",
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "latency_list_0",
+      "latency_ms": 517.424,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "latency_list_1",
+      "latency_ms": 506.678,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "latency_list_2",
+      "latency_ms": 520.282,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "latency_list_3",
+      "latency_ms": 521.854,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "latency_list_4",
+      "latency_ms": 522.415,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "latency_list_5",
+      "latency_ms": 528.621,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "latency_list_6",
+      "latency_ms": 542.842,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "latency_list_7",
+      "latency_ms": 558.072,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "latency_list_8",
+      "latency_ms": 535.242,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": null,
+      "generation": null,
+      "label": "latency_list_9",
+      "latency_ms": 559.66,
+      "md5Hash": null,
+      "principal": "service",
+      "status": 200
+    },
+    {
+      "error_reason": "kn-journal-probe@episteck-kn-probe-260926-5512.iam.gserviceaccount.com does not have storage.objects.update access to the Google Cloud Storage object. Permission 'storage.objects.update' denied on resource '//storage.googleapis.com/projects/_/buckets/episteck-kn-probe-260926-5512/objects/TEST-PARTITION-0001/generation-test-1/revision-000001' (or it may not exist).",
+      "label": "ws2_retention_patch_valid",
+      "latency_ms": 804.47,
+      "principal": "service",
+      "status": 403
+    }
+  ],
+  "latency_ms": {
+    "append": {
+      "n": 100,
+      "p50": 704.734,
+      "p95": 868.261,
+      "p99": 912.563
+    },
+    "get": {
+      "n": 20,
+      "p50": 480.778,
+      "p95": 573.316
+    },
+    "list_100_objects": {
+      "n": 10,
+      "p50": 525.518,
+      "p95": 558.945
+    }
+  },
+  "project": "episteck-kn-probe-260926-5512",
+  "started_utc": "2026-09-26T15:26:45.491189+00:00",
+  "ws1_after": true,
+  "ws1_duplicate": 412,
+  "ws1_first": 200,
+  "ws1_race": [
+    200,
+    412
+  ],
+  "ws1_unconditional": 403,
+  "ws2_admin_delete_protected": 403,
+  "ws2_admin_shorten_locked": 403,
+  "ws2_bucket_delete": 403,
+  "ws2_bucket_iam_put": 403,
+  "ws2_bucket_retention_patch": 403,
+  "ws2_delete": 403,
+  "ws2_metadata_patch": 403,
+  "ws2_retention_patch": 400,
+  "ws2_retention_patch_valid": 403,
+  "ws2_still_intact": true,
+  "ws3_fresh_read": true,
+  "ws3_meta": 200,
+  "ws5_before_lookup": {
+    "head": 5,
+    "pages": 4,
+    "revisions": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "state": "PROVEN"
+  },
+  "ws5_during_pagination": {
+    "head": 4,
+    "pages": 4,
+    "revisions": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "state": "PROVEN"
+  },
+  "ws5_gap": {
+    "reason": "gap or duplicate",
+    "revisions": [
+      1,
+      3
+    ],
+    "state": "BLOCKED"
+  },
+  "ws5_tamper": {
+    "reason": "chain mismatch",
+    "revision": 2,
+    "state": "BLOCKED"
+  },
+  "ws6_ambiguous_reconciliation": true,
+  "ws6_incomplete_pagination": true,
+  "ws6_missing": 404,
+  "ws6_unreachable": null
+}
