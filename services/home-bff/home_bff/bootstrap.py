@@ -83,6 +83,7 @@ def validate_bootstrap_response(raw: dict) -> dict:
         _fail("circles exceeds the maximum bound")
 
     circle_contexts = []
+    seen_circle_ids: set[str] = set()
     for entry in circles_raw:
         entry = _require_dict(entry, "a circle entry is not an object")
         circle_id = _validate_circle_id(
@@ -91,6 +92,9 @@ def validate_bootstrap_response(raw: dict) -> dict:
         display_name = _validate_display_name(
             entry.get("display_name"), "circle.display_name is malformed"
         )
+        if circle_id in seen_circle_ids:
+            _fail("duplicate circle context")
+        seen_circle_ids.add(circle_id)
         circle_contexts.append(
             {"type": "CIRCLE", "circleId": circle_id, "displayName": display_name}
         )

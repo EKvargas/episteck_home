@@ -364,6 +364,23 @@ def test_bff12_unhashable_relationship_type_is_invalid_response_not_500(
     assert response.json() == {"error": "INVALID_RESPONSE"}
 
 
+def test_duplicate_circle_id_returns_only_safe_error_not_partial_contexts(ctx):
+    http, _, client = ctx
+    _log_in(http)
+    client.bootstrap_payload["circles"] = [
+        {"circle_id": "CIR-00001", "display_name": "Family"},
+        {"circle_id": "CIR-00001", "display_name": "Care"},
+    ]
+
+    response = http.get("/bootstrap")
+
+    assert response.status_code == 502
+    assert response.json() == {"error": "INVALID_RESPONSE"}
+    assert "CIR-00001" not in response.text
+    assert "Family" not in response.text
+    assert "Care" not in response.text
+
+
 # ------------------------------------------------------------------- BFF-13
 
 
