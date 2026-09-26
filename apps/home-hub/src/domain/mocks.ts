@@ -1,5 +1,13 @@
 // src/domain/mocks.ts
-import { Viewer, ContextOption, TodaySummary, MicronutrientCoverage } from './types';
+import { Viewer, ContextOption, ContextMode, TodaySummary, MicronutrientCoverage } from './types';
+
+// Temporary F2 presentation seam: the prototype's domain mocks use fixed demo
+// keys. They are not authorization inputs or persisted active-context state.
+export function getDemoContextId(mode: ContextMode): string {
+  if (mode === 'PERSONAL') return 'PSN-me';
+  if (mode === 'CARE_FOR_ANOTHER_PERSON') return 'PSN-ana';
+  return 'CIR-fam';
+}
 
 export const viewerMock: Viewer = {
   id: 'PSN-me',
@@ -467,4 +475,3 @@ export const getMicronutrientCoverageMock = (contextId: string): MicronutrientCo
     }
   ];
 };
-

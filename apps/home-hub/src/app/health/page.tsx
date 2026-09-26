@@ -3,13 +3,13 @@
 import React from 'react';
 import { Database, LockKey, Moon, Drop, Stethoscope } from '@phosphor-icons/react';
 import { useAppContext } from '@/components/providers/AppProvider';
-import { getTodaySummaryMock } from '@/domain/mocks';
+import { getDemoContextId, getTodaySummaryMock } from '@/domain/mocks';
 import { DefaultRelationshipSwitcher } from '@/components/slots/default/DefaultRelationshipSwitcher';
 import styles from './page.module.css';
 
 export default function HealthPage() {
   const { activeContext, setContext, availableContexts } = useAppContext();
-  const data = getTodaySummaryMock(activeContext.id);
+  const data = getTodaySummaryMock(getDemoContextId(activeContext.mode));
 
   // Architecture check: if context has no care data, it is heavily restricted or unconfigured.
   const hasCare = !!data.care;

@@ -3,14 +3,14 @@
 import React from 'react';
 import { Database, LockKey, Basket, Fire, Drop } from '@phosphor-icons/react';
 import { useAppContext } from '@/components/providers/AppProvider';
-import { getTodaySummaryMock } from '@/domain/mocks';
+import { getDemoContextId, getTodaySummaryMock } from '@/domain/mocks';
 import { DefaultRelationshipSwitcher } from '@/components/slots/default/DefaultRelationshipSwitcher';
 import Link from 'next/link';
 import styles from './page.module.css';
 
 export default function NutritionPage() {
   const { activeContext, setContext, availableContexts } = useAppContext();
-  const data = getTodaySummaryMock(activeContext.id);
+  const data = getTodaySummaryMock(getDemoContextId(activeContext.mode));
 
   // Architecture check: if context has no nutrition AND no meal plan, it's restricted or unavailable.
   const hasNutrition = !!data.nutrition;
@@ -32,9 +32,9 @@ export default function NutritionPage() {
         </div>
         
         {hasNutrition && (
-          <div className={styles.provenanceBadge} title="Canonical data source">
+          <div className={styles.provenanceBadge} role="note" aria-label="Demo mock data, not from Nutrition service">
             <Database size={16} weight="fill" />
-            <span className={styles.provenanceText}>Source: </span>svc-nutrition
+            <span>DEMO · MOCK DATA</span>
           </div>
         )}
       </header>
@@ -47,7 +47,7 @@ export default function NutritionPage() {
           In production, visibility and feature access must ultimately be determined by 
           trusted server-side authorization and domain state.
         */}
-        {activeContext.id === 'PSN-ana' && (
+        {activeContext.mode === 'CARE_FOR_ANOTHER_PERSON' && (
           <div className={styles.card} style={{ gridColumn: '1 / -1', background: 'var(--olin-badge-bg)', border: '1px solid var(--olin-accent)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
@@ -154,7 +154,7 @@ export default function NutritionPage() {
               </div>
               <div className={styles.provenanceBadge} title="Integration provider">
                 <Database size={16} weight="fill" />
-                Provider: {data.familyMeal!.source}
+                Demo provider: local mock content
               </div>
             </div>
           </div>

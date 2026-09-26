@@ -1,0 +1,26 @@
+# Install under /home/svc-home-hub/.config/containers/systemd/.
+# This definition is intentionally not activated by the F2b implementation.
+[Unit]
+Description=Episteck Home Hub (Next.js server)
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=localhost/episteck-home-hub:REPLACE_WITH_COMMIT_SHA
+ContainerName=svc-home-hub
+PublishPort=127.0.0.1:9940:3000
+Network=pasta:-T,9933
+Environment=NODE_ENV=production
+Environment=HOME_HUB_DATA_MODE=LIVE
+Environment=HOME_HUB_BFF_BASE_URL=http://127.0.0.1:9933
+Environment=HOME_HUB_PUBLIC_ORIGIN=https://bff.home.episteck.com
+PodmanArgs=--memory=512m --memory-swap=512m
+
+[Service]
+Restart=always
+RestartSec=3
+TimeoutStartSec=180
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

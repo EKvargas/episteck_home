@@ -5,6 +5,13 @@ import { AppProvider } from "@/components/providers/AppProvider";
 import { AppShell } from "@/components/layout/AppShell";
 import { ThemeProvider } from "@/theme/ThemeProvider";
 import { ThemeInitScript } from "@/theme/ThemeInitScript";
+import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { getBootstrapForRequest } from '@/integration/home/bootstrap.server';
+import { ServiceUnavailableBoundary } from '@/integration/components/boundaries/ServiceUnavailableBoundary';
+import { SERVER_CONFIGURATION } from '@/integration/state/Environment.server';
+
+export const dynamic = 'force-dynamic';
 
 const plusJakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -41,11 +48,18 @@ export const metadata: Metadata = {
   description: "Personal and Family OS",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const [result, requestHeaders] = await Promise.all([getBootstrapForRequest(), headers()]);
+  if (result.errorCode === 'SESSION_REQUIRED' || result.errorCode === 'SESSION_INVALID') {
+    redirect(new URL('/login', SERVER_CONFIGURATION.publicOrigin).toString());
+  }
+  const bootstrap = result.delivery === 'READY' ? result.data : undefined;
+  const nonce = requestHeaders.get('x-nonce') ?? undefined;
+
   return (
     <html
       lang="en"
@@ -53,13 +67,17 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <ThemeInitScript />
+        <ThemeInitScript nonce={nonce} />
       </head>
       <body>
         <ThemeProvider>
-          <AppProvider>
-            <AppShell>{children}</AppShell>
-          </AppProvider>
+          {bootstrap ? (
+            <AppProvider bootstrap={bootstrap}>
+              <AppShell>{children}</AppShell>
+            </AppProvider>
+          ) : (
+            <AppShell><ServiceUnavailableBoundary /></AppShell>
+          )}
         </ThemeProvider>
       </body>
     </html>

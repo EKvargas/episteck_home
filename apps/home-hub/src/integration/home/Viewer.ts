@@ -1,16 +1,24 @@
+import type { ResourceScope } from '../session/ResourceScope';
+
 export interface Viewer {
   personId: string;
-  name: string;
+  displayName: string;
 }
+
+export type CareRelationshipType =
+  | 'CAREGIVER'
+  | 'COORDINATOR'
+  | 'GUARDIAN'
+  | 'FAMILY_SUPPORT';
 
 export interface CareRelationship {
   subjectPersonId: string;
-  relationshipType: string;
+  relationshipType: CareRelationshipType;
 }
 
 export interface BootstrapContext {
   viewer: Viewer;
-  personContexts: Array<{ type: 'PERSON'; personId: string; displayName: string }>;
-  circleContexts: Array<{ type: 'CIRCLE'; circleId: string; displayName: string }>;
+  personContexts: Array<Extract<ResourceScope, { type: 'PERSON' }>>;
+  circleContexts: Array<Extract<ResourceScope, { type: 'CIRCLE' }>>;
   careRelationships: CareRelationship[];
 }
