@@ -193,23 +193,16 @@ def create_app(
             )
             return _failure(403, "this account is not linked to a Home person")
 
-        # 10+11. Opaque cookie only. Tokens stay in the server-side store.
-        session = store.create_session(
-            home_session_id=home_session_id,
-            access_token=tokens.access_token,
-            refresh_token=tokens.refresh_token,
-        )
-
+        # 10+11. Session creation and runtime claim commit together. A failed
+        # claim rolls back the token-bearing row before any cookie is issued.
         try:
-            binding = store.claim_runtime(RUNTIME_ID, session.session_id)
+            session, binding = store.create_session_and_claim_runtime(
+                home_session_id=home_session_id,
+                access_token=tokens.access_token,
+                refresh_token=tokens.refresh_token,
+                runtime_id=RUNTIME_ID,
+            )
         except (ValueError, StoreUnavailableError):
-            # A newly created session is not returned to the browser unless its
-            # runtime claim reached a controlled outcome. If cleanup itself is
-            # temporarily unavailable, the unreferenced session simply expires.
-            try:
-                store.delete_session(session.session_id)
-            except StoreUnavailableError:
-                pass
             return _failure(503, "runtime binding could not be completed")
 
         # ALREADY_BOUND is still success: the Home Hub session is valid, and agent

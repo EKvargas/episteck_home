@@ -332,6 +332,54 @@ class SessionStore:
             expires_at=expires_at,
         )
 
+    def create_session_and_claim_runtime(
+        self,
+        *,
+        home_session_id: str,
+        access_token: str,
+        refresh_token: str | None,
+        runtime_id: str,
+        ttl_seconds: int = SESSION_TTL_SECONDS,
+    ) -> tuple[Session, BindResult]:
+        """Commit a browser session only with a controlled runtime claim result."""
+        session_id = secrets.token_urlsafe(32)
+        now = _now()
+        expires_at = now + ttl_seconds
+        try:
+            with self._mutation() as db:
+                db.execute(
+                    "INSERT INTO bff_session"
+                    " (session_id, home_session_id, access_token, refresh_token,"
+                    "  created_at, expires_at) VALUES (?,?,?,?,?,?)",
+                    (
+                        session_id,
+                        home_session_id,
+                        access_token,
+                        refresh_token,
+                        now,
+                        expires_at,
+                    ),
+                )
+                binding = self._claim_runtime_in_transaction(
+                    db, runtime_id, session_id, now
+                )
+                if not isinstance(binding, BindResult):
+                    raise ValueError("runtime claim outcome is not controlled")
+        except sqlite3.DatabaseError:
+            # _mutation has rolled back. Keep the callback's failure contract for
+            # SQLite errors beyond OperationalError, without changing other store APIs.
+            raise StoreUnavailableError("runtime store unavailable") from None
+        return (
+            Session(
+                session_id=session_id,
+                home_session_id=home_session_id,
+                access_token=access_token,
+                refresh_token=refresh_token,
+                expires_at=expires_at,
+            ),
+            binding,
+        )
+
     def get_session(self, session_id: str | None) -> Session | None:
         """Return a live session, or nothing. Expiry is a denial, not a warning."""
         if not session_id:
@@ -366,43 +414,47 @@ class SessionStore:
 
     def claim_runtime(self, runtime_id: str, session_id: str) -> BindResult:
         """Atomically bind a live session without replacing another live owner."""
-        now = _now()
         with self._mutation() as db:
-            candidate = db.execute(
-                "SELECT session_id FROM bff_session"
-                " WHERE session_id = ? AND expires_at > ?",
-                (session_id, now),
-            ).fetchone()
-            if candidate is None:
-                raise ValueError("runtime binding requires a live session")
+            return self._claim_runtime_in_transaction(db, runtime_id, session_id, _now())
 
-            binding = db.execute(
-                "SELECT rb.session_id, s.expires_at"
-                " FROM runtime_binding AS rb"
-                " LEFT JOIN bff_session AS s ON s.session_id = rb.session_id"
-                " WHERE rb.runtime_id = ?",
-                (runtime_id,),
-            ).fetchone()
-            if binding is None:
-                db.execute(
-                    "INSERT INTO runtime_binding (runtime_id, session_id, bound_at)"
-                    " VALUES (?, ?, ?)",
-                    (runtime_id, session_id, now),
-                )
-                return BindResult.BOUND
+    def _claim_runtime_in_transaction(
+        self, db: sqlite3.Connection, runtime_id: str, session_id: str, now: int
+    ) -> BindResult:
+        candidate = db.execute(
+            "SELECT session_id FROM bff_session"
+            " WHERE session_id = ? AND expires_at > ?",
+            (session_id, now),
+        ).fetchone()
+        if candidate is None:
+            raise ValueError("runtime binding requires a live session")
 
-            if binding["session_id"] == session_id:
-                return BindResult.SAME_SESSION
+        binding = db.execute(
+            "SELECT rb.session_id, s.expires_at"
+            " FROM runtime_binding AS rb"
+            " LEFT JOIN bff_session AS s ON s.session_id = rb.session_id"
+            " WHERE rb.runtime_id = ?",
+            (runtime_id,),
+        ).fetchone()
+        if binding is None:
+            db.execute(
+                "INSERT INTO runtime_binding (runtime_id, session_id, bound_at)"
+                " VALUES (?, ?, ?)",
+                (runtime_id, session_id, now),
+            )
+            return BindResult.BOUND
 
-            if binding["expires_at"] is None or binding["expires_at"] <= now:
-                db.execute(
-                    "UPDATE runtime_binding SET session_id = ?, bound_at = ?"
-                    " WHERE runtime_id = ?",
-                    (session_id, now, runtime_id),
-                )
-                return BindResult.REPLACED_STALE
+        if binding["session_id"] == session_id:
+            return BindResult.SAME_SESSION
 
-            return BindResult.ALREADY_BOUND
+        if binding["expires_at"] is None or binding["expires_at"] <= now:
+            db.execute(
+                "UPDATE runtime_binding SET session_id = ?, bound_at = ?"
+                " WHERE runtime_id = ?",
+                (session_id, now, runtime_id),
+            )
+            return BindResult.REPLACED_STALE
+
+        return BindResult.ALREADY_BOUND
 
     def resolve_runtime(self, runtime_id: str) -> Session | None:
         """Return the committed live owner and discard a stale binding."""

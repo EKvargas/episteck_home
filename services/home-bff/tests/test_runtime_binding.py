@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from home_bff.runtime import RUNTIME_ID, BindResult
-from home_bff.store import SessionStore
+from home_bff.store import SessionStore, StoreUnavailableError
 
 
 def _make_session(store: SessionStore, suffix: str, *, ttl_seconds: int = 300):
@@ -76,6 +76,114 @@ def _resolve_from_another_process(path: Path) -> str | None:
 def _binding_count(path: Path) -> int:
     with sqlite3.connect(path) as db:
         return db.execute("SELECT COUNT(*) FROM runtime_binding").fetchone()[0]
+
+
+def _session_count(path: Path) -> int:
+    with sqlite3.connect(path) as db:
+        return db.execute("SELECT COUNT(*) FROM bff_session").fetchone()[0]
+
+
+def _create_and_claim(store: SessionStore):
+    return store.create_session_and_claim_runtime(
+        home_session_id="HDS-CANDIDATE",
+        access_token="candidate-access",
+        refresh_token="candidate-refresh",
+        runtime_id=RUNTIME_ID,
+    )
+
+
+def test_atomic_create_and_claim_bound_persists_both_rows(tmp_path):
+    path = tmp_path / "bff.sqlite"
+    store = SessionStore(str(path))
+    session, result = _create_and_claim(store)
+
+    assert result is BindResult.BOUND
+    assert store.get_session(session.session_id) == session
+    assert store.resolve_runtime(RUNTIME_ID) == session
+    assert _session_count(path) == 1
+    assert _binding_count(path) == 1
+
+
+def test_atomic_create_and_claim_value_error_rolls_back_candidate(tmp_path, monkeypatch):
+    path = tmp_path / "bff.sqlite"
+    store = SessionStore(str(path))
+
+    def reject(*args):
+        raise ValueError("runtime claim rejected")
+
+    monkeypatch.setattr(store, "_claim_runtime_in_transaction", reject)
+    with pytest.raises(ValueError, match="runtime claim rejected"):
+        _create_and_claim(store)
+
+    assert _session_count(path) == 0
+    assert _binding_count(path) == 0
+
+
+def test_atomic_create_and_claim_requires_controlled_result(tmp_path, monkeypatch):
+    path = tmp_path / "bff.sqlite"
+    store = SessionStore(str(path))
+    monkeypatch.setattr(store, "_claim_runtime_in_transaction", lambda *args: None)
+
+    with pytest.raises(ValueError, match="runtime claim outcome"):
+        _create_and_claim(store)
+
+    assert _session_count(path) == 0
+    assert _binding_count(path) == 0
+
+
+def test_atomic_create_and_claim_sqlite_error_rolls_back_partial_binding(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "bff.sqlite"
+    store = SessionStore(str(path))
+
+    def partially_claim(db, runtime_id, session_id, now):
+        db.execute(
+            "INSERT INTO runtime_binding (runtime_id, session_id, bound_at) VALUES (?,?,?)",
+            (runtime_id, session_id, now),
+        )
+        raise sqlite3.OperationalError("injected failure after binding insert")
+
+    monkeypatch.setattr(store, "_claim_runtime_in_transaction", partially_claim)
+    with pytest.raises(StoreUnavailableError):
+        _create_and_claim(store)
+
+    assert _session_count(path) == 0
+    assert _binding_count(path) == 0
+
+
+def test_atomic_create_and_claim_already_bound_keeps_owner_and_candidate(tmp_path):
+    path = tmp_path / "bff.sqlite"
+    store = SessionStore(str(path))
+    owner = _make_session(store, "owner")
+    assert store.claim_runtime(RUNTIME_ID, owner.session_id) is BindResult.BOUND
+
+    candidate, result = _create_and_claim(store)
+
+    assert result is BindResult.ALREADY_BOUND
+    assert store.get_session(candidate.session_id) == candidate
+    assert store.resolve_runtime(RUNTIME_ID) == owner
+    assert _session_count(path) == 2
+    assert _binding_count(path) == 1
+
+
+def test_atomic_create_and_claim_replaces_stale_owner(tmp_path):
+    path = tmp_path / "bff.sqlite"
+    store = SessionStore(str(path))
+    owner = _make_session(store, "owner")
+    assert store.claim_runtime(RUNTIME_ID, owner.session_id) is BindResult.BOUND
+    with sqlite3.connect(path) as db:
+        db.execute(
+            "UPDATE bff_session SET expires_at = ? WHERE session_id = ?",
+            (int(time.time()) - 1, owner.session_id),
+        )
+
+    candidate, result = _create_and_claim(store)
+
+    assert result is BindResult.REPLACED_STALE
+    assert store.get_session(candidate.session_id) == candidate
+    assert store.resolve_runtime(RUNTIME_ID) == candidate
+    assert _binding_count(path) == 1
 
 
 def test_fixed_runtime_id_is_not_caller_selected():

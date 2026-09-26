@@ -1,6 +1,8 @@
 """Login-binding cookie primitives (F2a-BFF, B3 / §9)."""
 from __future__ import annotations
 
+import sqlite3
+
 from home_bff import sessions
 
 
@@ -255,16 +257,47 @@ def test_bff5_runtime_binding_failure_is_503(ctx):
     http.get("/login", follow_redirects=False)
     state = login_and_get_state(http)
 
-    def fail_claim(runtime_id, session_id):
+    def fail_claim(**kwargs):
         raise StoreUnavailableError("runtime store unavailable")
 
-    store.claim_runtime = fail_claim
+    store.create_session_and_claim_runtime = fail_claim
     response = http.get(f"/callback?code=c&state={state}", follow_redirects=False)
     assert response.status_code == 503
     assert "location" not in response.headers
     from home_bff import sessions
 
     assert sessions.COOKIE_NAME not in response.cookies
+    import sqlite3
+
+    with sqlite3.connect(store._path) as db:
+        assert db.execute("SELECT COUNT(*) FROM bff_session").fetchone()[0] == 0
+        assert db.execute("SELECT COUNT(*) FROM runtime_binding").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize(
+    "failure_type", [sqlite3.OperationalError, sqlite3.IntegrityError]
+)
+def test_bff5_sqlite_failure_after_binding_insert_leaves_no_session(
+    ctx, monkeypatch, failure_type
+):
+    http, store, _ = ctx
+
+    def partial_claim(db, runtime_id, session_id, now):
+        db.execute(
+            "INSERT INTO runtime_binding (runtime_id, session_id, bound_at) VALUES (?,?,?)",
+            (runtime_id, session_id, now),
+        )
+        raise failure_type("failure after insert")
+
+    monkeypatch.setattr(store, "_claim_runtime_in_transaction", partial_claim)
+    state = login_and_get_state(http)
+    response = http.get(f"/callback?code=c&state={state}", follow_redirects=False)
+
+    assert response.status_code == 503
+    assert sessions.COOKIE_NAME not in response.cookies
+    with sqlite3.connect(store._path) as db:
+        assert db.execute("SELECT COUNT(*) FROM bff_session").fetchone()[0] == 0
+        assert db.execute("SELECT COUNT(*) FROM runtime_binding").fetchone()[0] == 0
 
 
 def test_bff6_already_bound_still_returns_303_and_enum_absent(ctx):
