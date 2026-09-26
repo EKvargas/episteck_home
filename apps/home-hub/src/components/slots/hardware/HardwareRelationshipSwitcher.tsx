@@ -1,81 +1,24 @@
-// src/components/slots/hardware/HardwareRelationshipSwitcher.tsx
 'use client';
 import React from 'react';
 import { RelationshipSwitcherProps } from '../types';
 import styles from './HardwareRelationshipSwitcher.module.css';
 
-export function HardwareRelationshipSwitcher({
-  activeContextId,
-  onSelectContext,
-}: RelationshipSwitcherProps) {
-  const isFamily = activeContextId === 'CIR-fam';
-  const isErick = activeContextId === 'PSN-me';
-  const isAna = activeContextId === 'PSN-ana';
-
-  // Rotation angles for physical knob:
-  // Family: -35deg, Erick: 0deg, Ana: 35deg
-  const rotationDeg = isFamily ? -35 : isErick ? 0 : 35;
-
+export function HardwareRelationshipSwitcher({ contexts, activeContextId, onSelectContext }: RelationshipSwitcherProps) {
   return (
-    <nav
-      aria-label="Hardware Rotary Context Controller"
-      className={styles.container}
-    >
-      <span className={styles.rotaryLabel} aria-hidden="true">
-        Context Rotary
-      </span>
-
+    <nav aria-label="Household Relationship Switcher" className={styles.container}>
+      <span className={styles.rotaryLabel}>SCOPE</span>
       <div className={styles.controlsArea}>
-        {/* Family Target */}
-        <button
-          type="button"
-          role="tab"
-          aria-selected={isFamily}
-          aria-label="Family Context"
-          onClick={() => onSelectContext('CIR-fam')}
-          className={`${styles.contextButton} ${
-            isFamily ? styles.contextButtonActive : ''
-          }`}
-        >
-          FAMILY
-        </button>
-
-        {/* Machined Center Knob */}
-        <div
-          className={styles.knobWrapper}
-          style={{ transform: `rotate(${rotationDeg}deg)` }}
-          aria-hidden="true"
-        >
-          <div className={styles.knobPip} />
-        </div>
-
-        {/* Erick Target */}
-        <button
-          type="button"
-          role="tab"
-          aria-selected={isErick}
-          aria-label="Erick Personal Context"
-          onClick={() => onSelectContext('PSN-me')}
-          className={`${styles.contextButton} ${
-            isErick ? styles.contextButtonActive : ''
-          }`}
-        >
-          ERICK
-        </button>
-
-        {/* Ana Target */}
-        <button
-          type="button"
-          role="tab"
-          aria-selected={isAna}
-          aria-label="Ana Care Context"
-          onClick={() => onSelectContext('PSN-ana')}
-          className={`${styles.contextButton} ${
-            isAna ? styles.contextButtonActive : ''
-          }`}
-        >
-          ANA
-        </button>
+        {contexts.map((context) => {
+          const active = context.id === activeContextId;
+          return (
+            <button key={context.id} type="button" role="tab" aria-selected={active}
+              aria-label={`${context.name} ${context.mode === 'FAMILY' ? 'Circle' : context.mode === 'PERSONAL' ? 'Personal' : 'Care'} Context`}
+              onClick={() => onSelectContext(context.id)}
+              className={`${styles.contextButton} ${active ? styles.contextButtonActive : ''}`}>
+              {context.name}
+            </button>
+          );
+        })}
       </div>
     </nav>
   );

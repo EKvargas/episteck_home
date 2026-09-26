@@ -1,5 +1,29 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## F2b server integration
+
+The Hub is mounted at `/app`. In local development, `HOME_HUB_DATA_MODE` defaults
+to `MOCK`; mock mode never calls `fetch`. A production build or server requires
+`HOME_HUB_DATA_MODE=LIVE` and fails closed otherwise. LIVE mode also requires the
+trusted server-side `HOME_HUB_BFF_BASE_URL` origin, such as
+`http://127.0.0.1:9933`; it is never sent to browser code. The server forwards
+only the `episteck_home_session` cookie to that origin's `/bootstrap` endpoint.
+
+The current prototype still renders existing mock domain panels. As a temporary
+F2 compatibility seam, the existing local scope switcher uses an in-memory
+default/selection for presentation, while its visible Person and Circle options,
+viewer, and care relationship list come from the validated bootstrap. Care
+relationships only classify the presentation label for a discovered Person;
+they do not grant access. F3 owns the future `activeContext` state and persistence.
+
+The Next.js proxy adds a nonce based CSP for `/app`, along with the current
+security headers. Inline style attributes remain allowed because the existing
+screens use React style props; script execution uses per request nonces.
+
+F2b server boundary checks: `npm test`, `npm run lint`, `npx tsc --noEmit`, and
+`npm run test:e2e`. The inactive Quadlet and the separate real-host pasta proof
+are documented in [`deploy/home-hub/README.md`](../../deploy/home-hub/README.md).
+
 ## Getting Started
 
 First, run the development server:

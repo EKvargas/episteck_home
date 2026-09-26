@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useAppContext } from '@/components/providers/AppProvider';
-import { getMicronutrientCoverageMock } from '@/domain/mocks';
+import { getDemoContextId, getMicronutrientCoverageMock } from '@/domain/mocks';
 import { CoverageCard } from '@/components/features/nutrition/CoverageCard';
 import styles from './page.module.css';
 
@@ -11,9 +11,9 @@ export default function PregnancyNutritionPage() {
   const { activeContext } = useAppContext();
   
   // Fetch mock data based on current context
-  const coverageData = getMicronutrientCoverageMock(activeContext.id);
+  const coverageData = getMicronutrientCoverageMock(getDemoContextId(activeContext.mode));
 
-  if (activeContext.id !== 'PSN-ana') {
+  if (activeContext.mode !== 'CARE_FOR_ANOTHER_PERSON') {
     return (
       <div className={styles.pageContainer}>
         <header className={styles.header}>
