@@ -26,6 +26,7 @@ AUTHORIZE_PATH = "/api/method/frappe.integrations.oauth2.authorize"
 OPEN_SESSION_PATH = "/api/method/episteck_home.identity.session.open_session"
 CLOSE_SESSION_PATH = "/api/method/episteck_home.identity.session.close_session"
 WHOAMI_PATH = "/api/method/episteck_home.api.whoami"
+GET_HOME_BOOTSTRAP_PATH = "/api/method/episteck_home.api.get_home_bootstrap"
 
 
 class TokenExchangeError(RuntimeError):
@@ -34,6 +35,18 @@ class TokenExchangeError(RuntimeError):
 
 class SessionOpenError(RuntimeError):
     """The Control Plane refused to open a delegated session (e.g. no Person)."""
+
+
+class UpstreamRefused(RuntimeError):
+    """The Control Plane definitively refused this session/user (401/403)."""
+
+
+class UpstreamUnavailable(RuntimeError):
+    """Transport failure, timeout, or the CP method is absent/overloaded/down."""
+
+
+class UpstreamMalformed(RuntimeError):
+    """The CP answered 200 but the body is not usable JSON with the expected shape."""
 
 
 @dataclass(frozen=True)
@@ -135,6 +148,48 @@ class HomeOAuthClient:
     def whoami(self, access_token: str) -> dict:
         """Resolve the trusted actor for this human session. Used for evidence."""
         return self._as_user(access_token, WHOAMI_PATH, None, method="GET") or {}
+
+    def get_home_bootstrap(self, access_token: str, session_id: str) -> dict:
+        """The single session-bound bootstrap read (§2/§3 Option B).
+
+        Splits the previously-uniform SessionOpenError into three classes so the
+        BFF can map each to a distinct HTTP status (§6): a definitive refusal
+        (401/403) is not the same situation as the CP being unreachable, and
+        neither is the same as the CP answering with something we cannot parse.
+        """
+        if not access_token:
+            raise UpstreamRefused("no access token")
+        headers = {"Authorization": f"Bearer {access_token}"}
+        try:
+            response = self._client.post(
+                GET_HOME_BOOTSTRAP_PATH,
+                data={"session_id": session_id},
+                headers=headers,
+            )
+        except httpx.HTTPError as error:
+            raise UpstreamUnavailable("Control Plane unreachable") from error
+
+        if response.status_code in (401, 403):
+            raise UpstreamRefused(
+                f"Control Plane refused the session (HTTP {response.status_code})"
+            )
+        if response.status_code != 200:
+            # 404/417 (method absent), 429 (rate limited), and any 5xx are all
+            # "try again later" from the browser's perspective, not "you are
+            # unauthorized" — §6 maps every one of these to 503, never 401.
+            raise UpstreamUnavailable(
+                f"Control Plane unavailable (HTTP {response.status_code})"
+            )
+        try:
+            body = response.json()
+        except ValueError as error:
+            raise UpstreamMalformed("Control Plane returned non-JSON") from error
+        if not isinstance(body, dict) or "message" not in body:
+            raise UpstreamMalformed("Control Plane response missing message envelope")
+        message = body["message"]
+        if not isinstance(message, dict):
+            raise UpstreamMalformed("Control Plane message is not an object")
+        return message
 
     def revoke_token(self, access_token: str) -> bool:
         """Revoke the upstream OAuth token so logout is not merely local."""

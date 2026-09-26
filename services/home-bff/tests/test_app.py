@@ -112,7 +112,7 @@ def complete_login(http) -> str:
     response = http.get(
         f"/callback?code=auth-code&state={state}", follow_redirects=False
     )
-    assert response.status_code == 200, response.text
+    assert response.status_code == 303, response.text
     return state
 
 
@@ -189,11 +189,8 @@ def test_callback_claims_fixed_runtime_and_reports_binding(ctx):
         f"/callback?code=auth-code&state={state}", follow_redirects=False
     )
 
-    assert response.status_code == 200
-    assert response.json() == {
-        "status": "authenticated",
-        "runtime_binding": BindResult.BOUND.value,
-    }
+    assert response.status_code == 303
+    assert response.headers["location"] == "/app"
     browser_session = store.get_session(http.cookies.get(sessions.COOKIE_NAME))
     assert browser_session is not None
     assert store.resolve_runtime(RUNTIME_ID) == browser_session
@@ -211,8 +208,8 @@ def test_callback_refuses_to_replace_live_runtime_owner(ctx):
     state = login_and_get_state(http)
     response = http.get(f"/callback?code=c&state={state}", follow_redirects=False)
 
-    assert response.status_code == 200
-    assert response.json()["runtime_binding"] == BindResult.ALREADY_BOUND.value
+    assert response.status_code == 303
+    assert response.headers["location"] == "/app"
     assert store.resolve_runtime(RUNTIME_ID) == owner
     contender_id = http.cookies.get(sessions.COOKIE_NAME)
     assert contender_id != owner.session_id
@@ -230,17 +227,21 @@ def test_callback_refuses_to_replace_live_runtime_owner(ctx):
 def test_callback_binding_failure_is_a_generic_fail_closed_response(ctx, failure):
     http, store, _ = ctx
 
-    def fail_claim(runtime_id, session_id):
+    def fail_claim(**kwargs):
         raise failure
 
-    store.claim_runtime = fail_claim
+    store.create_session_and_claim_runtime = fail_claim
     state = login_and_get_state(http)
     response = http.get(f"/callback?code=c&state={state}", follow_redirects=False)
 
     assert response.status_code == 503
+    assert "location" not in response.headers
     assert sessions.COOKIE_NAME not in response.cookies
     assert "sqlite" not in response.text.lower()
     assert "live session" not in response.text.lower()
+    with sqlite3.connect(store._path) as db:
+        assert db.execute("SELECT COUNT(*) FROM bff_session").fetchone()[0] == 0
+        assert db.execute("SELECT COUNT(*) FROM runtime_binding").fetchone()[0] == 0
 
 
 def test_callback_uses_the_verifier_minted_for_that_state(ctx):
@@ -267,7 +268,7 @@ def test_callback_rejects_reused_state(ctx):
     http, _, _ = ctx
     state = login_and_get_state(http)
     first = http.get(f"/callback?code=c&state={state}", follow_redirects=False)
-    assert first.status_code == 200
+    assert first.status_code == 303
     replay = http.get(f"/callback?code=c&state={state}", follow_redirects=False)
     assert replay.status_code == 400
 

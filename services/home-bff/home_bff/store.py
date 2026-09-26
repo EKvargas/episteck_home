@@ -42,7 +42,7 @@ TRANSACTION_TTL_SECONDS = 600
 # Browser session lifetime. Matches the Control Plane's Home Delegated Session TTL.
 SESSION_TTL_SECONDS = 12 * 60 * 60
 
-_SCHEMA = """
+_SCHEMA_PRE_LOGIN_BINDING = """
 CREATE TABLE IF NOT EXISTS oauth_transaction (
     state          TEXT PRIMARY KEY,
     code_verifier  TEXT NOT NULL,
@@ -69,7 +69,55 @@ CREATE INDEX IF NOT EXISTS ix_tx_expiry ON oauth_transaction(expires_at);
 CREATE INDEX IF NOT EXISTS ix_session_expiry ON bff_session(expires_at);
 """
 
+# Same schema. New stores get the column from CREATE TABLE directly; existing
+# stores get it from the ALTER TABLE migration in __init__ below. Both converge
+# on this same shape, which is why the schema text lists it here too — a brand
+# new SessionStore() must never need a second migration pass on its own file.
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS oauth_transaction (
+    state               TEXT PRIMARY KEY,
+    code_verifier       TEXT NOT NULL,
+    nonce               TEXT NOT NULL,
+    redirect_uri        TEXT NOT NULL,
+    login_binding_hash  TEXT NOT NULL DEFAULT '',
+    created_at          INTEGER NOT NULL,
+    expires_at          INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS bff_session (
+    session_id           TEXT PRIMARY KEY,
+    home_session_id      TEXT NOT NULL,
+    access_token         TEXT NOT NULL,
+    refresh_token        TEXT,
+    created_at           INTEGER NOT NULL,
+    expires_at           INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS runtime_binding (
+    runtime_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    bound_at   INTEGER NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES bff_session(session_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS ix_tx_expiry ON oauth_transaction(expires_at);
+CREATE INDEX IF NOT EXISTS ix_session_expiry ON bff_session(expires_at);
+"""
+
+_MIGRATE_ADD_LOGIN_BINDING_HASH = (
+    "ALTER TABLE oauth_transaction ADD COLUMN login_binding_hash TEXT NOT NULL DEFAULT ''"
+)
+
 _BUSY_TIMEOUT_MS = 1_000
+
+# The very first `PRAGMA journal_mode = WAL` against a brand-new database file
+# is not fully protected by busy_timeout: switching journal modes takes an
+# exclusive lock on the file for a moment, and when several processes (public
+# app + mint app) construct a SessionStore against the same new file at the
+# same time, one of them can observe SQLITE_BUSY/"database is locked" during
+# that specific switch rather than simply queuing behind busy_timeout like an
+# ordinary write does. This is a narrow, well-understood SQLite startup race,
+# not a bug in the migration logic below it — so it gets its own short,
+# bounded retry rather than a change to the migration's exception handling.
+_WAL_SWITCH_MAX_ATTEMPTS = 5
+_WAL_SWITCH_RETRY_DELAY_SECONDS = 0.05
 
 
 @dataclass(frozen=True)
@@ -78,6 +126,7 @@ class Transaction:
     code_verifier: str
     nonce: str
     redirect_uri: str
+    login_binding_hash: str
 
 
 @dataclass(frozen=True)
@@ -103,10 +152,12 @@ class SessionStore:
         parent = Path(path).parent
         parent.mkdir(parents=True, exist_ok=True)
         with self._connection() as db:
+            db.execute(f"PRAGMA busy_timeout = {_BUSY_TIMEOUT_MS}")
             # WAL lets the mint process read the last committed binding while the
             # public process is preparing a short write transaction.
-            db.execute("PRAGMA journal_mode = WAL")
+            self._switch_to_wal_with_retry(db)
             db.executescript(_SCHEMA)
+            self._migrate_login_binding_hash(db)
             db.commit()
         # Tokens live here. Keep them unreadable to other service accounts even if
         # the parent directory is ever loosened.
@@ -114,6 +165,45 @@ class SessionStore:
             os.chmod(path, 0o600)
         except OSError:
             pass
+
+    def _switch_to_wal_with_retry(self, db: sqlite3.Connection) -> None:
+        """Switch to WAL, retrying a locked-database condition a few times.
+
+        Only the specific "database is locked"/"database is busy" failure is
+        retried; any other OperationalError is a real problem and propagates
+        immediately.
+        """
+        last_error: sqlite3.OperationalError | None = None
+        for attempt in range(_WAL_SWITCH_MAX_ATTEMPTS):
+            try:
+                db.execute("PRAGMA journal_mode = WAL")
+                return
+            except sqlite3.OperationalError as error:
+                message = str(error).lower()
+                if "locked" not in message and "busy" not in message:
+                    raise
+                last_error = error
+                if attempt < _WAL_SWITCH_MAX_ATTEMPTS - 1:
+                    time.sleep(_WAL_SWITCH_RETRY_DELAY_SECONDS * (attempt + 1))
+        raise StoreUnavailableError(
+            "runtime store unavailable: could not switch to WAL journal mode"
+        ) from last_error
+
+    def _migrate_login_binding_hash(self, db: sqlite3.Connection) -> None:
+        """Idempotent: a store created before this column existed gets it added.
+
+        A store created fresh by _SCHEMA above already has the column, so this
+        ALTER is a no-op there — SQLite raises "duplicate column name", which is
+        the expected, harmless outcome, not a failure. Two processes (the public
+        app and the mint app) can run this at the same time against the same
+        file; busy_timeout above makes the second writer wait rather than error,
+        and a duplicate-column result is equally harmless whichever one wins.
+        """
+        try:
+            db.execute(_MIGRATE_ADD_LOGIN_BINDING_HASH)
+        except sqlite3.OperationalError as error:
+            if "duplicate column name" not in str(error).lower():
+                raise
 
     def _connect(self) -> sqlite3.Connection:
         """Open one configured connection for exactly one store operation."""
@@ -158,19 +248,27 @@ class SessionStore:
     # ---------------------------------------------------------------- transactions
 
     def begin_transaction(
-        self, *, state: str, code_verifier: str, nonce: str, redirect_uri: str
+        self,
+        *,
+        state: str,
+        code_verifier: str,
+        nonce: str,
+        redirect_uri: str,
+        login_binding_hash: str,
     ) -> None:
         now = _now()
         with self._mutation() as db:
             db.execute(
                 "INSERT INTO oauth_transaction"
-                " (state, code_verifier, nonce, redirect_uri, created_at, expires_at)"
-                " VALUES (?,?,?,?,?,?)",
+                " (state, code_verifier, nonce, redirect_uri, login_binding_hash,"
+                "  created_at, expires_at)"
+                " VALUES (?,?,?,?,?,?,?)",
                 (
                     state,
                     code_verifier,
                     nonce,
                     redirect_uri,
+                    login_binding_hash,
                     now,
                     now + TRANSACTION_TTL_SECONDS,
                 ),
@@ -196,6 +294,7 @@ class SessionStore:
                 code_verifier=row["code_verifier"],
                 nonce=row["nonce"],
                 redirect_uri=row["redirect_uri"],
+                login_binding_hash=row["login_binding_hash"],
             )
 
     # -------------------------------------------------------------------- sessions
@@ -233,6 +332,54 @@ class SessionStore:
             expires_at=expires_at,
         )
 
+    def create_session_and_claim_runtime(
+        self,
+        *,
+        home_session_id: str,
+        access_token: str,
+        refresh_token: str | None,
+        runtime_id: str,
+        ttl_seconds: int = SESSION_TTL_SECONDS,
+    ) -> tuple[Session, BindResult]:
+        """Commit a browser session only with a controlled runtime claim result."""
+        session_id = secrets.token_urlsafe(32)
+        now = _now()
+        expires_at = now + ttl_seconds
+        try:
+            with self._mutation() as db:
+                db.execute(
+                    "INSERT INTO bff_session"
+                    " (session_id, home_session_id, access_token, refresh_token,"
+                    "  created_at, expires_at) VALUES (?,?,?,?,?,?)",
+                    (
+                        session_id,
+                        home_session_id,
+                        access_token,
+                        refresh_token,
+                        now,
+                        expires_at,
+                    ),
+                )
+                binding = self._claim_runtime_in_transaction(
+                    db, runtime_id, session_id, now
+                )
+                if not isinstance(binding, BindResult):
+                    raise ValueError("runtime claim outcome is not controlled")
+        except sqlite3.DatabaseError:
+            # _mutation has rolled back. Keep the callback's failure contract for
+            # SQLite errors beyond OperationalError, without changing other store APIs.
+            raise StoreUnavailableError("runtime store unavailable") from None
+        return (
+            Session(
+                session_id=session_id,
+                home_session_id=home_session_id,
+                access_token=access_token,
+                refresh_token=refresh_token,
+                expires_at=expires_at,
+            ),
+            binding,
+        )
+
     def get_session(self, session_id: str | None) -> Session | None:
         """Return a live session, or nothing. Expiry is a denial, not a warning."""
         if not session_id:
@@ -267,43 +414,47 @@ class SessionStore:
 
     def claim_runtime(self, runtime_id: str, session_id: str) -> BindResult:
         """Atomically bind a live session without replacing another live owner."""
-        now = _now()
         with self._mutation() as db:
-            candidate = db.execute(
-                "SELECT session_id FROM bff_session"
-                " WHERE session_id = ? AND expires_at > ?",
-                (session_id, now),
-            ).fetchone()
-            if candidate is None:
-                raise ValueError("runtime binding requires a live session")
+            return self._claim_runtime_in_transaction(db, runtime_id, session_id, _now())
 
-            binding = db.execute(
-                "SELECT rb.session_id, s.expires_at"
-                " FROM runtime_binding AS rb"
-                " LEFT JOIN bff_session AS s ON s.session_id = rb.session_id"
-                " WHERE rb.runtime_id = ?",
-                (runtime_id,),
-            ).fetchone()
-            if binding is None:
-                db.execute(
-                    "INSERT INTO runtime_binding (runtime_id, session_id, bound_at)"
-                    " VALUES (?, ?, ?)",
-                    (runtime_id, session_id, now),
-                )
-                return BindResult.BOUND
+    def _claim_runtime_in_transaction(
+        self, db: sqlite3.Connection, runtime_id: str, session_id: str, now: int
+    ) -> BindResult:
+        candidate = db.execute(
+            "SELECT session_id FROM bff_session"
+            " WHERE session_id = ? AND expires_at > ?",
+            (session_id, now),
+        ).fetchone()
+        if candidate is None:
+            raise ValueError("runtime binding requires a live session")
 
-            if binding["session_id"] == session_id:
-                return BindResult.SAME_SESSION
+        binding = db.execute(
+            "SELECT rb.session_id, s.expires_at"
+            " FROM runtime_binding AS rb"
+            " LEFT JOIN bff_session AS s ON s.session_id = rb.session_id"
+            " WHERE rb.runtime_id = ?",
+            (runtime_id,),
+        ).fetchone()
+        if binding is None:
+            db.execute(
+                "INSERT INTO runtime_binding (runtime_id, session_id, bound_at)"
+                " VALUES (?, ?, ?)",
+                (runtime_id, session_id, now),
+            )
+            return BindResult.BOUND
 
-            if binding["expires_at"] is None or binding["expires_at"] <= now:
-                db.execute(
-                    "UPDATE runtime_binding SET session_id = ?, bound_at = ?"
-                    " WHERE runtime_id = ?",
-                    (session_id, now, runtime_id),
-                )
-                return BindResult.REPLACED_STALE
+        if binding["session_id"] == session_id:
+            return BindResult.SAME_SESSION
 
-            return BindResult.ALREADY_BOUND
+        if binding["expires_at"] is None or binding["expires_at"] <= now:
+            db.execute(
+                "UPDATE runtime_binding SET session_id = ?, bound_at = ?"
+                " WHERE runtime_id = ?",
+                (session_id, now, runtime_id),
+            )
+            return BindResult.REPLACED_STALE
+
+        return BindResult.ALREADY_BOUND
 
     def resolve_runtime(self, runtime_id: str) -> Session | None:
         """Return the committed live owner and discard a stale binding."""
