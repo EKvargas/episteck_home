@@ -1,6 +1,6 @@
 # Google Cloud Storage control-journal capability research — Phase 0C
 
-Status: **GCS SELECTED by Architecture Board; Phase 0C screen and live evidence retained below**
+Status: **GCS SELECTED by Architecture Board; disposable live-probe resources cleaned up**
 
 Reviewed: 2026-09-26
 
@@ -104,7 +104,7 @@ The actual resource was disposable project/bucket `episteck-kn-probe-260926-5512
 
 The [GCS list API](https://docs.cloud.google.com/storage/docs/json_api/v1/objects/list) remains non-snapshot across pages. The successful WS-5 result is for the accepted S-6 proof boundary: documented strong visibility of entries acknowledged before a query, exhaustive pages, contiguous history, and a final exact next-revision lookup. A request error or uncertain boundary still means `H(p) = UNKNOWN`.
 
-**Current Board disposition:** GCS is **SELECTED** under the tested isolated configuration. **Pre-runtime obligation #6: CLOSED. Pre-runtime obligation #1: OPEN.** The selection is of a physical mechanism, not an authorization for Knowledge runtime or production GCS provisioning. Cleanup is pending the latest synthetic object's retention expiry at `2026-09-26T16:29:42.402Z`; the bucket contains only disposable data. The existing Hetzner Storage Box and backups were untouched.
+**Current Board disposition:** GCS is **SELECTED** under the tested isolated configuration. **Pre-runtime obligation #6: CLOSED. Pre-runtime obligation #1: OPEN.** The selection is of a physical mechanism, not an authorization for Knowledge runtime or production GCS provisioning. The live-run cleanup was initially pending the synthetic objects' expiry at `2026-09-26T16:29:42.402Z`; its final result is recorded below and in [the main report §14](KNOWLEDGE_JOURNAL_STORE_PROBE_REPORT.md#14-final-disposable-probe-cleanup--2026-09-26). The existing Hetzner Storage Box and backups were untouched.
 
 Verify the addendum:
 
@@ -117,13 +117,28 @@ git diff --no-index --check -- /dev/null docs/architecture/proposals/GCS_JOURNAL
 
 The Board-selected topology is a **dedicated GCP project**, private regional **Standard** GCS bucket in **`europe-west3`**, uniform bucket-level access, public access prevention, Object Versioning **disabled**, and **locked bucket retention**. A journal-only service account receives exactly `storage.objects.create`, `storage.objects.get`, and `storage.objects.list`, with no user-managed key; an operator/admin identity is separate. The **production retention duration is not selected here**. Production GCS infrastructure does not yet exist, and Knowledge runtime is not authorized.
 
-At the first required UTC check, `2026-09-26T15:41:41Z`, retention had **48 minutes 1 second** remaining. No destructive cleanup was attempted. The disposable project/bucket `episteck-kn-probe-260926-5512`, disabled probe identity, custom role, and 111 synthetic objects remain cleanup pending until after `2026-09-26T16:29:42.402Z` and a fresh exact-resource inventory. The detailed cleanup boundary is in [the main report §13](KNOWLEDGE_JOURNAL_STORE_PROBE_REPORT.md#13-architecture-board-selection-and-pending-disposable-cleanup).
+At the first required UTC check, `2026-09-26T15:41:41Z`, retention had **48 minutes 1 second** remaining, so no destructive cleanup was attempted then. The later inventory and final cleanup are recorded in [the main report §14](KNOWLEDGE_JOURNAL_STORE_PROBE_REPORT.md#14-final-disposable-probe-cleanup--2026-09-26).
 
 The seven-file privacy audit removed the unnecessary personal operator address and replaced the probe's local user-profile `gcloud` path with `PATH`/`GCLOUD_BIN` discovery. Only environment-specific invocation/path material was sanitized after execution; raw observation JSON remains the evidence. The scan found no committed live bearer/OAuth token value, private key, service-account JSON key, refresh token, or credential file.
 
 Verify the selected topology text:
 
 ```powershell
-rg -n 'SELECTED|production retention|cleanup pending|GCLOUD_BIN' docs/architecture/proposals/GCS_JOURNAL_CAPABILITY_RESEARCH.md spike/knowledge-journal-store-probe/gcs_live_probe.py
+rg -n 'SELECTED|production retention|cleanup|GCLOUD_BIN' docs/architecture/proposals/GCS_JOURNAL_CAPABILITY_RESEARCH.md spike/knowledge-journal-store-probe/gcs_live_probe.py
+git diff --check
+```
+
+## Final disposal result
+
+At **2026-09-26 19:25:20 UTC**, the one-hour retention had expired. The pre-delete version-aware inventory exactly matched the original probe: one disposable bucket, **111 synthetic objects / 2,642 bytes**, no noncurrent version or unexpected key, one disabled probe service account, one custom role, zero user-managed keys and HMAC keys. The sorted-name manifest SHA-256 was `4c5a1842d542279ec0cc7e400d808a6220ac8c9f86f81b10b4ad1d1ab3e9a7da`.
+
+All **111** generation-checked object DELETEs returned `204`; a fresh list returned zero. Bucket DELETE returned `204` and subsequent GET `404`. The disabled service account was deleted, the custom role reported `deleted: true`, and active lists were empty. The first project deletion request was blocked by the Storage-created lien from Bucket Lock. With bucket and objects already gone, the exact sole Storage lien was removed through the [documented Resource Manager API](https://docs.cloud.google.com/resource-manager/reference/rest/v3/liens/delete) (`200`), then project deletion succeeded. By **19:33:19 UTC**, project `episteck-kn-probe-260926-5512` was **`DELETE_REQUESTED`** and **`billingEnabled: false`**. No production resource was created.
+
+Google's [normal 30-day recovery period](https://docs.cloud.google.com/resource-manager/docs/delete-restore-projects) may retain project metadata before permanent removal; prior usage charges can settle later. No active billable GCS bucket/object or usable probe account remains. Modeled storage/operation cost is **sub-cent**, subject to actual billing, taxes, transfer and rounding. GCS remains **SELECTED**; WS-1..WS-6 PASS, WS-7 informational, obligation #6 **CLOSED**, obligation #1 **OPEN**. Knowledge runtime remains unauthorized, and unrelated Google, Hetzner and restic resources were untouched.
+
+Verify this addendum:
+
+```powershell
+rg -n '^## Final disposal|111|DELETE_REQUESTED|billingEnabled: false|SELECTED' docs/architecture/proposals/GCS_JOURNAL_CAPABILITY_RESEARCH.md
 git diff --check
 ```

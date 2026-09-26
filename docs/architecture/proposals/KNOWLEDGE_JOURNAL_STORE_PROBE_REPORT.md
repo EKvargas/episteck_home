@@ -1,6 +1,6 @@
 # Knowledge control journal physical-store probe — documentation and live evidence
 
-Status: **GCS SELECTED by Architecture Board; WS-1..WS-6 PASS; pre-runtime obligation #6 CLOSED; disposable cleanup pending**
+Status: **GCS SELECTED by Architecture Board; WS-1..WS-6 PASS; pre-runtime obligation #6 CLOSED; disposable probe cleanup completed**
 
 Date: 2026-09-26
 
@@ -317,13 +317,13 @@ git diff --check
 git status --short --branch
 ```
 
-## 13. Architecture Board selection and pending disposable cleanup
+## 13. Architecture Board selection and earlier cleanup gate
 
 The Board's disposition supersedes the earlier `SELECTABLE` probe recommendation: **GCS is SELECTED**. The selected production **topology**, when separately authorized, is a dedicated GCP project with a private regional Standard bucket in `europe-west3`, uniform bucket-level access, public access prevention, Object Versioning disabled, and locked bucket retention. The Knowledge journal identity must have **exactly** `storage.objects.create`, `storage.objects.get`, and `storage.objects.list`, with no user-managed service-account key or inherited broader permission. Operator/admin authority is separate from the journal service identity. The production retention duration remains **undecided**; the disposable probe's 3,600-second period is not a production choice. **No production GCS project or bucket exists, and Knowledge runtime remains unauthorized.**
 
 **Pre-runtime obligation #6: CLOSED. Pre-runtime obligation #1: OPEN.** WS-1..WS-6 remain PASS; WS-7 remains informational. This Board selection changes the current store disposition only; it does not change the accepted restore-freshness architecture or the negative Hetzner findings.
 
-At the required first time check on **2026-09-26 15:41:41 UTC**, the latest recorded retention expiry (`2026-09-26 16:29:42.402 UTC`) was still **48 minutes 1 second away**. No destructive cloud cleanup was attempted. The disabled service account, 111 synthetic objects, locked disposable bucket, custom role, and billing-enabled disposable project remain **cleanup pending**. After expiry, cleanup must reverify the exact project/bucket, enumerate resources, and remove only those disposable resources; confirm project shutdown and billing state. The existing Mail project, all other Google resources, Hetzner Storage Box, restic, and production credentials are outside scope.
+At the first required time check on **2026-09-26 15:41:41 UTC**, the latest recorded retention expiry (`2026-09-26 16:29:42.402 UTC`) was still **48 minutes 1 second away**. No destructive cloud cleanup was attempted at that time. The later exact inventory, deletion results, and project shutdown are recorded in §14. The existing Mail project, all other Google resources, Hetzner Storage Box, restic, and production credentials remained outside cleanup scope.
 
 Privacy audit of all seven PR files found one hard-coded local user-profile path and one personal operator email in durable text. The email was removed and the script now discovers `gcloud` on `PATH` or via `GCLOUD_BIN`. **Only environment-specific invocation/path material was sanitized after execution**; the committed raw JSON observations remain the actual probe evidence, and the probe logic and results are unchanged. No bearer/OAuth token value, private key, service-account JSON key, refresh token, or credential file was found in the seven-file scan. Disposable project/bucket IDs, technically useful service-account identity, statuses, timestamps, generations, hashes, and timings remain for traceability.
 
@@ -332,7 +332,41 @@ An independent read-only consistency check of the raw JSON and client source con
 Verify the Board update and sanitation:
 
 ```powershell
-rg -n 'GCS SELECTED|obligation #6: CLOSED|obligation #1: OPEN|cleanup pending' docs/architecture/proposals/KNOWLEDGE_JOURNAL_STORE_PROBE_REPORT.md
+rg -n 'GCS SELECTED|obligation #6: CLOSED|obligation #1: OPEN|cleanup completed' docs/architecture/proposals/KNOWLEDGE_JOURNAL_STORE_PROBE_REPORT.md
 python -c "import ast,pathlib; ast.parse(pathlib.Path('spike/knowledge-journal-store-probe/gcs_live_probe.py').read_text(encoding='utf-8')); print('PROBE_SCRIPT_SYNTAX=OK')"
+git diff --check
+```
+
+## 14. Final disposable probe cleanup — 2026-09-26
+
+**Cleanup UTC:** the retention gate was rechecked at **19:25:20 UTC**, after the latest recorded expiry at `16:29:42.402 UTC`; cleanup completed and the final lifecycle/billing check was recorded by **19:33:19 UTC**. The active CLI project was a pre-existing Mail project, so every cleanup call named the disposable project/bucket explicitly. The active authenticated operator account was verified without placing its personal address in this report. No pre-existing project was a deletion target.
+
+### 14.1 Exact pre-delete inventory
+
+| Resource | Read-only inventory before deletion |
+|---|---|
+| Project | `episteck-kn-probe-260926-5512`, number `620163540160`, display name `KN Journal Probe 260926`, `ACTIVE`, billing enabled. Project IAM had one `roles/owner` binding for the operator. |
+| Bucket | Exactly one bucket, `gs://episteck-kn-probe-260926-5512/`, `EUROPE-WEST3`, regional `STANDARD`, public access prevention enforced, uniform bucket-level access true, locked `3600`-second retention, soft delete `0` seconds. |
+| Objects | Version-aware exhaustive listing: **one page, 111 objects, 2,642 bytes, zero noncurrent versions, zero unexpected names**. Every key matched the synthetic `TEST-PARTITION-0001/generation-test-*/revision-NNNNNN` pattern. Counts by generation: test-1 **5**, ambiguous **1**, gap **2**, latency **100**, race **1**, tamper **2**. Sorted-name manifest SHA-256: `4c5a1842d542279ec0cc7e400d808a6220ac8c9f86f81b10b4ad1d1ab3e9a7da`. Latest object creation `15:29:42.402 UTC`; latest expiry `16:29:42.402 UTC`. |
+| Identity and role | Exactly one service account, `kn-journal-probe@episteck-kn-probe-260926-5512.iam.gserviceaccount.com`, **disabled**, zero user-managed keys; exactly one custom role, `projects/episteck-kn-probe-260926-5512/roles/knJournalProbe`. HMAC key list empty. |
+| Other relevant checks | Enabled-service inventory was inspected; no additional bucket, service account, active custom role, HMAC key, or BigQuery dataset appeared. Cloud Asset search was unavailable without enabling its API; no API was enabled for that purpose. The scoped inventories and the fact that this was a newly created disposable project supported proceeding. |
+
+### 14.2 Provider-supported removal and observed results
+
+1. Re-read the exact bucket/project number, version-aware object listing, expected **111** count, synthetic-name pattern and manifest digest; verify current UTC was after the maximum object creation time plus **3,600 seconds**. No retention bypass was used.
+2. Send one [Cloud Storage object DELETE](https://docs.cloud.google.com/storage/docs/json_api/v1/objects/delete) per exact listed key with `ifGenerationMatch` set to that key's observed generation. **111/111 returned HTTP `204`**, from `19:28:22.740616` to `19:29:30.528215 UTC`; no retention-protected or conflicting object occurred. A fresh version-aware listing returned **zero objects** and no continuation token.
+3. Delete only `gs://episteck-kn-probe-260926-5512/`: HTTP **`204`**. A fresh bucket GET returned **`404`**. No billable GCS bucket or object remained.
+4. Verify the service account was still disabled and the role name matched, then run `gcloud iam service-accounts delete` for that exact test account and `gcloud iam roles delete knJournalProbe --project=episteck-kn-probe-260926-5512`. Both commands succeeded. The role reported `deleted: true`; subsequent active service-account and custom-role lists were empty. No active probe service account remains usable.
+5. Initial `gcloud projects delete episteck-kn-probe-260926-5512 --quiet` returned `FAILED_PRECONDITION`: a single Storage-created project lien remained. The lien was listed as `liens/p620163540160-l70b7f8a1-ac84-4cdb-9584-968cb234bb25`, parent `projects/620163540160`, origin `storage.googleapis.com`, restricting only `resourcemanager.projects.delete`. After confirming the bucket was already deleted and the project had zero buckets, the owner removed **that one lien** through the [Resource Manager liens.delete API](https://docs.cloud.google.com/resource-manager/reference/rest/v3/liens/delete): HTTP **`200`**; follow-up lien list empty. This was the [documented normal step](https://docs.cloud.google.com/storage/docs/bucket-lock) for shutting down a project that had a locked bucket, performed **after** all protected data and the bucket were gone.
+6. Retry `gcloud projects delete episteck-kn-probe-260926-5512 --quiet`: succeeded. `gcloud projects describe` returned **`DELETE_REQUESTED`** for project number `620163540160`; `gcloud billing projects describe` returned **`billingEnabled: false`**. The user's billing account itself and unrelated projects were not changed.
+
+Google documents a normal [30-day project recovery window](https://docs.cloud.google.com/resource-manager/docs/delete-restore-projects) in `DELETE_REQUESTED`; provider metadata/project ID may remain visible until permanent deletion, and prior usage charges may settle in a later billing cycle. The project is shut down and cannot serve or accrue new GCS bucket/object usage. The modeled probe's storage and operations were **sub-cent** at published rates; actual billed charges, tax, transfer and rounding remain subject to the billing statement. This is a residual provider lifecycle state, not a remaining active journal resource.
+
+**Final state:** GCS remains **SELECTED**, WS-1..WS-6 remain **PASS**, WS-7 remains informational, pre-runtime obligation **#6 remains CLOSED**, and obligation **#1 remains OPEN**. Production GCS was **not** provisioned; Knowledge runtime was **not** implemented. The pre-existing Mail project, every other Google project, Hetzner Storage Box, restic backups, Home infrastructure and production credentials were untouched.
+
+Verify the final cleanup record:
+
+```powershell
+rg -n '^## 14\.|111/111|DELETE_REQUESTED|billingEnabled: false|GCS remains' docs/architecture/proposals/KNOWLEDGE_JOURNAL_STORE_PROBE_REPORT.md
 git diff --check
 ```
