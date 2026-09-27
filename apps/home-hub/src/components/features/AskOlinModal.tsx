@@ -13,6 +13,7 @@ import {
   ArrowRight 
 } from '@phosphor-icons/react';
 import Link from 'next/link';
+import { useAppContext } from '@/components/providers/AppProvider';
 import styles from './AskOlinModal.module.css';
 
 interface Message {
@@ -35,6 +36,7 @@ export function AskOlinModal({
   initialQuery = '',
   onLockDoor,
 }: AskOlinModalProps) {
+  const { activeContext } = useAppContext();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'm-0',
@@ -202,7 +204,7 @@ export function AskOlinModal({
                     </div>
 
                     <Link 
-                      href="/memory" 
+                      href={`/memory?person=${encodeURIComponent(activeContext.personId)}`}
                       onClick={onClose} 
                       className={styles.manageMemoryLink}
                     >

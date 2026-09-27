@@ -11,20 +11,22 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  let person: unknown;
+  let body: unknown;
   try {
-    const body: unknown = await request.json();
-    person = body && typeof body === 'object' && !Array.isArray(body) && 'person' in body
-      ? body.person : undefined;
+    body = await request.json();
   } catch {
-    person = undefined;
+    body = undefined;
+  }
+  const validBody = body && typeof body === 'object' && !Array.isArray(body)
+    && Object.keys(body).length === 1 && 'person' in body
+    && Array.isArray(body.person) && body.person.every((value) => typeof value === 'string');
+  if (!validBody) {
+    return NextResponse.json({ error: 'INVALID_CONTEXT_REQUEST' }, {
+      status: 400, headers: { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' },
+    });
   }
   const query = new URLSearchParams();
-  if (Array.isArray(person) && person.every((value) => typeof value === 'string')) {
-    for (const value of person) query.append('person', value);
-  } else {
-    query.append('person', '');
-  }
+  for (const value of (body as { person: string[] }).person) query.append('person', value);
 
   return NextResponse.json({
     ...resolveRequestedPerson(query, result.data),

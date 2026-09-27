@@ -1,6 +1,7 @@
 'use client';
 import React from 'react';
 import Link from 'next/link';
+import { useAppContext } from '@/components/providers/AppProvider';
 import { useOlinTheme } from '@/theme/ThemeProvider';
 import { OLIN_THEMES } from '@/theme/registry';
 import { OlinThemeId } from '@/theme/types';
@@ -8,6 +9,7 @@ import styles from './AppearanceScreen.module.css';
 import { CheckCircle } from '@phosphor-icons/react';
 
 export function AppearanceScreen() {
+  const { activeContext } = useAppContext();
   const { activeTheme, setTheme } = useOlinTheme();
   
   const themes = Object.values(OLIN_THEMES);
@@ -21,10 +23,10 @@ export function AppearanceScreen() {
 
       {/* Settings Sub-tabs */}
       <nav className={styles.tabsRow} aria-label="Settings categories">
-        <Link href="/settings/appearance" className={`${styles.tabLink} ${styles.tabLinkActive}`}>
+        <Link href={`/settings/appearance?person=${encodeURIComponent(activeContext.personId)}`} className={`${styles.tabLink} ${styles.tabLinkActive}`}>
           Appearance
         </Link>
-        <Link href="/settings/privacy" className={styles.tabLink}>
+        <Link href={`/settings/privacy?person=${encodeURIComponent(activeContext.personId)}`} className={styles.tabLink}>
           Privacy &amp; Data
         </Link>
       </nav>

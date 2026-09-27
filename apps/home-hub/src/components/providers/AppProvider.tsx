@@ -31,7 +31,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [contextChanged, setContextChanged] = useState(false);
   const [demoPresentation, setDemoPresentation] = useState<{ requestKey: string; id: string } | null>(null);
   const [unavailable, setUnavailable] = useState(false);
+  const [revalidation, setRevalidation] = useState(0);
   const selectionGeneration = useRef(0);
+  const pendingPersonIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const recheck = () => {
+      selectionGeneration.current += 1;
+      setNavigation(null);
+      setRevalidation((current) => current + 1);
+    };
+    const whenVisible = () => {
+      if (document.visibilityState === 'visible') recheck();
+    };
+    window.addEventListener('focus', recheck);
+    document.addEventListener('visibilitychange', whenVisible);
+    return () => {
+      window.removeEventListener('focus', recheck);
+      document.removeEventListener('visibilitychange', whenVisible);
+    };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -51,18 +70,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (controller.signal.aborted || generation !== selectionGeneration.current) return;
       setUnavailable(false);
       if (value.status === 'STALE_CONTEXT') {
+        pendingPersonIdRef.current = null;
+        setPendingPersonId(null);
         setContextChanged(true);
         setNavigation(null);
         router.replace(`${pathname}?person=${encodeURIComponent(value.activeContext.personId)}`);
         return;
       }
+      if (pendingPersonIdRef.current && value.activeContext.personId !== pendingPersonIdRef.current) return;
+      pendingPersonIdRef.current = null;
       setNavigation({ requestKey, value });
       setPendingPersonId(null);
     }).catch(() => {
-      if (!controller.signal.aborted) setUnavailable(true);
+      if (!controller.signal.aborted && generation === selectionGeneration.current) setUnavailable(true);
     });
     return () => controller.abort();
-  }, [pathname, queryString, requestKey, router]);
+  }, [pathname, queryString, requestKey, revalidation, router]);
 
   if (unavailable) return <ServiceUnavailableBoundary />;
   if (!navigation || navigation.requestKey !== requestKey
@@ -98,6 +121,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (personId === activeContext.personId) return;
     setContextChanged(false);
     selectionGeneration.current += 1;
+    pendingPersonIdRef.current = personId;
     setNavigation(null);
     setPendingPersonId(personId);
     router.push(`${pathname}?person=${encodeURIComponent(personId)}`);

@@ -60,6 +60,36 @@ test('Person selection changes no browser persistence or BFF session cookie', as
   expect(forwarded.cookie).toBe('episteck_home_session=authenticated');
 });
 
+test('an open tab clears an obsolete subject when focus revalidates its session', async ({ page }) => {
+  await authenticate(page);
+  await page.goto('/app?person=PSN-00007');
+  await expect(page.getByRole('tab', { name: /Synthetic Care Context/ })).toBeVisible();
+  await page.context().addCookies([{
+    name: 'episteck_home_session', value: 'authenticated-self-only',
+    url: 'http://127.0.0.1:3322', httpOnly: true, sameSite: 'Lax',
+  }]);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page).toHaveURL(/\/app\/?\?person=PSN-00001$/);
+  await expect(page.getByRole('status')).toContainText('Context changed');
+  await expect(page.getByRole('tab', { name: /Synthetic Care Context/ })).toHaveCount(0);
+});
+
+test('structured context requests reject actor fields', async ({ page }) => {
+  await authenticate(page);
+  const response = await page.request.post('/app/api/context', {
+    data: { person: ['PSN-00001'], actorPersonId: 'PSN-00999' },
+  });
+  expect(response.status()).toBe(400);
+  expect(await response.text()).not.toContain('PSN-00001');
+});
+
+test('a subject is carried through an internal detail link', async ({ page }) => {
+  await authenticate(page);
+  await page.goto('/app?person=PSN-00007');
+  await page.getByRole('link', { name: 'Review detail' }).click();
+  await expect(page).toHaveURL(/\/app\/memory\?person=PSN-00007$/);
+});
+
 test('context selection resets prior subject presentation before the new one renders', async ({ page }) => {
   await authenticate(page);
   await page.goto('/app');

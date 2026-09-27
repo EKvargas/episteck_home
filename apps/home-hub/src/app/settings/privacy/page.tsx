@@ -3,10 +3,12 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useAppContext } from '@/components/providers/AppProvider';
 import { Brain, ArrowRight, ShieldCheck, Lock } from '@phosphor-icons/react';
 import styles from './page.module.css';
 
 export default function PrivacySettingsPage() {
+  const { activeContext } = useAppContext();
   return (
     <div className={styles.container}>
       <header className={styles.header}>
@@ -16,10 +18,10 @@ export default function PrivacySettingsPage() {
 
       {/* Settings Sub-tabs */}
       <nav className={styles.tabsRow} aria-label="Settings categories">
-        <Link href="/settings/appearance" className={styles.tabLink}>
+        <Link href={`/settings/appearance?person=${encodeURIComponent(activeContext.personId)}`} className={styles.tabLink}>
           Appearance
         </Link>
-        <Link href="/settings/privacy" className={`${styles.tabLink} ${styles.tabLinkActive}`}>
+        <Link href={`/settings/privacy?person=${encodeURIComponent(activeContext.personId)}`} className={`${styles.tabLink} ${styles.tabLinkActive}`}>
           Privacy &amp; Data
         </Link>
       </nav>
@@ -63,7 +65,7 @@ export default function PrivacySettingsPage() {
             These memory counts and controls are demo content. This screen does not establish access or data-sharing policy.
           </p>
 
-          <Link href="/memory" className={styles.linkBtn}>
+          <Link href={`/memory?person=${encodeURIComponent(activeContext.personId)}`} className={styles.linkBtn}>
             Review &amp; Control Memory <ArrowRight size={14} weight="bold" />
           </Link>
         </div>
