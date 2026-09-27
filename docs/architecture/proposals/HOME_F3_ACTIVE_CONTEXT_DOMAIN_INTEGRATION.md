@@ -1,6 +1,6 @@
 # Home F3: active Person context and first real Nutrition read
 
-**Status:** Architecture approved and merged in PR #48. F3a implementation is in review; deployment verification remains pending. F3b/F3c/F3d are not implemented.
+**Status:** Architecture approved and merged in PR #48. F3a implementation merged in PR #50; live verification remains open after a 2026-09-27 rollout attempt was rolled back for production nginx log-format drift. F3b/F3c/F3d remain open.
 
 **Date:** 2026-09-27
 
@@ -193,7 +193,7 @@ Each phase is a separate, reviewable PR. The table remains the approved scope co
 | **F3c — one live page** | `apps/home-hub/src/app/nutrition/page.tsx` and its small profile presentation boundary. Replace mock Nutrition summary cluster in LIVE with profile present/absent/error panel. | All six product states are distinct; current subject visible; no fabricated calories, targets, or mock fallback; stale in-flight result discarded. | Authenticated Erick sees a real service-derived profile or truthful no-profile panel. Today, pregnancy, Mealie, and other mock surfaces stay clearly demo. |
 | **F3d — negative and live validation** | Focused tests in Hub, BFF boundary, Home policy, Nutrition; deployment/runbook evidence in `deploy/home-hub/README.md` and Home status docs after approval. | Cross-person allow/deny/revoke with fixtures; single/batch/future-equivalent policy entry points deny missing subjects without an oracle; bootstrap-then-delete race; actor substitution, stale context, disabled/expired session, malformed responses, Home outage, tab races, and no-cache assertions. | Read-only production verification for Erick; approved real cross-person checks only after separate topology/data authorization. No production fixture creation as a testing shortcut. |
 
-**F3a implementation status (2026-09-27):** The dedicated Hub implementation PR adds a Person-only active-context type, strict query resolver, session-bound `POST /app/api/context` validation, URL selection, stale-to-self canonicalization, focus revalidation, query-preserving links, and a keyed presentation reset. The route reuses the existing no-store bootstrap request; the browser supplies no actor. MOCK Family remains a separate presentation choice and cannot become an active Person. Hub unit, build, lint, and browser regression results are recorded in the F3a PR. Deployment and authenticated live verification remain pending; F3b/F3c/F3d remain open.
+**F3a implementation status (2026-09-27):** PR #50 merged the Person-only active-context type, strict query resolver, session-bound `POST /app/api/context` validation, URL selection, stale-to-self canonicalization, focus revalidation, query-preserving links, and keyed presentation reset. The route reuses the existing no-store bootstrap request; the browser supplies no actor. MOCK Family remains a separate presentation choice and cannot become an active Person. A Hub image built from `7739dab807873270163f62b8b9d3511c9f46b585` was deployed briefly and rolled back because the live nginx access-log format included query-bearing `Referer` headers. See `deploy/home-hub/README.md` for sanitized evidence. Authenticated live verification remains pending; F3b/F3c/F3d remain open.
 
 ## 11. Acceptance matrix and live proof
 
