@@ -1,0 +1,32 @@
+FROM docker.io/library/debian:bookworm-slim
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG PYTHON_VERSION=3.11.8
+ARG SQLITE_AUTOCONF=3410200
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential ca-certificates curl xz-utils pkg-config \
+    libssl-dev zlib1g-dev libbz2-dev libreadline-dev libffi-dev \
+    liblzma-dev libgdbm-dev libncursesw5-dev uuid-dev tk-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /tmp/build
+RUN curl -fsSLO "https://www.sqlite.org/2023/sqlite-autoconf-${SQLITE_AUTOCONF}.tar.gz" \
+ && tar -xzf "sqlite-autoconf-${SQLITE_AUTOCONF}.tar.gz" \
+ && cd "sqlite-autoconf-${SQLITE_AUTOCONF}" \
+ && ./configure --prefix=/opt/sqlite3412 --enable-threadsafe \
+ && make -j2 \
+ && make install
+
+RUN curl -fsSLO "https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tar.xz" \
+ && tar -xf "Python-${PYTHON_VERSION}.tar.xz" \
+ && cd "Python-${PYTHON_VERSION}" \
+ && CPPFLAGS="-I/opt/sqlite3412/include" \
+    LDFLAGS="-L/opt/sqlite3412/lib -Wl,-rpath,/opt/sqlite3412/lib" \
+    ./configure --prefix=/opt/python3118 --with-ensurepip=install \
+ && make -j2 \
+ && make install
+
+ENV PATH=/opt/python3118/bin:$PATH
+WORKDIR /validation
+ENTRYPOINT ["python3"]

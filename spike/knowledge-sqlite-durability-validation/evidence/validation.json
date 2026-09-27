@@ -1,0 +1,472 @@
+{
+  "L_H": {
+    "cases": {
+      "H_unknown": "UNVERIFIED",
+      "L_eq_H": "READY_CANDIDATE",
+      "L_gt_H": "BLOCKED",
+      "L_lt_H": "RECONCILING",
+      "gap": "BLOCKED",
+      "journal_corrupt": "BLOCKED",
+      "journal_unavailable": "UNVERIFIED",
+      "unreconstructable_permissive_state": "BLOCKED",
+      "wrong_generation_epoch_partition": "BLOCKED",
+      "wrong_hash": "BLOCKED"
+    },
+    "journal_fixture": {
+      "chain_verified": true,
+      "entries": 2,
+      "epoch": "e1",
+      "first_sequence": 8262,
+      "generation": "g1",
+      "last_sequence": 8263,
+      "partition": "p0"
+    },
+    "pre_ready_verification": {
+      "L_p0": 8261,
+      "durability_settings": [
+        "READY_CANDIDATE",
+        {
+          "busy_timeout": 5000,
+          "foreign_keys": 1,
+          "journal_mode": "wal",
+          "synchronous": 2,
+          "wal_autocheckpoint": 1000
+        }
+      ],
+      "durability_settings_after_explicit_configuration": [
+        "READY_CANDIDATE",
+        {
+          "busy_timeout": 5000,
+          "foreign_keys": 1,
+          "journal_mode": "wal",
+          "synchronous": 2,
+          "wal_autocheckpoint": 1000
+        }
+      ],
+      "durability_settings_initial": [
+        "NOT READY",
+        {
+          "busy_timeout": 5000,
+          "foreign_keys": 1,
+          "journal_mode": "delete",
+          "synchronous": 2,
+          "wal_autocheckpoint": 1000
+        }
+      ],
+      "hash_matches_manifest": true,
+      "integrity": {
+        "foreign_key_check_rows": 0,
+        "integrity_check": "ok"
+      },
+      "quarantine_configuration_mode": "wal",
+      "schema_identity_matches": true
+    },
+    "ready_requires_journal_and_register_check": true,
+    "replay_L_lt_H": {
+      "duration_ms": 5.918912,
+      "local_L_after": 8263,
+      "materialized_control_register": "suppressed",
+      "replayed_sequences": [
+        8262,
+        8263
+      ],
+      "result": "READY_CANDIDATE"
+    },
+    "restore_verification_duration_ms": 28.413494
+  },
+  "backup": {
+    "L_p0": 8261,
+    "artifact_integrity": {
+      "foreign_key_check_rows": 0,
+      "integrity_check": "ok"
+    },
+    "backup_source_readonly": true,
+    "destination_journal_mode": "delete",
+    "duration_ms": 8043.764918,
+    "foreground_commit_latency_baseline": {
+      "max_ms": 2.980439,
+      "n": 200,
+      "p50_ms": 1.288101,
+      "p95_ms": 1.605611,
+      "p99_ms": 1.72748
+    },
+    "foreground_commit_latency_during_backup": {
+      "max_ms": 9.420301,
+      "n": 4770,
+      "p50_ms": 1.03843,
+      "p95_ms": 4.910321,
+      "p99_ms": 5.205811
+    },
+    "hash_unchanged_after_later_source_commit": true,
+    "interrupted_not_selected": true,
+    "publication": [
+      "fsync artifact",
+      "fsync manifest",
+      "fsync staging directory",
+      "same-filesystem directory rename",
+      "fsync parent directory"
+    ],
+    "schema_version": 0,
+    "selected_completed_only": [
+      "completed-0001"
+    ],
+    "sha256": "6b62f285a88a3ea4cef547bb72c6320452bceb05ead26d4bac207d910cfba7a6",
+    "sidecars": {
+      "artifact_shm": false,
+      "artifact_wal": false,
+      "shm_exists_during_source": true,
+      "wal_exists_during_source": true
+    },
+    "staging_and_completed_same_filesystem": true,
+    "writer_commits_during_backup": 4770
+  },
+  "checkpoints": {
+    "ack_independent_of_checkpoint": true,
+    "automatic_1000_page_window": {
+      "commit_latency_including_any_auto_checkpoint": {
+        "max_ms": 8.250572,
+        "n": 1100,
+        "p50_ms": 0.70824,
+        "p95_ms": 0.95621,
+        "p99_ms": 1.22026
+      },
+      "passive_observation_after_window": {
+        "busy_log_checkpointed": [
+          0,
+          403,
+          403
+        ],
+        "duration_ms": 3.867621
+      },
+      "wal_bytes_after": 5562032,
+      "wal_bytes_before": 5562032
+    },
+    "held_reader": {
+      "growth_bytes": 0,
+      "passive_checkpoint_busy_log_checkpointed": [
+        0,
+        447,
+        0
+      ],
+      "wal_bytes_after": 5562032,
+      "wal_bytes_before": 5562032
+    },
+    "restart_after_release": [
+      0,
+      447,
+      447
+    ],
+    "restart_held_reader": {
+      "duration_ms": 5008.120239,
+      "result_busy_log_checkpointed": [
+        1,
+        447,
+        0
+      ]
+    },
+    "truncate": {
+      "duration_ms": 3.07594,
+      "result_busy_log_checkpointed": [
+        0,
+        0,
+        0
+      ],
+      "wal_bytes_after": 0
+    }
+  },
+  "disk_errors": {
+    "SQLITE_FULL": {
+      "acknowledged": false,
+      "error": "database or disk is full",
+      "integrity": {
+        "foreign_key_check_rows": 0,
+        "integrity_check": "ok"
+      },
+      "observed": true,
+      "partial_rows_visible": 0
+    },
+    "SQLITE_IOERR_injected": {
+      "acknowledged": false,
+      "error": "disk I/O error (injected before COMMIT)",
+      "transaction_present": false
+    },
+    "busy_timeout": {
+      "acknowledged": false,
+      "configured_timeout_ms": 5000,
+      "database": "separate disposable lock-probe DB",
+      "elapsed_ms": 5007.990513,
+      "error": "database is locked",
+      "timed_out": true
+    }
+  },
+  "final_integrity": {
+    "foreign_key_check_rows": 0,
+    "integrity_check": "ok"
+  },
+  "full_commit_latency": {
+    "cleanup_evidence_10": {
+      "max_ms": 4.31135,
+      "n": 1000,
+      "p50_ms": 0.74228,
+      "p95_ms": 1.1133,
+      "p99_ms": 1.406401
+    },
+    "small_ordinary": {
+      "max_ms": 0.271999,
+      "n": 1000,
+      "p50_ms": 0.05332,
+      "p95_ms": 0.094249,
+      "p99_ms": 0.170221
+    },
+    "suppression_control": {
+      "max_ms": 6.798471,
+      "n": 1000,
+      "p50_ms": 0.624441,
+      "p95_ms": 1.532211,
+      "p99_ms": 2.160511
+    }
+  },
+  "p13": {
+    "errors": {
+      "busy": 0,
+      "errors": 0,
+      "messages": [],
+      "timeout": 0
+    },
+    "order": "baseline/active/active/baseline",
+    "results": {
+      "read": {
+        "baseline": {
+          "max_ms": 2.04929,
+          "n": 1000,
+          "p50_ms": 1.07976,
+          "p95_ms": 1.160411,
+          "p99_ms": 1.47446
+        },
+        "cleanup_active": {
+          "max_ms": 2.144431,
+          "n": 1000,
+          "p50_ms": 1.44116,
+          "p95_ms": 1.681869,
+          "p99_ms": 2.02683
+        },
+        "runs_alternating": [
+          {
+            "cleanup_active": false,
+            "cleanup_batches": 0,
+            "max_ms": 2.04929,
+            "n": 500,
+            "p50_ms": 1.08027,
+            "p95_ms": 1.158931,
+            "p99_ms": 1.233631
+          },
+          {
+            "cleanup_active": true,
+            "cleanup_batches": 312,
+            "max_ms": 2.144431,
+            "n": 500,
+            "p50_ms": 1.461011,
+            "p95_ms": 1.752271,
+            "p99_ms": 2.05045
+          },
+          {
+            "cleanup_active": true,
+            "cleanup_batches": 328,
+            "max_ms": 2.02244,
+            "n": 500,
+            "p50_ms": 1.42844,
+            "p95_ms": 1.654291,
+            "p99_ms": 1.90181
+          },
+          {
+            "cleanup_active": false,
+            "cleanup_batches": 0,
+            "max_ms": 1.66244,
+            "n": 500,
+            "p50_ms": 1.07957,
+            "p95_ms": 1.1679,
+            "p99_ms": 1.50022
+          }
+        ]
+      },
+      "write": {
+        "baseline": {
+          "max_ms": 3.053171,
+          "n": 1000,
+          "p50_ms": 0.558679,
+          "p95_ms": 0.7439,
+          "p99_ms": 1.093781
+        },
+        "cleanup_active": {
+          "max_ms": 8.044352,
+          "n": 1000,
+          "p50_ms": 0.783199,
+          "p95_ms": 1.59549,
+          "p99_ms": 2.62154
+        },
+        "runs_alternating": [
+          {
+            "cleanup_active": false,
+            "cleanup_batches": 0,
+            "max_ms": 3.053171,
+            "n": 500,
+            "p50_ms": 0.593439,
+            "p95_ms": 0.787301,
+            "p99_ms": 1.19371
+          },
+          {
+            "cleanup_active": true,
+            "cleanup_batches": 234,
+            "max_ms": 8.044352,
+            "n": 500,
+            "p50_ms": 0.83163,
+            "p95_ms": 1.60882,
+            "p99_ms": 2.21118
+          },
+          {
+            "cleanup_active": true,
+            "cleanup_batches": 210,
+            "max_ms": 3.561791,
+            "n": 500,
+            "p50_ms": 0.754899,
+            "p95_ms": 1.586721,
+            "p99_ms": 2.69273
+          },
+          {
+            "cleanup_active": false,
+            "cleanup_batches": 0,
+            "max_ms": 0.98923,
+            "n": 500,
+            "p50_ms": 0.512989,
+            "p95_ms": 0.7232,
+            "p99_ms": 0.878681
+          }
+        ]
+      }
+    },
+    "samples_per_run": 500,
+    "warmup_per_phase": 200
+  },
+  "process_crash": {
+    "after_commit": {
+      "exit_code": 42,
+      "integrity": {
+        "foreign_key_check_rows": 0,
+        "integrity_check": "ok"
+      },
+      "killed_during_checkpoint": false,
+      "transaction_present": true,
+      "wal_bytes": 20632
+    },
+    "before_commit": {
+      "exit_code": 41,
+      "integrity": {
+        "foreign_key_check_rows": 0,
+        "integrity_check": "ok"
+      },
+      "killed_during_checkpoint": false,
+      "transaction_present": false,
+      "wal_bytes": 0
+    },
+    "during_checkpoint": {
+      "exit_code": -9,
+      "integrity": {
+        "foreign_key_check_rows": 0,
+        "integrity_check": "ok"
+      },
+      "killed_during_checkpoint": true,
+      "transaction_present": true,
+      "wal_bytes": 37112
+    },
+    "nonempty_wal": {
+      "exit_code": 42,
+      "integrity": {
+        "foreign_key_check_rows": 0,
+        "integrity_check": "ok"
+      },
+      "killed_during_checkpoint": false,
+      "transaction_present": true,
+      "wal_bytes": 28872
+    }
+  },
+  "runtime": {
+    "compile_options": [
+      "ATOMIC_INTRINSICS=1",
+      "COMPILER=gcc-12.2.0",
+      "DEFAULT_AUTOVACUUM",
+      "DEFAULT_CACHE_SIZE=-2000",
+      "DEFAULT_FILE_FORMAT=4",
+      "DEFAULT_JOURNAL_SIZE_LIMIT=-1",
+      "DEFAULT_MMAP_SIZE=0",
+      "DEFAULT_PAGE_SIZE=4096",
+      "DEFAULT_PCACHE_INITSZ=20",
+      "DEFAULT_RECURSIVE_TRIGGERS",
+      "DEFAULT_SECTOR_SIZE=4096",
+      "DEFAULT_SYNCHRONOUS=2",
+      "DEFAULT_WAL_AUTOCHECKPOINT=1000",
+      "DEFAULT_WAL_SYNCHRONOUS=2",
+      "DEFAULT_WORKER_THREADS=0",
+      "ENABLE_FTS3",
+      "ENABLE_FTS4",
+      "ENABLE_FTS5",
+      "ENABLE_GEOPOLY",
+      "ENABLE_MATH_FUNCTIONS",
+      "ENABLE_RTREE",
+      "MALLOC_SOFT_LIMIT=1024",
+      "MAX_ATTACHED=10",
+      "MAX_COLUMN=2000",
+      "MAX_COMPOUND_SELECT=500",
+      "MAX_DEFAULT_PAGE_SIZE=8192",
+      "MAX_EXPR_DEPTH=1000",
+      "MAX_FUNCTION_ARG=127",
+      "MAX_LENGTH=1000000000",
+      "MAX_LIKE_PATTERN_LENGTH=50000",
+      "MAX_MMAP_SIZE=0x7fff0000",
+      "MAX_PAGE_COUNT=1073741823",
+      "MAX_PAGE_SIZE=65536",
+      "MAX_SQL_LENGTH=1000000000",
+      "MAX_TRIGGER_DEPTH=1000",
+      "MAX_VARIABLE_NUMBER=32766",
+      "MAX_VDBE_OP=250000000",
+      "MAX_WORKER_THREADS=8",
+      "MUTEX_PTHREADS",
+      "SYSTEM_MALLOC",
+      "TEMP_STORE=1",
+      "THREADSAFE=1"
+    ],
+    "python": "3.11.8 (main, Sep 27 2026, 08:05:27) [GCC 12.2.0]",
+    "python_version": "3.11.8",
+    "sqlite_module_version": "2.6.0",
+    "sqlite_version": "3.41.2"
+  },
+  "settings": {
+    "journal_mode_initial": "wal",
+    "mismatch_test": [
+      "NOT READY",
+      {
+        "busy_timeout": 5000,
+        "foreign_keys": 0,
+        "journal_mode": "wal",
+        "synchronous": 2,
+        "wal_autocheckpoint": 1000
+      }
+    ],
+    "reopen": [
+      "READY_CANDIDATE",
+      {
+        "busy_timeout": 5000,
+        "foreign_keys": 1,
+        "journal_mode": "wal",
+        "synchronous": 2,
+        "wal_autocheckpoint": 1000
+      }
+    ],
+    "wal_persisted_reopen": true
+  },
+  "single_lane": {
+    "autocheckpoint_runs_on_writer_connection": true,
+    "external_second_checkpointer_rejected": "NOT READY: writes/checkpoints are accepted only by WriterLane",
+    "external_second_writer_rejected": "NOT READY: writes/checkpoints are accepted only by WriterLane",
+    "one_write_connection": true
+  }
+}
