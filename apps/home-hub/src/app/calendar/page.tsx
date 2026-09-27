@@ -33,7 +33,7 @@ import {
 import styles from './page.module.css';
 
 export default function CalendarPage() {
-  const { activeContext, setContext, availableContexts } = useAppContext();
+  const { presentationContext, setContext, availableContexts } = useAppContext();
 
   // Active filters for mock calendar sources
   const [activeSources, setActiveSources] = useState<Record<CalendarSourceId, boolean>>({
@@ -75,11 +75,11 @@ export default function CalendarPage() {
     if (!activeSources[ev.sourceId]) return false;
 
     // Filter by context
-    if (activeContext.mode === 'PERSONAL') {
+    if (presentationContext.mode === 'PERSONAL') {
       // Erick's view: Erick's work, personal, and joint family events
       return ev.owner === 'Erick' || ev.owner === 'Joint';
     }
-    if (activeContext.mode === 'CARE_FOR_ANOTHER_PERSON') {
+    if (presentationContext.mode === 'CARE_FOR_ANOTHER_PERSON') {
       // Ana's view: Ana's personal, icloud, and joint family events
       return ev.owner === 'Ana' || ev.owner === 'Joint';
     }
@@ -121,7 +121,7 @@ export default function CalendarPage() {
         <div>
           <DefaultRelationshipSwitcher
             contexts={availableContexts}
-            activeContextId={activeContext.id}
+            activeContextId={presentationContext.id}
             onSelectContext={(id) => setContext(id)}
           />
         </div>
@@ -201,7 +201,7 @@ export default function CalendarPage() {
       </section>
 
       {/* Privacy Notice / Work Masking Bar */}
-      {activeContext.mode === 'FAMILY' && (
+      {presentationContext.mode === 'FAMILY' && (
         <div className={styles.privacyNoticeBar}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             {maskWorkTitles ? <EyeSlash size={16} /> : <Eye size={16} />}
@@ -286,7 +286,7 @@ export default function CalendarPage() {
               ) : (
                 erickEvents.map(ev => {
                   const account = calendarAccountsMock[ev.sourceId];
-                  const displayTitle = (activeContext.mode === 'FAMILY' && maskWorkTitles && ev.sourceId === 'erick-work' && ev.maskedTitle)
+                  const displayTitle = (presentationContext.mode === 'FAMILY' && maskWorkTitles && ev.sourceId === 'erick-work' && ev.maskedTitle)
                     ? ev.maskedTitle
                     : ev.title;
 

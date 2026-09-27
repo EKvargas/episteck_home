@@ -8,19 +8,19 @@ import { CoverageCard } from '@/components/features/nutrition/CoverageCard';
 import styles from './page.module.css';
 
 export default function PregnancyNutritionPage() {
-  const { activeContext } = useAppContext();
-  
-  // Fetch mock data based on current context
-  const coverageData = getMicronutrientCoverageMock(getDemoContextId(activeContext.mode));
+  const { activeContext, presentationContext } = useAppContext();
 
-  if (activeContext.mode !== 'CARE_FOR_ANOTHER_PERSON') {
+  // Fetch mock data based on current context
+  const coverageData = getMicronutrientCoverageMock(getDemoContextId(presentationContext.mode));
+
+  if (presentationContext.mode !== 'CARE_FOR_ANOTHER_PERSON') {
     return (
       <div className={styles.pageContainer}>
         <header className={styles.header}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2>Pregnancy Nutrition</h2>
             <div style={{ display: 'flex', gap: '1rem' }}>
-              <Link href="/nutrition" style={{ textDecoration: 'none', color: 'var(--olin-accent)' }}>
+              <Link href={`/nutrition?person=${encodeURIComponent(activeContext.personId)}`} style={{ textDecoration: 'none', color: 'var(--olin-accent)' }}>
                 ← Back to Nutrition
               </Link>
             </div>
@@ -32,9 +32,9 @@ export default function PregnancyNutritionPage() {
             <p style={{ color: 'var(--olin-text-muted)', margin: 0 }}>
               This demo panel is shown in the prototype care context. Context selection does not grant data access.
             </p>
-            {/* 
+            {/*
               Context usage comment (Product Owner requirement):
-              `activeContext` is used here purely as a UI/demo routing mechanism to show 
+              `presentationContext` is used here purely as a UI/demo routing mechanism to show
               Ana's specific dashboard in the prototype. It is NOT an authorization decision.
             */}
           </div>

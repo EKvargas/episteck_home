@@ -5,7 +5,7 @@ import { CaretDown, Check } from '@phosphor-icons/react';
 import styles from './Navigation.module.css';
 
 export function ContextSwitcher() {
-  const { activeContext, setContext, availableContexts } = useAppContext();
+  const { presentationContext, setContext, availableContexts } = useAppContext();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -46,8 +46,8 @@ export function ContextSwitcher() {
         aria-haspopup="listbox"
       >
         <span className={styles.contextTriggerText}>
-          {activeContext.name} 
-          <span className={styles.contextTriggerSub}> · {getLabel(activeContext.mode)}</span>
+          {presentationContext.name}
+          <span className={styles.contextTriggerSub}> · {presentationContext.mode === 'FAMILY' ? 'Family demo' : getLabel(presentationContext.mode)}</span>
         </span>
         <CaretDown size={16} weight="bold" style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform var(--ep-transition-fast)' }} />
       </button>
@@ -55,7 +55,7 @@ export function ContextSwitcher() {
       {isOpen && (
         <ul className={styles.contextPopover} role="listbox">
           {availableContexts.map(c => {
-            const isSelected = c.id === activeContext.id;
+            const isSelected = c.id === presentationContext.id;
             return (
               <li 
                 key={c.id} 

@@ -22,7 +22,7 @@ import { memoryMocks, MemoryClaim } from '@/domain/memoryMocks';
 import styles from './page.module.css';
 
 export default function MemoryPage() {
-  const { activeContext, setContext, availableContexts } = useAppContext();
+  const { presentationContext, setContext, availableContexts } = useAppContext();
 
   // Filter memories based on active context
   const getInitialMemories = (contextMode: string) => {
@@ -34,14 +34,14 @@ export default function MemoryPage() {
   };
 
   const [localMemories, setLocalMemories] = useState<MemoryClaim[]>(() => 
-    getInitialMemories(activeContext.mode)
+    getInitialMemories(presentationContext.mode)
   );
-  const [prevContextId, setPrevContextId] = useState(activeContext.id);
+  const [prevContextId, setPrevContextId] = useState(presentationContext.id);
 
   // Sync state if context switcher changes
-  if (activeContext.id !== prevContextId) {
-    setPrevContextId(activeContext.id);
-    setLocalMemories(getInitialMemories(activeContext.mode));
+  if (presentationContext.id !== prevContextId) {
+    setPrevContextId(presentationContext.id);
+    setLocalMemories(getInitialMemories(presentationContext.mode));
   }
 
   const [selectedMemory, setSelectedMemory] = useState<MemoryClaim | null>(null);
@@ -278,7 +278,7 @@ export default function MemoryPage() {
           <div style={{ marginTop: '0.75rem' }}>
             <DefaultRelationshipSwitcher
               contexts={availableContexts}
-              activeContextId={activeContext.id}
+              activeContextId={presentationContext.id}
               onSelectContext={(id) => setContext(id)}
             />
           </div>

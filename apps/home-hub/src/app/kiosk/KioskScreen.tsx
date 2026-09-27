@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useAppContext } from '@/components/providers/AppProvider';
 import styles from './KioskScreen.module.css';
 import { getTodaySummaryMock } from '@/domain/mocks';
 import { useOlinTheme } from '@/theme/ThemeProvider';
@@ -67,6 +68,7 @@ function getCountdown(targetHHMM: string, now: Date): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export function KioskScreen() {
+  const { activeContext } = useAppContext();
   const [mounted, setMounted] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
   const [slideIndex, setSlideIndex] = useState(SLIDE_STATUS);
@@ -201,7 +203,7 @@ export function KioskScreen() {
             </button>
 
             {/* Exit Kiosk */}
-            <Link href="/" className={styles.exitKioskBtn} title="Exit Kiosk Mode" aria-label="Exit Kiosk Mode">
+            <Link href={`/?person=${encodeURIComponent(activeContext.personId)}`} className={styles.exitKioskBtn} title="Exit Kiosk Mode" aria-label="Exit Kiosk Mode">
               <X size={16} weight="bold" />
             </Link>
           </div>

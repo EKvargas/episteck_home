@@ -3,6 +3,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useAppContext } from '@/components/providers/AppProvider';
 import { 
   Sparkle, 
   ArrowClockwise, 
@@ -30,6 +31,7 @@ export function MemoryAttention({
   onInspect,
 }: MemoryAttentionProps) {
   const [feedback, setFeedback] = useState<string | null>(null);
+  const { activeContext } = useAppContext();
 
   // Core Principle: Memory is quiet by default. If no action is needed, render nothing!
   if (!item) {
@@ -159,7 +161,7 @@ export function MemoryAttention({
               Not really
             </button>
             <Link 
-              href="/memory"
+              href={`/memory?person=${encodeURIComponent(activeContext.personId)}`}
               className={styles.textAction}
               onClick={() => onInspect?.(item)}
             >
@@ -186,7 +188,7 @@ export function MemoryAttention({
               Keep previous
             </button>
             <Link 
-              href="/memory"
+              href={`/memory?person=${encodeURIComponent(activeContext.personId)}`}
               className={styles.textAction}
               onClick={() => onInspect?.(item)}
             >
@@ -198,7 +200,7 @@ export function MemoryAttention({
         {item.type === 'SHARED' && (
           <>
             <Link 
-              href="/memory"
+              href={`/memory?person=${encodeURIComponent(activeContext.personId)}`}
               className={styles.primaryAction}
               style={{ textDecoration: 'none' }}
               onClick={() => onInspect?.(item)}

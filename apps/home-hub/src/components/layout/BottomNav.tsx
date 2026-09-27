@@ -2,6 +2,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useOptionalAppContext } from '@/components/providers/AppProvider';
 import styles from './Navigation.module.css';
 import { House, Heartbeat, Gear, AppleLogo, Brain } from '@phosphor-icons/react';
 
@@ -15,6 +16,7 @@ const navLinks = [
 
 export function BottomNav() {
   const pathname = usePathname();
+  const activeContext = useOptionalAppContext()?.activeContext;
 
   return (
     <div className={styles.mobileNav}>
@@ -24,7 +26,7 @@ export function BottomNav() {
         return (
           <Link 
             key={link.href}
-            href={link.href} 
+            href={activeContext ? `${link.href}?person=${encodeURIComponent(activeContext.personId)}` : link.href}
             className={`${styles.mobileNavItem} ${isActive ? styles.mobileNavItemActive : ''}`}
             aria-current={isActive ? 'page' : undefined}
           >

@@ -59,6 +59,9 @@ createServer((request, response) => {
   } else if (cookie.includes('malformed')) {
     response.writeHead(200, { 'content-type': 'application/json' }).end('{"version":1,"viewer":{}}');
   } else {
-    response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(fixture));
+    const payload = cookie.includes('authenticated-self-only')
+      ? { ...fixture, personContexts: fixture.personContexts.slice(0, 1), careRelationships: [] }
+      : fixture;
+    response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(payload));
   }
 }).listen(3323, '127.0.0.1');

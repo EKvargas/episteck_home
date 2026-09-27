@@ -15,14 +15,14 @@ test('authenticated bootstrap shows the BFF viewer and discoverable contexts', a
   await page.goto('/app');
   await expect(page.getByRole('heading', { name: 'Good afternoon, Synthetic Viewer' })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Synthetic Care Context' })).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'Synthetic Circle' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Synthetic Circle' })).toHaveCount(0);
 });
 
 test('generated internal navigation stays under /app', async ({ page }) => {
   await setSessionCookie(page, 'authenticated');
   await page.goto('/app');
   await page.getByRole('link', { name: 'Memory' }).click();
-  await expect(page).toHaveURL(/\/app\/memory$/);
+  await expect(page).toHaveURL(/\/app\/memory\?person=PSN-00001$/);
   await expect(page.getByRole('heading', { name: 'Memory' })).toBeVisible();
 });
 
@@ -53,7 +53,7 @@ test('prototype routes label domain content and make no consent or live-source c
     expect(await page.locator('body').innerText(), `${path} care context`).not.toMatch(forbiddenClaims);
     if (path === '/app/nutrition') {
       await page.getByRole('link', { name: 'View Dashboard' }).click();
-      await expect(page).toHaveURL(/\/app\/nutrition\/pregnancy$/);
+      await expect(page).toHaveURL(/\/app\/nutrition\/pregnancy\?person=PSN-00007$/);
       await expect(page.getByRole('note', { name: 'Demo mock data' })).toBeVisible();
       expect(await page.locator('body').innerText(), 'pregnancy care context').not.toMatch(forbiddenClaims);
     }
@@ -140,8 +140,11 @@ test('serialized client bootstrap props contain no upstream secrets or raw respo
   ]) {
     expect(renderedFlight).not.toContain(sentinel);
   }
-  expect(renderedFlight).toContain('Synthetic Viewer');
-  expect(renderedFlight).toContain('PSN-00001');
+  expect(renderedFlight).toContain('Loading context');
+  expect(renderedFlight).not.toContain('Synthetic Viewer');
+  const validated = await page.request.post('/app/api/context', { data: { person: [] } });
+  expect(validated.status()).toBe(200);
+  expect((await validated.json()).bootstrap.viewer.personId).toBe('PSN-00001');
 });
 
 test('only the Hub session cookie reaches the BFF', async ({ page, request }) => {

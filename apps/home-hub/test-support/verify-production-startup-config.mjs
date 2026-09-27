@@ -127,7 +127,16 @@ try {
       redirect: 'manual',
     });
     assert.equal(authenticated.status, 200, running.output());
-    assert.match(await authenticated.text(), /Runtime Viewer/);
+    assert.match(await authenticated.text(), /Loading context/);
+    const context = await fetch(`http://127.0.0.1:${port}/app/api/context`, {
+      method: 'POST',
+      headers: { Cookie: 'episteck_home_session=runtime-session', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ person: [] }),
+    });
+    assert.equal(context.status, 200, running.output());
+    const validated = await context.json();
+    assert.equal(validated.bootstrap.viewer.displayName, 'Runtime Viewer');
+    assert.deepEqual(validated.activeContext, { kind: 'PERSON', personId: 'PSN-00001' });
     const anonymous = await fetch(`http://127.0.0.1:${port}/app`, { redirect: 'manual' });
     assert.equal(anonymous.status, 307);
     assert.equal(anonymous.headers.get('location'), `http://127.0.0.1:${port}/login`);
