@@ -116,7 +116,27 @@ duplicate-Circle fix, and F2b Hub.
 - Post-rollout BFF and Hub logs contained no access/refresh token, cookie, client or
   delegation secret, PKCE verifier, bearer credential, or JWT-shaped value. Hub
   emitted a non-fatal Node module-type warning at startup.
-- Authenticated OAuth verification remains **PENDING USER LOGIN**. Open
-  `https://bff.home.episteck.com/app` manually to verify callback, opaque session
-  cookie, server-side bootstrap, and real viewer/person/circle/care contexts. No
-  F3 or domain authorization work was included in this rollout.
+- Authenticated OAuth verification: **PASS** (2026-09-27). A human login in a
+  fresh incognito browser completed OAuth and returned to the authenticated Hub
+  UI at `/app`. The authenticated Frappe User was
+  `vargas3rick@gmail.com`, mapped to `PSN-00013` / Erick Vargas. The live BFF
+  had one current unexpired session for this actor; the matching Home Delegated
+  Session was active and unexpired.
+- A read-only server-side check of the live BFF session at `/bootstrap` returned
+  HTTP 200 with a valid bootstrap from the Control Plane's
+  `get_home_bootstrap(...)`: viewer `PSN-00013` / Erick Vargas, one person context
+  (the viewer), zero Circle contexts, and zero care relationships. No synthetic
+  Person or Circle was returned. No authorization error or malformed bootstrap
+  was observed. No Circle data was created.
+- One earlier normal-browser callback returned the safe
+  “invalid or already-used authorization state” response; the fresh incognito
+  flow then succeeded. The implementation atomically consumes OAuth
+  transactions and returns that response for absent, expired, or already-used
+  state. Logs show one callback 400 followed by a successful callback 303, so
+  the observation is consistent with an old/stale or already-consumed browser
+  transaction. The exact cause cannot be distinguished from safe logs, and no
+  persistent failure was observed.
+- Recent BFF and Hub logs had no matches for OAuth code/state, PKCE verifier,
+  cookie, bearer credential, access/refresh token, or JWT patterns. The nginx
+  access log recorded no request query strings. No F3 or domain authorization
+  work was included in this rollout or verification.
