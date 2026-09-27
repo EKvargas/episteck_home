@@ -1,7 +1,7 @@
 # Knowledge pre-runtime obligation #1 — SQLite durability validation
 
-**Disposition:** `REMAIN OPEN`
-**Review readiness:** `READY FOR ARCHITECTURE BOARD REVIEW` for the evidence and remaining gaps in this report.
+**Disposition:** `CLOSED` — Architecture Board disposition dated 2026-09-27, based on the empirical evidence in [PR #47](https://github.com/EKvargas/episteck_home/pull/47).
+**Board record:** Disposition recorded; downstream implementation/operations acceptance criteria remain.
 **Scope:** empirical validation of the already-selected SQLite 3.41.2 durability profile. This is not a Knowledge runtime, production data, a new database selection, or a change to B1–B6.
 
 ## 1. Evidence classification
@@ -107,6 +107,8 @@ Cleanup-active p95 was 0.521 ms higher for reads and 0.852 ms higher for writes 
 
 Automatic checkpoint work is included in commit latency because Python’s stdlib interface does not expose a separate callback duration for the automatic PASSIVE checkpoint. No separate claim is made that every automatic checkpoint ran at exactly page 1,000.
 
+**Downstream checkpoint policy acceptance criteria (not implemented):** use PASSIVE as normal checkpoint behavior; monitor logical uncheckpointed WAL frames and persistent retention; keep RESTART off the foreground path and schedule it only after quiescence is established; reserve TRUNCATE for planned space recovery. The held-reader RESTART measurement above returned busy after about 5,008 ms.
+
 ## 7. Process-crash recovery
 
 Each scenario was followed by `PRAGMA integrity_check` (`ok`) and `PRAGMA foreign_key_check` (zero rows). The tests used disposable data only and did not delete WAL files.
@@ -165,7 +167,7 @@ Daily backup plus a local persistent disk does **not** provide zero-RPO for ordi
 
 Changing `NORMAL` to `FULL` materially affects the P13 foreground write/cleanup path and its commit tails. P13 cleanup-active read p95 was also measured with concurrent FULL commits, so this path is relevant to reader-contention composition. The local p95 deltas in this synthetic harness are not interchangeable with the original §27.2.1 C-small/C-medium metadata/content measurements; therefore this report does not recompute or amend those composed figures. Direct warm/cold end-to-end latency and real R14/domain measurements remain open and are not claimed closed.
 
-The Technology Gate selection status is unchanged. Pre-runtime obligation #1 remains open. B1–B6, the SQLite/GCS selection, production GCS provisioning status, and all unrelated gate dispositions are unchanged.
+The Technology Gate selection is unchanged. By Architecture Board disposition dated 2026-09-27, pre-runtime obligation #1 is **CLOSED**, based on PR #47. B1–B6, the SQLite/GCS selection, production GCS provisioning status, and all unrelated gate dispositions are unchanged.
 
 ## 12. Remaining unknowns and disposition
 
@@ -177,7 +179,17 @@ The Technology Gate selection status is unchanged. Pre-runtime obligation #1 rem
 - The P13 rerun is a focused local contention harness adaptation; it does not replace the full authorization corpus or Technology Gate end-to-end suite.
 - Direct warm/cold end-to-end latency and real R14/domain measurements remain separate open obligations.
 
-**Recommendation for obligation #1: REMAIN OPEN.** The pinned-runtime Nuremberg measurements support the proposed WAL + FULL + one-lane + Online Backup API architecture and are ready for Board review. The listed power-loss, production-lane, I/O, and restic/restore unknowns prevent closure on this evidence alone.
+### 12.1 Downstream implementation / operations acceptance criteria
+
+These items remain required for implementation or operations acceptance. They are not reasons to keep pre-runtime obligation #1 open, and none is claimed as implemented:
+
+1. Enforce the one-writer/checkpointer invariant through production process boundaries, filesystem ownership, service jobs, and administrative tooling.
+2. Test actual SQLite VFS I/O-failure resilience.
+3. Periodically perform a real encrypted restic restore drill from a completed Knowledge backup artifact.
+4. Establish the infrastructure assumption that the production local block device honors required flush/fsync semantics.
+5. Apply the checkpoint policy in §6: PASSIVE normally, monitor logical uncheckpointed WAL frames and persistent retention, run RESTART only after quiescence is established, and reserve TRUNCATE for planned space recovery. The quiet-interval check and scheduling are operational acceptance criteria, not implemented behavior.
+
+**Disposition:** Pre-runtime obligation #1 — **CLOSED** by the Architecture Board on 2026-09-27, based on the empirical evidence in [PR #47](https://github.com/EKvargas/episteck_home/pull/47). The separate direct warm/cold end-to-end latency, timing side-channel, production R13, real R14/domain measurement, and restore-freshness obligations remain open as recorded in the Technology Gate.
 
 ### Verify this report
 

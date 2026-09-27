@@ -882,30 +882,42 @@ carries forward.
 |---|---|---|
 | **SELECTED** | **SQLite 3.41.2** as the S1 relational canonical-owner realization | Selected by this Gate |
 | **EMPIRICALLY TESTED CONFIGURATION** | `journal_mode=WAL`, `synchronous=NORMAL`, `busy_timeout=5000` | The configuration all SQLite evidence in this report was measured under. **Not part of the selection** |
-| **PRODUCTION DURABILITY CONFIGURATION** | — | **NOT YET APPROVED BY THIS GATE** |
+| **PRODUCTION DURABILITY CONFIGURATION** | WAL + `synchronous=FULL` + `wal_autocheckpoint=1000` + `busy_timeout=5000` + `foreign_keys=ON`; `BEGIN IMMEDIATE`; one serialized write/checkpoint lane; Online Backup API and quarantined restore | **ACCEPTED BY ARCHITECTURE BOARD 2026-09-27; PRE-RUNTIME OBLIGATION #1 CLOSED** based on [PR #47](https://github.com/EKvargas/episteck_home/pull/47) |
 
-**2026-09-27 proposal for Board review:** [Knowledge SQLite durability](KNOWLEDGE_SQLITE_DURABILITY.md) selects a production profile of WAL + `synchronous=FULL`, a single serialized write/checkpoint lane on the pinned SQLite 3.41.2 library, SQLite Online Backup API into a consistent artifact, existing encrypted off-host restic, and the independent GCS journal restore gate. This is a proposed architecture decision, not this Gate's historical selection. Obligation #1 remains OPEN until the P13 write/cleanup and affected composition re-validation required below, plus the host/restore checks in that proposal, pass. The other pre-runtime obligations are unchanged.
+**2026-09-27 Architecture Board disposition:** the selected profile in [Knowledge SQLite durability](KNOWLEDGE_SQLITE_DURABILITY.md) is substantiated by the Nuremberg pinned-runtime evidence in [PR #47](https://github.com/EKvargas/episteck_home/pull/47). **Pre-runtime obligation #1 — select and substantiate the production SQLite durability mode/mechanism satisfying B4 — is CLOSED.** The historical Gate-selection evidence and its `synchronous=NORMAL` measurements below remain unchanged; they are not the production profile.
 
-**Reason:** B4 requires suppression to be a **durable** positive record that commits
-immediately (B4 §1, principle 1). In WAL mode, `synchronous=NORMAL` does not sync the WAL
-at every commit. The most recent committed transactions can therefore be lost on power
-loss or OS crash. An application crash does not lose them. So the tested configuration is
-not shown to satisfy B4's durability requirement, and this Gate does not claim it does.
+**Historical reason the obligation remained open after the original Gate selection:** B4
+requires suppression to be a **durable** positive record that commits immediately (B4 §1,
+principle 1). In WAL mode, `synchronous=NORMAL` does not sync the WAL at every commit. The
+most recent committed transactions can therefore be lost on power loss or OS crash. An
+application crash does not lose them. The original tested configuration therefore did not
+substantiate the B4 durability requirement. PR #47 provides the later FULL-profile validation
+and the Board disposition above; the empirical classifications and limitations in that
+report remain applicable.
 
-**Before runtime implementation approval**, the implementation must do one of the
-following:
+### 27.3.1 Downstream implementation / operations acceptance criteria
 
-- choose and test a durability configuration that satisfies B4 (for example, evaluate
-  `synchronous=FULL`), re-validating **only** the minimum affected
-  performance/contention evidence: the P13 write/cleanup path and the §27.2.1 composition
-  inputs it touches; or
-- provide an equivalent durable control-state mechanism that satisfies B4.
+The following remain required implementation/operations acceptance criteria. They do not
+reopen obligation #1 and are not claimed to be implemented by the validation harness:
 
-### 27.4 Pre-runtime obligations (carried forward, not discharged by this Gate)
+1. Enforce the one-writer/checkpointer invariant through production process boundaries,
+   filesystem ownership, service jobs, and administrative tooling.
+2. Test actual SQLite VFS I/O-failure resilience.
+3. Periodically perform a real encrypted restic restore drill using a completed Knowledge
+   backup artifact.
+4. Establish that the production local block device honors required flush/fsync semantics.
+5. Use PASSIVE as normal checkpoint behavior; monitor logical uncheckpointed WAL frames
+   and persistent retention; keep RESTART off the foreground path and schedule it only after
+   quiescence is established; reserve TRUNCATE for planned space recovery. The measured
+   held-reader RESTART waited about 5008 ms and returned busy. Quiet-interval verification
+   and checkpoint scheduling are not implemented.
 
-All six must be resolved before Knowledge runtime implementation approval.
+### 27.4 Remaining separate pre-runtime obligations
 
-1. **Production durability mode or mechanism satisfying B4.** Required decision per §27.3.
+The original obligation #1 is closed by the 2026-09-27 Architecture Board disposition
+above. These five separate obligations remain open and must be resolved before Knowledge
+runtime implementation approval:
+
 2. **Direct warm/cold end-to-end latency confirmation.** Measure warm and cold pre-LLM
    orchestration end to end, on a realistic topology, with the selected runtime
    realization. This confirms item 6 by direct measurement. It is **not run now**.
@@ -937,13 +949,13 @@ operator step.
 **TECHNOLOGY GATE CLOSED — SELECTION COMPLETE**
 
 - **SQLite 3.41.2 is selected** as the S1 relational canonical-owner realization.
-- **Six pre-runtime obligations remain** (§27.4):
-  1. production durability mode or mechanism satisfying B4 (§27.3)
-  2. direct warm/cold end-to-end latency confirmation
-  3. timing side-channel closure
-  4. production R13 mechanism
-  5. real R14 / domain measurement
-  6. restore-freshness realization
+- **Five separate pre-runtime obligations remain open** (§27.4):
+  - #2 direct warm/cold end-to-end latency confirmation
+  - #3 timing side-channel closure
+  - #4 production R13 mechanism
+  - #5 real R14 / domain measurement
+  - #6 restore-freshness realization
+- **Pre-runtime obligation #1 — SQLite durability mode/mechanism satisfying B4 — is CLOSED** by the Architecture Board on 2026-09-27 based on [PR #47](https://github.com/EKvargas/episteck_home/pull/47). Its downstream implementation/operations criteria are in §27.3.1.
 - **Closing the Gate does not authorize implementation, migration, schema deployment or
   production runtime** (§27.5).
 
