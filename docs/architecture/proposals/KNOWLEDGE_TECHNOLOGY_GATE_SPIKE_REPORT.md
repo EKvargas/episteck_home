@@ -915,8 +915,9 @@ reopen obligation #1 and are not claimed to be implemented by the validation har
 ### 27.4 Remaining separate pre-runtime obligations
 
 The original obligation #1 is closed by the 2026-09-27 Architecture Board disposition
-above. These five separate obligations remain open and must be resolved before Knowledge
-runtime implementation approval:
+above. These four separate obligations remain open and must be resolved before Knowledge
+runtime implementation approval. Obligation #6 was already closed by the 2026-09-26 Board
+disposition after GCS selection and WS-1..WS-6 PASS ([Knowledge restore freshness](KNOWLEDGE_RESTORE_FRESHNESS.md) §15.1); absence of production runtime or GCS infrastructure does not reopen it.
 
 2. **Direct warm/cold end-to-end latency confirmation.** Measure warm and cold pre-LLM
    orchestration end to end, on a realistic topology, with the selected runtime
@@ -928,10 +929,6 @@ runtime implementation approval:
 5. **Real R14 / domain measurement.** The spike's R14 used a synthetic 10 ms domain latency
    injection (§21). An actual applicable domain-service read must be measured on the
    realistic topology.
-6. **Restore-freshness realization.** B4 C1 requires a concrete anti-resurrection /
-   control-state freshness authority, or an equivalent freshness proof. The spike verified
-   fail-closed behavior when freshness cannot be proven (§15, H7). It did not select or
-   implement the production mechanism.
 
 ### 27.5 What closing the Gate does not authorize
 
@@ -949,12 +946,12 @@ operator step.
 **TECHNOLOGY GATE CLOSED — SELECTION COMPLETE**
 
 - **SQLite 3.41.2 is selected** as the S1 relational canonical-owner realization.
-- **Five separate pre-runtime obligations remain open** (§27.4):
+- **Four separate pre-runtime obligations remain open** (§27.4):
   - #2 direct warm/cold end-to-end latency confirmation
   - #3 timing side-channel closure
   - #4 production R13 mechanism
   - #5 real R14 / domain measurement
-  - #6 restore-freshness realization
+- **Pre-runtime obligation #6 — restore-freshness realization — is CLOSED** by the 2026-09-26 Architecture Board disposition after GCS selection and WS-1..WS-6 PASS ([Knowledge restore freshness](KNOWLEDGE_RESTORE_FRESHNESS.md) §15.1). Production GCS/runtime implementation is tracked separately and does not reopen #6.
 - **Pre-runtime obligation #1 — SQLite durability mode/mechanism satisfying B4 — is CLOSED** by the Architecture Board on 2026-09-27 based on [PR #47](https://github.com/EKvargas/episteck_home/pull/47). Its downstream implementation/operations criteria are in §27.3.1.
 - **Closing the Gate does not authorize implementation, migration, schema deployment or
   production runtime** (§27.5).

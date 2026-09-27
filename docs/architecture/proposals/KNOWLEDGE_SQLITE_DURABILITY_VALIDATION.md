@@ -167,7 +167,7 @@ Daily backup plus a local persistent disk does **not** provide zero-RPO for ordi
 
 Changing `NORMAL` to `FULL` materially affects the P13 foreground write/cleanup path and its commit tails. P13 cleanup-active read p95 was also measured with concurrent FULL commits, so this path is relevant to reader-contention composition. The local p95 deltas in this synthetic harness are not interchangeable with the original §27.2.1 C-small/C-medium metadata/content measurements; therefore this report does not recompute or amend those composed figures. Direct warm/cold end-to-end latency and real R14/domain measurements remain open and are not claimed closed.
 
-The Technology Gate selection is unchanged. By Architecture Board disposition dated 2026-09-27, pre-runtime obligation #1 is **CLOSED**, based on PR #47. B1–B6, the SQLite/GCS selection, production GCS provisioning status, and all unrelated gate dispositions are unchanged.
+The Technology Gate selection is unchanged. By Architecture Board disposition dated 2026-09-27, pre-runtime obligation #1 is **CLOSED**, based on PR #47. Pre-runtime obligation #6 was already **CLOSED** by the 2026-09-26 Board disposition after GCS selection and WS-1..WS-6 PASS; see [Knowledge restore freshness](KNOWLEDGE_RESTORE_FRESHNESS.md) §15.1. The lack of a production Knowledge runtime or production GCS infrastructure does not reopen #6. B1–B6, the SQLite/GCS selection, production GCS provisioning status, and all unrelated gate dispositions are unchanged.
 
 ## 12. Remaining unknowns and disposition
 
@@ -189,7 +189,7 @@ These items remain required for implementation or operations acceptance. They ar
 4. Establish the infrastructure assumption that the production local block device honors required flush/fsync semantics.
 5. Apply the checkpoint policy in §6: PASSIVE normally, monitor logical uncheckpointed WAL frames and persistent retention, run RESTART only after quiescence is established, and reserve TRUNCATE for planned space recovery. The quiet-interval check and scheduling are operational acceptance criteria, not implemented behavior.
 
-**Disposition:** Pre-runtime obligation #1 — **CLOSED** by the Architecture Board on 2026-09-27, based on the empirical evidence in [PR #47](https://github.com/EKvargas/episteck_home/pull/47). The separate direct warm/cold end-to-end latency, timing side-channel, production R13, real R14/domain measurement, and restore-freshness obligations remain open as recorded in the Technology Gate.
+**Disposition:** Pre-runtime obligation #1 — **CLOSED** by the Architecture Board on 2026-09-27, based on the empirical evidence in [PR #47](https://github.com/EKvargas/episteck_home/pull/47). Pre-runtime obligations #2–#5 remain open: direct warm/cold end-to-end latency, timing side-channel closure, production R13 mechanism, and real R14/domain measurement. Pre-runtime obligation #6 — restore-freshness realization — was already **CLOSED** by the 2026-09-26 Board disposition after GCS selection and WS-1..WS-6 PASS ([Knowledge restore freshness](KNOWLEDGE_RESTORE_FRESHNESS.md) §15.1); it is not reopened by the absence of production runtime or GCS infrastructure.
 
 ### Verify this report
 
