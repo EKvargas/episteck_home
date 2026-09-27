@@ -915,17 +915,31 @@ reopen obligation #1 and are not claimed to be implemented by the validation har
 ### 27.4 Remaining separate pre-runtime obligations
 
 The original obligation #1 is closed by the 2026-09-27 Architecture Board disposition
-above. These four separate obligations remain open and must be resolved before Knowledge
-runtime implementation approval. Obligation #6 was already closed by the 2026-09-26 Board
+above. Obligation #4 is closed by the 2026-09-27 R13 Board disposition below. Three
+separate obligations (#2, #3 and #5) remain open before Knowledge runtime implementation
+approval. Obligation #6 was already closed by the 2026-09-26 Board
 disposition after GCS selection and WS-1..WS-6 PASS ([Knowledge restore freshness](KNOWLEDGE_RESTORE_FRESHNESS.md) §15.1); absence of production runtime or GCS infrastructure does not reopen it.
 
 2. **Direct warm/cold end-to-end latency confirmation.** Measure warm and cold pre-LLM
    orchestration end to end, on a realistic topology, with the selected runtime
    realization. This confirms item 6 by direct measurement. It is **not run now**.
 3. **Timing side-channel closure.** Per the §21 Product Architect disposition (PA-10d / B6).
-4. **Production R13 mechanism.** §14 established the non-bearer boundary only at the
-   spike's local-mTLS experimental scope. The production identity fabric, key distribution
-   and the §11.4.1 binding realization remain pre-runtime work.
+4. **Production R13 mechanism — CLOSED by Architecture Board disposition dated
+   2026-09-27.** The Board accepts [the corrected production mechanism](KNOWLEDGE_R13_PRODUCTION_MECHANISM.md):
+   direct domain mTLS service identity, a Home-signed exact-operation basis using
+   Ed25519 over `b"episteck-r13-v1\x00" || RFC 8785 JCS(claims)`, exactly one
+   issuance-active caller SPKI, an atomic domain-local single-use claim, and mandatory
+   fresh Home RT#2. The selected trust lease is **5 minutes**; trust generations have
+   a persistent monotonic anchor; the service CA uses an offline root and dedicated
+   issuing intermediate. The disposable R13 test file passes **25 targeted tests**;
+   the full R13-focused selection passes **49 tests**, including non-JCS, stale trust,
+   rollback, zero/ambiguous active SPKI and OLD/NEW mismatch cases. One and three domain
+   calls each preserve two Home stub evaluations, with zero Home calls by the verifier.
+   The original §14 evidence remains historical experimental evidence. Closing #4
+   selects the mechanism; it provisions no CA/key, changes no production service, and
+   authorizes no Knowledge runtime rollout. Production CA provisioning, trust-bundle
+   distribution, mTLS deployment, replay/security-state realization and host/rootless
+   integration remain runtime acceptance criteria. #2, #3 and #5 remain open.
 5. **Real R14 / domain measurement.** The spike's R14 used a synthetic 10 ms domain latency
    injection (§21). An actual applicable domain-service read must be measured on the
    realistic topology.
@@ -946,11 +960,11 @@ operator step.
 **TECHNOLOGY GATE CLOSED — SELECTION COMPLETE**
 
 - **SQLite 3.41.2 is selected** as the S1 relational canonical-owner realization.
-- **Four separate pre-runtime obligations remain open** (§27.4):
+- **Three separate pre-runtime obligations remain open** (§27.4):
   - #2 direct warm/cold end-to-end latency confirmation
   - #3 timing side-channel closure
-  - #4 production R13 mechanism
   - #5 real R14 / domain measurement
+- **Pre-runtime obligation #4 — production R13 mechanism — is CLOSED** by the Architecture Board on 2026-09-27 based on [the corrected R13 decision](KNOWLEDGE_R13_PRODUCTION_MECHANISM.md) and [PR #49](https://github.com/EKvargas/episteck_home/pull/49). Provisioning and runtime integration remain separate approval gates.
 - **Pre-runtime obligation #6 — restore-freshness realization — is CLOSED** by the 2026-09-26 Architecture Board disposition after GCS selection and WS-1..WS-6 PASS ([Knowledge restore freshness](KNOWLEDGE_RESTORE_FRESHNESS.md) §15.1). Production GCS/runtime implementation is tracked separately and does not reopen #6.
 - **Pre-runtime obligation #1 — SQLite durability mode/mechanism satisfying B4 — is CLOSED** by the Architecture Board on 2026-09-27 based on [PR #47](https://github.com/EKvargas/episteck_home/pull/47). Its downstream implementation/operations criteria are in §27.3.1.
 - **Closing the Gate does not authorize implementation, migration, schema deployment or
