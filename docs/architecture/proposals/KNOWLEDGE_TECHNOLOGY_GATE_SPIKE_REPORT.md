@@ -926,6 +926,19 @@ disposition after GCS selection and WS-1..WS-6 PASS ([Knowledge restore freshnes
 4. **Production R13 mechanism.** §14 established the non-bearer boundary only at the
    spike's local-mTLS experimental scope. The production identity fabric, key distribution
    and the §11.4.1 binding realization remain pre-runtime work.
+
+   **2026-09-27 architecture recommendation, pending Board disposition:**
+   [KNOWLEDGE_R13_PRODUCTION_MECHANISM](KNOWLEDGE_R13_PRODUCTION_MECHANISM.md)
+   selects direct domain mTLS service identity (verified URI SAN and registered SPKI)
+   plus a Home-signed, exact-operation, single-use execution basis. It specifies
+   service/CA and Home-signing-key custody, overlap, revocation and recovery, and records
+   a disposable live-TLS composition probe: valid operation succeeds; copied basis,
+   wrong service/key, wrong audience, replay, mutated operation and expiry fail; 1 and 3
+   domain calls each show exactly 2 Home stub evaluations with no domain-to-Home call.
+   **Recommend closing #4 as an architecture selection obligation if the Board accepts
+   that evidence.** No production cert, service, key or runtime was provisioned; #4
+   remains formally open in this report until Board acceptance. #2, #3 and #5 are
+   unchanged.
 5. **Real R14 / domain measurement.** The spike's R14 used a synthetic 10 ms domain latency
    injection (§21). An actual applicable domain-service read must be measured on the
    realistic topology.
