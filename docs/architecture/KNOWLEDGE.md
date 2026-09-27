@@ -93,19 +93,17 @@ SELECTION COMPLETE** (2026-09-25). See the
 - **Selected:** S1 — relational canonical owner with structured retrieval, realized
   on **SQLite 3.41.2**. The **Episteck Knowledge governance layer** stays
   Episteck-owned (Person/Circle/Consent).
-- **Not approved:** the production durability configuration. The spike's tested
-  configuration (WAL / `synchronous=NORMAL` / `busy_timeout=5000`) is not approved
-  for production.
 - **Pre-runtime obligations** (all six must be resolved before runtime
   implementation approval):
-  1. production durability mode or mechanism satisfying B4
-  2. direct warm/cold end-to-end latency confirmation
-  3. timing side-channel closure
-  4. production R13 mechanism
-  5. real R14 / domain measurement (the spike used a synthetic 10 ms injection)
-  6. restore-freshness realization (a B4 C1 anti-resurrection / control-state
-     freshness authority or equivalent proof; the spike verified fail-closed
-     behavior only)
+  1. **CLOSED** — production SQLite durability mode/mechanism satisfying B4,
+     [Board disposition 2026-09-27](proposals/KNOWLEDGE_SQLITE_DURABILITY.md).
+  2. **OPEN** — direct warm/cold end-to-end latency confirmation.
+  3. **OPEN** — timing side-channel closure.
+  4. **CLOSED** — [production R13 mechanism](proposals/KNOWLEDGE_R13_PRODUCTION_MECHANISM.md),
+     Board disposition 2026-09-27; provisioning and rollout are separate gates.
+  5. **OPEN** — real R14 / domain measurement (the spike used a synthetic 10 ms injection).
+  6. **CLOSED** — [restore-freshness realization](proposals/KNOWLEDGE_RESTORE_FRESHNESS.md),
+     Board disposition 2026-09-26.
 - **Not authorized:** selection authorizes no implementation, migration, schema
   deployment or runtime.
 
