@@ -884,6 +884,8 @@ carries forward.
 | **EMPIRICALLY TESTED CONFIGURATION** | `journal_mode=WAL`, `synchronous=NORMAL`, `busy_timeout=5000` | The configuration all SQLite evidence in this report was measured under. **Not part of the selection** |
 | **PRODUCTION DURABILITY CONFIGURATION** | — | **NOT YET APPROVED BY THIS GATE** |
 
+**2026-09-27 proposal for Board review:** [Knowledge SQLite durability](KNOWLEDGE_SQLITE_DURABILITY.md) selects a production profile of WAL + `synchronous=FULL`, a single serialized write/checkpoint lane on the pinned SQLite 3.41.2 library, SQLite Online Backup API into a consistent artifact, existing encrypted off-host restic, and the independent GCS journal restore gate. This is a proposed architecture decision, not this Gate's historical selection. Obligation #1 remains OPEN until the P13 write/cleanup and affected composition re-validation required below, plus the host/restore checks in that proposal, pass. The other pre-runtime obligations are unchanged.
+
 **Reason:** B4 requires suppression to be a **durable** positive record that commits
 immediately (B4 §1, principle 1). In WAL mode, `synchronous=NORMAL` does not sync the WAL
 at every commit. The most recent committed transactions can therefore be lost on power
