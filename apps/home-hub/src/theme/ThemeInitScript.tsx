@@ -4,12 +4,7 @@ import { OLIN_THEMES } from './registry';
 // Minified synchronous script to apply the theme attribute to the <html> tag
 // before the browser paints. This prevents the "flash of wrong theme".
 //
-// ARCHITECTURE NOTE (CSP/Nonce Policy):
-// If a strict Content Security Policy (CSP) is implemented in the future,
-// this inline script will be blocked unless a cryptographic nonce is provided.
-// To support CSP, Next.js Middleware should generate a nonce, pass it via headers,
-// and it should be attached to this script tag via the `nonce={nonce}` attribute.
-export const ThemeInitScript = () => {
+export const ThemeInitScript = ({ nonce }: { nonce?: string }) => {
   const code = `
     (function() {
       try {
@@ -23,5 +18,5 @@ export const ThemeInitScript = () => {
       }
     })();
   `;
-  return <script dangerouslySetInnerHTML={{ __html: code }} />;
+  return <script nonce={nonce} dangerouslySetInnerHTML={{ __html: code }} />;
 };

@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useAppContext } from '@/components/providers/AppProvider';
-import { getMicronutrientCoverageMock } from '@/domain/mocks';
+import { getDemoContextId, getMicronutrientCoverageMock } from '@/domain/mocks';
 import { CoverageCard } from '@/components/features/nutrition/CoverageCard';
 import styles from './page.module.css';
 
@@ -11,9 +11,9 @@ export default function PregnancyNutritionPage() {
   const { activeContext } = useAppContext();
   
   // Fetch mock data based on current context
-  const coverageData = getMicronutrientCoverageMock(activeContext.id);
+  const coverageData = getMicronutrientCoverageMock(getDemoContextId(activeContext.mode));
 
-  if (activeContext.id !== 'PSN-ana') {
+  if (activeContext.mode !== 'CARE_FOR_ANOTHER_PERSON') {
     return (
       <div className={styles.pageContainer}>
         <header className={styles.header}>
@@ -30,7 +30,7 @@ export default function PregnancyNutritionPage() {
           <div style={{ background: 'var(--olin-surface-hover)', padding: '3rem', borderRadius: '12px', display: 'inline-block' }}>
             <h3 style={{ margin: '0 0 1rem 0' }}>Pregnancy Nutrition</h3>
             <p style={{ color: 'var(--olin-text-muted)', margin: 0 }}>
-              Pregnancy Nutrition is currently available in Ana&apos;s care context.
+              This demo panel is shown in the prototype care context. Context selection does not grant data access.
             </p>
             {/* 
               Context usage comment (Product Owner requirement):
@@ -49,6 +49,9 @@ export default function PregnancyNutritionPage() {
         <h1 className={styles.title}>Micronutrient Coverage</h1>
         <p className={styles.subtitle}>
           Focusing on key nutrients for maternal wellness
+        </p>
+        <p role="note" style={{ margin: '0.75rem 0 0', padding: '0.75rem 1rem', border: '2px solid var(--olin-accent)', borderRadius: '8px', fontWeight: 700 }}>
+          DEMO · MOCK DATA — not Nutrition service data and not data for the selected Person.
         </p>
       </header>
 

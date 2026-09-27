@@ -5,8 +5,13 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node test-support/stage-standalone.mjs",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test",
+    "test:e2e": "playwright test",
+    "test:server-boundary": "node test-support/verify-server-only-client-import.mjs",
+    "test:startup-config": "node test-support/verify-production-startup-config.mjs"
   },
   "dependencies": {
     "@assistant-ui/react": "^0.15.21",

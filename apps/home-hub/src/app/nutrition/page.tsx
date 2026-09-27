@@ -1,18 +1,18 @@
 'use client';
 
 import React from 'react';
-import { Database, LockKey, Basket, Fire, Drop } from '@phosphor-icons/react';
+import { Database, Basket, Fire, Drop } from '@phosphor-icons/react';
 import { useAppContext } from '@/components/providers/AppProvider';
-import { getTodaySummaryMock } from '@/domain/mocks';
+import { getDemoContextId, getTodaySummaryMock } from '@/domain/mocks';
 import { DefaultRelationshipSwitcher } from '@/components/slots/default/DefaultRelationshipSwitcher';
 import Link from 'next/link';
 import styles from './page.module.css';
 
 export default function NutritionPage() {
   const { activeContext, setContext, availableContexts } = useAppContext();
-  const data = getTodaySummaryMock(activeContext.id);
+  const data = getTodaySummaryMock(getDemoContextId(activeContext.mode));
 
-  // Architecture check: if context has no nutrition AND no meal plan, it's restricted or unavailable.
+  // Mock content availability is a presentation choice, never an authorization result.
   const hasNutrition = !!data.nutrition;
   const hasMeal = !!data.familyMeal;
   const isFamilyContext = activeContext.mode === 'FAMILY';
@@ -31,12 +31,10 @@ export default function NutritionPage() {
           </div>
         </div>
         
-        {hasNutrition && (
-          <div className={styles.provenanceBadge} title="Canonical data source">
-            <Database size={16} weight="fill" />
-            <span className={styles.provenanceText}>Source: </span>svc-nutrition
-          </div>
-        )}
+        <div className={styles.provenanceBadge} role="note" aria-label="Mock nutrition data">
+          <Database size={16} weight="fill" />
+          <span>DEMO · MOCK DATA</span>
+        </div>
       </header>
 
       <main className={styles.grid}>
@@ -47,7 +45,7 @@ export default function NutritionPage() {
           In production, visibility and feature access must ultimately be determined by 
           trusted server-side authorization and domain state.
         */}
-        {activeContext.id === 'PSN-ana' && (
+        {activeContext.mode === 'CARE_FOR_ANOTHER_PERSON' && (
           <div className={styles.card} style={{ gridColumn: '1 / -1', background: 'var(--olin-badge-bg)', border: '1px solid var(--olin-accent)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
@@ -130,9 +128,8 @@ export default function NutritionPage() {
           </>
         ) : !isFamilyContext ? (
           <div className={styles.lockedState}>
-            <LockKey size={48} weight="duotone" />
-            <span className={styles.lockedText}>Consent required to view clinical nutrition</span>
-            <span style={{ fontSize: '0.875rem' }}>This domain requires an explicit ConsentGrant from the Control Plane.</span>
+            <span className={styles.lockedText}>No demo nutrition panel for this context</span>
+            <span style={{ fontSize: '0.875rem' }}>This prototype does not evaluate nutrition data access.</span>
           </div>
         ) : null}
 
@@ -154,7 +151,7 @@ export default function NutritionPage() {
               </div>
               <div className={styles.provenanceBadge} title="Integration provider">
                 <Database size={16} weight="fill" />
-                Provider: {data.familyMeal!.source}
+                Demo provider: local mock content
               </div>
             </div>
           </div>

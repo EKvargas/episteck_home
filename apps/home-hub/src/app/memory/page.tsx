@@ -63,11 +63,11 @@ export default function MemoryPage() {
   // Provenance helpers
   const getProvenanceText = (prov: string) => {
     switch (prov) {
-      case 'USER_EXPLICIT': return 'You told Olin';
-      case 'USER_CONFIRMED': return 'Confirmed by you';
-      case 'AI_HYPOTHESIS': return 'Olin noticed';
-      case 'SYSTEM_OBSERVED': return 'Household routine';
-      default: return 'Learned';
+      case 'USER_EXPLICIT': return 'Mock direct statement';
+      case 'USER_CONFIRMED': return 'Mock confirmation';
+      case 'AI_HYPOTHESIS': return 'Mock suggestion';
+      case 'SYSTEM_OBSERVED': return 'Mock household routine';
+      default: return 'Demo source';
     }
   };
 
@@ -95,7 +95,7 @@ export default function MemoryPage() {
       }
       return m;
     }));
-    showToast('Saved to active Memory');
+    showToast('Updated this demo memory view only');
   };
 
   const handleQuickReject = (e: React.MouseEvent, memoryId: string) => {
@@ -120,7 +120,7 @@ export default function MemoryPage() {
       }));
       setSelectedMemory(null);
       setForgetConfirm(false);
-      showToast('Memory forgotten — Olin will no longer use this');
+      showToast('Removed from this demo memory view only');
     }
   };
 
@@ -138,7 +138,7 @@ export default function MemoryPage() {
         return m;
       }));
       setSelectedMemory(null);
-      showToast('Memory confirmed and activated');
+      showToast('Confirmed in this demo memory view only');
     }
   };
 
@@ -361,7 +361,7 @@ export default function MemoryPage() {
                 <span className={styles.provenanceValue}>
                   {selectedMemory.visibility === 'HOUSEHOLD' ? (
                     <>
-                      <Users size={18} weight="fill" /> Shared with Household
+                      <Users size={18} weight="fill" /> Household demo scope
                     </>
                   ) : (
                     <>
@@ -376,12 +376,12 @@ export default function MemoryPage() {
 
               {/* Provenance: Why Olin knows this */}
               <div className={styles.provenanceRow}>
-                <span className={styles.provenanceLabel}>Why Olin knows this</span>
+                <span className={styles.provenanceLabel}>Demo provenance</span>
                 <span className={styles.provenanceValue}>
                   {getProvenanceIcon(selectedMemory.provenance, 18)} {getProvenanceText(selectedMemory.provenance)}
                 </span>
                 <span className={styles.provenanceSub}>
-                  {selectedMemory.createdAt} · {selectedMemory.sourceContext}
+                  Demo source: {selectedMemory.createdAt} · {selectedMemory.sourceContext}
                   {selectedMemory.inferredConfidence && ` (Confidence: ${selectedMemory.inferredConfidence})`}
                 </span>
               </div>
@@ -453,7 +453,7 @@ export default function MemoryPage() {
                   ) : (
                     <div style={{ padding: '1rem', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '12px', border: '1px solid rgba(239, 68, 68, 0.25)' }}>
                       <p style={{ margin: '0 0 0.85rem 0', fontSize: '0.85rem', fontWeight: 500, color: 'var(--olin-status-error, #ef4444)', lineHeight: 1.4 }}>
-                        Olin will stop using this memory. It will no longer personalize recommendations or responses.
+                        This removes the item from the local demo view. No stored memory or personalization service is changed.
                       </p>
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
                         <button 

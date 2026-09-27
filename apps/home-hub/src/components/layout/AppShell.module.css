@@ -1,4 +1,23 @@
 /* AppShell.module.css */
+.demoNotice {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  width: max-content;
+  max-width: calc(100vw - 1rem);
+  padding: 0.45rem 0.8rem;
+  border: 2px solid var(--olin-accent);
+  border-radius: 0 0 0.5rem 0.5rem;
+  background: var(--olin-surface, #fff);
+  color: var(--olin-text-main, #111);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
 .layout {
   display: flex;
   min-height: 100vh;

@@ -1,6 +1,6 @@
 'use client';
 import React from 'react';
-import { LockKey, Database } from '@phosphor-icons/react';
+import { Database } from '@phosphor-icons/react';
 import { WellbeingNutritionProps } from '../types';
 import styles from './DefaultSlots.module.css';
 
@@ -24,7 +24,7 @@ export function DefaultWellbeingNutrition({
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: 'var(--olin-text-muted)', opacity: 0.8 }}>
-             <Database size={12} weight="fill" /> Provenance: svc-nutrition
+             <Database size={12} weight="fill" /> Mock nutrition data
           </div>
         </div>
       ) : (
@@ -33,8 +33,7 @@ export function DefaultWellbeingNutrition({
           gap: '12px', padding: '32px 0', color: 'var(--olin-text-muted)',
           background: 'var(--olin-badge-bg)', borderRadius: '12px', border: '1px dashed var(--olin-surface-border)'
         }}>
-          <LockKey size={24} weight="duotone" />
-          <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Consent required for clinical truth</span>
+          <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>No demo nutrition panel for this context</span>
         </div>
       )}
     </div>

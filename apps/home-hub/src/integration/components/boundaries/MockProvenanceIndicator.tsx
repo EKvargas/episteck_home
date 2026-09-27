@@ -9,7 +9,7 @@ export function MockProvenanceIndicator({ environment }: Props) {
   if (environment === 'LIVE') {
     return null;
   }
-  
+
   return (
     <div className={styles.mockIndicator} title="Data is mocked for development">
       MOCK DATA

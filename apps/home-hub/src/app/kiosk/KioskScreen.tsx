@@ -8,6 +8,7 @@ import { getTodaySummaryMock } from '@/domain/mocks';
 import { useOlinTheme } from '@/theme/ThemeProvider';
 import { OLIN_THEMES } from '@/theme/registry';
 import { OlinThemeId } from '@/theme/types';
+import { HUB_BASE_PATH } from '@/integration/basePath';
 import { AskOlinModal } from '@/components/features/AskOlinModal';
 import {
   CloudSun,
@@ -268,7 +269,7 @@ export function KioskScreen() {
           <div className={`${styles.slide} ${slideIndex === SLIDE_PHOTO ? styles.slideActive : ''}`}>
             <div className={styles.photoSlide}>
               <Image
-                src={photo.src}
+                src={`${HUB_BASE_PATH}${photo.src}`}
                 alt={photo.title}
                 fill
                 className={styles.photoImage}
@@ -289,7 +290,7 @@ export function KioskScreen() {
           {/* ── Slide 2: HOME PULSE ── */}
           <div className={`${styles.slide} ${slideIndex === SLIDE_HOME ? styles.slideActive : ''}`}>
             <div className={styles.homeSlide}>
-              <span className={styles.homeSlideHeader}>Physical Home · Live Status</span>
+              <span className={styles.homeSlideHeader}>Prototype Home · Mock Status</span>
               <div className={styles.homeGrid}>
                 {/* Climate */}
                 <div className={styles.homeTile}>
@@ -329,7 +330,7 @@ export function KioskScreen() {
                   </span>
                   <span className={styles.tileLabel}>Front Door</span>
                   <p className={doorLocked ? `${styles.tileValue} ${styles.tileValueGreen}` : `${styles.tileValue} ${styles.tileValueAmber}`}>
-                    {doorLocked ? 'Secured' : 'Unlocked'}
+                    {doorLocked ? 'Mock locked' : 'Mock unlocked'}
                   </p>
                   <span className={styles.tapHint}>Tap to toggle</span>
                 </button>

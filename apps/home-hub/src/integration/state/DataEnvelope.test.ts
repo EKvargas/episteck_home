@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { EnvelopeFactory } from './DataEnvelope';
+import { EnvelopeFactory } from './DataEnvelope.ts';
 
 test('UNKNOWN != ZERO', () => {
   const env = EnvelopeFactory.loading();
@@ -34,7 +34,7 @@ test('INDETERMINATE authorization contains no protected data', () => {
   const env = EnvelopeFactory.loading();
   assert.equal(env.authorization, 'INDETERMINATE');
   assert.equal(env.data, undefined);
-  
+
   const env2 = EnvelopeFactory.error('SERVICE_UNAVAILABLE');
   assert.equal(env2.authorization, 'INDETERMINATE');
   assert.equal(env2.data, undefined);

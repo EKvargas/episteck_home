@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeSafeUIErrorCode } from './SafeUIErrorCode';
+import { normalizeSafeUIErrorCode } from './SafeUIErrorCode.ts';
 
 test('normalizeSafeUIErrorCode normalizes unknown strings to INVALID_RESPONSE', () => {
   assert.equal(normalizeSafeUIErrorCode('upstream secret/error body'), 'INVALID_RESPONSE');

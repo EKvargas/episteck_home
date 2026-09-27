@@ -39,7 +39,7 @@ export function AskOlinModal({
     {
       id: 'm-0',
       sender: 'agent',
-      text: "Good afternoon. I'm monitoring the Vargas home context, Ana's upcoming clinic return at 15:00, and your nutrition logs. How can I help?",
+      text: "This is a demo conversation using mock home, calendar, and nutrition content. How can I help?",
     },
   ]);
   const [customInput, setCustomInput] = useState<string | null>(null);
@@ -77,22 +77,22 @@ export function AskOlinModal({
     setCustomInput('');
 
     setTimeout(() => {
-      let reply = 'Context noted in Vargas Household state. Hermes has synchronized this with your daily schedule.';
+      let reply = 'Demo response: this prototype has not saved or synchronized a schedule.';
       const lower = text.toLowerCase();
 
       if (lower.includes('lock')) {
         onLockDoor?.();
-        reply = 'I have commanded the Home Assistant gateway to lock the smart deadbolt. Front door is now Locked.';
+        reply = 'Demo action: the door indicator changed in this prototype. No device command was sent.';
       } else if (lower.includes('ana') || lower.includes('appointment')) {
-        reply = "Ana's appointment with Dr. Weber is underway. Estimated departure is 15:00. I'll ping the Family display when her car departs.";
+        reply = "Demo calendar: Ana's fictional appointment is shown for 15:00. No live status or notification is available.";
       } else if (lower.includes('nutrition') || lower.includes('lunch') || lower.includes('dinner')) {
-        reply = "Logged nutrition update to Erick's health ledger via Nutrition domain service.";
+        reply = 'Demo response: no nutrition or health record was updated.';
       } else if (lower.includes('grocery') || lower.includes('checklist')) {
-        reply = 'Wild Baked Salmon checklist: Fresh salmon fillet (600g), organic asparagus bundle, Meyer lemons. Added to Mealie cart.';
+        reply = 'Demo checklist: salmon, asparagus, and lemons. No cart was updated.';
       } else if (lower.includes('timer') || lower.includes('countdown')) {
-        reply = 'Dinner prep countdown initialized: 17:45 preheat oven, 18:00 roast asparagus, 18:30 dinner ready.';
+        reply = 'Demo dinner timeline: 17:45 preheat oven, 18:00 roast asparagus, 18:30 dinner ready. No timer was started.';
       } else if (lower.includes('suggest') && lower.includes('dinner')) {
-        reply = 'I suggest Seared Mediterranean Salmon with Asparagus and Quinoa (560 kcal). Fits your 2,000 kcal target, respects your fresh fish preference, and finishes before 19:00.';
+        reply = 'Demo suggestion: Mediterranean salmon with asparagus and quinoa (mock 560 kcal), based on fictional preferences and targets.';
       }
 
       const isDinnerSuggestion = lower.includes('suggest') && lower.includes('dinner');
@@ -130,7 +130,7 @@ export function AskOlinModal({
           </div>
           <div>
             <h2 id="ask-olin-title" className={styles.modalTitle}>Ask Olin</h2>
-            <p className={styles.modalSub}>Hermes Multi-Domain Orchestrator</p>
+            <p className={styles.modalSub}>Mock assistant conversation</p>
           </div>
         </div>
         <button
@@ -151,7 +151,7 @@ export function AskOlinModal({
           >
             {m.sender === 'agent' && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--olin-accent)', marginBottom: '6px', opacity: 0.9 }}>
-                <Sparkle size={12} weight="fill" /> AI Synthesis
+                <Sparkle size={12} weight="fill" /> Demo reply
               </div>
             )}
             
@@ -167,7 +167,7 @@ export function AskOlinModal({
                   aria-expanded={expandedExplanationId === m.id}
                 >
                   <Brain size={14} weight="fill" />
-                  Personalized using 2 memories + live data
+                  Demo personalization using mock data
                   {expandedExplanationId === m.id ? (
                     <CaretUp size={11} weight="bold" />
                   ) : (
@@ -182,22 +182,22 @@ export function AskOlinModal({
                     {/* Section 1: Saved Context (Olin's Memory) */}
                     <div className={styles.contextSection}>
                       <span className={styles.sectionHeaderMemory}>
-                        <Brain size={12} weight="fill" /> Saved Context (Olin&apos;s Memory)
+                        <Brain size={12} weight="fill" /> Fictional demo preferences
                       </span>
                       <ul className={styles.contextList}>
-                        <li>Prefers Mediterranean food (Active memory)</li>
-                        <li>Avoids canned tuna · fresh tuna is fine (Active memory)</li>
+                        <li>Prefers Mediterranean food (mock preference)</li>
+                        <li>Avoids canned tuna (mock preference)</li>
                       </ul>
                     </div>
 
-                    {/* Section 2: Current Live Data (Not Memory) */}
+                    {/* Section 2: Mock context */}
                     <div className={styles.contextSection}>
                       <span className={styles.sectionHeaderData}>
-                        <Heartbeat size={12} weight="bold" /> Current Data (Domain Truth)
+                        <Heartbeat size={12} weight="bold" /> Mock nutrition and family context
                       </span>
                       <ul className={styles.contextList}>
-                        <li>Target: 2,000 kcal / 140g protein (from Nutrition service)</li>
-                        <li>Household dinner time: ~19:00 (from Family routine)</li>
+                        <li>Demo target: 2,000 kcal / 140g protein</li>
+                        <li>Demo household dinner time: ~19:00</li>
                       </ul>
                     </div>
 

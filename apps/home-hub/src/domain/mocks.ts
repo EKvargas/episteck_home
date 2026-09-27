@@ -1,12 +1,20 @@
 // src/domain/mocks.ts
-import { Viewer, ContextOption, TodaySummary, MicronutrientCoverage } from './types';
+import { Viewer, ContextOption, ContextMode, TodaySummary, MicronutrientCoverage } from './types';
+
+// Temporary F2 presentation seam: the prototype's domain mocks use fixed demo
+// keys. They are not authorization inputs or persisted active-context state.
+export function getDemoContextId(mode: ContextMode): string {
+  if (mode === 'PERSONAL') return 'PSN-me';
+  if (mode === 'CARE_FOR_ANOTHER_PERSON') return 'PSN-ana';
+  return 'CIR-fam';
+}
 
 export const viewerMock: Viewer = {
   id: 'PSN-me',
   name: 'Erick',
 };
 
-// Represents contexts the viewer is authorized to see
+// Prototype display contexts only; these do not establish domain access.
 export const availableContextsMock: ContextOption[] = [
   { id: 'PSN-me', name: 'Erick', mode: 'PERSONAL' },
   { id: 'PSN-ana', name: 'Ana', mode: 'CARE_FOR_ANOTHER_PERSON' },
@@ -101,7 +109,7 @@ export const getTodaySummaryMock = (contextId: string): TodaySummary => {
     return {
       greeting: "Good afternoon, Ana",
       subtitle: "Care & Support Sharing Context",
-      privacyTag: "Care Circle Access",
+      privacyTag: "Care context preview",
       privacyIcon: "heart",
       scheduleTitle: "Ana's Agenda & Care",
       scheduleSubtitle: "Appointments and shared wellness",
@@ -135,7 +143,7 @@ export const getTodaySummaryMock = (contextId: string): TodaySummary => {
           doctor: "Dr. Weber",
           clinic: "Maternal & Wellness Clinic",
           room: "Room 304",
-          description: "Maternal & Wellness Clinic, Room 304. Erick authorized to receive appointment completion chimes.",
+          description: "Demo consultation at Maternal & Wellness Clinic, Room 304. No notifications or permissions are active.",
           nextCheckup: "Oct 02"
         },
         restRhythm: {
@@ -467,4 +475,3 @@ export const getMicronutrientCoverageMock = (contextId: string): MicronutrientCo
     }
   ];
 };
-

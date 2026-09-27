@@ -5,18 +5,23 @@ import styles from './AppShell.module.css';
 import { Sidebar } from './Sidebar';
 import { BottomNav } from './BottomNav';
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({ children, demoContent = false }: { children: React.ReactNode; demoContent?: boolean }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
 
-  if (pathname === '/kiosk') {
-    return <>{children}</>;
-  }
+  const demoNotice = demoContent ? (
+    <div role="note" aria-label="Demo mock data" className={styles.demoNotice}>
+      DEMO / MOCK DATA — domain content is illustrative and is not data or access for the selected person.
+    </div>
+  ) : null;
+
+  if (pathname === '/kiosk') return <>{demoNotice}{children}</>;
 
 
 
   return (
     <div className={styles.layout}>
+      {demoNotice}
       <aside className={`${styles.sidebar} ${isCollapsed ? styles.collapsed : ''}`}>
         <div
           className={styles.sidebarLogo}

@@ -6,7 +6,7 @@ import { Palette, DeviceTabletSpeaker, Sparkle } from '@phosphor-icons/react';
 import { useAppContext } from '@/components/providers/AppProvider';
 import { useOlinTheme } from '@/theme/ThemeProvider';
 import { getThemeSlots } from '@/components/slots/resolver';
-import { getTodaySummaryMock } from '@/domain/mocks';
+import { getDemoContextId, getTodaySummaryMock } from '@/domain/mocks';
 import { ActionableTask } from '@/domain/types';
 import { 
   TodayAttentionScenarioId, 
@@ -18,7 +18,7 @@ import { AskOlinModal } from '@/components/features/AskOlinModal';
 import styles from './page.module.css';
 
 export default function TodayPage() {
-  const { activeContext, setContext, availableContexts } = useAppContext();
+  const { activeContext, setContext, availableContexts, viewer } = useAppContext();
   const { activeTheme } = useOlinTheme();
 
   // Resolve presentation slots for active theme
@@ -46,7 +46,7 @@ export default function TodayPage() {
   const ambianceScenes = ['Afternoon Calm', 'Golden Hour', 'Focus State', 'Evening Warmth'];
 
   // Canonical mock data derived from active context
-  const data = getTodaySummaryMock(activeContext.id);
+  const data = getTodaySummaryMock(getDemoContextId(activeContext.mode));
 
   // Compute tasks with local interactive overrides
   const tasks: ActionableTask[] = data.tasks.map((task) => ({
@@ -96,12 +96,9 @@ export default function TodayPage() {
     }
   };
 
-  const personKey: 'erick' | 'ana' | 'family' =
-    activeContext.id === 'PSN-me'
-      ? 'erick'
-      : activeContext.id === 'PSN-ana'
-      ? 'ana'
-      : 'family';
+  const personKey: 'erick' | 'ana' | 'family' = activeContext.mode === 'PERSONAL'
+    ? 'erick'
+    : activeContext.mode === 'CARE_FOR_ANOTHER_PERSON' ? 'ana' : 'family';
 
   const pendingCount = tasks.filter((t) => !t.done).length;
 
@@ -112,7 +109,7 @@ export default function TodayPage() {
         <div className={styles.headerLeft}>
           <div className={styles.brandTitle}>
             <span className={styles.timeTag}>{data.subtitle}</span>
-            <h1 className={styles.greetingTitle}>{data.greeting}</h1>
+            <h1 className={styles.greetingTitle}>{data.greeting.replace(/, .+$/, `, ${viewer.name}`)}</h1>
           </div>
         </div>
 
@@ -129,7 +126,7 @@ export default function TodayPage() {
         <div className={styles.headerRight}>
           <div className={styles.homeBadge}>
             <span className={styles.greenPulse} aria-hidden="true" />
-            <span>Home Secure · {data.physicalHome.livingRoom.temp}</span>
+            <span>Prototype home · {data.physicalHome.livingRoom.temp}</span>
           </div>
 
           <div className={styles.privacyBadge}>
@@ -189,24 +186,24 @@ export default function TodayPage() {
             personContext={personKey}
             title={
               personKey === 'erick'
-                ? 'Nutrition & Metabolic Truth'
+                ? 'Demo Nutrition & Metabolic Preview'
                 : personKey === 'ana'
                 ? 'Care for Ana · Clinical & Wellness'
                 : 'Family Dining & Nourishment'
             }
             subtitle={
               personKey === 'erick'
-                ? 'Domain Service: Nutrition Truth & Metabolic Balance'
+                ? 'Mock nutrition data'
                 : personKey === 'ana'
-                ? 'Care Relationship Circle · Consent Granted'
-                : 'Mealie Recipe Domain · Shared Household Ledger'
+                ? 'Demo care context · mock wellness data'
+                : 'Demo family meal plan'
             }
             targetTag={
               personKey === 'erick'
                 ? 'Target: 2,000 kcal'
                 : personKey === 'ana'
-                ? 'Active Care Link'
-                : 'Meal Planned'
+                ? 'Care context demo'
+                : 'Demo meal plan'
             }
             nutrition={data.nutrition}
             care={data.care}

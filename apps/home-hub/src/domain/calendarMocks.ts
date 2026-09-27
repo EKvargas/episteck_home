@@ -18,7 +18,6 @@ export interface CalendarAccount {
   color: string;
   badgeBg: string;
   badgeBorder: string;
-  lastSynced: string;
   privacyDefault: 'FULL_DETAILS' | 'BUSY_ONLY';
   description: string;
 }
@@ -60,9 +59,8 @@ export const calendarAccountsMock: Record<CalendarSourceId, CalendarAccount> = {
     color: '#3b82f6', // blue
     badgeBg: 'rgba(59, 130, 246, 0.12)',
     badgeBorder: 'rgba(59, 130, 246, 0.3)',
-    lastSynced: '2 minutes ago',
     privacyDefault: 'BUSY_ONLY',
-    description: 'Corporate Exchange / Google Workspace with sprint planning & client syncs',
+    description: 'Demo work calendar with fictional sprint planning and client meetings',
   },
   'erick-personal': {
     id: 'erick-personal',
@@ -73,7 +71,6 @@ export const calendarAccountsMock: Record<CalendarSourceId, CalendarAccount> = {
     color: '#f97316', // orange
     badgeBg: 'rgba(249, 115, 22, 0.12)',
     badgeBorder: 'rgba(249, 115, 22, 0.3)',
-    lastSynced: '5 minutes ago',
     privacyDefault: 'FULL_DETAILS',
     description: 'Personal Google Calendar for training, health, and personal errands',
   },
@@ -86,7 +83,6 @@ export const calendarAccountsMock: Record<CalendarSourceId, CalendarAccount> = {
     color: '#a855f7', // purple
     badgeBg: 'rgba(168, 85, 247, 0.12)',
     badgeBorder: 'rgba(168, 85, 247, 0.3)',
-    lastSynced: 'Just now',
     privacyDefault: 'FULL_DETAILS',
     description: 'Design consulting projects, student reviews, and personal schedule',
   },
@@ -99,9 +95,8 @@ export const calendarAccountsMock: Record<CalendarSourceId, CalendarAccount> = {
     color: '#10b981', // emerald
     badgeBg: 'rgba(16, 185, 129, 0.12)',
     badgeBorder: 'rgba(16, 185, 129, 0.3)',
-    lastSynced: '8 minutes ago',
     privacyDefault: 'FULL_DETAILS',
-    description: 'Apple CalDAV calendar synced with iOS Reminders and Clinic passes',
+    description: 'Mock Apple calendar entry with fictional reminders and clinic visits',
   },
   'household': {
     id: 'household',
@@ -112,7 +107,6 @@ export const calendarAccountsMock: Record<CalendarSourceId, CalendarAccount> = {
     color: '#c4643c', // olin terracotta
     badgeBg: 'rgba(196, 100, 60, 0.12)',
     badgeBorder: 'rgba(196, 100, 60, 0.3)',
-    lastSynced: 'Realtime internal ledger',
     privacyDefault: 'FULL_DETAILS',
     description: 'Shared family dinners, home maintenance, trips, and visitor access',
   },
@@ -232,7 +226,7 @@ export const calendarEventsMock: CalendarEvent[] = [
     owner: 'Ana',
     location: 'Maternal & Wellness Clinic, Room 302',
     attendees: ['Dr. Weber', 'Erick (Care Escort)'],
-    notes: 'Active care consent link active. Ultrasound checkup.',
+    notes: 'Demo ultrasound appointment; no consent or care access is evaluated.',
     isCareLink: true,
     isConflict: true,
     category: 'care',
@@ -262,7 +256,7 @@ export const calendarEventsMock: CalendarEvent[] = [
     owner: 'Joint',
     location: 'Dining Room',
     attendees: ['Erick', 'Ana'],
-    notes: 'Mealie recipe synchronized. Oven preheats at 17:45.',
+    notes: 'Demo meal-plan note. Prototype oven timing: 17:45.',
     category: 'family',
   },
   {
@@ -297,7 +291,7 @@ export const calendarInsightsMock: CalendarInsight[] = [
   {
     id: 'ins-conflict-1',
     type: 'CONFLICT',
-    title: 'Schedule Conflict Detected at 14:00',
+    title: 'Demo schedule overlap at 14:00',
     message: "Ana's clinic appointment with Dr. Weber overlaps with Erick's Client Technical Debrief. Erick is listed as care escort.",
     affectedEventIds: ['cal-ev-2', 'cal-ev-8'],
     actionLabel: 'Propose 15m shift for Client Call',
