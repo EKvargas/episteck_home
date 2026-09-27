@@ -59,6 +59,8 @@ Target: `ubuntu-4gb-nbg1-1` in Nuremberg. The deployed repository baseline was
 that exact SHA at rollout time; it contains F2a Control Plane, F2a BFF, the PR #42
 duplicate-Circle fix, and F2b Hub.
 
+**Coordinated rollout: PASS. Rollback was not used.**
+
 ### BFF
 
 - Previous image: `localhost/episteck-home-bff:ddebab6439c9d68487d180dec6995fc546d3cf68`
