@@ -44,10 +44,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const whenVisible = () => {
       if (document.visibilityState === 'visible') recheck();
     };
+    const whenHistoryChanges = () => {
+      pendingPersonIdRef.current = null;
+      setPendingPersonId(null);
+      recheck();
+    };
     window.addEventListener('focus', recheck);
+    window.addEventListener('popstate', whenHistoryChanges);
     document.addEventListener('visibilitychange', whenVisible);
     return () => {
       window.removeEventListener('focus', recheck);
+      window.removeEventListener('popstate', whenHistoryChanges);
       document.removeEventListener('visibilitychange', whenVisible);
     };
   }, []);

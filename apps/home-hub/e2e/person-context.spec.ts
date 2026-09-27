@@ -90,6 +90,22 @@ test('a subject is carried through an internal detail link', async ({ page }) =>
   await expect(page).toHaveURL(/\/app\/memory\?person=PSN-00007$/);
 });
 
+test('browser Back during a pending selection restores the previous Person', async ({ page }) => {
+  await authenticate(page);
+  await page.goto('/app?person=PSN-00001');
+  await expect(page.getByRole('tab', { name: /Synthetic Viewer/ })).toBeVisible();
+  await page.route('**/app/api/context', async (route) => {
+    const body = route.request().postDataJSON();
+    if (body.person?.[0] === 'PSN-00007') await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.continue();
+  });
+  await page.getByRole('tab', { name: /Synthetic Care Context/ }).click();
+  await expect(page).toHaveURL(/person=PSN-00007$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/person=PSN-00001$/);
+  await expect(page.getByRole('tab', { name: /Synthetic Viewer/ })).toBeVisible();
+});
+
 test('context selection resets prior subject presentation before the new one renders', async ({ page }) => {
   await authenticate(page);
   await page.goto('/app');
