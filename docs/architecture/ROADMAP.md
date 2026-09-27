@@ -36,6 +36,24 @@ Actor identity is derived from an authenticated session, never supplied. **No re
 
 See `adr/0009-trusted-actor-binding.md` and `G1_6_VALIDATION.md`.
 
+## Home Hub F0–F2 — COMPLETE (PASS)
+
+The Home Hub integration foundation, session-bound viewer/bootstrap flow, BFF routing,
+and authenticated Hub rollout are complete. The 2026-09-27 live login resolved
+`vargas3rick@gmail.com` to `PSN-00013` / Erick Vargas; the bootstrap contained only
+his Person context, with no Circle or care relationships. See
+`deploy/home-hub/README.md` for the rollout record. Historical F0/F2 design files
+may retain their original pre-implementation status labels.
+
+## Home F3 — ARCHITECTURE BOARD REVIEW
+
+`proposals/HOME_F3_ACTIVE_CONTEXT_DOMAIN_INTEGRATION.md` proposes a Person-only
+active context and one read-only, server-mediated Nutrition profile vertical. It
+combines the older foundation's separate F3 context, F4 adapter, and F5 UI steps
+into four small F3 implementation reviews. No implementation, deployment, family
+topology creation, or real-data onboarding is authorized by this proposal. The G2
+real family/health onboarding gate below remains in force.
+
 ## Gates ahead
 
 ### ~~Stage G1.7 — EU Home Control Plane migration~~ `[WITHDRAWN 2026-09-16]`
