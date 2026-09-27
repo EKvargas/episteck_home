@@ -45,14 +45,17 @@ his Person context, with no Circle or care relationships. See
 `deploy/home-hub/README.md` for the rollout record. Historical F0/F2 design files
 may retain their original pre-implementation status labels.
 
-## Home F3 — ARCHITECTURE BOARD REVIEW
+## Home F3 — ARCHITECTURE BOARD DISPOSITION RECORDED
 
-`proposals/HOME_F3_ACTIVE_CONTEXT_DOMAIN_INTEGRATION.md` proposes a Person-only
-active context and one read-only, server-mediated Nutrition profile vertical. It
-combines the older foundation's separate F3 context, F4 adapter, and F5 UI steps
-into four small F3 implementation reviews. No implementation, deployment, family
-topology creation, or real-data onboarding is authorized by this proposal. The G2
-real family/health onboarding gate below remains in force.
+`proposals/HOME_F3_ACTIVE_CONTEXT_DOMAIN_INTEGRATION.md` records the Board-accepted
+Person-only active context and one read-only, server-mediated Nutrition profile
+vertical. An authorized no-profile response is sufficient for the first live
+integration proof; it does not prove populated profile rendering. Home must establish
+subject Person existence before any positive authorization decision through its shared
+policy boundary. The older foundation's separate F3 context, F4 adapter, and F5 UI
+steps become four small F3 implementation reviews. No implementation, deployment,
+family topology creation, or real-data onboarding is authorized by this documentation
+update. The G2 real family/health onboarding gate below remains in force.
 
 ## Gates ahead
 

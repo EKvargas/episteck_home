@@ -1,10 +1,10 @@
 # Home F3: active Person context and first real Nutrition read
 
-**Status:** Proposed for Architecture Board review; no implementation authorized by this document
+**Status:** Architecture Board disposition incorporated; documentation PR awaiting merge. No runtime implementation authorized by this document.
 
 **Date:** 2026-09-27
 
-**Baseline:** `origin/main` at `0346aede2ff4a6895ddbb4dba976bd285a1991e9`
+**Baseline:** refreshed against `origin/main` at `0db28ab21462c2ff74add1ecb07c215b8c64488a` (original PR baseline: `0346aede2ff4a6895ddbb4dba976bd285a1991e9`)
 
 **Scope:** Home Hub context selection, one read-only Nutrition vertical, and its server and policy boundary. No production data mutation, deployment, or Knowledge runtime.
 
@@ -12,7 +12,7 @@
 
 Erick signs in as `vargas3rick@gmail.com`. The authenticated session resolves to Person `PSN-00013` (Erick Vargas). He chooses whose Nutrition profile to inspect. Home turns that choice into a **requested subject**. Nutrition performs a fresh `NUTRITION/VIEW` decision before reading its own store, then Home shows the result or a distinct safe failure state. The actor, subject, operation, and decision remain separate throughout.
 
-The first live stage works with Erick alone. The current live bootstrap contains only Erick, no Circle, and no care relationship. Later cross-person use needs a real navigable Person and explicit consent; a family Circle is not a prerequisite for the Person Nutrition read. No synthetic Ana or Circle is introduced into LIVE.
+The first live stage works with Erick alone. The current live bootstrap contains only Erick, no Circle, and no care relationship. Later cross-person use needs a real navigable Person and explicit consent; a family Circle is not a prerequisite for the Person Nutrition read. No synthetic Ana or Circle is introduced into LIVE. **Board decision:** if Erick has no Nutrition profile, an authorized `ABSENT` result is sufficient to prove the first live end-to-end integration and authorization path. It is not proof that populated profile data rendered, and F3 must not create a profile to make the demonstration contain data.
 
 ### Process register
 
@@ -22,7 +22,7 @@ The first live stage works with Erick alone. The current live bootstrap contains
 | **F3-P2: select self Person** | Actor Erick; requested subject `PSN-00013`. | Browser selects; server validates against fresh session bootstrap. Nutrition owns profile. | Context validation for navigation; subsequent Nutrition `NUTRITION/VIEW` check remains mandatory. | URL and selector show Erick. Failure keeps sensitive content hidden. |
 | **F3-P3: select another Person** | Actor Erick; subject is a different Person, for example Ana after real onboarding. | Frappe bootstrap owns discoverability; Home policy owns consent; Nutrition owns profile. | Server accepts only a current navigable Person candidate; Nutrition independently checks a valid `Consent Grant` for this actor, subject, domain, and action. | Selector changes and prior data clears before request. A visible care relationship alone may lead to a `DENIED` panel. An unknown Person cannot be discovered by guessing an ID. |
 | **F3-P4: select Circle** | Actor Erick; requested Circle has no single Nutrition subject. | Frappe Circle and Circle Membership own navigation topology; no Circle Nutrition operation exists. | F3 Person-only active-context parser rejects a Circle ID for this vertical. | A future family entry may remain a shell/navigation affordance, but `/nutrition` explains that Circle Nutrition is unavailable and offers Person choices. No member is silently chosen and no Nutrition call is made. |
-| **F3-P5: request real Nutrition** | Actor resolved from the delegated session; subject from validated Person context; operation `NUTRITION/VIEW`. | BFF mints delegation; Home policy decides; Nutrition profile store supplies data. | Nutrition calls Home once, with its own machine credential and the single-use delegation, before repository access. | Show a real, minimally mapped profile summary or explicit no-profile state. |
+| **F3-P5: request real Nutrition** | Actor resolved from the delegated session; subject from validated Person context; operation `NUTRITION/VIEW`. | BFF mints delegation; Home policy decides; Nutrition profile store supplies data. | Nutrition calls Home once, with its own machine credential and the single-use delegation; Home establishes subject existence before any allow; Nutrition reads only after allow. | Show a real, minimally mapped profile summary or explicit no-profile state. |
 | **F3-P6: authorization denied** | Same actor and selected subject; explicit policy says no. | Home `Consent Grant` and `can_access` are authoritative. | Nutrition refuses before `repo.get_profile`. | Keep the selected Person visible with an access-restricted state; never substitute self or show earlier subject data. |
 | **F3-P7: domain unavailable** | Actor and selected Person unchanged. | Nutrition service health or Home policy availability. | No successful fresh authorization and domain response. | Show unavailable; no mock fallback. Retry starts a new operation with a fresh delegation. |
 | **F3-P8: no domain data** | Actor and selected Person authorized; profile absent. | Nutrition repository. | Authorization succeeded, then repository returned no profile. | Show “No Nutrition profile yet,” not zero targets, denial, or error. |
@@ -67,9 +67,9 @@ There is no `actorPersonId`, `canViewNutrition`, grant snapshot, relationship, o
 5. Refresh preserves the query and revalidates it. A fresh login starts at self. A historical URL opened under a new session is revalidated against that session's bootstrap, then falls back to that viewer's self if stale. Logout invalidates the session; a URL alone has no access.
 6. Two tabs hold independent URLs and requests. A context switch cancels or disregards the prior in-flight result using the requested context key and request generation. Data for subject A cannot paint under subject B.
 
-Person IDs in the URL are navigation selectors, not secrets or authority, but they are personal metadata. F3 must keep `Referrer-Policy: no-referrer`, strip query strings from access logs and telemetry, avoid third-party links carrying the query, set all sensitive responses `Cache-Control: no-store`, and avoid embedding domain data in share previews. This choice gives refresh and tab isolation without persisting a selection across login. If the Board considers even the Person ID in history unacceptable, an opaque per-tab handle requires a separate design; it must still be revalidated and cannot be a bearer capability.
+Person IDs in the URL are navigation selectors, not secrets or authority, but they are personal metadata. F3 must keep `Referrer-Policy: no-referrer`, strip query strings from access logs and telemetry, avoid third-party links carrying the query, set all sensitive responses `Cache-Control: no-store`, and avoid embedding domain data in share previews. This Board-accepted choice gives refresh and tab isolation without persisting a selection across login.
 
-**Discoverability limit:** F2 bootstrap exposes self and care subjects, not grant-only subjects or Circle co-members as Person contexts. Thus a grant-only Person without a care relationship is not selectable in the initial UI. The first cross-person live topology should include a real care relationship for navigation **and** a distinct Consent Grant for data access. A later discovery extension may surface grant-only candidates without returning grant details or replacing the domain check. F3 does not broaden bootstrap silently.
+**Board-accepted discoverability limit:** F2 bootstrap exposes self and active-care subjects, not grant-only subjects or Circle co-members as Person contexts. Thus a grant-only Person without a care relationship is not selectable in the F3 UI. The first cross-person live topology should include a real care relationship for navigation **and** a distinct Consent Grant for data access. Care Relationship is navigation/discoverability only; it **never** authorizes `NUTRITION/VIEW`. Grant-only discovery is deferred and cannot later replace the domain check.
 
 ## 4. Actor, subject, and operation contract
 
@@ -81,6 +81,14 @@ Person IDs in the URL are navigation selectors, not secrets or authority, but th
 | Decision | Fresh Home `can_access` evaluation through Nutrition | **No** | literal allow or deny |
 
 Proposed browser-to-Hub request shape is a route/query Person selector only. Proposed Hub adapter signature is conceptually `readNutritionProfile(requestedContext, requestSession): Promise<DataEnvelope<ProfileSummary>>`; it has **no actor argument**, no client-chosen domain/action, and no client-supplied delegation. The Nutrition endpoint's existing `person_id` path parameter is the subject. The actor is never serialized into the call. The BFF's mint uses the session cookie and fixed `svc-nutrition` audience; Home's policy call receives the subject and fixed domain/action and derives the actor itself.
+
+### Home policy-boundary subject-existence invariant
+
+**Before any positive authorization decision, Home must establish from its current Person system of record that the subject Person exists.** Missing, deleted, malformed, or unresolvable subjects fail closed. This invariant applies to `check_access(...)`, `check_access_many(...)`, and every future equivalent authorization entry point, for self and cross-person requests alike. An `ALLOW` from the pure policy evaluator cannot be exposed as an authoritative decision unless this existence condition has been satisfied in the same server-side authorization operation. No downstream domain repository read may follow a missing-subject decision.
+
+The eventual implementation should put the check in a **shared Home policy-boundary helper**, used by single and batch APIs, instead of duplicating it in each Frappe method. `check_access_many` must fail the whole request and return no positive per-requirement decision when the subject is missing; at most, an existence result may be reused within that one request. It must not be cached across requests. A missing subject and an unauthorized subject have the same user-visible denial shape and generic reason: neither the status nor message may disclose which condition occurred. Internal audit may retain a safe reason category without returning an existence oracle.
+
+The load-bearing race is: bootstrap validates a Person → that Person is deleted → Nutrition asks Home for authorization. Bootstrap's earlier navigation result cannot authorize the read. The fresh Home policy-boundary existence check must prevent `ALLOW`, even if an orphaned Consent Grant remains. The current `policy/wrappers.py:check_access` feeds the pure evaluator without checking subject existence; `api.check_access_many` calls that wrapper per requirement. This is a cross-API policy-boundary correction, not a Nutrition-only exception.
 
 ## 5. First real vertical and server adapter
 
@@ -103,17 +111,17 @@ Browser: GET /app/nutrition?person=S with opaque HttpOnly cookie
   → Hub server: GET Nutrition /profile/S with delegation header
   → Nutrition: call Home check_access(S, NUTRITION, VIEW) once,
                using Nutrition machine credential + delegation
-  → Home: independently resolve human actor from delegated session;
-          confirm the subject Person still exists;
+  → Home shared policy boundary: independently resolve human actor;
+          establish current subject Person existence before any ALLOW;
           evaluate current Consent Grants (self access or exact grant)
   → Nutrition: read profile only after literal ALLOW; return profile or 404
   → Hub server: validate and minimize the domain response; map safe envelope
   → Browser: render only the envelope for the current S
 ```
 
-This matches the implemented Nutrition authorization order and single-use behavior in `service.py` and `home_control/client.py`. The subject-existence check is a proposed tightening: current `api.check_access` resolves the actor and evaluates the policy without a separate subject-existence check, so an orphaned grant could otherwise authorize a deleted subject if deletion raced with context validation. The missing work is that check, the Hub adapter, transport reachability, strict response mapping, and a typed distinction between explicit denial and indeterminate policy failure. The BFF remains the session/delegation issuer, the Hub server is a presentation adapter, Home is the identity/policy authority, and Nutrition remains the profile owner. Do not add Nutrition business tables or target calculations to Home.
+This matches the implemented Nutrition authorization order and single-use behavior in `service.py` and `home_control/client.py`. The shared subject-existence invariant above is the required Home policy-boundary adjustment. Other missing work is the Hub adapter, transport reachability, strict response mapping, and a typed distinction between explicit denial and indeterminate policy failure. The BFF remains the session/delegation issuer, the Hub server is a presentation adapter, Home is the identity/policy authority, and Nutrition remains the profile owner. Do not add Nutrition business tables or target calculations to Home.
 
-**Network decision for F3b:** retain Hub → BFF port 9933 and add only a reviewed Hub server → Nutrition FastAPI port 9930 path. Keep 9931/9932/9934 unreachable from the Hub, and keep 9930 unavailable to the public browser. Prove the exact Podman/pasta and service-account isolation on the host before rollout. If the narrow forward cannot be proven, stop the rollout and return evidence for a new transport decision; do not use host networking or a broad gateway as an implicit fallback.
+**Board-accepted network principle for F3b:** retain Hub → BFF port 9933 and add only a narrow Hub server → Nutrition FastAPI port 9930 path. The deployment must empirically prove the exact Podman/pasta configuration: Hub → 9933 reachable; Hub → 9930 reachable; Hub → 9931/9932/9934 unreachable; public → 9930 unreachable. If that isolation cannot be proven, stop the rollout and return evidence for a new transport decision. `Network=host` and broad network exposure are not approved fallbacks.
 
 ## 6. Response and UI state contract
 
@@ -129,7 +137,7 @@ type ProfileSummary =
 | --- | --- | --- |
 | `LOADING` | `delivery=LOADING`, `authorization=INDETERMINATE`, no data | Clear prior subject data; show loading for current subject. |
 | `READY_WITH_DATA` | `READY`, `GRANTED`, `LIVE`, `data.presence=PRESENT` | Show real profile summary and Nutrition provenance. |
-| `READY_NO_DATA` | `READY`, `GRANTED`, `LIVE`, `data.presence=ABSENT` | Show no-profile state; no zeros or demo values. |
+| `READY_NO_DATA` | `READY`, `GRANTED`, `LIVE`, `data.presence=ABSENT` | Show no-profile state; no zeros or demo values. This proves the real read and authorization chain, not populated profile rendering. |
 | `DENIED` | `ERROR`, `DENIED`, `ACCESS_DENIED`, no data | Access restricted; preserve selected context. |
 | `UNAVAILABLE` | `ERROR`, `INDETERMINATE`, `SERVICE_UNAVAILABLE` or `OFFLINE`, no data | Service unavailable and retry. |
 | `ERROR` | `ERROR`, `INDETERMINATE`, `INVALID_RESPONSE`, no data | Safe error; no raw upstream body. |
@@ -149,7 +157,7 @@ type ProfileSummary =
 
 ## 8. Family topology and sequencing
 
-**Stage 1:** Erick self context and a read-only Nutrition profile operation. No new Person, Circle, membership, care relation, or grant is necessary. The current live Nutrition profile for `PSN-00013` has **not** been inspected by this architecture work. If absent, live verification can prove the authorized no-profile path, but it cannot claim that populated real profile data was displayed. Creating a real profile is a separate data-onboarding decision, especially because the canonical Roadmap still gates real family/health onboarding.
+**Stage 1:** Erick self context and a read-only Nutrition profile operation. No new Person, Circle, membership, care relation, or grant is necessary. The current live Nutrition profile for `PSN-00013` has **not** been inspected by this architecture work. The Board accepts an authorized `ABSENT` result as sufficient for F3's first live end-to-end integration proof if no profile exists. Evidence must say **authorized no-profile response**, never **populated profile rendered**. Do not create a Nutrition profile to fill the demo. Real data onboarding remains a separate decision under the canonical Roadmap's G2 gate.
 
 **Stage 2, only when authorized for real onboarding:** create Ana as a distinct Person, add a care relationship if Ana should appear in the F2/F3 Person selector, and create an explicit `NUTRITION/VIEW` Consent Grant from the proper grantor. A family Circle and memberships are needed only for an actual family workflow; neither changes Person Nutrition authorization. Prove cross-person allow, deny, and revocation first with synthetic test fixtures, then with approved real records. Do not assign Ana a synthetic login or treat co-membership as consent.
 
@@ -164,7 +172,7 @@ type ProfileSummary =
 | Revoked Consent Grant | Next Nutrition operation gets literal deny before repository read; clear prior panel on recheck. |
 | Removed Circle membership | Circle navigation disappears on fresh bootstrap. It never controls Person Nutrition permission; any separate affected Person eligibility is recomputed. |
 | Context from previous session | New login defaults to self. A historical URL is revalidated against the new session, then falls back to that viewer's self with a notice if stale. |
-| Deleted Person | Fresh bootstrap/navigation validation rejects it. If deletion races after bootstrap, Home policy confirms subject existence at decision time before allow; no repository read. |
+| Deleted Person | Fresh bootstrap/navigation validation rejects it. If deletion races after bootstrap, the shared Home policy-boundary check confirms subject existence at authorization time; missing means no positive decision and no repository read. The user sees the same generic denial as other unauthorized subjects. |
 | Disabled User | Frappe session/bootstrap and delegated actor resolution refuse; login/session error, no data. |
 | Expired BFF session | `/bootstrap`/mint refuses; redirect to login, clear client domain data. |
 | Nutrition cannot reach Home | No repository read. F3b maps indeterminate policy availability to sanitized unavailable, never granted/empty. |
@@ -181,34 +189,31 @@ Each phase is a separate, reviewable PR. Code paths below are planning targets, 
 | Phase | Scope and code areas | Acceptance and security checks | Live verification and non-goals |
 | --- | --- | --- | --- |
 | **F3a — Person context** | `apps/home-hub/src/components/providers/AppProvider.tsx`, typed context/URL parser under `src/integration/home`, server selection boundary, `/nutrition` navigation. Self default, refresh, tab isolation, stale handling. | Invalid Person/Circle/actor injection rejected; care-only candidate navigable but no domain permission asserted; stale URL clears old data. | Human login still lands on Erick self; two tabs and refresh behave independently. No Nutrition call, Circle domain semantics, or topology mutation. |
-| **F3b — Nutrition server adapter** | `src/integration/nutrition/*` server-only adapter; existing BFF `/delegation`; `services/nutrition/app/home_control/client.py`, `service.py`, `main.py` for typed deny versus indeterminate; `apps/episteck_home/episteck_home/api.py` for subject-existence guard; reviewed `deploy/home-hub` narrow port 9930 forwarding. | One mint and one Home policy call per profile operation; no actor input; deleted subject and deny/unknown never read the repository; strict policy/profile response validation; no token/browser exposure. | Host proves 9933 and 9930 reachable from Hub, 9931/9932/9934 not, and public 9930 inaccessible. No broad network mode, new domain, or policy cache. |
+| **F3b — Nutrition server adapter** | `src/integration/nutrition/*` server-only adapter; existing BFF `/delegation`; `services/nutrition/app/home_control/client.py`, `service.py`, `main.py` for typed deny versus indeterminate; shared subject-existence guard under `apps/episteck_home/episteck_home/policy/`, consumed by `api.check_access`, `api.check_access_many`, and future policy entry points; reviewed `deploy/home-hub` narrow port 9930 forwarding. | One mint and one Home policy call per profile operation; no actor input; all positive decisions require a currently existing subject; deleted subject and deny/unknown never read the repository; strict policy/profile response validation; no token/browser exposure. | Host proves 9933 and 9930 reachable from Hub, 9931/9932/9934 not, and public 9930 inaccessible. `Network=host` and broad exposure are excluded. No new domain or policy cache. |
 | **F3c — one live page** | `apps/home-hub/src/app/nutrition/page.tsx` and its small profile presentation boundary. Replace mock Nutrition summary cluster in LIVE with profile present/absent/error panel. | All six product states are distinct; current subject visible; no fabricated calories, targets, or mock fallback; stale in-flight result discarded. | Authenticated Erick sees a real service-derived profile or truthful no-profile panel. Today, pregnancy, Mealie, and other mock surfaces stay clearly demo. |
-| **F3d — negative and live validation** | Focused tests in Hub, BFF boundary, Home policy, Nutrition; deployment/runbook evidence in `deploy/home-hub/README.md` and Home status docs after approval. | Cross-person allow/deny/revoke with fixtures; actor substitution, stale/deleted context, disabled/expired session, malformed responses, Home outage, tab races, and no-cache assertions. | Read-only production verification for Erick; approved real cross-person checks only after separate topology/data authorization. No production fixture creation as a testing shortcut. |
+| **F3d — negative and live validation** | Focused tests in Hub, BFF boundary, Home policy, Nutrition; deployment/runbook evidence in `deploy/home-hub/README.md` and Home status docs after approval. | Cross-person allow/deny/revoke with fixtures; single/batch/future-equivalent policy entry points deny missing subjects without an oracle; bootstrap-then-delete race; actor substitution, stale context, disabled/expired session, malformed responses, Home outage, tab races, and no-cache assertions. | Read-only production verification for Erick; approved real cross-person checks only after separate topology/data authorization. No production fixture creation as a testing shortcut. |
 
 ## 11. Acceptance matrix and live proof
 
 | Case | Setup and action | Required observation |
 | --- | --- | --- |
-| Self context | Erick OAuth login → self default → profile request | Home resolves actor `PSN-00013`; subject `PSN-00013`; `NUTRITION/VIEW` self allow; Nutrition responds with a real profile summary **if present** or authorized `ABSENT` if not. No mock values. |
+| Self context | Erick OAuth login → self default → profile request | Home resolves actor `PSN-00013`; subject `PSN-00013`; subject exists at authorization time; `NUTRITION/VIEW` self allow; Nutrition responds with a real profile summary **if present** or authorized `ABSENT` if not. No mock values. Authorized `ABSENT` passes the initial live path proof, without a populated-data claim. |
 | Cross-person allow | Synthetic actor Erick, another Person navigable through care, active `NUTRITION/VIEW` grant | Fresh Home allow; Nutrition reads only that subject; Hub renders the subject's profile. Live version awaits approved real topology. |
 | Cross-person deny | Same navigable Person, no matching active grant | HTTP/domain deny before profile repository read; no subject data, no self fallback. |
 | Revocation | Initial grant allows; revoke; request again | Next operation denies with zero new domain disclosure; no cached allow/result. |
 | Actor substitution | Send actor field/query/header and forged delegation | Actor never changes; unsupported input rejected/ignored safely, forged delegation denied. |
 | Stale context | Remove navigation eligibility or open prior-session URL | Fresh validation clears old data and routes to current viewer self with notice; no call for stale subject. |
+| Subject deleted after bootstrap | Bootstrap validates another Person; delete that Person before Nutrition's Home authorization, with an orphaned grant if needed | Shared policy boundary returns no positive decision from `check_access` or `check_access_many`; all future equivalent entry points obey the same invariant; zero Nutrition repository reads; generic denial does not reveal whether the Person exists. |
 | Domain failure | Stop/unreach Nutrition or Home policy | Unavailable state, no fake data; a retry uses fresh delegation. |
 | Absent profile | Authorized subject has no Nutrition profile | `READY_NO_DATA`, not `0`, `DENIED`, or transport `ERROR`. |
 | Concurrent tabs/in-flight switch | Different Person URL per tab; switch during delayed response | Independent selections; late response discarded; no cross-subject paint. |
 
-**Architecture-task verification:** inspect only repository code and existing rollout records; do not query or change production. During a later implementation rollout, capture the exact deployed SHAs, F3 narrow network proof, authenticated BFF/bootstrap evidence, a single Nutrition request trace showing one Home policy decision, response classification, no sensitive cache headers, and logs free of IDs/credentials. Live cross-person consent and populated self profile are gated by real-data authorization; synthetic tests prove those branches before any real topology exists.
+**Architecture-task verification:** inspect only repository code and existing rollout records; do not query or change production. During a later implementation rollout, capture the exact deployed SHAs, F3 narrow network proof, authenticated BFF/bootstrap evidence, a single Nutrition request trace showing one Home policy decision, response classification, no sensitive cache headers, and logs free of IDs/credentials. If Erick's profile is absent, record an **authorized ABSENT end-to-end proof** and stop there; do not seed a profile for display. Live cross-person consent and populated self profile are gated by real-data authorization; synthetic tests prove those branches before any real topology exists.
 
-## 12. Board decisions and open questions
+## 12. Board disposition and remaining gates
 
-The proposal decides Person-only F3 active context; URL-carried requested Person with server validation; self default and stale fallback; actor derived only from session; profile summary as the first vertical; Hub server adapter using BFF delegation; Nutrition's fresh policy check; existing envelope plus explicit profile presence; no authorization cache; self topology first; and the F3a–F3d split.
+The Board accepts Person-only F3 active context; URL-carried requested Person with fresh server validation; session-derived actor and context-derived subject; Nutrition Profile as the first vertical; an authorized `ABSENT` result as the first live end-to-end proof if the profile is absent; self plus active-care Person discovery; a narrow Hub-server → Nutrition port 9930 path in principle; and distinct `DENIED` versus indeterminate/unavailable outcomes, with both failing closed for data access.
 
-The Board should resolve these before F3 implementation:
+The Board requires the shared Home policy-boundary subject-existence invariant in §4 before **any** positive authorization decision, including single, batch, and future equivalent entry points. The deletion race and no-oracle behavior are acceptance requirements, not optional hardening.
 
-1. **Real profile data gate:** the live `PSN-00013` Nutrition profile has not been inspected here. If it is absent, is an authorized no-profile result sufficient for F3's live read proof, with populated real data deferred to an approved onboarding step? The current Roadmap blocks G2 real health/family onboarding pending other gates.
-2. **Navigation discovery beyond care:** F2 bootstrap omits grant-only Person candidates. Is the initial self + care navigation limitation acceptable for F3, with grant-only discovery designed later?
-3. **Network rollout detail:** verify the exact narrow Podman/pasta forward to Nutrition port 9930 and isolation proof on the deployed host before approving F3b deployment. No alternate topology is preapproved here.
-
-These questions do not weaken the selected trust model. They determine rollout scope and evidence, not whether client context can authorize access.
+**Open Board architecture questions: none.** F3b still has an empirical Podman/pasta isolation gate before deployment. Populated-profile rendering and real cross-person topology remain outside the first live proof; no production records are created to satisfy them. These are implementation and real-data authorization gates, not unresolved choices about the F3 trust model.
