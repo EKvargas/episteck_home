@@ -9,13 +9,13 @@ import Link from 'next/link';
 import styles from './page.module.css';
 
 export default function NutritionPage() {
-  const { activeContext, setContext, availableContexts } = useAppContext();
-  const data = getTodaySummaryMock(getDemoContextId(activeContext.mode));
+  const { activeContext, presentationContext, setContext, availableContexts } = useAppContext();
+  const data = getTodaySummaryMock(getDemoContextId(presentationContext.mode));
 
   // Mock content availability is a presentation choice, never an authorization result.
   const hasNutrition = !!data.nutrition;
   const hasMeal = !!data.familyMeal;
-  const isFamilyContext = activeContext.mode === 'FAMILY';
+  const isFamilyContext = presentationContext.mode === 'FAMILY';
 
   return (
     <div className={styles.nutritionCanvas}>
@@ -25,12 +25,12 @@ export default function NutritionPage() {
           <div style={{ marginTop: '0.75rem' }}>
             <DefaultRelationshipSwitcher
               contexts={availableContexts}
-              activeContextId={activeContext.id}
+              activeContextId={presentationContext.id}
               onSelectContext={(id) => setContext(id)}
             />
           </div>
         </div>
-        
+
         <div className={styles.provenanceBadge} role="note" aria-label="Mock nutrition data">
           <Database size={16} weight="fill" />
           <span>DEMO · MOCK DATA</span>
@@ -38,21 +38,21 @@ export default function NutritionPage() {
       </header>
 
       <main className={styles.grid}>
-        {/* 
+        {/*
           Context usage comment (Product Owner requirement):
-          `activeContext` is used here purely as a UI/demo routing mechanism to show 
+          `presentationContext` is used here purely as a UI/demo routing mechanism to show
           Ana's specific dashboard in the prototype. It is NOT an authorization decision.
-          In production, visibility and feature access must ultimately be determined by 
+          In production, visibility and feature access must ultimately be determined by
           trusted server-side authorization and domain state.
         */}
-        {activeContext.mode === 'CARE_FOR_ANOTHER_PERSON' && (
+        {presentationContext.mode === 'CARE_FOR_ANOTHER_PERSON' && (
           <div className={styles.card} style={{ gridColumn: '1 / -1', background: 'var(--olin-badge-bg)', border: '1px solid var(--olin-accent)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '1.25rem' }}>Pregnancy Nutrition</h3>
                 <p style={{ color: 'var(--olin-text-muted)', margin: '0.25rem 0 0' }}>Track prenatal vitamins, iron, and key pregnancy nutrients.</p>
               </div>
-              <Link href="/nutrition/pregnancy" style={{ padding: '0.75rem 1.5rem', background: 'var(--olin-accent)', color: 'white', borderRadius: '8px', textDecoration: 'none', fontWeight: 500 }}>
+              <Link href={`/nutrition/pregnancy?person=${encodeURIComponent(activeContext.personId)}`} style={{ padding: '0.75rem 1.5rem', background: 'var(--olin-accent)', color: 'white', borderRadius: '8px', textDecoration: 'none', fontWeight: 500 }}>
                 View Dashboard
               </Link>
             </div>
@@ -63,7 +63,7 @@ export default function NutritionPage() {
           <>
             {/* Caloric Hero */}
             <div className={`${styles.card} ${styles.heroCard}`}>
-              <div 
+              <div
                 className={styles.calorieRing}
                 style={{
                   background: `conic-gradient(var(--olin-accent) ${(data.nutrition!.calories / data.nutrition!.targetCalories) * 100}%, var(--olin-badge-bg) 0)`
@@ -74,7 +74,7 @@ export default function NutritionPage() {
                   <span className={styles.calorieLabel}>/ {data.nutrition!.targetCalories} kcal</span>
                 </div>
               </div>
-              
+
               <div style={{ display: 'flex', gap: '3rem', marginTop: '1.5rem', width: '100%', justifyContent: 'center' }}>
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: '1.5rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
@@ -102,8 +102,8 @@ export default function NutritionPage() {
                   <span>{data.nutrition!.proteinConsumedGrams} / {data.nutrition!.proteinTargetGrams} g</span>
                 </div>
                 <div className={styles.macroBar}>
-                  <div 
-                    className={styles.macroFill} 
+                  <div
+                    className={styles.macroFill}
                     style={{ width: `${Math.min(100, (data.nutrition!.proteinConsumedGrams / data.nutrition!.proteinTargetGrams) * 100)}%` }}
                   />
                 </div>
@@ -118,8 +118,8 @@ export default function NutritionPage() {
                   <span>{data.nutrition!.carbsConsumedGrams} / {data.nutrition!.carbsTargetGrams} g</span>
                 </div>
                 <div className={styles.macroBar}>
-                  <div 
-                    className={styles.macroFill} 
+                  <div
+                    className={styles.macroFill}
                     style={{ width: `${Math.min(100, (data.nutrition!.carbsConsumedGrams / data.nutrition!.carbsTargetGrams) * 100)}%` }}
                   />
                 </div>

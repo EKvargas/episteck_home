@@ -18,7 +18,7 @@ import { AskOlinModal } from '@/components/features/AskOlinModal';
 import styles from './page.module.css';
 
 export default function TodayPage() {
-  const { activeContext, setContext, availableContexts, viewer } = useAppContext();
+  const { activeContext, presentationContext, setContext, availableContexts, viewer } = useAppContext();
   const { activeTheme } = useOlinTheme();
 
   // Resolve presentation slots for active theme
@@ -46,7 +46,7 @@ export default function TodayPage() {
   const ambianceScenes = ['Afternoon Calm', 'Golden Hour', 'Focus State', 'Evening Warmth'];
 
   // Canonical mock data derived from active context
-  const data = getTodaySummaryMock(getDemoContextId(activeContext.mode));
+  const data = getTodaySummaryMock(getDemoContextId(presentationContext.mode));
 
   // Compute tasks with local interactive overrides
   const tasks: ActionableTask[] = data.tasks.map((task) => ({
@@ -96,14 +96,14 @@ export default function TodayPage() {
     }
   };
 
-  const personKey: 'erick' | 'ana' | 'family' = activeContext.mode === 'PERSONAL'
+  const personKey: 'erick' | 'ana' | 'family' = presentationContext.mode === 'PERSONAL'
     ? 'erick'
-    : activeContext.mode === 'CARE_FOR_ANOTHER_PERSON' ? 'ana' : 'family';
+    : presentationContext.mode === 'CARE_FOR_ANOTHER_PERSON' ? 'ana' : 'family';
 
   const pendingCount = tasks.filter((t) => !t.done).length;
 
   return (
-    <div className={styles.pageCanvas} data-context={activeContext.mode}>
+    <div className={styles.pageCanvas} data-context={presentationContext.mode}>
       {/* Top Header Bar */}
       <header className={styles.topHeaderBar}>
         <div className={styles.headerLeft}>
@@ -117,7 +117,7 @@ export default function TodayPage() {
         <div className={styles.headerCenter}>
           <RelationshipSwitcher
             contexts={availableContexts}
-            activeContextId={activeContext.id}
+            activeContextId={presentationContext.id}
             onSelectContext={(id) => setContext(id)}
           />
         </div>
@@ -135,7 +135,7 @@ export default function TodayPage() {
 
           {/* Quick Navigation to Appearance and Kiosk */}
           <Link
-            href="/settings/appearance"
+            href={`/settings/appearance?person=${encodeURIComponent(activeContext.personId)}`}
             className={styles.navLinkIcon}
             title="Appearance Settings (Theme Switcher)"
             aria-label="Appearance Settings"
@@ -144,7 +144,7 @@ export default function TodayPage() {
           </Link>
 
           <Link
-            href="/kiosk"
+            href={`/kiosk?person=${encodeURIComponent(activeContext.personId)}`}
             className={styles.navLinkIcon}
             title="Family Kiosk View (3m glanceable)"
             aria-label="Family Kiosk View"

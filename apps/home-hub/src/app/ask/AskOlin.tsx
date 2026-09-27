@@ -62,7 +62,7 @@ function MyAssistantMessage() {
 }
 
 export function AskOlin() {
-  const { activeContext } = useAppContext();
+  const { presentationContext } = useAppContext();
   
   // @ts-expect-error - Bypass strict ChatModelAdapter type for spike
   const runtime = useLocalRuntime(async (message: any) => {
@@ -88,7 +88,7 @@ export function AskOlin() {
         <div className={styles.header}>
           <h1 className={styles.title}>Ask Olin</h1>
           <span className={styles.contextSubtitle}>
-            Viewing {activeContext.name} · {activeContext.mode === 'PERSONAL' ? 'You' : (activeContext.mode === 'FAMILY' ? 'Family overview' : 'Care context preview')}
+            Viewing {presentationContext.name} · {presentationContext.mode === 'PERSONAL' ? 'You' : (presentationContext.mode === 'FAMILY' ? 'Family overview' : 'Care context preview')}
           </span>
         </div>
 

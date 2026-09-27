@@ -8,8 +8,8 @@ import { DefaultRelationshipSwitcher } from '@/components/slots/default/DefaultR
 import styles from './page.module.css';
 
 export default function HealthPage() {
-  const { activeContext, setContext, availableContexts } = useAppContext();
-  const data = getTodaySummaryMock(getDemoContextId(activeContext.mode));
+  const { presentationContext, setContext, availableContexts } = useAppContext();
+  const data = getTodaySummaryMock(getDemoContextId(presentationContext.mode));
 
   // Mock content availability is a presentation choice, never an authorization result.
   const hasCare = !!data.care;
@@ -22,7 +22,7 @@ export default function HealthPage() {
           <div style={{ marginTop: '0.75rem' }}>
             <DefaultRelationshipSwitcher
               contexts={availableContexts}
-              activeContextId={activeContext.id}
+              activeContextId={presentationContext.id}
               onSelectContext={(id) => setContext(id)}
             />
           </div>

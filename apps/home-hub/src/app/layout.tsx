@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from 'react';
 import { Plus_Jakarta_Sans, Fraunces, DM_Sans, Fira_Code, Outfit } from "next/font/google";
 import "./globals.css";
 import { AppProvider } from "@/components/providers/AppProvider";
@@ -72,9 +73,11 @@ export default async function RootLayout({
       <body>
         <ThemeProvider>
           {bootstrap ? (
-            <AppProvider bootstrap={bootstrap}>
-              <AppShell demoContent>{children}</AppShell>
-            </AppProvider>
+            <Suspense fallback={<AppShell><div role="status">Loading context…</div></AppShell>}>
+              <AppProvider>
+                <AppShell demoContent>{children}</AppShell>
+              </AppProvider>
+            </Suspense>
           ) : (
             <AppShell><ServiceUnavailableBoundary /></AppShell>
           )}

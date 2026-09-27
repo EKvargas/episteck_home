@@ -2,11 +2,13 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useOptionalAppContext } from '@/components/providers/AppProvider';
 import { House, Heartbeat, AppleLogo, Gear, Calendar, Brain } from '@phosphor-icons/react';
 import styles from './Navigation.module.css';
 
 export function Sidebar({ isCollapsed }: { isCollapsed?: boolean }) {
   const pathname = usePathname();
+  const activeContext = useOptionalAppContext()?.activeContext;
 
   const getLinks = () => {
     return [
@@ -28,7 +30,7 @@ export function Sidebar({ isCollapsed }: { isCollapsed?: boolean }) {
         return (
           <li key={link.path}>
             <Link 
-              href={link.path} 
+              href={activeContext ? `${link.path}?person=${encodeURIComponent(activeContext.personId)}` : link.path}
               className={`${styles.navItem} ${isActive ? styles.navItemActive : ''}`}
             >
               {link.icon}
