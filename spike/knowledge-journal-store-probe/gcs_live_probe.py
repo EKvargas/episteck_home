@@ -198,7 +198,7 @@ def main() -> None:
     obj = object_url(key(1))
     results["ws2_delete"] = request("ws2_delete", "DELETE", obj)[0]
     results["ws2_metadata_patch"] = request("ws2_metadata_patch", "PATCH", obj, document={"metadata": {"probe": "mutation"}})[0]
-    results["ws2_retention_patch"] = request("ws2_retention_patch", "PATCH", obj, document={"retention": {"mode": "Unlocked", "retainUntilTime": "2026-09-26T17:00:00Z"}})[0]
+    results["ws2_retention_patch"] = request("ws2_retention_patch", "PATCH", obj, document={"retention": {"mode": "Unlocked"}})[0]
     bucket_url = f"{API}/b/{BUCKET}"
     iam_status, iam_body, _ = request("admin_get_bucket_iam", "GET", f"{bucket_url}/iam", who="admin")
     if iam_status == 200 and isinstance(iam_body, dict):
