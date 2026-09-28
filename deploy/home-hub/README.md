@@ -201,3 +201,124 @@ operational change, verify that a query-bearing `Referer` is not recorded, then
 repeat the F3a rollout and authenticated browser/API matrix. Until those checks
 pass, **F3a implementation is merged but live verification remains open**;
 F3b, F3c, and F3d remain open.
+
+## Production nginx log-hygiene correction (2026-09-28)
+
+**Disposition: nginx log-hygiene blocker CLOSED; F3a live verification still
+OPEN.** This was a logging-only correction on the Nuremberg host. No Hub image,
+route, proxy, TLS, OAuth, firewall, upstream, BFF session, or delegation setting
+was changed, and the F3a Hub was not deployed. The evidence branch is
+`ops/home-nginx-log-hygiene`, created as a clean worktree from `origin/main`
+`91c8a680c931188ff3b5a097d57cbab6e8f7dfc2`.
+
+### Exact drift and custody
+
+The reviewed source is `deploy/home-bff/episteck-log-format.conf` (SHA-256
+`3a8d7c0d95f0bd592817adefd8f87447770fa5f9c2cf714cff915eb227919e68`).
+The previous live file was `/etc/nginx/conf.d/episteck-log-format.conf` (SHA-256
+`d34314e42d32436417bdd5b01160cce74d27e79678695773d0b1ee42c269f7bd`).
+The complete sanitized file diff, before correction, was:
+
+```diff
+--- repository/deploy/home-bff/episteck-log-format.conf
++++ production/etc/nginx/conf.d/episteck-log-format.conf
+@@ -1,10 +1,4 @@
+-# Install to: /etc/nginx/conf.d/episteck-log-format.conf
+-#
+-# Must be in the http{} context, which is why it is a conf.d file and not part of the
+-# vhost: a log_format inside a server block is a configuration error.
+-#
+-# Logs the path and low-risk request metadata only. Callback queries carry the
+-# OAuth code/state; Referer and User-Agent are untrusted and may carry them too.
+-log_format episteck_noqs '$remote_addr [$time_local] '
++# Path only: OAuth authorization codes and state must never reach disk.
++log_format episteck_noqs '$remote_addr - $remote_user [$time_local] '
+                          '"$request_method $uri $server_protocol" '
+-                         '$status $body_bytes_sent';
++                         '$status $body_bytes_sent "$http_referer" "$http_user_agent"';
+```
+
+Thus the live format added `$remote_user`, `$http_referer`, and
+`$http_user_agent` to the reviewed path-safe format. The Home vhost's two
+server-level `access_log` directives, two `error_log /dev/null` directives,
+and lack of location-level logging overrides matched the reviewed
+`deploy/home-bff/nginx-home-bff.conf`; no other Home logging drift was found.
+nginx's global default access log exists, but both Home server blocks override
+it with `episteck_noqs`.
+
+Before replacement, the exact old file was copied with metadata to the
+root-controlled directory
+`/var/backups/episteck/home-nginx-log-hygiene-20260928-91c8a68/` as
+`episteck-log-format.conf.before`; its SHA-256 equals the old live hash above.
+The directory is `root:root 0700`. Sanitized `nginx -T` logging excerpts were
+saved there as `nginx-logging-effective.before.txt` (SHA-256
+`25e0b400477f9f0c293b99893512deaa1376f13cdff465a613a1ef4453bd6897`)
+and `nginx-logging-effective.after.txt` (SHA-256
+`7bd169034b476d04573c7cca87749eb9fda50d13d568073312470697290a82e7`).
+The byte-identical reviewed staging file is
+`episteck-log-format.conf.reviewed` (SHA-256 equals the reviewed source above).
+Before change, nginx was active/running, master PID `995442`, with zero restarts.
+
+### Apply and live proof
+
+The reviewed staging file alone was installed at
+`/etc/nginx/conf.d/episteck-log-format.conf` as `root:root 0644`. `nginx -t`
+passed (`syntax is ok`; `test is successful`), then `systemctl reload nginx`
+passed. nginx remained active/running with master PID `995442` and zero
+restarts. The test emitted only the existing `listen ... http2` deprecation
+warning for the unchanged Home vhost.
+
+Post-reload `nginx -T` succeeded and showed exactly one `episteck_noqs`
+definition, textually equal to the reviewed active statement:
+
+```nginx
+log_format episteck_noqs '$remote_addr [$time_local] '
+                         '"$request_method $uri $server_protocol" '
+                         '$status $body_bytes_sent';
+```
+
+The effective Home vhost retained its two server-level
+`access_log /var/log/nginx/home-bff-access.log episteck_noqs;` directives and
+`error_log /dev/null;` directives. The selected format has no `$request`,
+`$args`, `$query_string`, `$request_uri`, `$http_referer`, `$http_user_agent`,
+Cookie, Authorization, or delegation-bearing field. It records the method and
+`$uri` path, status, bytes, timestamp, protocol, and previously reviewed remote
+address. Successful reload plus the fresh log probes below confirms this format
+was used by the running server, beyond the on-disk file comparison.
+
+Three external `/health` requests each returned 200. Each was checked against
+only its own new byte window in `/var/log/nginx/home-bff-access.log` (inode
+`826553`), and each window contained exactly one `"GET /health HTTP/..." 200`
+entry and none of the synthetic markers:
+
+| Probe | Harmless input | New-log byte window | Result |
+| --- | --- | --- | --- |
+| URL query | `probe=F3A_QUERY_8CDA9A2684C1`, plus synthetic `code=F3A_CODE_8CDA9A2684C1`, `state=F3A_STATE_8CDA9A2684C1`, `person=F3A_PERSON_8CDA9A2684C1` | `[40770, 40843)` | 200; path/status present; all markers absent |
+| Referer | `https://example.invalid/path?probe=F3A_REF_8CDA9A2684C1` | `[40843, 40916)` | 200; path/status present; marker absent |
+| User-Agent | `F3A_UA_8CDA9A2684C1` | `[40916, 40989)` | 200; path/status present; marker absent |
+
+These are synthetic strings, not OAuth credentials or real Person IDs. Because
+the effective format contains neither a query-bearing request field nor
+Referer, it cannot record OAuth `code`/`state` or Person query parameters from
+those surfaces. No historical log was rewritten; older production entries may
+still contain Referer or User-Agent values from before this correction. This
+gate applies to entries created after the reload.
+
+Post-reload public GET results matched the pre-reload baseline: `/health` 200,
+anonymous `/app` 307, `/bootstrap` 404, and `/delegation` 404. External direct
+connections to `91.98.132.9:9940` (Hub) and `91.98.132.9:9930` (Nutrition)
+timed out before and after reload. Host `ss` showed `127.0.0.1:9940`,
+`127.0.0.1:9930`, and `127.0.0.1:9933` only for those selected listeners.
+
+The ready, syntax-checked one-command rollback artifact is
+`/var/backups/episteck/home-nginx-log-hygiene-20260928-91c8a68/rollback.sh`
+(SHA-256 `4eb326b585e179ae3c937552e09a086191be9c64c5aa9c6e62e5e49cb5f43e29`):
+
+```bash
+ssh episteck-node1 'sudo -n /var/backups/episteck/home-nginx-log-hygiene-20260928-91c8a68/rollback.sh'
+```
+
+It restores the exact old file, tests nginx, and reloads it. Running it would
+restore the old unsafe logging format and reopen this blocker; use only for an
+emergency rollback. The next separate task must repeat the F3a Hub rollout and
+authenticated matrix. No F3b work is authorized by this log correction.
