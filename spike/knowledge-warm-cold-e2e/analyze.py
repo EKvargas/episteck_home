@@ -53,7 +53,11 @@ def summarize(path: Path) -> dict[str, Any]:
                     "source_expansion_count": 0}
         if any(counters.get(key) != value for key, value in expected.items()):
             raise ValueError(f"counter invariant failed: {path}:{index}")
-    latency = distribution([float(row["total_pre_llm_ms"]) for row in rows])
+    # V1 cold rows retained the direct child request timer separately, then
+    # overwrote total_pre_llm_ms with process launch-through-exit wall time.
+    # Use the measured request boundary, not process teardown, for acceptance.
+    latency = distribution([float(row["internal_request_ms"] if classification == "cold"
+                                  else row["total_pre_llm_ms"]) for row in rows])
     phase_keys = sorted({key for row in rows for key in row["phases_ms"]})
     phases = {key: distribution([float(row["phases_ms"].get(key, 0.0)) for row in rows])
               for key in phase_keys}
@@ -64,13 +68,17 @@ def summarize(path: Path) -> dict[str, Any]:
         for label, pair in zip(("rt1", "rt2"), row["home_body_bytes"]):
             sizes[f"{label}_request"].append(pair[0])
             sizes[f"{label}_response"].append(pair[1])
-    return {"file": str(path), "scenario": scenario, "classification": classification,
+    result = {"file": str(path), "scenario": scenario, "classification": classification,
             "latency_ms": latency, "phases_ms": phases,
             "threshold_pass": {key: latency[key] <= threshold for key, threshold in THRESHOLDS.items()},
             "home_body_bytes_range": {key: [min(v), max(v)] for key, v in sizes.items()},
             "all_counter_invariants_pass": True,
             "first_timestamp_utc": rows[0]["timestamp_utc"],
             "last_timestamp_utc": rows[-1]["timestamp_utc"]}
+    if classification == "cold":
+        result["process_lifetime_ms"] = distribution(
+            [float(row.get("process_lifetime_ms", row["total_pre_llm_ms"])) for row in rows])
+    return result
 
 
 def main() -> None:

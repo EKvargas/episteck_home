@@ -13,6 +13,16 @@ removed.
 | P3 | `P3-warm-pooled.jsonl` (v2) | `P3-cold.jsonl` (v1) |
 | Five-domain informative | `P4-warm-pooled.jsonl` (v2) | `P4-cold.jsonl` (v1) |
 
+
+The original v1 cold runner preserved the direct request duration in
+`internal_request_ms` but replaced `total_pre_llm_ms` with process
+launch-through-exit wall time. The latter extends past the canonical bundle
+boundary. `analyze.py` uses the preserved direct timer for cold acceptance and
+reports the original process lifetime separately. The JSONL files are left
+unaltered so this correction is auditable. Future runner output keeps
+`total_pre_llm_ms` at the direct request boundary and records
+`process_lifetime_ms` separately.
+
 The v2 change only reuses local domain mTLS connections between **warm**
 requests. It does not change the cold request path. `P2-warm.jsonl`,
 `P3-warm.jsonl`, `P4-warm.jsonl` and `initial-summary.json` retain the initial

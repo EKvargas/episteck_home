@@ -30,7 +30,8 @@ API, Nutrition records, ConsentGrants or family topology are accessed.
   synthetic Knowledge DB. `runner.py batch` runs `--samples 200 --warmup 10`
   for each warm P1/P2/P3 and `--samples 100` for each cold P1/P2/P3. Warm
   keeps Home and domain TLS connections; cold launches a new Python process
-  for each observation and includes process start/exit in total latency.
+  for each observation and times the request through bundle construction.
+  Process lifetime is recorded separately.
 * `baseline.py` records explanatory TLS/reused Home timing and timer overhead.
   Measure Tailscale RTT separately on the host if the pinned container lacks
   the Tailscale CLI. `faults.py` runs the six separate fail-closed arms.

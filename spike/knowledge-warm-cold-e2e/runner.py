@@ -24,7 +24,7 @@ from backends.common import AuthorizedSet, ContentAccessLog  # noqa: E402
 from backends.sqlite_backend import SQLiteKnowledgeBackend  # noqa: E402
 from corpus.generator import generate_corpus  # noqa: E402
 
-VERSION = "warm-cold-e2e-2"
+VERSION = "warm-cold-e2e-3"
 AS_OF = 2_000_000_000
 SCENARIOS = {
     "P1": (),
@@ -309,7 +309,7 @@ def _batch(args: argparse.Namespace) -> None:
                 row = json.loads(completed.stdout)
                 row["process_start_and_exit_ms"] = wall_ms - row["total_pre_llm_ms"]
                 row["internal_request_ms"] = row["total_pre_llm_ms"]
-                row["total_pre_llm_ms"] = wall_ms
+                row["process_lifetime_ms"] = wall_ms
                 if not row["success"]:
                     raise RuntimeError(f"cold request failed at {iteration}: {row['failure_class']}")
                 out.write(json.dumps(row, sort_keys=True) + "\n")
