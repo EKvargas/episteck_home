@@ -1,0 +1,1 @@
+{"all_fail_closed": true, "failure_probes": {"domain_unavailable": true, "home_rt1_unavailable": true, "home_rt2_unavailable": true, "r13_bad_signature": true, "r13_replay": true, "r13_stale_trust": true}}
