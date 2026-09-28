@@ -19,14 +19,14 @@
     "P4-cold.jsonl": "4b502cea41a2ad4579a43c4b55bfa37b57716ea72c65274b128b719520aa2fd9",
     "P4-warm-pooled.jsonl": "57e3845b355580f38843397daee1b0ffa89905065b3d0c95bb0cc288ddc8459c",
     "P4-warm.jsonl": "62e32994381e360c33c80f93c7d38f8152b06199c1e2df775b5612f6c79b8de1",
-    "README.md": "0e984c9928e507a2847d95f0e2267bde73e62143415e57602b1219e10d5bd00a",
+    "README.md": "a7f87ca3a83c2c3324219714914304f8652ba8a2ba4e7d558db183ccfdb796d8",
     "failure-probes.json": "daa53a4741eef993281a50cb18b7605336839254a025400d789dbc3de6951341",
     "host-conditions.json": "f5d52b1eced5d081ec2a91c2b861b9ddae7fbcbd4411fcef1d71a8d500256842",
-    "initial-summary.json": "779875df047e92ea54633e613800ceee7cdfdf36e93c2fa065a61725af82b95f",
+    "initial-summary.json": "1e09a4cb7445c7874085d8a8d0894ed5760becb8e40d4314170a244b582966b1",
     "network-baseline.json": "c13dc7765f4f30c845a9142d4cce01e762b85cd502b5bd2e266441c34b01a248",
-    "summary.json": "acfa4426bee5897aa2ce45f69e94925e97324edd939b84d2879339730e075fe9",
+    "summary.json": "302a470dc4ac81d875cfcd3188c8e43d62472c23003f7309411482f926ba4071",
     "tailscale-rtt.json": "cfdbcfe542c09a2047513a1f9cb49c8e3d6568d9b6c2793644eb6c2b7051ed75",
-    "window2-summary.json": "d2f4fb5548212a66450eab9f4135b24d861587d510e6e2602052c63f29850320"
+    "window2-summary.json": "6e612464ee6afa1f07b5e88cc52bedf6d678bb30f5f81f0da32670ec8577a08d"
   },
   "exploratory_files": [
     "P2-warm.jsonl",
@@ -44,7 +44,7 @@
     "P4-warm-pooled.jsonl",
     "P4-cold.jsonl"
   ],
-  "note": "Raw git_sha is the fetched baseline. Original v1 cold JSONL retains direct internal_request_ms and process-lifetime total_pre_llm_ms; corrected analysis uses the direct request timer. Future v3 runner source separates both fields. The PR head and source hashes bind the reviewed harness. V2 changed warm domain connection reuse only.",
+  "note": "Raw git_sha is the fetched baseline. Original v1 cold JSONL retains direct internal_request_ms and process-lifetime total_pre_llm_ms; corrected analysis uses the direct request timer. Future v3 runner source separates both fields. The PR head and source hashes bind the reviewed harness. V2 changed warm domain connection reuse only. Hashes are of committed Git blob bytes; Windows checkout CRLF may differ for text files.",
   "primary_files": [
     "P1-warm.jsonl",
     "P1-cold.jsonl",
