@@ -1,0 +1,5 @@
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on tailscale0, link-type RAW (Raw IP), snapshot length 96 bytes
+4179 packets captured
+4179 packets received by filter
+0 packets dropped by kernel

@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "sha256": {
+    "docs/architecture/proposals/KNOWLEDGE_HOME_TRANSPORT_TRACE.md": "bab8d7d9e10f4e2d8c62ac0913e6758322296799493a04df3136c2303381cf1d",
+    "spike/knowledge-home-transport-trace/README.md": "debbe71a96bbf62b0f8f575b9a4f594b61e675a754bfc8d0ae7a01aa67f0de96",
+    "spike/knowledge-home-transport-trace/analyze.py": "ec66455f78c0ae232c7463778076fd74b2099f4183d44f7794ae5ba7fdb7b577",
+    "spike/knowledge-home-transport-trace/evidence/client.jsonl": "4c53fbbced3cb27599df4ded286979918ee151894a34a61a87052edc994202af",
+    "spike/knowledge-home-transport-trace/evidence/exact-client.jsonl": "06323e803cf18e4440e3d974ddb84e064bf8ae12964b4be8eef72a75564ad697",
+    "spike/knowledge-home-transport-trace/evidence/exact-py311-client.jsonl": "c4f1b61ff5f6539148ae1c59d622e3cb567c449340dd7d287750a925601c0bf9",
+    "spike/knowledge-home-transport-trace/evidence/legacy-client.jsonl": "ec2764328731a843eb57df71c596c537d8665e9dc53067a27b3a918a0f5472c5",
+    "spike/knowledge-home-transport-trace/evidence/mimic-responder-client.jsonl": "ac53f57b5e26dad118eaab7b0ceb8ac0d4850c6f32e5249204dcfe6611c288b1",
+    "spike/knowledge-home-transport-trace/evidence/original-responder-client.jsonl": "ea5b3560f79da5118c6daa1a8be5972b9fbb67105f391ad7de6634604e22484f",
+    "spike/knowledge-home-transport-trace/evidence/packets-exact.txt": "9b8d03dce7faf424f23b2a4b5b58ce7e229ddcb957668fe773058ad202b752f1",
+    "spike/knowledge-home-transport-trace/evidence/packets-legacy.txt": "c385364a27510e82f8d7d801318d8da60fbfb3f86d04b750193e8055671022dd",
+    "spike/knowledge-home-transport-trace/evidence/packets-mimic.txt": "57c5b7c80eb53a956b523a538a89d243e8a82b66cd07d725faa93cb2a19a938c",
+    "spike/knowledge-home-transport-trace/evidence/packets-original.txt": "795a2d0f18c4915e2b4dd362bc948efef7dec78171a52ece80f05220473437e1",
+    "spike/knowledge-home-transport-trace/evidence/packets-py311.txt": "13d3b141453b967a3d864cd9565b53f6fd18fa522fb256c16653544ec42a8f52",
+    "spike/knowledge-home-transport-trace/evidence/packets.txt": "140aa0bcb57847a8a4ba5187b4691c60d94ddbef6933def36cc060353fdbcf92",
+    "spike/knowledge-home-transport-trace/evidence/server-all.jsonl": "bd05c7e949dba218cce794c524c6a6ab1b8837a930608bc972dc77eb5c668107",
+    "spike/knowledge-home-transport-trace/evidence/server.jsonl": "2472ef0af8dbd251f0620036f1037bb99c2efa3f45ac80e78dc9bd4ee798702c",
+    "spike/knowledge-home-transport-trace/evidence/summary.json": "f4ef694f16d623ee34d1aa257cbf2d8dd4417b38f3c3c25231f5d647c140dc94",
+    "spike/knowledge-home-transport-trace/evidence/tcpdump-exact.txt": "48d73f32775b758b2a3a863ba4c03523f4374ddd65f54eaf202863339164d347",
+    "spike/knowledge-home-transport-trace/evidence/tcpdump-legacy.txt": "f901b9bb4b41c323456c9e984545a91d06f22dcd22b661bfa156ac10b23980aa",
+    "spike/knowledge-home-transport-trace/evidence/tcpdump-mimic.txt": "62640d2fbe0ad8604c932ff225c330d87f65d7aa6380735e06f3166345af32e5",
+    "spike/knowledge-home-transport-trace/evidence/tcpdump-original.txt": "a6b13b0232c5678a780d1e3bce47afa27b70fb4394c729a027753f5dfdd83a3b",
+    "spike/knowledge-home-transport-trace/evidence/tcpdump-py311.txt": "d01e5c3eb9c794e1f590aeec5d848f27aa59bae100905f1f97db017081bc2618",
+    "spike/knowledge-home-transport-trace/evidence/tcpdump.txt": "34ddca4fe4c70f9e82b440bfc0ad24acaa8fb4bb2278edc20d28e96b55f9d9d4",
+    "spike/knowledge-home-transport-trace/original_client.py": "0ce26db5049424a751edcc5444241a197bebda7befeefefd52e5248688889ca1",
+    "spike/knowledge-home-transport-trace/probe.py": "d9261e1fa6e6f656ed19797cc558adfffb2a664bb5eaf10a504f4b46cfb39658"
+  }
+}

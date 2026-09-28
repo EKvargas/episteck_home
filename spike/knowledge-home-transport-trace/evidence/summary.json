@@ -1,0 +1,1592 @@
+{
+  "datasets": {
+    "controlled": {
+      "large_fresh_tls": {
+        "n": 30,
+        "request_ms": {
+          "p50": 238.191,
+          "p95": 238.892,
+          "min": 236.986,
+          "max": 239.876
+        },
+        "send_ms": {
+          "p50": 0.093,
+          "p95": 0.31,
+          "min": 0.043,
+          "max": 0.375
+        },
+        "client_body_read_ms": {
+          "p50": 41.293,
+          "p95": 41.985,
+          "min": 38.615,
+          "max": 43.107
+        },
+        "server_body_read_ms": {
+          "p50": 96.274,
+          "p95": 97.039,
+          "min": 93.973,
+          "max": 98.554
+        },
+        "server_processing_ms": {
+          "p50": 0.014,
+          "p95": 0.025,
+          "min": 0.01,
+          "max": 0.053
+        },
+        "server_write_ms": {
+          "p50": 0.087,
+          "p95": 0.122,
+          "min": 0.062,
+          "max": 0.16
+        },
+        "client_wait_first_read_ms": {
+          "p50": 196.746,
+          "p95": 197.579,
+          "min": 196.176,
+          "max": 199.529
+        },
+        "tls_connect_ms": {
+          "p50": 199.252,
+          "p95": 200.458,
+          "min": 198.716,
+          "max": 200.891
+        },
+        "connection_plus_request_ms": {
+          "p50": 437.471,
+          "p95": 438.73,
+          "min": 436.241,
+          "max": 440.691
+        }
+      },
+      "large_request_off": {
+        "n": 30,
+        "request_ms": {
+          "p50": 294.852,
+          "p95": 295.311,
+          "min": 294.158,
+          "max": 295.554
+        },
+        "send_ms": {
+          "p50": 0.116,
+          "p95": 0.26,
+          "min": 0.047,
+          "max": 0.377
+        },
+        "client_body_read_ms": {
+          "p50": 98.133,
+          "p95": 98.388,
+          "min": 97.906,
+          "max": 98.445
+        },
+        "server_body_read_ms": {
+          "p50": 97.967,
+          "p95": 98.335,
+          "min": 97.732,
+          "max": 98.392
+        },
+        "server_processing_ms": {
+          "p50": 0.012,
+          "p95": 0.015,
+          "min": 0.01,
+          "max": 0.016
+        },
+        "server_write_ms": {
+          "p50": 0.087,
+          "p95": 0.114,
+          "min": 0.056,
+          "max": 0.115
+        },
+        "client_wait_first_read_ms": {
+          "p50": 196.487,
+          "p95": 197.076,
+          "min": 196.004,
+          "max": 197.087
+        }
+      },
+      "large_response_off": {
+        "n": 30,
+        "request_ms": {
+          "p50": 335.276,
+          "p95": 336.088,
+          "min": 334.501,
+          "max": 336.411
+        },
+        "send_ms": {
+          "p50": 0.101,
+          "p95": 0.217,
+          "min": 0.058,
+          "max": 0.317
+        },
+        "client_body_read_ms": {
+          "p50": 98.099,
+          "p95": 98.5,
+          "min": 97.8,
+          "max": 98.526
+        },
+        "server_body_read_ms": {
+          "p50": 138.503,
+          "p95": 139.163,
+          "min": 137.987,
+          "max": 139.29
+        },
+        "server_processing_ms": {
+          "p50": 0.015,
+          "p95": 0.022,
+          "min": 0.012,
+          "max": 0.03
+        },
+        "server_write_ms": {
+          "p50": 0.108,
+          "p95": 0.148,
+          "min": 0.064,
+          "max": 0.164
+        },
+        "client_wait_first_read_ms": {
+          "p50": 236.97,
+          "p95": 237.845,
+          "min": 236.406,
+          "max": 238.028
+        }
+      },
+      "large_split_off": {
+        "n": 30,
+        "request_ms": {
+          "p50": 294.892,
+          "p95": 295.468,
+          "min": 294.162,
+          "max": 297.564
+        },
+        "send_ms": {
+          "p50": 0.127,
+          "p95": 0.216,
+          "min": 0.078,
+          "max": 0.536
+        },
+        "client_body_read_ms": {
+          "p50": 98.191,
+          "p95": 98.444,
+          "min": 97.738,
+          "max": 98.51
+        },
+        "server_body_read_ms": {
+          "p50": 97.981,
+          "p95": 98.242,
+          "min": 97.434,
+          "max": 98.647
+        },
+        "server_processing_ms": {
+          "p50": 0.015,
+          "p95": 0.019,
+          "min": 0.01,
+          "max": 0.035
+        },
+        "server_write_ms": {
+          "p50": 0.095,
+          "p95": 0.156,
+          "min": 0.067,
+          "max": 0.21
+        },
+        "client_wait_first_read_ms": {
+          "p50": 196.53,
+          "p95": 197.128,
+          "min": 195.756,
+          "max": 199.107
+        }
+      },
+      "medium_split_off": {
+        "n": 30,
+        "request_ms": {
+          "p50": 294.856,
+          "p95": 295.537,
+          "min": 293.899,
+          "max": 295.702
+        },
+        "send_ms": {
+          "p50": 0.118,
+          "p95": 0.214,
+          "min": 0.075,
+          "max": 0.48
+        },
+        "client_body_read_ms": {
+          "p50": 98.176,
+          "p95": 98.41,
+          "min": 97.951,
+          "max": 98.613
+        },
+        "server_body_read_ms": {
+          "p50": 98.017,
+          "p95": 98.359,
+          "min": 97.698,
+          "max": 98.555
+        },
+        "server_processing_ms": {
+          "p50": 0.013,
+          "p95": 0.022,
+          "min": 0.01,
+          "max": 0.04
+        },
+        "server_write_ms": {
+          "p50": 0.085,
+          "p95": 0.141,
+          "min": 0.051,
+          "max": 0.187
+        },
+        "client_wait_first_read_ms": {
+          "p50": 196.573,
+          "p95": 196.974,
+          "min": 195.805,
+          "max": 197.0
+        }
+      },
+      "small_both_nodelay": {
+        "n": 30,
+        "request_ms": {
+          "p50": 98.651,
+          "p95": 99.071,
+          "min": 98.364,
+          "max": 99.679
+        },
+        "send_ms": {
+          "p50": 0.122,
+          "p95": 0.227,
+          "min": 0.053,
+          "max": 0.385
+        },
+        "client_body_read_ms": {
+          "p50": 0.065,
+          "p95": 0.193,
+          "min": 0.05,
+          "max": 0.229
+        },
+        "server_body_read_ms": {
+          "p50": 0.085,
+          "p95": 0.205,
+          "min": 0.065,
+          "max": 0.289
+        },
+        "server_processing_ms": {
+          "p50": 0.005,
+          "p95": 0.007,
+          "min": 0.004,
+          "max": 0.007
+        },
+        "server_write_ms": {
+          "p50": 0.042,
+          "p95": 0.203,
+          "min": 0.034,
+          "max": 0.319
+        },
+        "client_wait_first_read_ms": {
+          "p50": 98.435,
+          "p95": 98.885,
+          "min": 97.993,
+          "max": 99.502
+        }
+      },
+      "small_chunked": {
+        "n": 30,
+        "request_ms": {
+          "p50": 335.165,
+          "p95": 337.768,
+          "min": 334.185,
+          "max": 376.037
+        },
+        "send_ms": {
+          "p50": 0.108,
+          "p95": 0.253,
+          "min": 0.056,
+          "max": 0.358
+        },
+        "client_body_read_ms": {
+          "p50": 98.151,
+          "p95": 98.43,
+          "min": 97.862,
+          "max": 139.147
+        },
+        "server_body_read_ms": {
+          "p50": 138.546,
+          "p95": 139.203,
+          "min": 137.918,
+          "max": 139.713
+        },
+        "server_processing_ms": {
+          "p50": 0.017,
+          "p95": 0.024,
+          "min": 0.013,
+          "max": 0.061
+        },
+        "server_write_ms": {
+          "p50": 0.074,
+          "p95": 0.115,
+          "min": 0.048,
+          "max": 0.148
+        },
+        "client_wait_first_read_ms": {
+          "p50": 236.837,
+          "p95": 237.884,
+          "min": 236.228,
+          "max": 240.344
+        }
+      },
+      "small_client_nodelay": {
+        "n": 30,
+        "request_ms": {
+          "p50": 196.746,
+          "p95": 197.271,
+          "min": 196.155,
+          "max": 197.498
+        },
+        "send_ms": {
+          "p50": 0.111,
+          "p95": 0.224,
+          "min": 0.077,
+          "max": 0.398
+        },
+        "client_body_read_ms": {
+          "p50": 98.187,
+          "p95": 98.483,
+          "min": 97.687,
+          "max": 98.851
+        },
+        "server_body_read_ms": {
+          "p50": 0.078,
+          "p95": 0.138,
+          "min": 0.053,
+          "max": 0.216
+        },
+        "server_processing_ms": {
+          "p50": 0.005,
+          "p95": 0.008,
+          "min": 0.004,
+          "max": 0.025
+        },
+        "server_write_ms": {
+          "p50": 0.042,
+          "p95": 0.132,
+          "min": 0.035,
+          "max": 0.206
+        },
+        "client_wait_first_read_ms": {
+          "p50": 98.441,
+          "p95": 98.823,
+          "min": 98.055,
+          "max": 99.103
+        }
+      },
+      "small_fresh_tls": {
+        "n": 30,
+        "request_ms": {
+          "p50": 336.545,
+          "p95": 337.442,
+          "min": 335.596,
+          "max": 337.832
+        },
+        "send_ms": {
+          "p50": 0.051,
+          "p95": 0.116,
+          "min": 0.032,
+          "max": 0.163
+        },
+        "client_body_read_ms": {
+          "p50": 0.027,
+          "p95": 0.056,
+          "min": 0.019,
+          "max": 0.137
+        },
+        "server_body_read_ms": {
+          "p50": 0.051,
+          "p95": 0.101,
+          "min": 0.037,
+          "max": 0.109
+        },
+        "server_processing_ms": {
+          "p50": 0.005,
+          "p95": 0.006,
+          "min": 0.004,
+          "max": 0.009
+        },
+        "server_write_ms": {
+          "p50": 0.037,
+          "p95": 0.068,
+          "min": 0.029,
+          "max": 0.071
+        },
+        "client_wait_first_read_ms": {
+          "p50": 336.445,
+          "p95": 337.317,
+          "min": 335.516,
+          "max": 337.741
+        },
+        "tls_connect_ms": {
+          "p50": 199.157,
+          "p95": 199.787,
+          "min": 198.377,
+          "max": 199.994
+        },
+        "connection_plus_request_ms": {
+          "p50": 535.635,
+          "p95": 536.826,
+          "min": 534.661,
+          "max": 537.029
+        }
+      },
+      "small_request_combined": {
+        "n": 30,
+        "request_ms": {
+          "p50": 196.767,
+          "p95": 197.366,
+          "min": 196.157,
+          "max": 197.588
+        },
+        "send_ms": {
+          "p50": 0.085,
+          "p95": 0.112,
+          "min": 0.041,
+          "max": 0.307
+        },
+        "client_body_read_ms": {
+          "p50": 98.096,
+          "p95": 98.519,
+          "min": 97.665,
+          "max": 98.545
+        },
+        "server_body_read_ms": {
+          "p50": 0.019,
+          "p95": 0.03,
+          "min": 0.015,
+          "max": 0.034
+        },
+        "server_processing_ms": {
+          "p50": 0.004,
+          "p95": 0.006,
+          "min": 0.003,
+          "max": 0.007
+        },
+        "server_write_ms": {
+          "p50": 0.076,
+          "p95": 0.11,
+          "min": 0.051,
+          "max": 0.245
+        },
+        "client_wait_first_read_ms": {
+          "p50": 98.481,
+          "p95": 98.964,
+          "min": 98.106,
+          "max": 99.486
+        }
+      },
+      "small_response_combined": {
+        "n": 30,
+        "request_ms": {
+          "p50": 237.135,
+          "p95": 237.725,
+          "min": 236.351,
+          "max": 237.765
+        },
+        "send_ms": {
+          "p50": 0.105,
+          "p95": 0.155,
+          "min": 0.07,
+          "max": 0.286
+        },
+        "client_body_read_ms": {
+          "p50": 0.006,
+          "p95": 0.007,
+          "min": 0.005,
+          "max": 0.013
+        },
+        "server_body_read_ms": {
+          "p50": 138.724,
+          "p95": 139.0,
+          "min": 137.987,
+          "max": 139.36
+        },
+        "server_processing_ms": {
+          "p50": 0.012,
+          "p95": 0.017,
+          "min": 0.009,
+          "max": 0.018
+        },
+        "server_write_ms": {
+          "p50": 0.068,
+          "p95": 0.093,
+          "min": 0.047,
+          "max": 0.136
+        },
+        "client_wait_first_read_ms": {
+          "p50": 237.0,
+          "p95": 237.585,
+          "min": 236.227,
+          "max": 237.634
+        }
+      },
+      "small_server_nodelay": {
+        "n": 30,
+        "request_ms": {
+          "p50": 237.029,
+          "p95": 237.707,
+          "min": 236.585,
+          "max": 237.993
+        },
+        "send_ms": {
+          "p50": 0.099,
+          "p95": 0.182,
+          "min": 0.05,
+          "max": 0.428
+        },
+        "client_body_read_ms": {
+          "p50": 0.033,
+          "p95": 0.209,
+          "min": 0.019,
+          "max": 0.282
+        },
+        "server_body_read_ms": {
+          "p50": 138.656,
+          "p95": 139.124,
+          "min": 138.052,
+          "max": 139.209
+        },
+        "server_processing_ms": {
+          "p50": 0.013,
+          "p95": 0.016,
+          "min": 0.008,
+          "max": 0.019
+        },
+        "server_write_ms": {
+          "p50": 0.068,
+          "p95": 0.108,
+          "min": 0.046,
+          "max": 0.18
+        },
+        "client_wait_first_read_ms": {
+          "p50": 236.892,
+          "p95": 237.512,
+          "min": 236.359,
+          "max": 237.618
+        }
+      },
+      "small_split_off": {
+        "n": 30,
+        "request_ms": {
+          "p50": 335.249,
+          "p95": 337.258,
+          "min": 334.55,
+          "max": 375.582
+        },
+        "send_ms": {
+          "p50": 0.107,
+          "p95": 0.167,
+          "min": 0.055,
+          "max": 0.19
+        },
+        "client_body_read_ms": {
+          "p50": 98.169,
+          "p95": 98.471,
+          "min": 97.868,
+          "max": 138.899
+        },
+        "server_body_read_ms": {
+          "p50": 138.615,
+          "p95": 139.122,
+          "min": 137.916,
+          "max": 139.883
+        },
+        "server_processing_ms": {
+          "p50": 0.012,
+          "p95": 0.017,
+          "min": 0.009,
+          "max": 0.023
+        },
+        "server_write_ms": {
+          "p50": 0.076,
+          "p95": 0.126,
+          "min": 0.052,
+          "max": 0.144
+        },
+        "client_wait_first_read_ms": {
+          "p50": 237.003,
+          "p95": 237.782,
+          "min": 236.19,
+          "max": 239.386
+        }
+      }
+    },
+    "http_client_with_probe_headers": {
+      "legacy_large": {
+        "n": 30,
+        "request_ms": {
+          "p50": 196.921,
+          "p95": 197.56,
+          "min": 196.505,
+          "max": 198.559
+        },
+        "send_ms": {
+          "p50": 0.241,
+          "p95": 0.403,
+          "min": 0.112,
+          "max": 0.569
+        },
+        "client_body_read_ms": {
+          "p50": 97.883,
+          "p95": 98.563,
+          "min": 97.442,
+          "max": 98.898
+        },
+        "server_body_read_ms": {
+          "p50": 0.06,
+          "p95": 0.15,
+          "min": 0.038,
+          "max": 0.265
+        },
+        "server_processing_ms": {
+          "p50": 0.006,
+          "p95": 0.01,
+          "min": 0.004,
+          "max": 0.011
+        },
+        "server_write_ms": {
+          "p50": 0.133,
+          "p95": 0.216,
+          "min": 0.089,
+          "max": 0.243
+        },
+        "client_headers_read_ms": {
+          "p50": 98.778,
+          "p95": 99.309,
+          "min": 98.097,
+          "max": 99.679
+        }
+      },
+      "legacy_large_request": {
+        "n": 30,
+        "request_ms": {
+          "p50": 196.91,
+          "p95": 219.551,
+          "min": 196.329,
+          "max": 237.666
+        },
+        "send_ms": {
+          "p50": 0.252,
+          "p95": 0.363,
+          "min": 0.135,
+          "max": 0.459
+        },
+        "client_body_read_ms": {
+          "p50": 97.961,
+          "p95": 120.672,
+          "min": 97.631,
+          "max": 138.687
+        },
+        "server_body_read_ms": {
+          "p50": 0.057,
+          "p95": 0.103,
+          "min": 0.04,
+          "max": 0.214
+        },
+        "server_processing_ms": {
+          "p50": 0.004,
+          "p95": 0.007,
+          "min": 0.003,
+          "max": 0.007
+        },
+        "server_write_ms": {
+          "p50": 0.106,
+          "p95": 0.197,
+          "min": 0.079,
+          "max": 0.216
+        },
+        "client_headers_read_ms": {
+          "p50": 98.626,
+          "p95": 99.02,
+          "min": 98.124,
+          "max": 99.635
+        }
+      },
+      "legacy_large_response": {
+        "n": 30,
+        "request_ms": {
+          "p50": 197.102,
+          "p95": 197.538,
+          "min": 196.605,
+          "max": 198.053
+        },
+        "send_ms": {
+          "p50": 0.219,
+          "p95": 0.348,
+          "min": 0.13,
+          "max": 1.649
+        },
+        "client_body_read_ms": {
+          "p50": 98.023,
+          "p95": 98.496,
+          "min": 97.722,
+          "max": 98.739
+        },
+        "server_body_read_ms": {
+          "p50": 0.075,
+          "p95": 0.117,
+          "min": 0.059,
+          "max": 1.136
+        },
+        "server_processing_ms": {
+          "p50": 0.006,
+          "p95": 0.016,
+          "min": 0.005,
+          "max": 0.023
+        },
+        "server_write_ms": {
+          "p50": 0.137,
+          "p95": 0.191,
+          "min": 0.104,
+          "max": 0.219
+        },
+        "client_headers_read_ms": {
+          "p50": 98.759,
+          "p95": 99.071,
+          "min": 98.446,
+          "max": 99.086
+        }
+      },
+      "legacy_medium": {
+        "n": 30,
+        "request_ms": {
+          "p50": 196.88,
+          "p95": 197.558,
+          "min": 196.28,
+          "max": 199.543
+        },
+        "send_ms": {
+          "p50": 0.241,
+          "p95": 0.407,
+          "min": 0.14,
+          "max": 0.594
+        },
+        "client_body_read_ms": {
+          "p50": 97.912,
+          "p95": 98.55,
+          "min": 97.547,
+          "max": 98.569
+        },
+        "server_body_read_ms": {
+          "p50": 0.049,
+          "p95": 0.092,
+          "min": 0.039,
+          "max": 0.097
+        },
+        "server_processing_ms": {
+          "p50": 0.005,
+          "p95": 0.007,
+          "min": 0.004,
+          "max": 0.036
+        },
+        "server_write_ms": {
+          "p50": 0.118,
+          "p95": 0.154,
+          "min": 0.086,
+          "max": 0.16
+        },
+        "client_headers_read_ms": {
+          "p50": 98.622,
+          "p95": 98.991,
+          "min": 98.34,
+          "max": 101.388
+        }
+      },
+      "legacy_small": {
+        "n": 30,
+        "request_ms": {
+          "p50": 197.005,
+          "p95": 197.956,
+          "min": 196.358,
+          "max": 238.319
+        },
+        "send_ms": {
+          "p50": 0.232,
+          "p95": 0.354,
+          "min": 0.131,
+          "max": 0.406
+        },
+        "client_body_read_ms": {
+          "p50": 97.95,
+          "p95": 98.467,
+          "min": 97.714,
+          "max": 138.965
+        },
+        "server_body_read_ms": {
+          "p50": 0.079,
+          "p95": 0.138,
+          "min": 0.061,
+          "max": 0.241
+        },
+        "server_processing_ms": {
+          "p50": 0.005,
+          "p95": 0.009,
+          "min": 0.003,
+          "max": 0.011
+        },
+        "server_write_ms": {
+          "p50": 0.118,
+          "p95": 0.274,
+          "min": 0.082,
+          "max": 0.399
+        },
+        "client_headers_read_ms": {
+          "p50": 98.681,
+          "p95": 99.338,
+          "min": 98.361,
+          "max": 99.657
+        }
+      }
+    },
+    "http_client_minimal_headers": {
+      "exact_baseline": {
+        "n": 30,
+        "request_ms": {
+          "p50": 196.934,
+          "p95": 219.427,
+          "min": 196.426,
+          "max": 238.392
+        },
+        "send_ms": {
+          "p50": 0.201,
+          "p95": 0.309,
+          "min": 0.105,
+          "max": 0.386
+        },
+        "client_body_read_ms": {
+          "p50": 98.034,
+          "p95": 120.39,
+          "min": 97.461,
+          "max": 139.479
+        },
+        "server_body_read_ms": {
+          "p50": 0.071,
+          "p95": 0.13,
+          "min": 0.053,
+          "max": 0.134
+        },
+        "server_processing_ms": {
+          "p50": 0.006,
+          "p95": 0.013,
+          "min": 0.005,
+          "max": 0.042
+        },
+        "server_write_ms": {
+          "p50": 0.126,
+          "p95": 0.201,
+          "min": 0.078,
+          "max": 0.285
+        },
+        "client_headers_read_ms": {
+          "p50": 98.717,
+          "p95": 99.03,
+          "min": 98.195,
+          "max": 99.31
+        }
+      },
+      "exact_p1": {
+        "n": 30,
+        "request_ms": {
+          "p50": 196.857,
+          "p95": 237.251,
+          "min": 196.434,
+          "max": 237.831
+        },
+        "send_ms": {
+          "p50": 0.217,
+          "p95": 0.355,
+          "min": 0.098,
+          "max": 0.764
+        },
+        "client_body_read_ms": {
+          "p50": 97.955,
+          "p95": 138.457,
+          "min": 97.517,
+          "max": 138.791
+        },
+        "server_body_read_ms": {
+          "p50": 0.069,
+          "p95": 0.117,
+          "min": 0.047,
+          "max": 0.164
+        },
+        "server_processing_ms": {
+          "p50": 0.006,
+          "p95": 0.01,
+          "min": 0.004,
+          "max": 0.025
+        },
+        "server_write_ms": {
+          "p50": 0.116,
+          "p95": 0.174,
+          "min": 0.077,
+          "max": 0.227
+        },
+        "client_headers_read_ms": {
+          "p50": 98.644,
+          "p95": 98.939,
+          "min": 98.235,
+          "max": 99.041
+        }
+      },
+      "exact_p2": {
+        "n": 30,
+        "request_ms": {
+          "p50": 196.867,
+          "p95": 198.304,
+          "min": 196.179,
+          "max": 238.134
+        },
+        "send_ms": {
+          "p50": 0.217,
+          "p95": 0.526,
+          "min": 0.108,
+          "max": 0.751
+        },
+        "client_body_read_ms": {
+          "p50": 97.939,
+          "p95": 99.203,
+          "min": 97.59,
+          "max": 139.147
+        },
+        "server_body_read_ms": {
+          "p50": 0.056,
+          "p95": 0.195,
+          "min": 0.029,
+          "max": 0.479
+        },
+        "server_processing_ms": {
+          "p50": 0.007,
+          "p95": 0.011,
+          "min": 0.005,
+          "max": 0.024
+        },
+        "server_write_ms": {
+          "p50": 0.132,
+          "p95": 0.254,
+          "min": 0.091,
+          "max": 0.437
+        },
+        "client_headers_read_ms": {
+          "p50": 98.638,
+          "p95": 99.048,
+          "min": 97.968,
+          "max": 99.409
+        }
+      },
+      "exact_p3": {
+        "n": 30,
+        "request_ms": {
+          "p50": 196.866,
+          "p95": 197.488,
+          "min": 196.295,
+          "max": 197.767
+        },
+        "send_ms": {
+          "p50": 0.209,
+          "p95": 0.297,
+          "min": 0.119,
+          "max": 0.431
+        },
+        "client_body_read_ms": {
+          "p50": 97.975,
+          "p95": 98.336,
+          "min": 97.455,
+          "max": 98.46
+        },
+        "server_body_read_ms": {
+          "p50": 0.064,
+          "p95": 0.287,
+          "min": 0.031,
+          "max": 0.343
+        },
+        "server_processing_ms": {
+          "p50": 0.006,
+          "p95": 0.011,
+          "min": 0.005,
+          "max": 0.037
+        },
+        "server_write_ms": {
+          "p50": 0.125,
+          "p95": 0.19,
+          "min": 0.089,
+          "max": 0.194
+        },
+        "client_headers_read_ms": {
+          "p50": 98.626,
+          "p95": 99.149,
+          "min": 98.106,
+          "max": 99.263
+        }
+      }
+    },
+    "http_client_py311_minimal_headers": {
+      "exact_baseline": {
+        "n": 30,
+        "request_ms": {
+          "p50": 196.912,
+          "p95": 219.245,
+          "min": 196.481,
+          "max": 237.205
+        },
+        "send_ms": {
+          "p50": 0.214,
+          "p95": 0.283,
+          "min": 0.133,
+          "max": 0.361
+        },
+        "client_body_read_ms": {
+          "p50": 97.938,
+          "p95": 120.192,
+          "min": 97.736,
+          "max": 138.315
+        },
+        "server_body_read_ms": {
+          "p50": 0.068,
+          "p95": 0.127,
+          "min": 0.049,
+          "max": 0.226
+        },
+        "server_processing_ms": {
+          "p50": 0.006,
+          "p95": 0.01,
+          "min": 0.004,
+          "max": 0.031
+        },
+        "server_write_ms": {
+          "p50": 0.105,
+          "p95": 0.234,
+          "min": 0.077,
+          "max": 0.273
+        },
+        "client_headers_read_ms": {
+          "p50": 98.712,
+          "p95": 99.126,
+          "min": 98.429,
+          "max": 99.216
+        }
+      },
+      "exact_p1": {
+        "n": 30,
+        "request_ms": {
+          "p50": 196.834,
+          "p95": 237.57,
+          "min": 196.312,
+          "max": 237.999
+        },
+        "send_ms": {
+          "p50": 0.219,
+          "p95": 0.339,
+          "min": 0.109,
+          "max": 0.415
+        },
+        "client_body_read_ms": {
+          "p50": 98.006,
+          "p95": 138.571,
+          "min": 97.485,
+          "max": 138.938
+        },
+        "server_body_read_ms": {
+          "p50": 0.073,
+          "p95": 0.117,
+          "min": 0.05,
+          "max": 0.119
+        },
+        "server_processing_ms": {
+          "p50": 0.006,
+          "p95": 0.009,
+          "min": 0.005,
+          "max": 0.009
+        },
+        "server_write_ms": {
+          "p50": 0.121,
+          "p95": 0.157,
+          "min": 0.085,
+          "max": 0.215
+        },
+        "client_headers_read_ms": {
+          "p50": 98.638,
+          "p95": 99.012,
+          "min": 98.384,
+          "max": 99.26
+        }
+      },
+      "exact_p2": {
+        "n": 30,
+        "request_ms": {
+          "p50": 196.884,
+          "p95": 198.478,
+          "min": 196.181,
+          "max": 237.859
+        },
+        "send_ms": {
+          "p50": 0.223,
+          "p95": 0.326,
+          "min": 0.109,
+          "max": 0.34
+        },
+        "client_body_read_ms": {
+          "p50": 97.994,
+          "p95": 98.533,
+          "min": 97.612,
+          "max": 138.9
+        },
+        "server_body_read_ms": {
+          "p50": 0.044,
+          "p95": 0.081,
+          "min": 0.028,
+          "max": 0.11
+        },
+        "server_processing_ms": {
+          "p50": 0.005,
+          "p95": 0.006,
+          "min": 0.004,
+          "max": 0.007
+        },
+        "server_write_ms": {
+          "p50": 0.115,
+          "p95": 0.15,
+          "min": 0.079,
+          "max": 0.216
+        },
+        "client_headers_read_ms": {
+          "p50": 98.564,
+          "p95": 99.358,
+          "min": 98.139,
+          "max": 100.682
+        }
+      },
+      "exact_p3": {
+        "n": 30,
+        "request_ms": {
+          "p50": 196.81,
+          "p95": 197.649,
+          "min": 196.133,
+          "max": 198.12
+        },
+        "send_ms": {
+          "p50": 0.227,
+          "p95": 0.289,
+          "min": 0.123,
+          "max": 0.902
+        },
+        "client_body_read_ms": {
+          "p50": 98.019,
+          "p95": 98.544,
+          "min": 97.751,
+          "max": 98.656
+        },
+        "server_body_read_ms": {
+          "p50": 0.042,
+          "p95": 0.112,
+          "min": 0.032,
+          "max": 0.166
+        },
+        "server_processing_ms": {
+          "p50": 0.006,
+          "p95": 0.01,
+          "min": 0.005,
+          "max": 0.014
+        },
+        "server_write_ms": {
+          "p50": 0.116,
+          "p95": 0.205,
+          "min": 0.092,
+          "max": 0.279
+        },
+        "client_headers_read_ms": {
+          "p50": 98.511,
+          "p95": 99.087,
+          "min": 97.925,
+          "max": 99.252
+        }
+      }
+    }
+  },
+  "timelines": [
+    {
+      "case": "large_split_off",
+      "round": 25,
+      "request_ms": 294.898,
+      "client_port": 49136,
+      "segments": [
+        {
+          "from": "client",
+          "at_ms": 0.0,
+          "tcp_payload_bytes": 241
+        },
+        {
+          "from": "client",
+          "at_ms": 0.073,
+          "tcp_payload_bytes": 1228
+        },
+        {
+          "from": "client",
+          "at_ms": 97.942,
+          "tcp_payload_bytes": 1016
+        },
+        {
+          "from": "server",
+          "at_ms": 196.303,
+          "tcp_payload_bytes": 127
+        },
+        {
+          "from": "server",
+          "at_ms": 196.375,
+          "tcp_payload_bytes": 2456
+        },
+        {
+          "from": "server",
+          "at_ms": 196.386,
+          "tcp_payload_bytes": 2456
+        },
+        {
+          "from": "server",
+          "at_ms": 294.738,
+          "tcp_payload_bytes": 146
+        }
+      ]
+    },
+    {
+      "case": "medium_split_off",
+      "round": 0,
+      "request_ms": 294.864,
+      "client_port": 49126,
+      "segments": [
+        {
+          "from": "client",
+          "at_ms": 0.0,
+          "tcp_payload_bytes": 240
+        },
+        {
+          "from": "client",
+          "at_ms": 0.036,
+          "tcp_payload_bytes": 1228
+        },
+        {
+          "from": "client",
+          "at_ms": 98.398,
+          "tcp_payload_bytes": 91
+        },
+        {
+          "from": "server",
+          "at_ms": 196.553,
+          "tcp_payload_bytes": 126
+        },
+        {
+          "from": "server",
+          "at_ms": 294.648,
+          "tcp_payload_bytes": 226
+        }
+      ]
+    },
+    {
+      "case": "small_both_nodelay",
+      "round": 28,
+      "request_ms": 98.654,
+      "client_port": 49174,
+      "segments": [
+        {
+          "from": "client",
+          "at_ms": 0.0,
+          "tcp_payload_bytes": 239
+        },
+        {
+          "from": "client",
+          "at_ms": 0.039,
+          "tcp_payload_bytes": 854
+        },
+        {
+          "from": "server",
+          "at_ms": 98.419,
+          "tcp_payload_bytes": 126
+        },
+        {
+          "from": "server",
+          "at_ms": 98.442,
+          "tcp_payload_bytes": 134
+        }
+      ]
+    },
+    {
+      "case": "small_server_nodelay",
+      "round": 16,
+      "request_ms": 237.038,
+      "client_port": 49170,
+      "segments": [
+        {
+          "from": "client",
+          "at_ms": 0.0,
+          "tcp_payload_bytes": 239
+        },
+        {
+          "from": "client",
+          "at_ms": 138.462,
+          "tcp_payload_bytes": 854
+        },
+        {
+          "from": "server",
+          "at_ms": 236.808,
+          "tcp_payload_bytes": 126
+        },
+        {
+          "from": "server",
+          "at_ms": 236.862,
+          "tcp_payload_bytes": 134
+        }
+      ]
+    },
+    {
+      "case": "small_split_off",
+      "round": 5,
+      "request_ms": 335.29,
+      "client_port": 49118,
+      "segments": [
+        {
+          "from": "client",
+          "at_ms": 0.0,
+          "tcp_payload_bytes": 239
+        },
+        {
+          "from": "client",
+          "at_ms": 138.735,
+          "tcp_payload_bytes": 854
+        },
+        {
+          "from": "server",
+          "at_ms": 236.932,
+          "tcp_payload_bytes": 126
+        },
+        {
+          "from": "server",
+          "at_ms": 335.072,
+          "tcp_payload_bytes": 134
+        }
+      ]
+    },
+    {
+      "case": "exact_baseline",
+      "round": 29,
+      "request_ms": 196.955,
+      "client_port": 50844,
+      "segments": [
+        {
+          "from": "client",
+          "at_ms": 0.0,
+          "tcp_payload_bytes": 158
+        },
+        {
+          "from": "client",
+          "at_ms": 0.047,
+          "tcp_payload_bytes": 272
+        },
+        {
+          "from": "server",
+          "at_ms": 98.385,
+          "tcp_payload_bytes": 178
+        },
+        {
+          "from": "server",
+          "at_ms": 196.593,
+          "tcp_payload_bytes": 104
+        }
+      ]
+    },
+    {
+      "case": "exact_p3",
+      "round": 9,
+      "request_ms": 196.901,
+      "client_port": 50828,
+      "segments": [
+        {
+          "from": "client",
+          "at_ms": 0.0,
+          "tcp_payload_bytes": 159
+        },
+        {
+          "from": "client",
+          "at_ms": 0.056,
+          "tcp_payload_bytes": 2244
+        },
+        {
+          "from": "server",
+          "at_ms": 98.42,
+          "tcp_payload_bytes": 179
+        },
+        {
+          "from": "server",
+          "at_ms": 196.553,
+          "tcp_payload_bytes": 409
+        }
+      ]
+    },
+    {
+      "case": "exact_baseline",
+      "round": 20,
+      "request_ms": 196.925,
+      "client_port": 32950,
+      "segments": [
+        {
+          "from": "client",
+          "at_ms": 0.0,
+          "tcp_payload_bytes": 158
+        },
+        {
+          "from": "client",
+          "at_ms": 0.043,
+          "tcp_payload_bytes": 272
+        },
+        {
+          "from": "server",
+          "at_ms": 98.261,
+          "tcp_payload_bytes": 178
+        },
+        {
+          "from": "server",
+          "at_ms": 196.35,
+          "tcp_payload_bytes": 104
+        }
+      ]
+    },
+    {
+      "case": "exact_p3",
+      "round": 12,
+      "request_ms": 196.833,
+      "client_port": 32948,
+      "segments": [
+        {
+          "from": "client",
+          "at_ms": 0.0,
+          "tcp_payload_bytes": 159
+        },
+        {
+          "from": "client",
+          "at_ms": 0.054,
+          "tcp_payload_bytes": 2244
+        },
+        {
+          "from": "server",
+          "at_ms": 98.234,
+          "tcp_payload_bytes": 179
+        },
+        {
+          "from": "server",
+          "at_ms": 196.541,
+          "tcp_payload_bytes": 409
+        }
+      ]
+    },
+    {
+      "case": "original_responder_rt2",
+      "round": 10,
+      "request_ms": 238.719,
+      "client_port": 48204,
+      "segments": [
+        {
+          "from": "client",
+          "at_ms": 0.0,
+          "tcp_payload_bytes": 156
+        },
+        {
+          "from": "client",
+          "at_ms": 0.08,
+          "tcp_payload_bytes": 272
+        },
+        {
+          "from": "server",
+          "at_ms": 99.076,
+          "tcp_payload_bytes": 166
+        },
+        {
+          "from": "server",
+          "at_ms": 238.345,
+          "tcp_payload_bytes": 104
+        }
+      ],
+      "comparator": "original_responder"
+    },
+    {
+      "case": "original_responder_rt2",
+      "round": 10,
+      "request_ms": 237.745,
+      "client_port": 51700,
+      "segments": [
+        {
+          "from": "client",
+          "at_ms": 0.0,
+          "tcp_payload_bytes": 158
+        },
+        {
+          "from": "client",
+          "at_ms": 0.04,
+          "tcp_payload_bytes": 272
+        },
+        {
+          "from": "server",
+          "at_ms": 98.359,
+          "tcp_payload_bytes": 166
+        },
+        {
+          "from": "server",
+          "at_ms": 237.362,
+          "tcp_payload_bytes": 104
+        }
+      ],
+      "comparator": "mimic_without_plan_evaluation"
+    }
+  ],
+  "response_comparators": {
+    "original_responder": {
+      "request_ms": {
+        "p50": 238.725,
+        "p95": 239.649,
+        "min": 237.72,
+        "max": 239.818
+      },
+      "send_ms": {
+        "p50": 0.22,
+        "p95": 0.475,
+        "min": 0.11,
+        "max": 1.137
+      },
+      "headers_read_ms": {
+        "p50": 99.569,
+        "p95": 100.261,
+        "min": 98.981,
+        "max": 101.034
+      },
+      "body_read_ms": {
+        "p50": 138.763,
+        "p95": 139.327,
+        "min": 138.079,
+        "max": 139.574
+      }
+    },
+    "mimic_without_plan_evaluation": {
+      "request_ms": {
+        "p50": 237.741,
+        "p95": 239.336,
+        "min": 236.704,
+        "max": 239.685
+      },
+      "send_ms": {
+        "p50": 0.204,
+        "p95": 0.295,
+        "min": 0.092,
+        "max": 0.31
+      },
+      "headers_read_ms": {
+        "p50": 98.651,
+        "p95": 99.878,
+        "min": 98.32,
+        "max": 100.54
+      },
+      "body_read_ms": {
+        "p50": 138.855,
+        "p95": 139.484,
+        "min": 137.93,
+        "max": 139.872
+      }
+    }
+  }
+}
