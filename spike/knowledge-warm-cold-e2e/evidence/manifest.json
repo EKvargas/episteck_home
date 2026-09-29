@@ -1,0 +1,69 @@
+{
+  "baseline_origin_main_sha": "7739dab807873270163f62b8b9d3511c9f46b585",
+  "benchmark_versions_in_raw": [
+    "warm-cold-e2e-1",
+    "warm-cold-e2e-2"
+  ],
+  "evidence_sha256": {
+    "P1-cold.jsonl": "75b08bbf48b1edfd95d459a4264825f2363055b4265b409e6a03dc3e06575277",
+    "P1-warm-window2.jsonl": "7f5f5b8462b558b21949d68ad92452ec77c9b821d7a10786454fc96094f6d305",
+    "P1-warm.jsonl": "b5781082f659455d0234074ac5850d30a93fa1eecf2e82615599334b5e0921b0",
+    "P2-cold.jsonl": "78e3939eb5472417fe42e83427c0eab4014907e0243c068a6c1a2dc26e67320b",
+    "P2-warm-pooled.jsonl": "4a0629391370495933b12e992b5df27b0f3450db0e2e384ec04f71b28ba0a699",
+    "P2-warm-window2.jsonl": "e7121bbc34e69ddad8e3cc9e5b4bc25144a067b905424bbdba88fc0a2a04bfc9",
+    "P2-warm.jsonl": "d4875631bac27f0cf13e94a88e25a5734ce6ad000ee3b11f51f22f09c516acfb",
+    "P3-cold.jsonl": "74ceda385bff02b5e4a603d4b8f9c482b66c0906ee969fbeab82490b289727e7",
+    "P3-warm-pooled.jsonl": "b83d27e8be13151d84309bf5f0330d9e8093dcadb5f6f0135843045fe3117f94",
+    "P3-warm-window2.jsonl": "26717122018f69072623e78031fe1c9265a73ca907eb7dc840f5246368273d12",
+    "P3-warm.jsonl": "80e19081f74e2d8fa9b2ee366309845738374bc202f3595bc262840d0d384acc",
+    "P4-cold.jsonl": "4b502cea41a2ad4579a43c4b55bfa37b57716ea72c65274b128b719520aa2fd9",
+    "P4-warm-pooled.jsonl": "57e3845b355580f38843397daee1b0ffa89905065b3d0c95bb0cc288ddc8459c",
+    "P4-warm.jsonl": "62e32994381e360c33c80f93c7d38f8152b06199c1e2df775b5612f6c79b8de1",
+    "README.md": "a7f87ca3a83c2c3324219714914304f8652ba8a2ba4e7d558db183ccfdb796d8",
+    "failure-probes.json": "daa53a4741eef993281a50cb18b7605336839254a025400d789dbc3de6951341",
+    "host-conditions.json": "f5d52b1eced5d081ec2a91c2b861b9ddae7fbcbd4411fcef1d71a8d500256842",
+    "initial-summary.json": "1e09a4cb7445c7874085d8a8d0894ed5760becb8e40d4314170a244b582966b1",
+    "network-baseline.json": "c13dc7765f4f30c845a9142d4cce01e762b85cd502b5bd2e266441c34b01a248",
+    "summary.json": "302a470dc4ac81d875cfcd3188c8e43d62472c23003f7309411482f926ba4071",
+    "tailscale-rtt.json": "cfdbcfe542c09a2047513a1f9cb49c8e3d6568d9b6c2793644eb6c2b7051ed75",
+    "window2-summary.json": "6e612464ee6afa1f07b5e88cc52bedf6d678bb30f5f81f0da32670ec8577a08d"
+  },
+  "exploratory_files": [
+    "P2-warm.jsonl",
+    "P3-warm.jsonl",
+    "P4-warm.jsonl",
+    "P1-warm-window2.jsonl",
+    "P2-warm-window2.jsonl",
+    "P3-warm-window2.jsonl"
+  ],
+  "image_ids": {
+    "initial": "a789264ab6741626484ef70056462e5edc740f18dcc70a0a4ea50ce14d5849de",
+    "pooled_warm": "fff4ffd9fe0b0c5e8809fb4311ff55ff481eaab82b1f855814492793fde6af44"
+  },
+  "informative_files": [
+    "P4-warm-pooled.jsonl",
+    "P4-cold.jsonl"
+  ],
+  "note": "Raw git_sha is the fetched baseline. Original v1 cold JSONL retains direct internal_request_ms and process-lifetime total_pre_llm_ms; corrected analysis uses the direct request timer. Future v3 runner source separates both fields. The PR head and source hashes bind the reviewed harness. V2 changed warm domain connection reuse only. Hashes are of committed Git blob bytes; Windows checkout CRLF may differ for text files.",
+  "primary_files": [
+    "P1-warm.jsonl",
+    "P1-cold.jsonl",
+    "P2-warm-pooled.jsonl",
+    "P2-cold.jsonl",
+    "P3-warm-pooled.jsonl",
+    "P3-cold.jsonl"
+  ],
+  "source_sha256": {
+    "Containerfile": "0529d1d5565c0a9cddf3140c67fd49df49b4a845e200365cdda002ff9f80763a",
+    "PROTOCOL.md": "c2aee256c374067b1158358f1595b970d4aab0d181550c0c46b217a75a1a69a9",
+    "analyze.py": "796d98cc3236544003fa0b9fc50b33110fe877f5414098e65ff71c0c7ef3bf29",
+    "baseline.py": "821dae8226b9e2f5e5bcfca6b34519b7deab8d3baa44dae43e5c8bd34845dcb9",
+    "faults.py": "c3a6c941c1a370097bfaa88d8ceb4d7cfd81923562364ccef78882ff2e2066dc",
+    "provision.py": "659cf33fefbb7e50f8a464140fbdd50db9f7b10d77a6c7e3bb5f6288a5b5b469",
+    "r13_wire.py": "908d8203ac28388ae88812af5778ea3f14ee28f94209cc005fbc785666ecb21e",
+    "responders.py": "b091f9acceac52d002d5a54395e386a41fd1b9afc68c59931872b0583be62671",
+    "runner.py": "b0c5fcae341d20185cd772988737bd5265030dc800b792e8577b659d9c867750",
+    "selftest.py": "5ded28a2e423e328441bf8be8a6ef068f9ac26118afa5d0219561afcb1c7614e"
+  },
+  "topology": "Nuremberg pinned Python 3.11.8 / SQLite 3.41.2 ext4 runtime; private mTLS Nuremberg to Ashburn Home responder; Nuremberg loopback mTLS synthetic domains"
+}
