@@ -1,0 +1,14 @@
+{
+  "units": {"load_average": "1/5/15 minute runnable processes", "memory": "MiB"},
+  "snapshots": [
+    {"timestamp_utc": "2026-09-28T07:37:08Z", "host": "Nuremberg", "stage": "before", "load": [0.10, 0.10, 0.09], "memory_total_mib": 3809, "memory_available_mib": 2182, "swap_used_mib": 256, "nutrition_health_http": 200},
+    {"timestamp_utc": "2026-09-28T07:37:10Z", "host": "Ashburn", "stage": "before", "load": [0.13, 0.10, 0.07], "memory_total_mib": 3819, "memory_available_mib": 1046, "swap_used_mib": 1514},
+    {"timestamp_utc": "2026-09-28T07:57:48Z", "host": "Nuremberg", "stage": "after_required_batches", "load": [0.19, 0.21, 0.17], "memory_total_mib": 3809, "memory_available_mib": 2203, "swap_used_mib": 256, "nutrition_health_http": 200},
+    {"timestamp_utc": "2026-09-28T07:57:59Z", "host": "Ashburn", "stage": "after_required_batches", "load": [0.00, 0.08, 0.12], "memory_total_mib": 3819, "memory_available_mib": 1039, "swap_used_mib": 1512, "benchmark_responder_cpu_percent": 0.4, "benchmark_responder_memory_percent": 0.8},
+    {"timestamp_utc": "2026-09-28T08:02:46Z", "host": "Nuremberg", "stage": "after_second_window", "load": [0.08, 0.15, 0.16], "memory_total_mib": 3809, "memory_available_mib": 2153, "swap_used_mib": 256, "benchmark_domain_cpu_percent": 0.90, "benchmark_domain_memory_mib": 22.48, "nutrition_health_http": 200},
+    {"timestamp_utc": "2026-09-28T08:02:48Z", "host": "Ashburn", "stage": "after_second_window", "load": [0.04, 0.10, 0.10], "memory_total_mib": 3819, "memory_available_mib": 1034, "swap_used_mib": 1512, "benchmark_responder_cpu_percent": 0.4},
+    {"timestamp_utc": "2026-09-28T08:18:37Z", "host": "Nuremberg", "stage": "after_pooled_reruns_and_cleanup", "load": [0.11, 0.10, 0.13], "memory_total_mib": 3809, "memory_available_mib": 2187, "swap_used_mib": 256, "nutrition_health_http": 200},
+    {"timestamp_utc": "2026-09-28T08:18:39Z", "host": "Ashburn", "stage": "after_pooled_reruns_and_cleanup", "load": [0.10, 0.05, 0.05], "memory_total_mib": 3819, "memory_available_mib": 1044, "swap_used_mib": 1511}
+  ],
+  "production_observation_limit": "No authenticated production Home health endpoint was called; existing listeners were unchanged and no public route was modified."
+}
