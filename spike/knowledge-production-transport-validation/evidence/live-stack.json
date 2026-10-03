@@ -1,0 +1,63 @@
+{
+  "observed_utc_date": "2026-10-03",
+  "source": "read-only SSH on Nuremberg and Ashburn plus repository source",
+  "route": {
+    "nuremberg_tailscale_ip": "100.81.4.57",
+    "ashburn_tailscale_ip": "100.71.79.33",
+    "tailscale_ping_ms_reported": 97
+  },
+  "existing_nutrition_home_client": {
+    "library": "httpx 0.28.1",
+    "httpcore": "1.0.9",
+    "python": "3.11 container path; patch version not inspected",
+    "httpcore_sync_tcp_nodelay": "sets TCP_NODELAY=1 in _backends/sync.py:215",
+    "home_client_timeout_seconds": 3,
+    "home_plan_client_exists": false
+  },
+  "ashburn_home": {
+    "nginx": "1.24.0 Ubuntu",
+    "nginx_built_openssl": "3.0.13",
+    "observed_private_route_tls": "TLSv1.3 TLS_AES_256_GCM_SHA384; certificate CN=home.episteck.com verified",
+    "home_vhost": "/etc/nginx/conf.d/home.episteck.com.conf",
+    "public_listener": "443 ssl; no http2 option in Home vhost",
+    "tls_termination": "nginx",
+    "home_vhost_keepalive_timeout_seconds": 15,
+    "home_vhost_client_body_buffer": "16K",
+    "home_vhost_proxy_buffer_size": "128k",
+    "home_vhost_proxy_buffers": "4 256k",
+    "home_vhost_proxy_busy_buffers_size": "256k",
+    "home_vhost_proxy_http_version": "1.1",
+    "home_vhost_proxy_read_timeout_seconds": 120,
+    "nginx_global_tcp_nopush": "on",
+    "nginx_explicit_tcp_nodelay": "none; nginx documented default on",
+    "nginx_explicit_proxy_buffering": "none; nginx documented default on",
+    "nginx_explicit_proxy_request_buffering": "none; nginx documented default on",
+    "upstream": "127.0.0.1:8000; no nginx upstream keepalive directive",
+    "gunicorn": "23.0.0; four sync workers; 120s timeout",
+    "frappe": "15.99.0",
+    "authorization_plan_endpoint_exists": false
+  },
+  "disposable_seam": {
+    "tls_listener": "100.71.79.33:18473",
+    "upstream_listener": "127.0.0.1:18474",
+    "client_python": "3.11.8",
+    "client_httpx": "0.28.1",
+    "client_httpcore": "1.0.9",
+    "client_image_openssl": "3.0.22",
+    "server_nginx": "1.24.0",
+    "server_gunicorn": "23.0.0",
+    "server_app": "synthetic WSGI, not Frappe",
+    "certificate": "disposable self-signed IP SAN; no mTLS",
+    "packet_capture_v2": "1944 packets on tailscale0, exact host/port filter, zero kernel drops",
+    "packet_capture_v1": "1304 packets on tailscale0, exact host/port filter, zero kernel drops"
+  },
+  "cleanup": {
+    "temporary_home_ports_closed": true,
+    "no_temporary_public_nginx_route": true,
+    "temporary_dirs_certs_keys_and_host_pcaps_removed": true,
+    "temporary_containers_remaining": 0,
+    "home_ping_http_after": 200,
+    "nutrition_health_http_after": 200,
+    "nginx_config_test_after": "passed"
+  }
+}

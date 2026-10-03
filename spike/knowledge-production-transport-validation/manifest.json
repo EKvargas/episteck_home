@@ -1,0 +1,28 @@
+{
+  "algorithm": "sha256",
+  "files": {
+    "docs/architecture/proposals/KNOWLEDGE_PRODUCTION_TRANSPORT_VALIDATION.md": "17080d3a525e3bf807659c882c9ab8e928e46a65036c49e060997a468d4969ce",
+    "spike/knowledge-production-transport-validation/README.md": "2b1a60502778cd93f39596360f15b3703bd62f28cedbc874dfc925f6ae785b7b",
+    "spike/knowledge-production-transport-validation/analyze.py": "72812f6fae535734366cfd19ae4f73783ec88e1afea050be851ace2388eeab07",
+    "spike/knowledge-production-transport-validation/cleanup-home.sh": "3d728977214b9f341b481de04eb87dc6d6a4ef06b5ee9dc0fffa3d71ccf68d26",
+    "spike/knowledge-production-transport-validation/client.py": "77de19e5be3e07468eaa3a6c585fdc3cb8f9a28d12dea7b0ac1ae6762ab25927",
+    "spike/knowledge-production-transport-validation/evidence/README.md": "102faabbbbad00c5c06ed5378210b8ccf72edea7159ccba70426e89c6dcf0db3",
+    "spike/knowledge-production-transport-validation/evidence/baseline-v2.jsonl": "bb9d544aed25e6346b6d344982d09012ee544cae4f6e45838609f15ba2a7dc97",
+    "spike/knowledge-production-transport-validation/evidence/exploratory-direct-request-summary.json": "ed2af1e923c20e53ef195c04afe82dd59067ce354f7ebed7cafc548e285f7091",
+    "spike/knowledge-production-transport-validation/evidence/exploratory-direct-request.jsonl": "c7a52ff479dc14f566f2ac182721e9cc58a11fc0a0db67edb72bb54dec2d1958",
+    "spike/knowledge-production-transport-validation/evidence/exploratory-packet-replay-summary.json": "b7d79db295c9094f0944e2f1cb162d7be7fa8981a242c376d68be1b9591a451d",
+    "spike/knowledge-production-transport-validation/evidence/exploratory-packet-replay.jsonl": "8dd4ba519c2a845de0a01d0e2397eaab77fe5b50a3505f7ae9a4e787ac2ca6e0",
+    "spike/knowledge-production-transport-validation/evidence/exploratory-packet-sample.txt": "37e14f6d7000648963ffeb95628a4fc62a1af6b8fcaa6f0ce1d2843f2ffe7be6",
+    "spike/knowledge-production-transport-validation/evidence/failure-probes.json": "a58431d4568cbf138bf295a969a93f43e7316412c137664a4d3e1d9223f71089",
+    "spike/knowledge-production-transport-validation/evidence/live-stack.json": "ddcdadc9299b18adbca30e27932ed5682a013c017404a4704c4c44acbd6ae996",
+    "spike/knowledge-production-transport-validation/evidence/packet-sample-v2.txt": "3f669f18013c2474f976f3ac9b41c87237ed32db29758f9b50297b773eb9c8e8",
+    "spike/knowledge-production-transport-validation/evidence/summary-v2.json": "bbaab8a1ce10e55206c4d9d25ad255da79d9ddaabaaa848ecdf11e9cccf264a8",
+    "spike/knowledge-production-transport-validation/failure_probe.py": "0c447d76a2585ffb296207c4c8cbf18e67d91f209bae56474280111344fd66a4",
+    "spike/knowledge-production-transport-validation/manifest.py": "f9c3ae14e54613a3603373f09fbc9c215e07b0332037b5edd83aed44b300fd46",
+    "spike/knowledge-production-transport-validation/run-client.sh": "a9414cec2dfb6fdc4ecf0553260ba9f9684e069288a35bcf21525bf7d005b966",
+    "spike/knowledge-production-transport-validation/run-failure.sh": "4b4e41da62f3540272b123b1b72b63ef067971a4d4800dd9fd7c146b23da3f68",
+    "spike/knowledge-production-transport-validation/server.py": "03fb3dbc138c50841a69d36d05ed114c4c81ea37a4bd3eaad85e89bf9bdd2015",
+    "spike/knowledge-production-transport-validation/setup-home.sh": "fe1895b4d4c2ab112ecb3c65ff2e3568d1899dc117a23ef2dc36fa99c051f779",
+    "spike/knowledge-production-transport-validation/transport-inventory.md": "48a06bf391343fae37617394cfa5f2c6cb8992882da9e9c0cb9b34a7184dd4d4"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "control": {
+    "rt1_success": true,
+    "local_read": true,
+    "rt2_success": true,
+    "context_bundle_produced": true
+  },
+  "rt1_unavailable": {
+    "rt1_success": false,
+    "local_read": false,
+    "rt2_success": false,
+    "context_bundle_produced": false
+  },
+  "rt2_unavailable_after_local_read": {
+    "rt1_success": true,
+    "local_read": true,
+    "rt2_success": false,
+    "context_bundle_produced": false
+  },
+  "tls_untrusted_certificate": {
+    "rt1_success": false,
+    "local_read": false,
+    "rt2_success": false,
+    "context_bundle_produced": false
+  },
+  "invalid_r13_basis": "NOT_EXERCISED: no R13 issuer/verifier in transport seam"
+}
