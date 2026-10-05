@@ -322,3 +322,96 @@ It restores the exact old file, tests nginx, and reloads it. Running it would
 restore the old unsafe logging format and reopen this blocker; use only for an
 emergency rollback. The next separate task must repeat the F3a Hub rollout and
 authenticated matrix. No F3b work is authorized by this log correction.
+
+## F3a live rollout and verification (2026-10-05)
+
+**Disposition: F3a live verification PASS. Rollback was not used.** No BFF,
+nginx, network, firewall, OAuth, session-store, or Control Plane change was made.
+No production Person, Circle, grant, or Nutrition record was created. F3b, F3c,
+and F3d remain open.
+
+### Provenance and build
+
+- Fresh `git fetch origin` resolved `origin/main` to
+  `b1a3d5f7cc58b58968a3250b752a1dab37d0fa8b` (PR #55). Evidence branch
+  `ops/home-f3a-live-verification-retry`, worktree
+  `.worktrees/home-f3a-live-retry`, clean at that SHA.
+- `apps/home-hub`, the BFF, and `deploy/home-bff` are unchanged between `7739dab`
+  and `b1a3d5f` (only this README changed under the Hub/BFF paths).
+- Clean host checkout `/tmp/episteck-home-f3a-build-b1a3d5f` (detached, no local
+  changes). Rootless build as `svc-home-hub` tagged
+  `localhost/episteck-home-hub:b1a3d5f7cc58b58968a3250b752a1dab37d0fa8b`
+  produced image ID
+  `9b0f64701e86dfa7b8ff3ffb1a4a01e0d9d7e284490b26b5247f3ad7c72f5714`, digest
+  `sha256:229a5f7900a30c9bfd04d81c669ef3b00f79388c0b65e8c3c3b5902c71d2304e` —
+  identical to the 2026-09-27 `7739dab` build, confirming reproducibility.
+- Pre-rollout baseline: Hub on `484d129…` (image ID `4c08dfe6…`); nginx
+  `episteck-log-format.conf` SHA-256 equal to the reviewed
+  `3a8d7c0d…919e68`; BFF `/health` 200; listeners `127.0.0.1` 9930/9933/9940.
+
+### Apply
+
+- Pre-rollout Quadlet saved to the root-only directory
+  `/var/backups/episteck/home-f3a-rollout-b1a3d5f/svc-home-hub.container.before`
+  (SHA-256 `3039a74b3b2d13ca7e9a482bd8a7efd8e9c0a1a335174a33c36dbf2282d72d46`,
+  equal to the live file).
+- Before restart, the new image under `pasta:-T,9933` reached BFF `/health`
+  (200) and could not reach 9930/9931/9932/9934.
+- The Quadlet diff against the backup was exactly one line (`Image=` 484d129 →
+  b1a3d5f). The change, user-unit reload and restart were run by the operator.
+  At `2026-10-05T15:21:06Z` the service was `active/running`, `NRestarts=0`,
+  image ID `9b0f6470…`, user `node`, 512 MiB memory and swap, `NoNewPrivileges=yes`,
+  published only `127.0.0.1:9940:3000`; Quadlet retained `Network=pasta:-T,9933`,
+  `LIVE` mode, and the existing BFF and public-origin settings.
+
+### Anonymous and network checks
+
+- From the running Hub container: BFF `/health` 200; 9930/9931/9932/9934 blocked.
+  Host `ss`: `127.0.0.1` 9930/9933/9940 only. Internal `/app` 307 to login.
+- External: `/health` 200; `/app` 307 to `/login`; `/login` 302 to the Control
+  Plane authorize endpoint with S256 PKCE; `/bootstrap` and `/delegation` 404.
+  `/app` carries `Cache-Control: no-store` and `Referrer-Policy: no-referrer`.
+  Direct `91.98.132.9:9940`, `:9930`, `:9933` timed out.
+- Log-hygiene probe: synthetic markers in the URL query (`person`, `code`,
+  `state`), `Referer`, and `User-Agent`. In the new byte window of
+  `home-bff-access.log` (9 lines): 0 marker hits, 0 query strings.
+
+### Authenticated matrix
+
+A human login in a fresh isolated browser context (password entered by the
+operator only) completed OAuth and landed on `/app`. Browser checks were driven
+via Chrome DevTools in that context.
+
+| Check | Result |
+| --- | --- |
+| Self default | Viewer and only context `PSN-00013` / Erick Vargas; nav links carry `?person=PSN-00013` |
+| Context request | Body `{"person":[]}` only (no actor); response `CURRENT`, bootstrap with one person context, zero Circles, zero care relationships, `LIVE`; `no-store`, `no-referrer` |
+| Unknown Person in URL | `/app/nutrition?person=PSN-99999` canonicalized to `?person=PSN-00013`, "Context changed" notice |
+| Resolver matrix | Unknown, malformed, Circle-shaped, and duplicate values → `STALE_CONTEXT` → self (requested ID never echoed); self → `CURRENT`; body with `actor`/`viewer` → 400 `INVALID_CONTEXT_REQUEST`; non-array shape → 400; all `no-store` |
+| Refresh | Route and self context preserved; no stale notice |
+| Two tabs | Tab 2 opened with a stale Person canonicalized independently; tab 1 route and context unchanged, no notice |
+| Focus revalidation | A focus/visibility event issued exactly one new `POST /app/api/context` |
+| History | Link → back → forward restored each route with the self context |
+
+Cross-Person live tab proof remains deferred until approved real topology
+exists; synthetic F3a tests cover P1/P2 separation.
+
+### Logs
+
+Since `2026-10-05T15:20Z`: 207 `home-bff-access.log` lines, 9 Hub and 25 BFF
+container log lines. Zero matches for Person IDs, probe markers, OAuth
+`code`/`state` parameters, session cookie, bearer credential, access/refresh
+token, PKCE verifier, or JWT shape; zero nginx lines with a query string. Status
+codes were 200/302/303/307/400/404 as exercised, plus two client-cancelled
+prefetches (499). The Hub still emits the known non-fatal Node module-type
+warning at startup.
+
+### Rollback
+
+```bash
+ssh episteck-node1 'cd /; sudo cp -p /var/backups/episteck/home-f3a-rollout-b1a3d5f/svc-home-hub.container.before /home/svc-home-hub/.config/containers/systemd/svc-home-hub.container; H=$(id -u svc-home-hub); S="sudo -u svc-home-hub XDG_RUNTIME_DIR=/run/user/$H DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$H/bus"; $S systemctl --user daemon-reload; $S systemctl --user restart svc-home-hub.service'
+```
+
+The prior `484d129` image is retained. F3b is the next Home MVP step and still
+requires its own reviewed Hub-server → Nutrition transport change and live
+isolation proof.
