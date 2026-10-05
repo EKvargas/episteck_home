@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-09-19
+**Updated:** 2026-10-05
 
 ## Live now
 | Component | State |
@@ -41,8 +41,9 @@ Finance, public UI, voice. `svc-home-core` (explicitly rejected — Frappe is th
 | G1.5 | ✅ **COMPLETE** |
 | G1.6 | ✅ **COMPLETE** — production closeout 2026-09-19 |
 
-Next: **Knowledge Technology Gate**, then **G2 / Health architecture** with explicit
-approval. No G1.7 stage is created.
+Next: Continue the Knowledge Authorization Plan dependency graph from KAP-1; the
+Knowledge Technology Gate selection is complete. G2 / Health architecture remains a
+separate track requiring explicit approval. No G1.7 stage is created.
 
 ## G1.6 — trusted actor binding (COMPLETE)
 
@@ -92,3 +93,17 @@ instance. EU residency is a future commercialization concern only.
   rule. Allow and revoked-deny traces pass.
 - Live p95: Home `check_access` 119.88 ms; cross-person Nutrition profile 121.60 ms
   (30 samples each). Full evidence: `G1_5_VALIDATION.md`.
+
+## Knowledge Authorization Plan track (2026-10-05)
+
+The SQLite technology selection and durability decision are complete, but no
+Knowledge runtime is installed. The Architecture Board accepted the v1 Authorization
+Plan contract in PR #56, which remains open at head
+`2b1b9e5f896594027d35afe45d5fcabff70eafb7`. KAP-1 contract code is under draft review
+on a branch based on that head; there is no Home endpoint, runtime deployment, or
+live Knowledge verification yet. The complete KAP-1–10 evidence and dependency map is
+in [Knowledge Architecture](KNOWLEDGE.md#knowledge-authorization-plan-implementation-progress).
+
+Home's F3 implementation, Finance, and Episteck UI are separate tracks and do not
+change this Knowledge sequence. Open runtime gates #2 (latency), #3
+(timing/existence-oracle closure), and #5 (real R14/domain measurement) remain open.

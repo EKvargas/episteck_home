@@ -5,7 +5,7 @@ personal/family knowledge — with ownership, provenance, consent, sharing, and
 correction/deletion. It is **not** a duplicate store for structured domain facts
 (those stay in their owning services) and **not** the Hermes working memory.
 
-> The dependency-free contracts live in `packages/home-contracts`. They provide no
+> The pure Python contracts live in `packages/home-contracts`. They provide no
 > storage, extraction, indexing, retrieval, embeddings, or service runtime. **No**
 > Knowledge store is installed: not SQLite, Mem0, Graphiti, RAGFlow, Postgres/pgvector
 > or Docling.
@@ -113,3 +113,29 @@ Candidates evaluated and **not selected**:
 - **Mem0 / RAGFlow:** hard-eliminated as canonical owner.
 - **Graphiti:** not shortlisted.
 - **Docling:** deferred to document ingestion.
+
+## Knowledge Authorization Plan implementation progress
+
+**Updated:** 2026-10-05. The accepted runtime contract is
+[`KNOWLEDGE_AUTHORIZATION_PLAN_RUNTIME_CONTRACT.md`](proposals/KNOWLEDGE_AUTHORIZATION_PLAN_RUNTIME_CONTRACT.md).
+The Board accepted that contract in PR #56; PR #56 remains open. Its acceptance
+does not authorize production endpoints, credentials, certificates, deployment,
+or data migration. KAP-1 is being reviewed as a contract-only package change on a
+draft branch based on PR #56.
+
+| Item | Accepted scope and prerequisite | Current evidence / unmet acceptance |
+| --- | --- | --- |
+| KAP-1 | Versioned strict wire/domain contracts and test vectors; first. | Implemented and package-tested locally (29 tests pass); architectural review pending; no live use. Domain request/result field schemas are delegated to trusted owning-adapter validators; an absent registration rejects closed. |
+| KAP-2 | Home typed PERSON/CIRCLE policy, trusted partition binding, durable rollback-safe authorization revision; needs KAP-1. | Not implemented. Concrete fence storage, atomic mutation coverage, restore behavior, and race tests remain. |
+| KAP-3 | Dedicated `olin-runtime` machine identity and Home-owned bounded one-use request context; needs KAP-2. | Not implemented. Provisioning is separately gated; no credential exists for this path. |
+| KAP-4 | Complete RT#1 Authorization Plan evaluation; needs KAP-3. | Not implemented. No Home endpoint or integration tests exist. |
+| KAP-5 | Home R13 signer and trusted service/SPKI registration; needs KAP-4. | Not implemented. No key provisioning, trust registration, or issuance tests exist. |
+| KAP-6 | Persistent Home client and protected metadata planner; needs KAP-1 and KAP-4. | Not implemented. No runtime client or content-planning path exists. |
+| KAP-7 | Direct domain mTLS adapter, R13 verifier, replay store, and repository guard; needs KAP-5 and KAP-6. | Not implemented. No production domain route or live peer verification exists. |
+| KAP-8 | Fresh RT#2 evaluation and disclosure ordering; needs KAP-2, KAP-3, and KAP-4. | Not implemented. No endpoint, ordering fence, or revocation-race tests exist. |
+| KAP-9 | Constrained exact-version retrieval, Knowledge control fence, and ContextBundle release; needs KAP-6, KAP-7, and KAP-8. | Not implemented. SQLite selection is not an installed store; restore freshness and suppression remain runtime gates. |
+| KAP-10 | Adversarial end-to-end tests, two-crossing proof, latency/timing gates, and real R14/domain measurement; needs all prior items. | Not implemented or live-verified. Obligations #2, #3, and #5 remain open. |
+
+“Implemented locally” and “unit-tested” do not mean merged, deployed, or live
+verified. Track each state separately in the KAP draft PRs and update this table
+after each accepted review.
