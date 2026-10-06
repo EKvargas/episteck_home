@@ -70,32 +70,27 @@ EU customers, a regional deployment/data-residency strategy will be designed sep
 likely dedicated EU Home instances for those customers rather than migrating the personal
 US instance. No stage is scheduled for it.
 
-### Knowledge Technology Gate `[OPEN — PHASE 1 COMPLETE / SPIKE AUTHORIZED]`
-**B1–B6 are RESOLVED**; B6 acceptance authorized this Gate to begin. **No Knowledge
-technology is selected**, and the pure G1.5 contracts are not a Knowledge runtime or
-persistence implementation.
+### Knowledge Technology Gate `[CLOSED — SELECTION COMPLETE; RUNTIME GATES OPEN]`
+The Gate selected S1, a relational canonical owner with structured retrieval,
+realized on SQLite 3.41.2. The Knowledge governance layer remains Episteck-owned;
+SQLite has **not** been installed as a Knowledge runtime. See the accepted
+[Technology Gate](proposals/KNOWLEDGE_TECHNOLOGY_GATE.md),
+[durability decision](proposals/KNOWLEDGE_SQLITE_DURABILITY.md), and
+[Knowledge architecture progress](KNOWLEDGE.md#knowledge-authorization-plan-implementation-progress).
 
-**Phase 1 — candidate investigation and benchmark/spike design — is COMPLETE and
-accepted** (`proposals/KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md`). **TG-PA-7 authorizes an
-isolated synthetic spike** — disposable, off the production Nuremberg host, synthetic
-data only, stubbed peers. **The spike is not implemented.** Final selection requires
-its empirical evidence plus an explicit Product Architect disposition. Prereqs
-recorded by the Gate: a clear first Knowledge use case (now defined) and B6 closed
-(now closed).
-
-**No stack is pre-selected here.** Earlier wording in this Roadmap named a specific
-candidate stack before the Gate had run; it predated B1–B6 and is superseded by the
-Gate register's candidate table, where every entry remains **UNSELECTED** until the
-Product Architect disposes.
+The Architecture Board accepted the Authorization Plan runtime contract in PR #56.
+PR #56 is documentation-only and remains open; its acceptance does not authorize
+production endpoints, credentials, certificates, deployment, or migration. KAP-1
+contract implementation is under draft review, based on PR #56's head. The accepted
+sequence and per-item criteria are in the runtime contract §15; live gates #2
+(latency), #3 (timing/existence-oracle closure), and #5 (real R14/domain measurement)
+remain open.
 
 **Accepted B5 ownership boundary** (`proposals/KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md`):
-Home is the trusted identity, security-partition resolution and authorization
-authority; a **distinct logical Knowledge owner** owns canonical contextual
-assertions and Knowledge control state; domain services own structured
-operational/domain truth. Physical placement, runtime and storage remain
-**undecided** — the gate may choose them, but may not collapse canonical Knowledge
-ownership into ordinary Home Control Plane persistence/DocTypes. B5 acceptance
-approves **no** runtime implementation.
+Home owns trusted identity, security-partition resolution and authorization; a
+distinct logical Knowledge owner owns canonical contextual assertions and Knowledge
+control state; domain services own structured operational/domain truth. Physical
+placement and runtime responsibilities must preserve this split.
 
 ### LLM Routing & Cost Management Gate `[FUTURE / PARALLEL]`
 Preserve a dedicated architecture gate for inference-provider routing, quota/cost
