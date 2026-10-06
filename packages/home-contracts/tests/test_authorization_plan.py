@@ -350,6 +350,38 @@ def test_domain_contribution_requires_adapter_and_in_plan_result():
         parse_revalidation_request(rt2, plan, approved, domain_routes=routes)
 
 
+def test_domain_result_rejects_execution_id_different_from_supplied_basis():
+    op = _domain_operation()
+    route = _route()
+    plan = parse_plan_request(
+        {"version": 1, "request_id": "request-1", "operations": [op]},
+        trusted_manifest={"op-n": {"requirements": op["requirements"], "target": op["target"]}},
+        domain_routes={route.audience: route},
+    )
+    response = _response(plan.operation_digests[0])
+    response["message"]["decisions"][0]["operation_id"] = "op-n"
+    response["message"]["decisions"][0]["execution_basis"] = {
+        "claims_jcs_b64u": base64.urlsafe_b64encode(b'{"execution_id":"execution-2"}').decode().rstrip("="),
+        "signature_hex": "f" * 128,
+    }
+    approved = parse_plan_response(response, plan)
+    rt2 = {
+        "version": 1,
+        "request_id": "request-1",
+        "plan_id": "plan-1",
+        "contributions": [{
+            "operation_id": "op-n",
+            "selected_versions": [],
+            "domain_results": [{
+                "resource_id": "record-1", "revision": "r1", "version": "v7",
+                "freshness": "fresh-4", "execution_id": "execution-1",
+            }],
+        }],
+    }
+    with pytest.raises(ContractError, match="invalid domain result binding"):
+        parse_revalidation_request(rt2, plan, approved, domain_routes={route.audience: route})
+
+
 def test_non_null_interval_requires_trusted_knowledge_validator():
     payload = _plan()
     payload["operations"][0]["target"]["requested_interval"] = {"from": 100, "until": 200}
@@ -470,6 +502,31 @@ def test_global_requirement_limit_counts_distinct_tuples_only():
     too_many_manifest["op-4"] = {"requirements": extra["requirements"], "target": extra["target"]}
     with pytest.raises(ContractError, match="requirement bound"):
         parse_plan_request(too_many, trusted_manifest=too_many_manifest)
+
+
+def test_plan_accepts_more_than_256_occurrences_with_at_most_256_distinct_tuples():
+    import rfc8785
+
+    requirements = [
+        {"resource_type": "PERSON", "resource_id": f"PSN-{index:03}", "domain": "KNOWLEDGE", "action": "VIEW"}
+        for index in range(64)
+    ]
+    payload = {"version": 1, "request_id": "request-1", "operations": []}
+    manifest = {}
+    for index in range(5):
+        operation = _knowledge_operation()
+        operation["operation_id"] = f"op-{index}"
+        operation["requirements"] = copy.deepcopy(requirements)
+        payload["operations"].append(operation)
+        manifest[operation["operation_id"]] = {
+            "requirements": copy.deepcopy(requirements),
+            "target": copy.deepcopy(operation["target"]),
+        }
+    assert sum(len(op["requirements"]) for op in payload["operations"]) == 320
+    assert len(rfc8785.dumps(payload)) <= 64 * 1024
+    parsed = parse_plan_request(payload, trusted_manifest=manifest)
+    assert len(parsed.operations) == 5
+    assert all(len(op.requirements) == 64 for op in parsed.operations)
 
 
 def test_determinate_denial_is_valid_but_cannot_contribute():

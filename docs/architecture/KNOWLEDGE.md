@@ -125,7 +125,7 @@ draft branch based on PR #56.
 
 | Item | Accepted scope and prerequisite | Current evidence / unmet acceptance |
 | --- | --- | --- |
-| KAP-1 | Versioned strict wire/domain contracts and test vectors; first. | Implemented and package-tested locally (35 tests pass); revised PR #58 awaits architectural review; no live use. Parsed operations and domain result markers are preserved immutably. Knowledge interval and owning-domain schemas require trusted validators and fail closed when absent. |
+| KAP-1 | Versioned strict wire/domain contracts and test vectors; first. | Implemented and package-tested locally (37 tests pass); revised PR #58 awaits architectural review; no live use. Parsed operations and domain result markers are preserved immutably. Knowledge interval and owning-domain schemas require trusted validators and fail closed when absent. |
 | KAP-2 | Home typed PERSON/CIRCLE policy, trusted partition binding, durable rollback-safe authorization revision; needs KAP-1. | Not implemented. Concrete fence storage, atomic mutation coverage, restore behavior, and race tests remain. |
 | KAP-3 | Dedicated `olin-runtime` machine identity and Home-owned bounded one-use request context; needs KAP-2. | Not implemented. Provisioning is separately gated; no credential exists for this path. |
 | KAP-4 | Complete RT#1 Authorization Plan evaluation; needs KAP-3. | Not implemented. No Home endpoint or integration tests exist. |
