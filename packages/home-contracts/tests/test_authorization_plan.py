@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import base64
 import copy
 import hashlib
+import json
 
 import pytest
 
@@ -119,12 +121,15 @@ def _route() -> DomainRoute:
         if set(body) != {"subject_person_ids", "resource_ids", "query"} or body["query"] != {"limit": 10}:
             raise ContractError("adapter body mismatch")
 
-    def validate_result(result: dict, basis: dict) -> tuple[str, str]:
-        if set(result) != {"resource_id", "revision", "execution_id"} or result["revision"] != "r1":
+    def validate_result(result: dict, basis: dict) -> tuple[str, str, dict]:
+        if set(result) != {"resource_id", "revision", "version", "freshness", "execution_id"}:
             raise ContractError("adapter result mismatch")
-        if result["execution_id"] != "execution-1":
+        encoded = basis["claims_jcs_b64u"]
+        claims = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
+        if result["execution_id"] != claims["execution_id"]:
             raise ContractError("execution mismatch")
-        return result["resource_id"], result["execution_id"]
+        markers = {key: result[key] for key in ("revision", "version", "freshness")}
+        return result["resource_id"], result["execution_id"], markers
 
     return DomainRoute(
         audience="spiffe://episteck.internal/service/svc-nutrition",
@@ -171,6 +176,20 @@ def test_plan_rejects_identity_order_duplicates_and_incomplete_requirements(chan
     change(payload)
     with pytest.raises(ContractError):
         parse_plan_request(payload, trusted_manifest=_trusted_manifest())
+
+
+def test_requirement_order_uses_case_sensitive_ascii_lexical_tuple_order():
+    payload = _plan()
+    requirements = payload["operations"][0]["requirements"]
+    requirements[0]["resource_id"] = "A"
+    requirements[1]["resource_id"] = "a"
+    manifest = _trusted_manifest()
+    manifest["op-k"]["requirements"] = copy.deepcopy(requirements)
+    assert parse_plan_request(payload, trusted_manifest=manifest).operations[0].requirements[0].resource_id == "A"
+    payload["operations"][0]["requirements"].reverse()
+    manifest["op-k"]["requirements"].reverse()
+    with pytest.raises(ContractError, match="normalized and unique"):
+        parse_plan_request(payload, trusted_manifest=manifest)
 
 
 def test_plan_rejects_duplicate_json_keys_and_oversize():
@@ -301,7 +320,7 @@ def test_domain_contribution_requires_adapter_and_in_plan_result():
     response = _response(plan.operation_digests[0])
     response["message"]["decisions"][0]["operation_id"] = "op-n"
     response["message"]["decisions"][0]["execution_basis"] = {
-        "claims_jcs_b64u": "eA",
+        "claims_jcs_b64u": base64.urlsafe_b64encode(b'{"execution_id":"execution-1"}').decode().rstrip("="),
         "signature_hex": "f" * 128,
     }
     approved = parse_plan_response(response, plan)
@@ -312,12 +331,20 @@ def test_domain_contribution_requires_adapter_and_in_plan_result():
         "contributions": [{
             "operation_id": "op-n",
             "selected_versions": [],
-            "domain_results": [{"resource_id": "record-1", "revision": "r1", "execution_id": "execution-1"}],
+            "domain_results": [{"resource_id": "record-1", "revision": "r1", "version": "v7", "freshness": "fresh-4", "execution_id": "execution-1"}],
         }],
     }
     with pytest.raises(ContractError):
         parse_revalidation_request(rt2, plan, approved)
-    assert parse_revalidation_request(rt2, plan, approved, domain_routes=routes).contributions[0].operation_id == "op-n"
+    parsed = parse_revalidation_request(rt2, plan, approved, domain_routes=routes)
+    assert parsed.contributions[0].operation_id == "op-n"
+    domain_result = parsed.contributions[0].domain_results[0]
+    assert (domain_result.resource_id, domain_result.execution_id) == ("record-1", "execution-1")
+    assert (domain_result.adapter_markers["revision"], domain_result.adapter_markers["version"], domain_result.adapter_markers["freshness"]) == ("r1", "v7", "fresh-4")
+    with pytest.raises(TypeError):
+        domain_result.adapter_markers["revision"] = "changed"
+    rt2["contributions"][0]["domain_results"][0]["revision"] = "changed"
+    assert domain_result.adapter_markers["revision"] == "r1"
     rt2["contributions"][0]["domain_results"][0]["resource_id"] = "hidden-record"
     with pytest.raises(ContractError):
         parse_revalidation_request(rt2, plan, approved, domain_routes=routes)
@@ -335,7 +362,114 @@ def test_non_null_interval_requires_trusted_knowledge_validator():
         if set(interval) != {"from", "until"} or interval["from"] > interval["until"]:
             raise ContractError("invalid interval")
 
-    assert parse_plan_request(payload, trusted_manifest=manifest, validate_interval=validate_interval).operations[0].kind == "KNOWLEDGE_READ"
+    parsed = parse_plan_request(payload, trusted_manifest=manifest, validate_interval=validate_interval)
+    assert parsed.operations[0].kind == "KNOWLEDGE_READ"
+    assert parsed.operations[0].requested_interval["from"] == 100
+    payload["operations"][0]["target"]["requested_interval"]["from"] = 999
+    assert parsed.operations[0].requested_interval["from"] == 100
+    with pytest.raises(TypeError):
+        parsed.operations[0].requested_interval["from"] = 101
+
+
+def test_parsed_operation_preserves_immutable_detached_wire_evidence():
+    op = _domain_operation()
+    payload = {"version": 1, "request_id": "request-1", "operations": [op]}
+    manifest = {"op-n": {"requirements": op["requirements"], "target": op["target"]}}
+    parsed = parse_plan_request(payload, trusted_manifest=manifest, domain_routes={_route().audience: _route()})
+    operation = parsed.operations[0]
+    op["domain_request"]["body"]["query"]["limit"] = 99
+    op["domain_request"]["request_sha256"] = "f" * 64
+    assert operation.domain_request is not None
+    assert operation.domain_request.audience == _route().audience
+    assert operation.domain_request.method == "POST"
+    assert operation.domain_request.target == "/v1/r13/knowledge-read"
+    assert operation.domain_request.body["query"]["limit"] == 10
+    assert operation.domain_request.request_sha256 != "f" * 64
+    assert operation.descriptor["domain_request"]["body"]["query"]["limit"] == 10
+    with pytest.raises(TypeError):
+        operation.domain_request.body["query"]["limit"] = 11
+    with pytest.raises(TypeError):
+        operation.descriptor["domain_request"]["body"]["query"]["limit"] = 11
+
+
+def test_execution_basis_is_immutable_and_detached_from_input():
+    op = _domain_operation()
+    plan = parse_plan_request(
+        {"version": 1, "request_id": "request-1", "operations": [op]},
+        trusted_manifest={"op-n": {"requirements": op["requirements"], "target": op["target"]}},
+        domain_routes={_route().audience: _route()},
+    )
+    encoded = base64.urlsafe_b64encode(b'{"execution_id":"execution-1"}').decode().rstrip("=")
+    response = _response(plan.operation_digests[0])
+    response["message"]["decisions"][0]["operation_id"] = "op-n"
+    response["message"]["decisions"][0]["execution_basis"] = {"claims_jcs_b64u": encoded, "signature_hex": "f" * 128}
+    parsed = parse_plan_response(response, plan)
+    response["message"]["decisions"][0]["execution_basis"]["claims_jcs_b64u"] = "changed"
+    basis = parsed.decisions[0].execution_basis
+    assert basis is not None and basis["claims_jcs_b64u"] == encoded
+    with pytest.raises(TypeError):
+        basis["claims_jcs_b64u"] = "changed"
+
+
+def test_revalidation_rejects_nested_identity_authority_fields():
+    op = _domain_operation()
+    route = _route()
+    permissive_route = DomainRoute(**{**route.__dict__, "validate_result": lambda result, basis: ("record-1", "execution-1", {"revision": "r1"})})
+    plan = parse_plan_request(
+        {"version": 1, "request_id": "request-1", "operations": [op]},
+        trusted_manifest={"op-n": {"requirements": op["requirements"], "target": op["target"]}},
+        domain_routes={route.audience: route},
+    )
+    response = _response(plan.operation_digests[0])
+    response["message"]["decisions"][0]["operation_id"] = "op-n"
+    response["message"]["decisions"][0]["execution_basis"] = {
+        "claims_jcs_b64u": base64.urlsafe_b64encode(b'{"execution_id":"execution-1"}').decode().rstrip("="),
+        "signature_hex": "f" * 128,
+    }
+    approved = parse_plan_response(response, plan)
+    rt2 = {
+        "version": 1,
+        "request_id": "request-1",
+        "plan_id": "plan-1",
+        "contributions": [{"operation_id": "op-n", "selected_versions": [], "domain_results": [{
+            "resource_id": "record-1", "execution_id": "execution-1", "revision": "r1",
+            "adapter": {"nested": [{"session_id": "forged"}]},
+        }]}],
+    }
+    with pytest.raises(ContractError, match="identity authority"):
+        parse_revalidation_request(rt2, plan, approved, domain_routes={route.audience: permissive_route})
+
+
+def test_global_requirement_limit_counts_distinct_tuples_only():
+    operation = _knowledge_operation()
+    payload = {"version": 1, "request_id": "request-1", "operations": []}
+    manifest = {}
+    for index in range(4):
+        item = copy.deepcopy(operation)
+        item["operation_id"] = f"op-{index}"
+        payload["operations"].append(item)
+        manifest[item["operation_id"]] = {"requirements": item["requirements"], "target": item["target"]}
+    # 4 occurrences of two tuples are only two distinct plan requirements.
+    parsed = parse_plan_request(payload, trusted_manifest=manifest)
+    assert len(parsed.operations) == 4
+
+    too_many = copy.deepcopy(payload)
+    too_many_manifest = copy.deepcopy(manifest)
+    # Add 64 distinct requirements to four operations, then one more through a fifth.
+    for index, item in enumerate(too_many["operations"]):
+        requirements = [
+            {"resource_type": "PERSON", "resource_id": f"PSN-{n:03}", "domain": "KNOWLEDGE", "action": "VIEW"}
+            for n in range(index * 64 + 1, index * 64 + 65)
+        ]
+        item["requirements"] = requirements
+        too_many_manifest[item["operation_id"]]["requirements"] = requirements
+    extra = copy.deepcopy(_knowledge_operation())
+    extra["operation_id"] = "op-4"
+    extra["requirements"] = [{"resource_type": "PERSON", "resource_id": "PSN-257", "domain": "KNOWLEDGE", "action": "VIEW"}]
+    too_many["operations"].append(extra)
+    too_many_manifest["op-4"] = {"requirements": extra["requirements"], "target": extra["target"]}
+    with pytest.raises(ContractError, match="requirement bound"):
+        parse_plan_request(too_many, trusted_manifest=too_many_manifest)
 
 
 def test_determinate_denial_is_valid_but_cannot_contribute():

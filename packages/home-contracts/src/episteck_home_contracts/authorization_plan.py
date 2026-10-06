@@ -11,6 +11,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
+from collections.abc import Iterator
 from typing import Any, Callable, Mapping
 
 import rfc8785
@@ -45,11 +46,39 @@ class ContractError(ValueError):
 
 
 @dataclass(frozen=True)
+class FrozenJSON(Mapping[str, Any]):
+    """Recursively immutable JSON object, detached from parsed caller input."""
+
+    _entries: tuple[tuple[str, Any], ...]
+
+    def __getitem__(self, key: str) -> Any:
+        for name, value in self._entries:
+            if name == key:
+                return value
+        raise KeyError(key)
+
+    def __iter__(self) -> Iterator[str]:
+        return (name for name, _ in self._entries)
+
+    def __len__(self) -> int:
+        return len(self._entries)
+
+
+def _freeze_json(value: Any) -> Any:
+    if type(value) is dict:
+        return FrozenJSON(tuple((key, _freeze_json(child)) for key, child in sorted(value.items())))
+    if type(value) is list:
+        return tuple(_freeze_json(child) for child in value)
+    return value
+
+
+@dataclass(frozen=True)
 class DomainRoute:
     """Trusted adapter registration, including strict domain body/result schemas.
 
-    validate_result must compare the result execution ID with the issued basis.
-    The owning adapter defines its revision or freshness-marker wire fields.
+    validate_result must compare the result execution ID with the supplied
+    basis and return all schema-defined revision/version/freshness markers.
+    The owning adapter defines those result fields.
     """
 
     audience: str
@@ -59,7 +88,7 @@ class DomainRoute:
     action: str
     use_class: str
     validate_body: Callable[[dict[str, Any]], None]
-    validate_result: Callable[[dict[str, Any], dict[str, str]], tuple[str, str]]
+    validate_result: Callable[[dict[str, Any], dict[str, Any]], tuple[str, str, Any]]
 
 
 @dataclass(frozen=True)
@@ -79,6 +108,15 @@ class ExactVersion:
 
 
 @dataclass(frozen=True)
+class DomainRequest:
+    audience: str
+    method: str
+    target: str
+    body: FrozenJSON
+    request_sha256: str
+
+
+@dataclass(frozen=True)
 class PlanOperation:
     operation_id: str
     kind: str
@@ -88,6 +126,9 @@ class PlanOperation:
     exact_versions: tuple[ExactVersion, ...]
     resource_ids: tuple[str, ...]
     domain_audience: str | None
+    requested_interval: Any
+    domain_request: DomainRequest | None
+    descriptor: FrozenJSON
     digest: str
 
 
@@ -106,7 +147,7 @@ class PlanDecision:
     operation_id: str
     outcome: str
     decision_id: str
-    execution_basis: Mapping[str, str] | None
+    execution_basis: FrozenJSON | None
 
 
 @dataclass(frozen=True)
@@ -124,7 +165,14 @@ class PlanResponse:
 class Contribution:
     operation_id: str
     selected_versions: tuple[tuple[str, str, str], ...]
-    domain_results: tuple[tuple[str, str], ...] = ()
+    domain_results: tuple["DomainResult", ...] = ()
+
+
+@dataclass(frozen=True)
+class DomainResult:
+    resource_id: str
+    execution_id: str
+    adapter_markers: Any
 
 
 @dataclass(frozen=True)
@@ -331,7 +379,30 @@ def _operation(
         digest = hashlib.sha256(rfc8785.dumps(item)).hexdigest()
     except rfc8785.CanonicalizationError as exc:
         raise ContractError("operation is not canonicalizable") from exc
-    return PlanOperation(operation_id, kind, use_class, requirements, owner, versions, resource_ids, domain_audience, digest)
+    requested_interval = _freeze_json(target["requested_interval"]) if kind == "KNOWLEDGE_READ" else None
+    parsed_domain_request = None
+    if kind == "DOMAIN_READ":
+        parsed_domain_request = DomainRequest(
+            domain_audience or "",
+            domain_request["method"],
+            domain_request["target"],
+            _freeze_json(domain_request["body"]),
+            domain_request["request_sha256"],
+        )
+    return PlanOperation(
+        operation_id,
+        kind,
+        use_class,
+        requirements,
+        owner,
+        versions,
+        resource_ids,
+        domain_audience,
+        requested_interval,
+        parsed_domain_request,
+        _freeze_json(item),
+        digest,
+    )
 
 
 def parse_plan_request(
@@ -353,7 +424,8 @@ def parse_plan_request(
     ids = [op.operation_id for op in operations]
     if ids != sorted(set(ids)) or set(ids) != set(trusted_manifest):
         raise ContractError("operations are not normalized and complete")
-    if sum(len(op.requirements) for op in operations) > MAX_REQUIREMENTS:
+    distinct_requirements = {requirement for op in operations for requirement in op.requirements}
+    if len(distinct_requirements) > MAX_REQUIREMENTS:
         raise ContractError("plan requirement bound exceeded")
     return PlanRequest(request_id, operations)
 
@@ -378,7 +450,7 @@ def parse_plan_response(value: bytes | str | Mapping[str, Any], request: PlanReq
                 raise ContractError("malformed execution basis")
         elif basis is not None:
             raise ContractError("unexpected execution basis")
-        decisions.append(PlanDecision(op.operation_id, outcome, _id(decision["decision_id"], "decision id"), basis))
+        decisions.append(PlanDecision(op.operation_id, outcome, _id(decision["decision_id"], "decision id"), _freeze_json(basis) if basis is not None else None))
     return PlanResponse(
         request.request_id,
         _id(body["plan_id"], "plan id"),
@@ -396,6 +468,7 @@ def parse_revalidation_request(
 ) -> RevalidationRequest:
     """Bind RT#2 contributors to RT#1 allows and exact Knowledge versions."""
     body = _object(_wire(value), {"version", "request_id", "plan_id", "contributions"}, "revalidation request")
+    _reject_identity_fields(body)
     if type(body["version"]) is not int or body["version"] != 1 or body["request_id"] != plan.request_id or body["plan_id"] != response.plan_id:
         raise ContractError("revalidation request binding mismatch")
     raw = _array(body["contributions"], 1, len(plan.operations), "contributions")
@@ -436,15 +509,22 @@ def parse_revalidation_request(
                 if type(result) is not dict:
                     raise ContractError("domain result must be an object")
                 try:
-                    resource_id, execution_id = route.validate_result(result, dict(basis))
+                    resource_id, execution_id, adapter_markers = route.validate_result(copy.deepcopy(result), dict(basis))
+                    rfc8785.dumps(adapter_markers)
                 except Exception:
                     raise ContractError("invalid domain result binding") from None
-                results.append((_id(resource_id, "domain result resource"), _id(execution_id, "domain execution id")))
+                results.append(
+                    DomainResult(
+                        _id(resource_id, "domain result resource"),
+                        _id(execution_id, "domain execution id"),
+                        _freeze_json(adapter_markers),
+                    )
+                )
             if (
-                len({r[0] for r in results}) != len(results)
-                or len({r[1] for r in results}) != 1
-                or [r[0] for r in results] != sorted(r[0] for r in results)
-                or not {r[0] for r in results} <= set(operation.resource_ids)
+                len({r.resource_id for r in results}) != len(results)
+                or len({r.execution_id for r in results}) != 1
+                or [r.resource_id for r in results] != sorted(r.resource_id for r in results)
+                or not {r.resource_id for r in results} <= set(operation.resource_ids)
             ):
                 raise ContractError("domain result is duplicated, unordered or out of plan")
             contributions.append(Contribution(operation_id, (), tuple(results)))
@@ -457,6 +537,7 @@ def parse_revalidation_response(
     """Validate a complete fresh RT#2 result; DENY is a determinate outcome."""
     wrapper = _object(_wire(value), {"message"}, "Frappe response")
     body = _object(wrapper["message"], {"version", "request_id", "plan_id", "evaluated_at", "authorization_revision", "disclosure_fence", "decisions", "disclosure"}, "revalidation response")
+    _reject_identity_fields(body)
     if type(body["version"]) is not int or body["version"] != 1 or body["request_id"] != request.request_id or body["plan_id"] != request.plan_id:
         raise ContractError("revalidation response binding mismatch")
     raw = _array(body["decisions"], len(request.contributions), len(request.contributions), "fresh decisions")
