@@ -29,6 +29,8 @@ PERMISSIONS = (
     "storage.objects.delete", "storage.objects.update", "storage.buckets.update",
     "storage.objects.setRetention", "storage.objects.overrideUnlockedRetention",
 )
+MAX_CREATES = 160
+MAX_OBJECT_REQUESTS = 5000
 
 
 def canonical(value: dict) -> bytes:
@@ -61,11 +63,15 @@ class Client:
         return f"{self.prefix}/{kind}/{number:020d}.json"
 
     def get(self, key: str) -> tuple[int, bytes, str | None]:
+        if sum(self.counts.values()) >= MAX_OBJECT_REQUESTS:
+            raise RuntimeError("probe object-request cap reached")
         self.counts["get"] += 1
         response = self.request("GET", f"{API}/b/{self.bucket}/o/{quote(key, safe='')}", params={"alt": "media"})
         return response.status_code, response.content, response.headers.get("x-goog-generation")
 
     def create(self, key: str, content: dict) -> tuple[int, bytes, str | None]:
+        if self.counts["create"] >= MAX_CREATES or sum(self.counts.values()) >= MAX_OBJECT_REQUESTS:
+            raise RuntimeError("probe write/request cap reached")
         self.counts["create"] += 1
         response = self.request(
             "POST", f"{UPLOAD}/b/{self.bucket}/o",
@@ -78,6 +84,8 @@ class Client:
     def list_all(self, *, page_size: int = 7, after_first_page: Callable[[], None] | None = None) -> tuple[list[str], int]:
         names, pages, page_token = [], 0, None
         while True:
+            if sum(self.counts.values()) >= MAX_OBJECT_REQUESTS:
+                raise RuntimeError("probe object-request cap reached")
             self.counts["list"] += 1
             params = {"prefix": self.prefix + "/", "maxResults": page_size}
             if page_token:
