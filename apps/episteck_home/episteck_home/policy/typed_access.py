@@ -56,11 +56,25 @@ class TypedGrant:
     legacy_reauthorized: bool = False
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "actions", frozenset(self.actions))
+        if type(self.actions) not in (set, frozenset, list, tuple):
+            frozen = frozenset()
+        else:
+            try:
+                frozen = frozenset(self.actions)
+            except (TypeError, ValueError):
+                frozen = frozenset()
+        object.__setattr__(self, "actions", frozen)
 
 
 def _valid_time(value: datetime | None) -> bool:
-    return value is None or (isinstance(value, datetime) and value.tzinfo is not None and value.utcoffset() is not None)
+    if value is None:
+        return True
+    if type(value) is not datetime or value.tzinfo is None:
+        return False
+    try:
+        return value.utcoffset() is not None
+    except (TypeError, ValueError, OverflowError):
+        return False
 
 
 def _grant_covers(
@@ -69,17 +83,28 @@ def _grant_covers(
     if not isinstance(grant, TypedGrant):
         return False
     if (
-        grant.partition_id != partition_id
+        type(grant.partition_id) is not str
+        or type(grant.actor_person_id) is not str
+        or type(grant.resource_type) is not str
+        or type(grant.resource_id) is not str
+        or type(grant.domain) is not str
+        or grant.partition_id != partition_id
         or grant.actor_person_id != actor_person_id
         or grant.resource_type != requirement.resource_type
         or grant.resource_id != requirement.resource_id
         or grant.domain != requirement.domain
         or grant.state != "ACTIVE"
+        or type(grant.state) is not str
         or not grant.actions
+        or any(type(action) is not str for action in grant.actions)
         or not grant.actions.issubset(ACTIONS)
+        or type(grant.issuer_verified) is not bool
         or grant.issuer_verified is not True
+        or type(grant.dependency_current) is not bool
         or grant.dependency_current is not True
-        or (grant.legacy is True and grant.legacy_reauthorized is not True)
+        or type(grant.legacy) is not bool
+        or type(grant.legacy_reauthorized) is not bool
+        or (grant.legacy and not grant.legacy_reauthorized)
         or not _valid_time(grant.valid_from)
         or not _valid_time(grant.valid_until)
     ):
@@ -102,19 +127,30 @@ def evaluate_operation(
 ) -> Decision:
     """Allow only when every typed requirement is proven by current authority."""
     deny = Decision(False, "unverified typed authority")
-    if not partition_id or not isinstance(actor, Actor) or actor.partition_id != partition_id or not actor.person_id:
+    if (
+        type(partition_id) is not str or not partition_id or not isinstance(actor, Actor)
+        or type(actor.partition_id) is not str or actor.partition_id != partition_id
+        or type(actor.person_id) is not str or not actor.person_id
+    ):
         return deny
     if not _valid_time(now) or now is None:
         return deny
     try:
         required, resources, rows = tuple(requirements), tuple(targets), tuple(grants)
-    except (TypeError, ValueError):
+    except Exception:
         return deny
     if not required:
         return deny
     target_index: dict[tuple[str, str], TypedTarget] = {}
     for target in resources:
-        if not isinstance(target, TypedTarget) or target.resource_type not in RESOURCE_TYPES or not target.resource_id:
+        if (
+            not isinstance(target, TypedTarget)
+            or type(target.partition_id) is not str
+            or type(target.resource_type) is not str
+            or target.resource_type not in RESOURCE_TYPES
+            or type(target.resource_id) is not str or not target.resource_id
+            or type(target.active) is not bool
+        ):
             return deny
         key = (target.resource_type, target.resource_id)
         if key in target_index:
@@ -123,10 +159,10 @@ def evaluate_operation(
     for requirement in required:
         if (
             not isinstance(requirement, AccessRequirement)
-            or requirement.resource_type not in RESOURCE_TYPES
-            or not requirement.resource_id
-            or requirement.domain not in DOMAINS
-            or requirement.action not in ACTIONS
+            or type(requirement.resource_type) is not str or requirement.resource_type not in RESOURCE_TYPES
+            or type(requirement.resource_id) is not str or not requirement.resource_id
+            or type(requirement.domain) is not str or requirement.domain not in DOMAINS
+            or type(requirement.action) is not str or requirement.action not in ACTIONS
         ):
             return deny
         target = target_index.get((requirement.resource_type, requirement.resource_id))

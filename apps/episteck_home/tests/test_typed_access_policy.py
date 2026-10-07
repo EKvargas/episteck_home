@@ -105,3 +105,31 @@ def test_malformed_or_ambiguous_trusted_snapshot_fails_closed():
     assert not decide((req(),), targets=(PERSON, PERSON), grants=(grant(),)).allow
     assert not decide((req(),), targets=(replace(PERSON, active=False),), grants=(grant(),)).allow
     assert not decide((req(),), grants=(grant(actions=frozenset({"MANAGE", "UNKNOWN"})),)).allow
+
+
+def test_non_boolean_legacy_values_never_bypass_quarantine():
+    for malformed in (1, 0, "false", None):
+        assert not decide((req(),), grants=(grant(legacy=malformed),)).allow
+        assert not decide((req(),), grants=(grant(legacy=malformed, legacy_reauthorized=True),)).allow
+        assert not decide((req(),), grants=(grant(legacy=True, legacy_reauthorized=malformed),)).allow
+    assert not decide((req(),), grants=(grant(issuer_verified=1),)).allow
+    assert not decide((req(),), grants=(grant(dependency_current=1),)).allow
+
+
+def test_malformed_snapshot_values_deny_without_exception():
+    malformed_cases = (
+        {"actor": Actor("partition-a", [])},
+        {"actor": Actor([], "actor")},
+        {"targets": (replace(PERSON, resource_type=[]),)},
+        {"targets": (replace(PERSON, resource_id=[]),)},
+        {"requirements": (req(domain=[]),)},
+        {"requirements": (req(identity=[]),)},
+        {"grants": (grant(actions=1),)},
+        {"grants": (grant(actions=[["VIEW"]]),)},
+        {"grants": (grant(valid_from="yesterday"),)},
+    )
+    for changes in malformed_cases:
+        options = {"actor": Actor("partition-a", "actor"), "targets": (PERSON,), "grants": (grant(),)}
+        options.update(changes)
+        requirements = options.pop("requirements", (req(),))
+        assert not decide(requirements, **options).allow
