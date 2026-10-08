@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
+import time
 import uuid
 from pathlib import Path
 
@@ -66,15 +68,17 @@ def _install_candidate_guard(frappe, token: str) -> tuple[str, str]:
 
             cursor.execute(
                 f"CREATE PROCEDURE {qschema}.revoke_synthetic(IN p_user VARCHAR(140), IN p_person VARCHAR(140), "
-                "IN p_session VARCHAR(140), IN p_grant VARCHAR(140), IN p_membership VARCHAR(140)) "
+                "IN p_session VARCHAR(140), IN p_grant VARCHAR(140), IN p_membership VARCHAR(140), IN p_hold DOUBLE) "
                 "SQL SECURITY DEFINER BEGIN START TRANSACTION; "
+                f"UPDATE {qschema}.authority SET seq=seq WHERE id=1; "
+                f"DO GET_LOCK('kap2_writer_{token}', 0); DO SLEEP(p_hold); "
                 f"UPDATE {qdb}.`tabUser` SET enabled=0 WHERE name=p_user; "
                 f"UPDATE {qdb}.`tabPerson` SET linked_user=NULL WHERE name=p_person; "
                 f"UPDATE {qdb}.`tabHome Delegated Session` SET status='Revoked' WHERE name=p_session; "
                 f"UPDATE {qdb}.`tabConsent Grant` SET state='REVOKED' WHERE name=p_grant; "
                 f"DELETE FROM {qdb}.`tabCircle Membership` WHERE name=p_membership; "
                 f"UPDATE {qschema}.authority SET state='REVOKED', seq=seq+1, outcome='PENDING' WHERE id=1; "
-                "COMMIT; END"
+                f"COMMIT; DO RELEASE_LOCK('kap2_writer_{token}'); END"
             )
             cursor.execute(f"GRANT EXECUTE ON PROCEDURE {qschema}.revoke_synthetic TO '{mutator}'@'localhost'")
             cursor.execute(f"REVOKE ALL PRIVILEGES ON {qdb}.* FROM '{database}'@'localhost'")
@@ -98,6 +102,14 @@ def run_baseline() -> dict:
 
 def run() -> dict:
     return run_baseline()
+
+
+def _candidate_decision(state: str, sequence: int, witness: dict[int, tuple[str, str]],
+                        policy_allows: bool) -> bool:
+    """Disposable reader rule. The caller must supply an independent trusted witness."""
+    return (state == "ACTIVE" and type(sequence) is int and policy_allows
+            and witness.get(sequence) == ("COMMIT", "ACTIVE")
+            and sequence == max(witness, default=-1))
 
 
 def _run(mode: str) -> dict:
@@ -172,7 +184,7 @@ def _run(mode: str) -> dict:
                 frappe, token, user, other, person, subject, circle,
                 membership, grant, session, legacy_allows, save_field,
             )
-            result["canonical_guard_verified"] = True
+            result["disposable_protected_paths_verified"] = True
             return result
 
         observations["legacy_wrapper_initial_allow"] = legacy_allows()
@@ -242,14 +254,41 @@ def _guarded_checks(frappe, token, user, other, person, subject, circle,
     import pymysql
 
     schema, mutator = _install_candidate_guard(frappe, token)
-    # MariaDB keeps database-level grants for an existing session until its
-    # next connection. Readers and writers must reconnect after cutover.
-    frappe.db.close()
-    frappe.db.connect()
     database = frappe.conf.db_name
     socket = os.environ["KAP2_DB_SOCKET"]
     password = "KAP2_LOCAL_SYNTHETIC_ONLY"
     results: dict[str, str] = {}
+
+    # REVOKE does not remove a database-level grant from an already connected
+    # MariaDB session. The disposable cutover kills *all* site-principal
+    # sessions before any candidate authority read is admitted.
+    stale_connection = frappe.db._conn
+    stale_id = frappe.db.sql("SELECT CONNECTION_ID()")[0][0]
+    root = pymysql.connect(unix_socket=socket, user="root", password=os.environ["KAP2_DB_ROOT_PASSWORD"], autocommit=True)
+    try:
+        with root.cursor() as cursor:
+            cursor.execute("SELECT ID FROM information_schema.PROCESSLIST WHERE USER=%s", (database,))
+            sessions = [row[0] for row in cursor.fetchall()]
+            if stale_id not in sessions:
+                raise AssertionError("site connection absent from cutover inventory")
+            for session_id in sessions:
+                cursor.execute(f"KILL CONNECTION {int(session_id)}")
+            cursor.execute("SELECT COUNT(*) FROM information_schema.PROCESSLIST WHERE USER=%s", (database,))
+            if cursor.fetchone()[0] != 0:
+                raise AssertionError("privileged site connection survived cutover")
+    finally:
+        root.close()
+    try:
+        stale_connection.cursor().execute("SELECT 1")
+    except pymysql.MySQLError:
+        pass
+    else:
+        raise AssertionError("old privileged connection remained usable")
+    frappe.db.close()
+    frappe.db.connect()
+    if frappe.db.sql("SELECT CONNECTION_ID()")[0][0] == stale_id:
+        raise AssertionError("site did not reconnect after cutover")
+    results["cutover_privileged_sessions_drained"] = "old_connection_killed"
 
     def expect_denied(name, action, read):
         before = read()
@@ -282,10 +321,39 @@ def _guarded_checks(frappe, token, user, other, person, subject, circle,
         finally:
             conn.close()
 
+    witness: dict[int, tuple[str, str]] = {0: ("COMMIT", "ACTIVE")}
+
+    def candidate_read(*, locked=None, release=None, policy=None) -> bool:
+        # Read the local fence under a shared lock. The separate synthetic
+        # witness is supplied by the harness, never inferred from the DB's
+        # restored `outcome` column. Production must use verified GCS history.
+        conn = pymysql.connect(unix_socket=socket, user=f"kap2_reader_{token}", password=password, autocommit=False)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(f"SELECT state, seq FROM `{schema}`.authority WHERE id=1 LOCK IN SHARE MODE")
+                state, sequence = cursor.fetchone()
+                if locked:
+                    locked.set()
+                if release and not release.wait(5):
+                    raise TimeoutError("reader lock release timed out")
+                allowed = _candidate_decision(state, sequence, witness, (policy or legacy_allows)())
+            conn.commit()
+            return allowed
+        finally:
+            conn.close()
+
     get = frappe.db.get_value
     if not legacy_allows() or authority() != ("ACTIVE", 0, "COMMIT"):
         raise AssertionError("initial synthetic authority invalid")
     results["initial_authority"] = "active_committed"
+    witness[0] = ("PENDING", "ACTIVE")
+    if candidate_read():
+        raise AssertionError("ACTIVE/PENDING disclosed despite permissive grant")
+    results["active_pending_reader"] = "denied"
+    witness[0] = ("COMMIT", "ACTIVE")
+    if not candidate_read():
+        raise AssertionError("matching ACTIVE/COMMIT failed to authorize")
+    results["active_matching_commit_reader"] = "allowed"
 
     expect_allowed("ordinary_user_name_save", lambda: save_field("User", other.name, "first_name", "Ordinary"),
                    lambda: get("User", other.name, "first_name"))
@@ -308,18 +376,97 @@ def _guarded_checks(frappe, token, user, other, person, subject, circle,
     expect_denied("circle_exit_delete", lambda: frappe.get_doc("Circle Membership", membership.name).delete(ignore_permissions=True),
                   lambda: frappe.db.exists("Circle Membership", membership.name))
 
-    # This procedure stands in for a central write lane. It advances a local
-    # synthetic counter and leaves an intentionally uncommitted external outcome.
-    conn = pymysql.connect(unix_socket=socket, user=mutator, password=password, autocommit=True)
+    # Route the actual Frappe DocType controller dispatch through a disposable
+    # mutation adapter. The production revoke() was already shown guard-denied
+    # above; this monkeypatch is never installed outside this marked site run.
+    from concurrent.futures import ThreadPoolExecutor
+    from episteck_home.episteck_home.doctype.home_delegated_session.home_delegated_session import HomeDelegatedSession
+
+    original_revoke = HomeDelegatedSession.revoke
+    hold_seconds = 0.0
+    site_name = frappe.local.site
+
+    def candidate_revoke(self):
+        if self.name != session.name:
+            raise AssertionError("unexpected controller target")
+        conn = pymysql.connect(unix_socket=socket, user=mutator, password=password, autocommit=True)
+        try:
+            with conn.cursor() as cursor:
+                cursor.callproc(f"{schema}.revoke_synthetic",
+                                (user.name, person.name, session.name, grant.name, membership.name, hold_seconds))
+        finally:
+            conn.close()
+
+    def thread_call(action):
+        import frappe as thread_frappe
+        thread_frappe.init(site=site_name)
+        thread_frappe.connect()
+        try:
+            return action(thread_frappe)
+        finally:
+            thread_frappe.destroy()
+
+    def writer_lock_held() -> bool:
+        root = pymysql.connect(unix_socket=socket, user="root", password=os.environ["KAP2_DB_ROOT_PASSWORD"])
+        try:
+            with root.cursor() as cursor:
+                cursor.execute("SELECT IS_USED_LOCK(%s)", (f"kap2_writer_{token}",))
+                return cursor.fetchone()[0] is not None
+        finally:
+            root.close()
+
+    HomeDelegatedSession.revoke = candidate_revoke
     try:
-        with conn.cursor() as cursor:
-            cursor.callproc(f"{schema}.revoke_synthetic", (user.name, person.name, session.name, grant.name, membership.name))
+        read_locked, release_read = threading.Event(), threading.Event()
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first_read = pool.submit(thread_call, lambda _f: candidate_read(locked=read_locked, release=release_read))
+            if not read_locked.wait(5):
+                raise AssertionError("reader-first did not acquire fence lock")
+            first_revoke = pool.submit(thread_call, lambda f: f.get_doc("Home Delegated Session", session.name).revoke())
+            time.sleep(0.25)
+            if first_revoke.done() or writer_lock_held():
+                raise AssertionError("reader-first revocation bypassed fence lock")
+            release_read.set()
+            if first_read.result(timeout=5) is not True:
+                raise AssertionError("reader-first did not see the prior committed grant")
+            first_revoke.result(timeout=5)
+        witness[1] = ("PENDING", "REVOKED")
+        frappe.db.commit()
+        if authority() != ("REVOKED", 1, "PENDING") or candidate_read():
+            raise AssertionError("reader-first revocation did not block subsequent disclosure")
+        results["frappe_controller_reader_first"] = "reader_before_revocation_then_denied"
+
+        hold_seconds = 1.0
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            second_revoke = pool.submit(thread_call, lambda f: f.get_doc("Home Delegated Session", session.name).revoke())
+            deadline = time.monotonic() + 5
+            while not writer_lock_held() and time.monotonic() < deadline:
+                if second_revoke.done():
+                    second_revoke.result()
+                    raise AssertionError("writer-first lock was never held")
+                time.sleep(0.02)
+            if not writer_lock_held():
+                raise AssertionError("writer-first lock acquisition timed out")
+            started = time.monotonic()
+            if candidate_read():
+                raise AssertionError("writer-first disclosed revoked authority")
+            waited = time.monotonic() - started
+            second_revoke.result(timeout=5)
+            if waited < 0.5:
+                raise AssertionError("writer-first reader did not wait for revocation")
+        witness[2] = ("PENDING", "REVOKED")
+        frappe.db.commit()
+        if authority() != ("REVOKED", 2, "PENDING") or candidate_read():
+            raise AssertionError("writer-first revocation did not advance fence")
+        results["frappe_controller_writer_first"] = "reader_waited_then_denied"
+        results["revoked_pending_reader"] = "denied"
     finally:
-        conn.close()
+        HomeDelegatedSession.revoke = original_revoke
+
     frappe.db.commit()
-    if authority() != ("REVOKED", 1, "PENDING") or legacy_allows():
-        raise AssertionError("central revocation or pending outcome incorrect")
-    results["central_revocation_and_commit_gap"] = "revoked_pending_denies"
+    if legacy_allows():
+        raise AssertionError("legacy wrapper still allows after revocation")
+    results["protected_revocation"] = "legacy_wrapper_denies"
 
     expect_denied("user_reenable_set_value", lambda: frappe.db.set_value("User", user.name, "enabled", 1),
                   lambda: get("User", user.name, "enabled"))
@@ -362,11 +509,13 @@ def _guarded_checks(frappe, token, user, other, person, subject, circle,
             cursor.execute(f"UPDATE `{schema}`.authority SET outcome='COMMIT' WHERE id=1")
     finally:
         root.close()
-    if authority() != ("REVOKED", 1, "COMMIT") or legacy_allows():
+    witness[2] = ("COMMIT", "REVOKED")
+    if authority() != ("REVOKED", 2, "COMMIT") or legacy_allows() or candidate_read():
         raise AssertionError("published revocation changed access")
-    results["external_outcome_publication"] = "revoked_committed_denies"
-    if any(value not in {"guard_denied", "allowed_and_changed", "allowed", "active_committed",
-                          "revoked_pending_denies", "privilege_denied", "revoked_committed_denies"}
+    results["revoked_matching_commit_reader"] = "denied"
+    if any(value not in {"guard_denied", "allowed_and_changed", "allowed", "active_committed", "denied",
+                          "old_connection_killed", "reader_before_revocation_then_denied", "reader_waited_then_denied",
+                          "legacy_wrapper_denies", "privilege_denied"}
            for value in results.values()):
         raise AssertionError("unknown guarded outcome")
     return results
