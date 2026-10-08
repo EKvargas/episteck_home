@@ -82,6 +82,19 @@ class BoundedWitnessFailures(unittest.TestCase):
         self.assertFalse(reader.authorize())
         self.assertEqual(witness.head.sequence, 1)
 
+    def test_combined_home_and_valid_head_rollback_detects_retained_successor(self) -> None:
+        home, witness, publisher, reader = new_system()
+        old_valid_head = witness.head
+        publisher.begin("writer-1", "revoke-1", allowed=False)
+        publisher.commit()
+        self.assertFalse(reader.authorize())
+        home.restore_old_allow()
+        witness.cas(witness.head.generation, old_valid_head)
+        self.assertEqual(witness.head.sequence, 0)
+        self.assertTrue(old_valid_head.authority_digest == home.authority_digest)
+        self.assertIn(1, witness.events)  # Retained newer revocation history.
+        self.assertFalse(reader.authorize())
+
     def test_unknown_pending_publication_requires_fresh_readback(self) -> None:
         home, witness, publisher, reader = new_system()
         with self.assertRaises(TimeoutError):
@@ -134,7 +147,8 @@ class BoundedWitnessFailures(unittest.TestCase):
         self.assertTrue(reader.authorize())
         delta = {name: witness.requests[name] - value for name, value in before.items()}
         self.assertEqual(delta, {"head_get": 1, "checkpoint_get": 1,
-                                 "event_get": MAX_SUFFIX, "head_cas": 0})
+                                 "event_get": MAX_SUFFIX, "successor_get": 1,
+                                 "head_cas": 0})
 
 
 if __name__ == "__main__":

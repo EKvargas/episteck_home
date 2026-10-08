@@ -92,9 +92,10 @@ class Witness:
                          "GENESIS", 0)
         self.checkpoints = {0: Checkpoint.sign(0, 1, initial, "GENESIS")}
         self.events: dict[int, Event] = {}
+        self.slots: set[int] = set()  # Immutable reservations, including PENDING work.
         self.outage = False
         self.requests = {"head_get": 0, "checkpoint_get": 0,
-                         "event_get": 0, "head_cas": 0}
+                         "event_get": 0, "successor_get": 0, "head_cas": 0}
 
     def fresh_head(self) -> Head:
         self.requests["head_get"] += 1
@@ -113,6 +114,12 @@ class Witness:
         if self.outage or sequence not in self.events:
             raise Denied("journal suffix unavailable")
         return self.events[sequence]
+
+    def successor_exists(self, sequence: int) -> bool:
+        self.requests["successor_get"] += 1
+        if self.outage:
+            raise Denied("immutable successor probe unavailable")
+        return sequence in self.slots
 
     def cas(self, expected_generation: int, next_head: Head,
             *, lose_ack: bool = False) -> Head:
@@ -172,6 +179,9 @@ class Publisher:
                 raise Denied("local authority differs from witness")
             if head.sequence - head.checkpoint_sequence >= MAX_SUFFIX:
                 raise Denied("checkpoint required before further work")
+            if self.witness.successor_exists(head.sequence + 1):
+                raise Denied("next immutable slot already reserved")
+            self.witness.slots.add(head.sequence + 1)
             proposed = replace(head, state="PENDING", event_id=event_id)
             self.pending = (event_id, allowed, head.generation + 1, identity)
             self.witness.cas(head.generation, proposed, lose_ack=lose_ack)
@@ -269,6 +279,8 @@ class Reader:
             head.sequence, head.epoch, head.authority_digest
         ):
             raise Denied("restored or uncommitted Home authority")
+        if self.witness.successor_exists(head.sequence + 1):
+            raise Denied("newer immutable slot than mutable head")
         return self.home.allowed
 
 
