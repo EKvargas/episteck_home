@@ -52,9 +52,9 @@ def token(service: str | None = None) -> str:
 
 
 class Client:
-    def __init__(self, bucket: str, bearer: str, prefix: str) -> None:
+    def __init__(self, bucket: str, bearer: str, prefix: str, counts: dict[str, int] | None = None) -> None:
         self.bucket, self.bearer, self.prefix = bucket, bearer, prefix
-        self.counts = {"list": 0, "get": 0, "create": 0}
+        self.counts = counts if counts is not None else {"list": 0, "get": 0, "create": 0}
 
     def request(self, method: str, url: str, **kwargs) -> requests.Response:
         headers = kwargs.pop("headers", {})
@@ -196,15 +196,22 @@ class KmsSigner:
         return envelope
 
 
-def run(bucket: str, service: str, project: str, run_id: str, kms_version: str,
+def run(bucket: str, old_writer_service: str, new_writer_service: str, verifier_service: str,
+        project: str, region: str, run_id: str, kms_version: str,
         root_pem_file: str, registration_file: str, next_kms_version: str,
         next_registration_file: str, root_sha256: str) -> dict:
-    if (not bucket.startswith("kap2-probe-") or not project or not service
+    if (not bucket.startswith("kap2-probe-") or not project or region not in {"us-east4", "europe-west3"}
+            or len({old_writer_service, new_writer_service, verifier_service}) != 3
+            or not all((old_writer_service, new_writer_service, verifier_service))
             or not re.fullmatch(r"[0-9a-f]{32}", run_id) or not kms_version
             or not root_pem_file or not registration_file or not next_kms_version
             or not next_registration_file or kms_version == next_kms_version
             or not re.fullmatch(r"[0-9a-f]{64}", root_sha256)):
-        raise ValueError("requires an isolated bucket, identity, run ID and pinned signing inputs")
+        raise ValueError("requires an isolated bucket, three identities, run ID and pinned signing inputs")
+    first_key = kms_version.rsplit("/cryptoKeyVersions/", 1)
+    second_key = next_kms_version.rsplit("/cryptoKeyVersions/", 1)
+    if len(first_key) != 2 or len(second_key) != 2 or first_key[0] == second_key[0]:
+        raise ValueError("writer epochs require separate CryptoKeys, not versions of one key")
     prefix = f"home-auth/v1/partitions/{sha(('synthetic-' + run_id).encode())}"
     trusted_root = Path(root_pem_file).read_text(encoding="utf-8")
     if root_fingerprint(trusted_root) != root_sha256:
@@ -230,26 +237,69 @@ def run(bucket: str, service: str, project: str, run_id: str, kms_version: str,
         raise ValueError("isolated bucket is outside the explicitly named project")
     if info.get("versioning", {}).get("enabled", False):
         raise ValueError("versioned bucket is outside this immutable live-view probe")
-    service_token = token(service)
-    check = requests.get(
-        f"{API}/b/{bucket}/iam/testPermissions",
-        headers={"Authorization": f"Bearer {service_token}"},
-        params=[("permissions", permission) for permission in PERMISSIONS], timeout=20,
-    )
-    check.raise_for_status()
-    allowed = set(check.json().get("permissions", []))
-    if not set(PERMISSIONS[:3]).issubset(allowed) or set(PERMISSIONS[3:]) & allowed:
-        raise RuntimeError("service IAM is not create/get/list only; no objects written")
-    client = Client(bucket, service_token, prefix)
-    signer = KmsSigner(service_token, trust, operator)
-    next_signer = KmsSigner(service_token, next_trust, operator)
+    if info.get("location", "").lower() != region or info.get("retentionPolicy"):
+        raise ValueError("bucket region or retention policy differs from approved disposable probe")
+    for version in (kms_version, next_kms_version):
+        response = requests.get(f"https://cloudkms.googleapis.com/v1/{version}",
+                                headers={"Authorization": f"Bearer {operator}"}, timeout=20)
+        response.raise_for_status()
+        key_info = response.json()
+        if (key_info.get("protectionLevel") != "SOFTWARE" or
+                key_info.get("algorithm") != "EC_SIGN_ED25519" or key_info.get("state") != "ENABLED"):
+            raise ValueError("signer version must be enabled SOFTWARE Ed25519")
+    old_token, new_token, verifier_token = (token(identity) for identity in
+                                             (old_writer_service, new_writer_service, verifier_service))
+
+    def permissions(bearer: str) -> set[str]:
+        check = requests.get(
+            f"{API}/b/{bucket}/iam/testPermissions",
+            headers={"Authorization": f"Bearer {bearer}"},
+            params=[("permissions", permission) for permission in PERMISSIONS], timeout=20,
+        )
+        check.raise_for_status()
+        return set(check.json().get("permissions", []))
+
+    writer_permissions = set(PERMISSIONS[:3])
+    reader_permissions = {"storage.objects.get", "storage.objects.list"}
+    allowed = {"old_writer": permissions(old_token), "new_writer": permissions(new_token),
+               "verifier": permissions(verifier_token)}
+    if (not writer_permissions.issubset(allowed["old_writer"])
+            or set(PERMISSIONS[3:]) & allowed["old_writer"]
+            or allowed["new_writer"] != reader_permissions
+            or allowed["verifier"] != reader_permissions):
+        raise RuntimeError("writer/verifier IAM exceeds or lacks scoped probe permissions; no objects written")
+    counts = {"list": 0, "get": 0, "create": 0}
+    old_client = Client(bucket, old_token, prefix, counts)
+    new_client = Client(bucket, new_token, prefix, counts)
+    verifier_client = Client(bucket, verifier_token, prefix, counts)
+    client = old_client
+    signer = KmsSigner(old_token, trust, operator)
+    next_signer = KmsSigner(new_token, next_trust, operator)
+    direct_sign_counts = {kms_version: 0, next_kms_version: 0}
+
+    def sign_probe(version: str, bearer: str) -> int:
+        signed = signer.count if version == kms_version else next_signer.count
+        if signed + direct_sign_counts[version] >= MAX_SIGN_REQUESTS:
+            raise RuntimeError("probe KMS signing-request cap reached")
+        direct_sign_counts[version] += 1
+        response = requests.post(
+            f"https://cloudkms.googleapis.com/v1/{version}:asymmetricSign",
+            headers={"Authorization": f"Bearer {bearer}"},
+            json={"data": base64.b64encode(JOURNAL_DOMAIN + b"synthetic-iam-denial").decode()},
+            timeout=20,
+        )
+        return response.status_code
+
+    if (sign_probe(next_kms_version, old_token) != 403 or
+            sign_probe(next_kms_version, new_token) != 403):
+        raise RuntimeError("writer key isolation or pre-admission signing denial failed")
     registration_key = f"{prefix}/trust/00000000000000000001.json"
     status, exact_registration, _ = client.create(registration_key, registration)
-    if status != 200 or client.get(registration_key)[:2] != (200, exact_registration):
+    if status != 200 or verifier_client.get(registration_key)[:2] != (200, exact_registration):
         raise RuntimeError("conditional trusted registration publication failed")
     next_registration_key = f"{prefix}/trust/00000000000000000002.json"
     status, exact_next_registration, _ = client.create(next_registration_key, next_registration)
-    if status != 200 or client.get(next_registration_key)[:2] != (200, exact_next_registration):
+    if status != 200 or verifier_client.get(next_registration_key)[:2] != (200, exact_next_registration):
         raise RuntimeError("conditional rotated registration publication failed")
     current_signer, current_trust = signer, trust
 
@@ -257,11 +307,12 @@ def run(bucket: str, service: str, project: str, run_id: str, kms_version: str,
         return client.create(key, current_signer.envelope({**payload, "signer_epoch": current_trust.epoch}))
 
     def head(**kwargs):
-        return inspect_head(client, trust=registry, **kwargs)
+        return inspect_head(verifier_client, trust=registry, **kwargs)
 
     results: dict[str, object] = {
         "probe": "real_gcs_protocol", "bucket": "existing_isolated", "run_id": run_id,
-        "iam": sorted(allowed), "retention_locked": info.get("retentionPolicy", {}).get("isLocked"),
+        "iam": {role: sorted(value) for role, value in allowed.items()},
+        "retention_locked": info.get("retentionPolicy", {}).get("isLocked"),
         "versioning_enabled": info.get("versioning", {}).get("enabled", False),
         "signing": "two_root_registrations_and_kms_public_keys_verified", "cases": {}, "head_measurements": {},
     }
@@ -329,6 +380,43 @@ def run(bucket: str, service: str, project: str, run_id: str, kms_version: str,
     append("REVOKE", "REVOKED")
     assert head()[:2] == ("READY", sequence) and stale_local_sequence != sequence
     cases["restore_before_revocation"] = "STALE_LOCAL_DENIED"
+    # Capture an already-issued credential before operator cutover. This runner
+    # does not mutate IAM and never refreshes the credential after cutover.
+    old_token = token(old_writer_service)
+    old_client.bearer = old_token
+    token_issued_at = time.monotonic()
+    confirmation = input("Drain old writers; revoke old key signing and bucket create IAM; "
+                         "wait for propagation. Type CUTOVER to test old token before new writer admission: ")
+    if confirmation != "CUTOVER" or time.monotonic() - token_issued_at > 1200:
+        raise RuntimeError("cutover not confirmed or old token too old for a valid denial test")
+    if "storage.objects.create" in permissions(old_token):
+        raise RuntimeError("old token still has object-create permission")
+    denied: list[dict[str, int]] = []
+    for round_number in range(3):
+        statuses: dict[str, int] = {}
+        for label, version in (("old_key", kms_version), ("new_key", next_kms_version)):
+            statuses[label] = sign_probe(version, old_token)
+        status, _, _ = old_client.create(old_client.key("old-writer-denial", round_number),
+                                         {"synthetic": True, "round": round_number})
+        statuses["journal_create"] = status
+        denied.append(statuses)
+        if set(statuses.values()) != {403}:
+            raise RuntimeError(f"old issued credential retained access at cutover: {statuses}")
+        if round_number < 2:
+            time.sleep(2)
+    cases["old_issued_token_before_new_admission"] = denied
+    # New writer starts without create/sign grants. The operator admits it only
+    # after the old-token denial rounds, then the runner checks its bucket IAM.
+    confirmation = input("Now grant the new writer bucket create and its own key signing; "
+                         "type ADMIT after propagation: ")
+    if confirmation != "ADMIT":
+        raise RuntimeError("new writer admission not confirmed")
+    new_token = token(new_writer_service)
+    if permissions(new_token) != writer_permissions:
+        raise RuntimeError("new writer bucket admission missing or overprivileged")
+    new_client.bearer = new_token
+    next_signer.bearer = new_token
+    client = new_client
     current_signer, current_trust = next_signer, next_trust
     append("EPOCH", "REVOKED")
     assert head()[:2] == ("READY", sequence)
@@ -339,8 +427,8 @@ def run(bucket: str, service: str, project: str, run_id: str, kms_version: str,
     assert signed_create(client.key("slots", sequence + 1), bad)[0] == 200
     assert head()[0] in {"PENDING", "BROKEN"}
     cases["chain_corruption"] = "BLOCKED"
-    results["total_object_requests"] = client.counts
-    results["kms_sign_requests"] = signer.count + next_signer.count
+    results["total_object_requests"] = counts
+    results["kms_sign_requests"] = signer.count + next_signer.count + sum(direct_sign_counts.values())
     return results
 
 
@@ -350,8 +438,11 @@ def main() -> None:
     parser.add_argument("--run", action="store_true")
     options = parser.parse_args()
     bucket = os.environ.get("KAP2_GCS_BUCKET", "")
-    service = os.environ.get("KAP2_GCS_SERVICE_ACCOUNT", "")
+    old_writer = os.environ.get("KAP2_GCS_OLD_WRITER_SERVICE_ACCOUNT", "")
+    new_writer = os.environ.get("KAP2_GCS_NEW_WRITER_SERVICE_ACCOUNT", "")
+    verifier = os.environ.get("KAP2_GCS_VERIFIER_SERVICE_ACCOUNT", "")
     project = os.environ.get("KAP2_GCS_PROJECT", "")
+    region = os.environ.get("KAP2_GCS_EXPECTED_REGION", "")
     run_id = os.environ.get("KAP2_GCS_RUN_ID", "")
     kms_version = os.environ.get("KAP2_KMS_SIGNER_VERSION", "")
     root_pem_file = os.environ.get("KAP2_TRUST_ROOT_PEM_FILE", "")
@@ -361,11 +452,12 @@ def main() -> None:
     root_sha256 = os.environ.get("KAP2_TRUST_ROOT_SHA256", "")
     if options.preflight or not options.run:
         print(json.dumps({"probe": "real_gcs_protocol", "environment_configured": bool(
-                          bucket and service and project and run_id and kms_version and root_pem_file
+                          bucket and old_writer and new_writer and verifier and project and region and run_id and kms_version and root_pem_file
                           and registration_file and next_kms_version and next_registration_file and root_sha256),
                           "preflight_level": "environment_only",
                           "missing": [name for name, value in (("existing_isolated_bucket", bucket),
-                           ("authorized_service_identity", service), ("project", project),
+                           ("old_writer_identity", old_writer), ("new_writer_identity", new_writer),
+                           ("verifier_identity", verifier), ("project", project), ("expected_region", region),
                            ("synthetic_run_id", run_id), ("kms_signer_version", kms_version),
                            ("independent_root_pin", root_pem_file),
                            ("independent_root_fingerprint", root_sha256),
@@ -373,7 +465,7 @@ def main() -> None:
                            ("next_kms_signer_version", next_kms_version),
                            ("next_root_signed_registration", next_registration_file)) if not value]}, sort_keys=True))
         return
-    print(json.dumps(run(bucket, service, project, run_id, kms_version,
+    print(json.dumps(run(bucket, old_writer, new_writer, verifier, project, region, run_id, kms_version,
                          root_pem_file, registration_file, next_kms_version,
                          next_registration_file, root_sha256), sort_keys=True))
 

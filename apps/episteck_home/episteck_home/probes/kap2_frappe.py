@@ -34,6 +34,7 @@ def _install_candidate_guard(frappe, token: str) -> tuple[str, str]:
             cursor.execute(f"CREATE DATABASE {qschema}")
             cursor.execute(f"CREATE TABLE {qschema}.authority (id INT PRIMARY KEY, state VARCHAR(16), seq INT, outcome VARCHAR(16))")
             cursor.execute(f"INSERT INTO {qschema}.authority VALUES (1,'ACTIVE',0,'COMMIT')")
+            cursor.execute(f"INSERT INTO {qschema}.authority VALUES (2,'ACTIVE',0,'COMMIT')")
             cursor.execute(f"CREATE USER '{mutator}'@'localhost' IDENTIFIED BY 'KAP2_LOCAL_SYNTHETIC_ONLY'")
             cursor.execute(f"CREATE USER '{reader}'@'localhost' IDENTIFIED BY 'KAP2_LOCAL_SYNTHETIC_ONLY'")
             cursor.execute(f"GRANT SELECT ON {qschema}.authority TO '{reader}'@'localhost'")
@@ -67,17 +68,17 @@ def _install_candidate_guard(frappe, token: str) -> tuple[str, str]:
                 )
 
             cursor.execute(
-                f"CREATE PROCEDURE {qschema}.revoke_synthetic(IN p_user VARCHAR(140), IN p_person VARCHAR(140), "
+                f"CREATE PROCEDURE {qschema}.revoke_synthetic(IN p_authority_id INT, IN p_user VARCHAR(140), IN p_person VARCHAR(140), "
                 "IN p_session VARCHAR(140), IN p_grant VARCHAR(140), IN p_membership VARCHAR(140), IN p_hold DOUBLE) "
                 "SQL SECURITY DEFINER BEGIN START TRANSACTION; "
-                f"UPDATE {qschema}.authority SET seq=seq WHERE id=1; "
+                f"UPDATE {qschema}.authority SET seq=seq WHERE id=p_authority_id; "
                 f"DO GET_LOCK('kap2_writer_{token}', 0); DO SLEEP(p_hold); "
                 f"UPDATE {qdb}.`tabUser` SET enabled=0 WHERE name=p_user; "
                 f"UPDATE {qdb}.`tabPerson` SET linked_user=NULL WHERE name=p_person; "
                 f"UPDATE {qdb}.`tabHome Delegated Session` SET status='Revoked' WHERE name=p_session; "
                 f"UPDATE {qdb}.`tabConsent Grant` SET state='REVOKED' WHERE name=p_grant; "
                 f"DELETE FROM {qdb}.`tabCircle Membership` WHERE name=p_membership; "
-                f"UPDATE {qschema}.authority SET state='REVOKED', seq=seq+1, outcome='PENDING' WHERE id=1; "
+                f"UPDATE {qschema}.authority SET state='REVOKED', seq=seq+1, outcome='PENDING' WHERE id=p_authority_id; "
                 f"COMMIT; DO RELEASE_LOCK('kap2_writer_{token}'); END"
             )
             cursor.execute(f"GRANT EXECUTE ON PROCEDURE {qschema}.revoke_synthetic TO '{mutator}'@'localhost'")
@@ -171,6 +172,30 @@ def _run(mode: str) -> dict:
             "status": "Active", "expires_at": "2099-01-01 00:00:00",
         }).insert(ignore_permissions=True)
 
+        fresh = None
+        if mode == "guarded":
+            fresh_user = frappe.get_doc({
+                "doctype": "User", "email": f"kap2-fresh-{token}@example.invalid",
+                "first_name": "KAP2", "send_welcome_email": 0, "enabled": 1,
+            }).insert(ignore_permissions=True)
+            fresh_person = frappe.get_doc({"doctype": "Person", "full_name": f"Fresh {token}",
+                                          "linked_user": fresh_user.name}).insert(ignore_permissions=True)
+            fresh_subject = frappe.get_doc({"doctype": "Person", "full_name": f"Fresh Subject {token}"}).insert(ignore_permissions=True)
+            fresh_circle = frappe.get_doc({"doctype": "Circle", "title": f"Fresh {token}",
+                                          "circle_type": "FAMILY"}).insert(ignore_permissions=True)
+            fresh_membership = frappe.get_doc({"doctype": "Circle Membership", "circle": fresh_circle.name,
+                                              "person": fresh_person.name}).insert(ignore_permissions=True)
+            fresh_grant = frappe.get_doc({
+                "doctype": "Consent Grant", "actor_person": fresh_person.name,
+                "subject_person": fresh_subject.name, "domain": "KNOWLEDGE",
+                "actions": "VIEW", "state": "ACTIVE", "granted_by": fresh_subject.name,
+            }).insert(ignore_permissions=True)
+            fresh_session = frappe.get_doc({
+                "doctype": "Home Delegated Session", "user": fresh_user.name,
+                "status": "Active", "expires_at": "2099-01-01 00:00:00",
+            }).insert(ignore_permissions=True)
+            fresh = (fresh_user, fresh_person, fresh_subject, fresh_membership, fresh_grant, fresh_session)
+
         get = frappe.db.get_value
         from episteck_home.policy.wrappers import check_access
         def legacy_allows() -> bool:
@@ -182,7 +207,7 @@ def _run(mode: str) -> dict:
             frappe.db.commit()
             result["observations"] = _guarded_checks(
                 frappe, token, user, other, person, subject, circle,
-                membership, grant, session, legacy_allows, save_field,
+                membership, grant, session, fresh, legacy_allows, save_field,
             )
             result["disposable_protected_paths_verified"] = True
             return result
@@ -250,8 +275,9 @@ def _run(mode: str) -> dict:
 
 
 def _guarded_checks(frappe, token, user, other, person, subject, circle,
-                    membership, grant, session, legacy_allows, save_field) -> dict:
+                    membership, grant, session, fresh, legacy_allows, save_field) -> dict:
     import pymysql
+    from episteck_home.policy.wrappers import check_access
 
     schema, mutator = _install_candidate_guard(frappe, token)
     database = frappe.conf.db_name
@@ -312,31 +338,32 @@ def _guarded_checks(frappe, token, user, other, person, subject, circle,
         frappe.db.commit()
         results[name] = "allowed_and_changed"
 
-    def authority():
+    def authority(authority_id=1):
         conn = pymysql.connect(unix_socket=socket, user=f"kap2_reader_{token}", password=password)
         try:
             with conn.cursor() as cursor:
-                cursor.execute(f"SELECT state, seq, outcome FROM `{schema}`.authority WHERE id=1")
+                cursor.execute(f"SELECT state, seq, outcome FROM `{schema}`.authority WHERE id=%s", (authority_id,))
                 return cursor.fetchone()
         finally:
             conn.close()
 
     witness: dict[int, tuple[str, str]] = {0: ("COMMIT", "ACTIVE")}
 
-    def candidate_read(*, locked=None, release=None, policy=None) -> bool:
+    def candidate_read(*, authority_id=1, witness_map=None, locked=None, release=None, policy=None) -> bool:
         # Read the local fence under a shared lock. The separate synthetic
         # witness is supplied by the harness, never inferred from the DB's
         # restored `outcome` column. Production must use verified GCS history.
         conn = pymysql.connect(unix_socket=socket, user=f"kap2_reader_{token}", password=password, autocommit=False)
         try:
             with conn.cursor() as cursor:
-                cursor.execute(f"SELECT state, seq FROM `{schema}`.authority WHERE id=1 LOCK IN SHARE MODE")
+                cursor.execute(f"SELECT state, seq FROM `{schema}`.authority WHERE id=%s LOCK IN SHARE MODE", (authority_id,))
                 state, sequence = cursor.fetchone()
                 if locked:
                     locked.set()
                 if release and not release.wait(5):
                     raise TimeoutError("reader lock release timed out")
-                allowed = _candidate_decision(state, sequence, witness, (policy or legacy_allows)())
+                allowed = _candidate_decision(state, sequence, witness if witness_map is None else witness_map,
+                                              (policy or legacy_allows)())
             conn.commit()
             return allowed
         finally:
@@ -385,15 +412,25 @@ def _guarded_checks(frappe, token, user, other, person, subject, circle,
     original_revoke = HomeDelegatedSession.revoke
     hold_seconds = 0.0
     site_name = frappe.local.site
+    fresh_user, fresh_person, fresh_subject, fresh_membership, fresh_grant, fresh_session = fresh
+
+    def fresh_legacy_allows() -> bool:
+        return check_access(fresh_person.name, fresh_subject.name, "KNOWLEDGE", "VIEW")["allow"]
 
     def candidate_revoke(self):
-        if self.name != session.name:
+        targets = {
+            session.name: (1, user, person, session, grant, membership),
+            fresh_session.name: (2, fresh_user, fresh_person, fresh_session, fresh_grant, fresh_membership),
+        }
+        if self.name not in targets:
             raise AssertionError("unexpected controller target")
+        authority_id, target_user, target_person, target_session, target_grant, target_membership = targets[self.name]
         conn = pymysql.connect(unix_socket=socket, user=mutator, password=password, autocommit=True)
         try:
             with conn.cursor() as cursor:
                 cursor.callproc(f"{schema}.revoke_synthetic",
-                                (user.name, person.name, session.name, grant.name, membership.name, hold_seconds))
+                                (authority_id, target_user.name, target_person.name, target_session.name,
+                                 target_grant.name, target_membership.name, hold_seconds))
         finally:
             conn.close()
 
@@ -436,9 +473,15 @@ def _guarded_checks(frappe, token, user, other, person, subject, circle,
             raise AssertionError("reader-first revocation did not block subsequent disclosure")
         results["frappe_controller_reader_first"] = "reader_before_revocation_then_denied"
 
+        fresh_witness = {0: ("COMMIT", "ACTIVE")}
+        if not fresh_legacy_allows() or authority(2) != ("ACTIVE", 0, "COMMIT"):
+            raise AssertionError("writer-first fixture is not fresh permissive authority")
+        if not candidate_read(authority_id=2, witness_map=fresh_witness, policy=fresh_legacy_allows):
+            raise AssertionError("writer-first fixture did not initially authorize")
+        results["writer_first_initial_authorization"] = "allowed"
         hold_seconds = 1.0
         with ThreadPoolExecutor(max_workers=1) as pool:
-            second_revoke = pool.submit(thread_call, lambda f: f.get_doc("Home Delegated Session", session.name).revoke())
+            second_revoke = pool.submit(thread_call, lambda f: f.get_doc("Home Delegated Session", fresh_session.name).revoke())
             deadline = time.monotonic() + 5
             while not writer_lock_held() and time.monotonic() < deadline:
                 if second_revoke.done():
@@ -448,17 +491,18 @@ def _guarded_checks(frappe, token, user, other, person, subject, circle,
             if not writer_lock_held():
                 raise AssertionError("writer-first lock acquisition timed out")
             started = time.monotonic()
-            if candidate_read():
+            if candidate_read(authority_id=2, witness_map=fresh_witness, policy=fresh_legacy_allows):
                 raise AssertionError("writer-first disclosed revoked authority")
             waited = time.monotonic() - started
             second_revoke.result(timeout=5)
             if waited < 0.5:
                 raise AssertionError("writer-first reader did not wait for revocation")
-        witness[2] = ("PENDING", "REVOKED")
+        fresh_witness[1] = ("PENDING", "REVOKED")
         frappe.db.commit()
-        if authority() != ("REVOKED", 2, "PENDING") or candidate_read():
+        if authority(2) != ("REVOKED", 1, "PENDING") or candidate_read(
+                authority_id=2, witness_map=fresh_witness, policy=fresh_legacy_allows):
             raise AssertionError("writer-first revocation did not advance fence")
-        results["frappe_controller_writer_first"] = "reader_waited_then_denied"
+        results["frappe_controller_writer_first"] = "fresh_active_writer_lock_reader_waited_denied"
         results["revoked_pending_reader"] = "denied"
     finally:
         HomeDelegatedSession.revoke = original_revoke
@@ -509,12 +553,13 @@ def _guarded_checks(frappe, token, user, other, person, subject, circle,
             cursor.execute(f"UPDATE `{schema}`.authority SET outcome='COMMIT' WHERE id=1")
     finally:
         root.close()
-    witness[2] = ("COMMIT", "REVOKED")
-    if authority() != ("REVOKED", 2, "COMMIT") or legacy_allows() or candidate_read():
+    witness[1] = ("COMMIT", "REVOKED")
+    if authority() != ("REVOKED", 1, "COMMIT") or legacy_allows() or candidate_read():
         raise AssertionError("published revocation changed access")
     results["revoked_matching_commit_reader"] = "denied"
     if any(value not in {"guard_denied", "allowed_and_changed", "allowed", "active_committed", "denied",
-                          "old_connection_killed", "reader_before_revocation_then_denied", "reader_waited_then_denied",
+                          "old_connection_killed", "reader_before_revocation_then_denied",
+                          "fresh_active_writer_lock_reader_waited_denied",
                           "legacy_wrapper_denies", "privilege_denied"}
            for value in results.values()):
         raise AssertionError("unknown guarded outcome")

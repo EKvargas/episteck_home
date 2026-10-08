@@ -78,11 +78,26 @@ def test_signed_head_rejects_tampered_slot():
     assert module.inspect_head(client, trust=registry)[0] == "BROKEN"
 
 
-def test_full_signed_runner_with_synthetic_clients(monkeypatch, tmp_path):
+def test_runner_rejects_shared_key_or_identity_before_cloud_access():
+    first = "projects/synthetic/locations/us-east4/keyRings/probe/cryptoKeys/shared/cryptoKeyVersions/1"
+    second = first.removesuffix("/1") + "/2"
+    args = ("kap2-probe-synthetic", "old-service", "new-service", "verifier-service",
+            "synthetic-project", "us-east4", "a" * 32, first, "root.pem", "first.json",
+            second, "second.json", "0" * 64)
+    with pytest.raises(ValueError, match="separate CryptoKeys"):
+        module.run(*args)
+    with pytest.raises(ValueError, match="three identities"):
+        module.run(*((args[0], args[1], args[1]) + args[3:]))
+
+
+@pytest.mark.parametrize("old_key_after_cutover", [403, 200])
+def test_full_signed_runner_with_synthetic_clients(monkeypatch, tmp_path, old_key_after_cutover):
     run_id = "a" * 32
     partition = f"home-auth/v1/partitions/{module.sha(('synthetic-' + run_id).encode())}"
     root = Ed25519PrivateKey.generate()
-    signers = {str(i): Ed25519PrivateKey.generate() for i in (1, 2)}
+    versions = {i: f"projects/synthetic/locations/us-east4/keyRings/probe/cryptoKeys/epoch{i}/cryptoKeyVersions/1"
+                for i in (1, 2)}
+    signers = {versions[i]: Ed25519PrivateKey.generate() for i in (1, 2)}
 
     def pem(key):
         return key.public_key().public_bytes(
@@ -91,7 +106,7 @@ def test_full_signed_runner_with_synthetic_clients(monkeypatch, tmp_path):
 
     def registration(epoch, previous):
         payload = {"version": 1, "partition": partition, "epoch": epoch,
-                   "kms_version": str(epoch), "public_key_pem": pem(signers[str(epoch)]),
+                   "kms_version": versions[epoch], "public_key_pem": pem(signers[versions[epoch]]),
                    "previous_registration_sha256": previous}
         return {"payload": payload, "root_signature_b64": base64.b64encode(
             root.sign(REGISTRATION_DOMAIN + module.canonical(payload))).decode()}
@@ -104,9 +119,11 @@ def test_full_signed_runner_with_synthetic_clients(monkeypatch, tmp_path):
     second_file.write_text(json.dumps(second))
 
     class MemoryClient:
-        def __init__(self, bucket, bearer, prefix):
-            self.prefix, self.objects = prefix, {}
-            self.counts = {"list": 0, "get": 0, "create": 0}
+        objects: dict[str, bytes] = {}
+
+        def __init__(self, bucket, bearer, prefix, counts=None):
+            self.prefix, self.bearer = prefix, bearer
+            self.counts = counts if counts is not None else {"list": 0, "get": 0, "create": 0}
 
         def key(self, kind, number):
             return f"{self.prefix}/{kind}/{number:020d}.json"
@@ -114,6 +131,8 @@ def test_full_signed_runner_with_synthetic_clients(monkeypatch, tmp_path):
         def create(self, key, content):
             self.counts["create"] += 1
             raw = module.canonical(content)
+            if cutover["phase"] != "before" and self.bearer == "old-issued-token":
+                return 403, raw, None
             if key in self.objects:
                 return 412, raw, None
             self.objects[key] = raw
@@ -133,6 +152,7 @@ def test_full_signed_runner_with_synthetic_clients(monkeypatch, tmp_path):
     class SyntheticKmsSigner:
         def __init__(self, bearer, trust, public_key_bearer):
             self.trust, self.count = trust, 0
+            assert bearer == ("old-issued-token" if trust.epoch == 1 else "new-token")
 
         def envelope(self, payload):
             self.count += 1
@@ -141,8 +161,8 @@ def test_full_signed_runner_with_synthetic_clients(monkeypatch, tmp_path):
                         JOURNAL_DOMAIN + module.canonical(payload))).decode()}
 
     class Response:
-        def __init__(self, content):
-            self.content = content
+        def __init__(self, content, status_code=200):
+            self.content, self.status_code = content, status_code
 
         def raise_for_status(self):
             pass
@@ -150,20 +170,64 @@ def test_full_signed_runner_with_synthetic_clients(monkeypatch, tmp_path):
         def json(self):
             return self.content
 
+    cutover = {"phase": "before"}
     monkeypatch.setattr(module, "Client", MemoryClient)
     monkeypatch.setattr(module, "KmsSigner", SyntheticKmsSigner)
-    monkeypatch.setattr(module, "token", lambda service=None: "synthetic-token")
-    monkeypatch.setattr(module.requests, "get", lambda url, **kwargs: Response(
-        {"projectNumber": "123", "labels": {"kap2_probe": "true"}}
-        if url.endswith("/b/kap2-probe-synthetic") else {"permissions": list(module.PERMISSIONS[:3])}))
+    monkeypatch.setattr(module, "token", lambda service=None: {
+        None: "operator-token", "old-service": "old-issued-token", "new-service": "new-token",
+        "verifier-service": "verifier-token",
+    }[service])
+
+    def get(url, **kwargs):
+        if url.endswith("/b/kap2-probe-synthetic"):
+            return Response({"projectNumber": "123", "labels": {"kap2_probe": "true"},
+                             "location": "US-EAST4"})
+        if "/cryptoKeyVersions/" in url:
+            return Response({"protectionLevel": "SOFTWARE", "algorithm": "EC_SIGN_ED25519",
+                             "state": "ENABLED"})
+        bearer = kwargs["headers"]["Authorization"]
+        permissions = list(module.PERMISSIONS[:3]) if bearer == "Bearer old-issued-token" else list(module.PERMISSIONS[1:3])
+        if cutover["phase"] == "admitted" and bearer == "Bearer new-token":
+            permissions.append("storage.objects.create")
+        if cutover["phase"] != "before" and bearer == "Bearer old-issued-token":
+            permissions.remove("storage.objects.create")
+        return Response({"permissions": permissions})
+
+    monkeypatch.setattr(module.requests, "get", get)
+    monkeypatch.setattr(module.requests, "post", lambda url, **kwargs: Response(
+        {}, (403 if cutover["phase"] == "before" else
+             old_key_after_cutover if url.endswith(versions[1] + ":asymmetricSign") else 403)
+        if kwargs["headers"]["Authorization"] in {"Bearer old-issued-token", "Bearer new-token"}
+        else 200))
+
+    def confirm(prompt):
+        if prompt.startswith("Drain"):
+            cutover["phase"] = "cutover"
+            return "CUTOVER"
+        assert cutover["phase"] == "cutover"
+        cutover["phase"] = "admitted"
+        return "ADMIT"
+
+    monkeypatch.setattr(module, "input", confirm, raising=False)
+    monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
     monkeypatch.setattr(module.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(stdout="123"))
     with pytest.raises(ValueError, match="fingerprint"):
-        module.run("kap2-probe-synthetic", "synthetic-service", "synthetic-project", run_id,
-                   "1", str(root_file), str(first_file), "2", str(second_file), "0" * 64)
-    result = module.run("kap2-probe-synthetic", "synthetic-service", "synthetic-project", run_id,
-                        "1", str(root_file), str(first_file), "2", str(second_file), root_fingerprint(pem(root)))
+        module.run("kap2-probe-synthetic", "old-service", "new-service", "verifier-service",
+                   "synthetic-project", "us-east4", run_id, versions[1], str(root_file), str(first_file),
+                   versions[2], str(second_file), "0" * 64)
+    if old_key_after_cutover == 200:
+        with pytest.raises(RuntimeError, match="retained access"):
+            module.run("kap2-probe-synthetic", "old-service", "new-service", "verifier-service",
+                       "synthetic-project", "us-east4", run_id, versions[1], str(root_file), str(first_file),
+                       versions[2], str(second_file), root_fingerprint(pem(root)))
+        return
+    result = module.run("kap2-probe-synthetic", "old-service", "new-service", "verifier-service",
+                        "synthetic-project", "us-east4", run_id, versions[1], str(root_file), str(first_file),
+                        versions[2], str(second_file), root_fingerprint(pem(root)))
     assert result["cases"]["writer_takeover"] == "ROOT_REGISTERED_SIGNER_EPOCH"
     assert result["cases"]["chain_corruption"] == "BLOCKED"
+    assert result["cases"]["old_issued_token_before_new_admission"] == [
+        {"old_key": 403, "new_key": 403, "journal_create": 403}] * 3
     assert result["total_object_requests"]["create"] <= module.MAX_CREATES
     assert result["kms_sign_requests"] <= 2 * module.MAX_SIGN_REQUESTS
 
