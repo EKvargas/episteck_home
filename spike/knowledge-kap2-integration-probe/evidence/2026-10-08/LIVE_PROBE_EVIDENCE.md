@@ -44,3 +44,9 @@ The US 1/16/64 measurements were lost with the initial runner output. Growing fu
 - The initial US transient 200 is an adverse result. Admission must wait for observed effective denial and a proved in-flight drain; the EU 62.715 s observation is not a bound for production.
 
 The local synthetic protocol tests and Frappe disposable guard observations remain in the parent PR. No live result in this document establishes complete KAP-2 acceptance.
+
+## Cleanup verified
+
+After this evidence was committed and pushed, both exact synthetic bucket names and their objects were deleted; the isolated project's bucket list returned empty. All four KMS versions were changed from ENABLED to DISABLED, with **no version destruction**. All four CryptoKey IAM policies then had no bindings. The five probe service accounts were deleted, the custom object-writer role was deleted, and the project-filtered budget notification was deleted; independent lists returned no buckets, service accounts or budget. The project `episteck-home-kap2-probe` was closed and `gcloud projects describe` returned `DELETE_REQUESTED`. The exact `/tmp/kap2-gcs-probe-20261008` directory on the Ashburn host was removed after resolving and checking its path. Public synthetic evidence remains in this PR.
+
+Cloud project deletion is asynchronous and recoverable for a limited period. The two key rings, four CryptoKeys and disabled versions can remain as project residue until Google completes deletion; no irreversible key-destruction command was issued. Final charges are not yet available from billing, and the budget alert was a notification rather than a cap.
