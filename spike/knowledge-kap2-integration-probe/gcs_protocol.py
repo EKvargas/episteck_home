@@ -388,6 +388,14 @@ def run(bucket: str, old_writer_service: str, new_writer_service: str, verifier_
     cases: dict[str, object] = results["cases"]  # type: ignore[assignment]
     previous, epoch, sequence = "GENESIS", 1, 0
 
+    def checkpoint() -> None:
+        control = os.environ.get("KAP2_CONTROL_DIR")
+        if control:
+            target = Path(control) / "progress.json"
+            temporary = target.with_suffix(".tmp")
+            temporary.write_text(json.dumps(results, sort_keys=True), encoding="utf-8")
+            temporary.replace(target)
+
     def append(kind: str = "MUTATION", after: str = "ACTIVE") -> None:
         nonlocal previous, epoch, sequence
         number = sequence + 1
@@ -439,6 +447,7 @@ def run(bucket: str, old_writer_service: str, new_writer_service: str, verifier_
             "list_pages_per_run": pages,
             "requests": {name: client.counts[name] - before[name] for name in client.counts},
         }
+        checkpoint()
 
     number = sequence + 1
     timeout_slot = {"sequence": number, "epoch": epoch, "kind": "MUTATION",
@@ -457,6 +466,7 @@ def run(bucket: str, old_writer_service: str, new_writer_service: str, verifier_
     if head()[:2] != ("READY", sequence):
         raise RuntimeError("timeout recovery did not produce a verified head")
     cases["induced_http_read_timeout_after_gcs_acceptance"] = "EXACT_READBACK_AND_COMMIT"
+    checkpoint()
 
     state, observed_head, _, _ = head(after_first_page=append)
     assert state == "UNVERIFIED" or (state == "READY" and observed_head == sequence), (state, observed_head)
@@ -467,6 +477,7 @@ def run(bucket: str, old_writer_service: str, new_writer_service: str, verifier_
     append("REVOKE", "REVOKED")
     assert head()[:2] == ("READY", sequence) and stale_local_sequence != sequence
     cases["restore_before_revocation"] = "STALE_LOCAL_DENIED"
+    checkpoint()
     # Capture an already-issued credential before operator cutover. This runner
     # does not mutate IAM and never refreshes the credential after cutover.
     old_token = token(old_writer_service)
@@ -480,6 +491,21 @@ def run(bucket: str, old_writer_service: str, new_writer_service: str, verifier_
         raise RuntimeError("cutover not confirmed or old token too old for a valid denial test")
     if "storage.objects.create" in permissions(old_token):
         raise RuntimeError("old token still has object-create permission")
+    propagation: list[dict[str, float | int]] = []
+    propagation_started = time.monotonic()
+    for attempt in range(8):
+        old_status = sign_probe(kms_version, old_token)
+        propagation.append({"seconds": round(time.monotonic() - propagation_started, 3),
+                            "old_key_http": old_status})
+        if old_status == 403:
+            break
+        if old_status != 200:
+            raise RuntimeError(f"unexpected old-key cutover response: {old_status}")
+        if attempt < 7:
+            time.sleep(20)
+    else:
+        raise RuntimeError("old issued token retained signing beyond bounded probe")
+    cases["old_key_propagation_samples"] = propagation
     denied: list[dict[str, int]] = []
     for round_number in range(3):
         statuses: dict[str, int] = {}
@@ -494,6 +520,7 @@ def run(bucket: str, old_writer_service: str, new_writer_service: str, verifier_
         if round_number < 2:
             time.sleep(2)
     cases["old_issued_token_before_new_admission"] = denied
+    checkpoint()
     # New writer starts without create/sign grants. The operator admits it only
     # after the old-token denial rounds, then the runner checks its bucket IAM.
     confirmation = confirm("ADMIT", "Now grant the new writer bucket create and its own key signing; "
@@ -521,10 +548,91 @@ def run(bucket: str, old_writer_service: str, new_writer_service: str, verifier_
     return results
 
 
+def resume_after_cutover(bucket: str, new_writer_service: str, verifier_service: str,
+                         run_id: str, next_kms_version: str, root_pem_file: str,
+                         registration_file: str, next_registration_file: str) -> dict:
+    """Finish only an existing, blocked synthetic REVOKE history after isolated IAM cutover."""
+    if not bucket.startswith("kap2-probe-") or not re.fullmatch(r"[0-9a-f]{32}", run_id):
+        raise ValueError("resume requires the isolated synthetic bucket and run ID")
+    prefix = f"home-auth/v1/partitions/{sha(('synthetic-' + run_id).encode())}"
+    root = Path(root_pem_file).read_text(encoding="utf-8")
+    if root_fingerprint(root) != os.environ.get("KAP2_TRUST_ROOT_SHA256"):
+        raise ValueError("independent root pin mismatch on resume")
+    first_document = json.loads(Path(registration_file).read_text(encoding="utf-8"))
+    first_version = first_document["payload"]["kms_version"]
+    first = verify_registration(first_document, root, partition=prefix, kms_version=first_version)
+    second_document = json.loads(Path(next_registration_file).read_text(encoding="utf-8"))
+    second = verify_registration(second_document, root, partition=prefix,
+                                 kms_version=next_kms_version, prior=first)
+    registry = {first.registration_sha256: first, second.registration_sha256: second}
+    operator, new_token, verifier_token = token(), token(new_writer_service), token(verifier_service)
+    metadata = requests.get(f"{API}/b/{bucket}",
+                            headers={"Authorization": f"Bearer {operator}"}, timeout=20)
+    metadata.raise_for_status()
+    bucket_info = metadata.json()
+    if (bucket_info.get("labels", {}).get("kap2_probe") != "true"
+            or bucket_info.get("location", "").lower() != os.environ.get("KAP2_GCS_EXPECTED_REGION")
+            or str(bucket_info.get("projectNumber")) != os.environ.get("KAP2_GCS_PROJECT_NUMBER")):
+        raise ValueError("resume bucket is outside the pinned isolated scope")
+    # Reserve more than the first run's theoretical object-request total.
+    # This bounds combined attempts even though the failed process lost counters.
+    counts = {"create": 145, "get": 2300, "list": 350}
+    new_client = Client(bucket, new_token, prefix, counts)
+    verifier_client = Client(bucket, verifier_token, prefix, counts)
+    initial = dict(counts)
+    signer = KmsSigner(new_token, second, operator)
+    state, sequence, _, _ = inspect_head(verifier_client, trust=registry)
+    if state != "READY" or sequence < 2:
+        raise RuntimeError("existing witness is not a committed synthetic history")
+    slot_status, slot_bytes, _ = verifier_client.get(verifier_client.key("slots", sequence))
+    outcome_status, outcome_bytes, _ = verifier_client.get(verifier_client.key("outcomes", sequence))
+    if slot_status != 200 or outcome_status != 200:
+        raise RuntimeError("committed revocation evidence missing")
+    prior_slot = verify_envelope(registry, json.loads(slot_bytes))
+    verify_envelope(registry, json.loads(outcome_bytes))
+    if prior_slot.get("kind") != "REVOKE" or prior_slot.get("after") != "REVOKED" or prior_slot.get("epoch") != 1:
+        raise RuntimeError("resume requires the exact post-revocation cutover point")
+    next_number = sequence + 1
+    slot = {"sequence": next_number, "epoch": 2, "kind": "EPOCH",
+            "previous": sha(outcome_bytes), "after": "REVOKED", "synthetic": True}
+    slot_envelope = signer.envelope({**slot, "signer_epoch": 2})
+    status, exact_slot, _ = new_client.create(new_client.key("slots", next_number), slot_envelope)
+    if status != 200:
+        raise RuntimeError(f"new-writer conditional epoch slot failed: {status}")
+    outcome = signer.envelope({"slot_sha256": sha(exact_slot), "decision": "COMMIT", "signer_epoch": 2})
+    status, _, _ = new_client.create(new_client.key("outcomes", next_number), outcome)
+    if status != 200 or inspect_head(verifier_client, trust=registry)[:2] != ("READY", next_number):
+        raise RuntimeError("new-writer epoch outcome or verified head failed")
+    times, pages = [], []
+    before_scan = dict(counts)
+    for _ in range(10):
+        state, observed, page_count, elapsed = inspect_head(verifier_client, trust=registry)
+        if (state, observed) != ("READY", next_number):
+            raise RuntimeError("verified head changed during continuation measurement")
+        times.append(elapsed)
+        pages.append(page_count)
+    scan_requests = {name: counts[name] - before_scan[name] for name in counts}
+    corrupt = signer.envelope({"sequence": next_number + 1, "epoch": 2, "kind": "MUTATION",
+                               "previous": "CORRUPT", "after": "ACTIVE", "synthetic": True,
+                               "signer_epoch": 2})
+    status, _, _ = new_client.create(new_client.key("slots", next_number + 1), corrupt)
+    if status != 200 or inspect_head(verifier_client, trust=registry)[0] not in {"BROKEN", "PENDING"}:
+        raise RuntimeError("corrupt immutable slot did not block the head")
+    return {"probe": "real_gcs_resume_after_cutover", "prior_head": sequence,
+            "verified_epoch_head": next_number, "chain_corruption": "BLOCKED",
+            "head_measurements": {"runs": 10, "min_ms": min(times), "p50_ms": statistics.median(times),
+                                  "p95_ms": sorted(times)[-1], "max_ms": max(times),
+                                  "list_pages_per_run": pages, "requests": scan_requests},
+            "continuation_object_requests": {name: counts[name] - initial[name] for name in counts},
+            "conservative_combined_request_reservation": counts,
+            "continuation_kms_sign_requests": signer.count}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--preflight", action="store_true")
     parser.add_argument("--run", action="store_true")
+    parser.add_argument("--resume-after-cutover", action="store_true")
     options = parser.parse_args()
     bucket = os.environ.get("KAP2_GCS_BUCKET", "")
     old_writer = os.environ.get("KAP2_GCS_OLD_WRITER_SERVICE_ACCOUNT", "")
@@ -540,6 +648,10 @@ def main() -> None:
     next_kms_version = os.environ.get("KAP2_NEXT_KMS_SIGNER_VERSION", "")
     next_registration_file = os.environ.get("KAP2_NEXT_SIGNED_REGISTRATION_FILE", "")
     root_sha256 = os.environ.get("KAP2_TRUST_ROOT_SHA256", "")
+    if options.resume_after_cutover:
+        print(json.dumps(resume_after_cutover(bucket, new_writer, verifier, run_id, next_kms_version,
+                                              root_pem_file, registration_file, next_registration_file), sort_keys=True))
+        return
     if options.preflight or not options.run:
         print(json.dumps({"probe": "real_gcs_protocol", "environment_configured": bool(
                           bucket and old_writer and new_writer and verifier and project and project_number and region and run_id and kms_version and root_pem_file

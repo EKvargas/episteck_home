@@ -232,7 +232,7 @@ def test_full_signed_runner_with_synthetic_clients(monkeypatch, tmp_path, old_ke
                    "synthetic-project", "us-east4", run_id, versions[1], str(root_file), str(first_file),
                    versions[2], str(second_file), "0" * 64)
     if old_key_after_cutover == 200:
-        with pytest.raises(RuntimeError, match="retained access"):
+        with pytest.raises(RuntimeError, match="retained signing"):
             module.run("kap2-probe-synthetic", "old-service", "new-service", "verifier-service",
                        "synthetic-project", "us-east4", run_id, versions[1], str(root_file), str(first_file),
                        versions[2], str(second_file), root_fingerprint(pem(root)))
