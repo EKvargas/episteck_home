@@ -294,12 +294,15 @@ def run(bucket: str, old_writer_service: str, new_writer_service: str, verifier_
     info = metadata.json()
     if info.get("projectNumber") is None or info.get("labels", {}).get("kap2_probe") != "true":
         raise ValueError("bucket lacks explicit kap2_probe=true isolation label")
-    project_response = requests.get(
-        f"https://cloudresourcemanager.googleapis.com/v1/projects/{quote(project, safe='')}",
-        headers={"Authorization": f"Bearer {operator}"}, timeout=20,
-    )
-    project_response.raise_for_status()
-    if str(info["projectNumber"]) != str(project_response.json().get("projectNumber")):
+    pinned_project_number = os.environ.get("KAP2_GCS_PROJECT_NUMBER")
+    if pinned_project_number is None:
+        project_response = requests.get(
+            f"https://cloudresourcemanager.googleapis.com/v1/projects/{quote(project, safe='')}",
+            headers={"Authorization": f"Bearer {operator}"}, timeout=20,
+        )
+        project_response.raise_for_status()
+        pinned_project_number = str(project_response.json().get("projectNumber"))
+    if not pinned_project_number.isdecimal() or str(info["projectNumber"]) != pinned_project_number:
         raise ValueError("isolated bucket is outside the explicitly named project")
     if info.get("versioning", {}).get("enabled", False):
         raise ValueError("versioned bucket is outside this immutable live-view probe")
@@ -528,6 +531,7 @@ def main() -> None:
     new_writer = os.environ.get("KAP2_GCS_NEW_WRITER_SERVICE_ACCOUNT", "")
     verifier = os.environ.get("KAP2_GCS_VERIFIER_SERVICE_ACCOUNT", "")
     project = os.environ.get("KAP2_GCS_PROJECT", "")
+    project_number = os.environ.get("KAP2_GCS_PROJECT_NUMBER", "")
     region = os.environ.get("KAP2_GCS_EXPECTED_REGION", "")
     run_id = os.environ.get("KAP2_GCS_RUN_ID", "")
     kms_version = os.environ.get("KAP2_KMS_SIGNER_VERSION", "")
@@ -538,12 +542,13 @@ def main() -> None:
     root_sha256 = os.environ.get("KAP2_TRUST_ROOT_SHA256", "")
     if options.preflight or not options.run:
         print(json.dumps({"probe": "real_gcs_protocol", "environment_configured": bool(
-                          bucket and old_writer and new_writer and verifier and project and region and run_id and kms_version and root_pem_file
+                          bucket and old_writer and new_writer and verifier and project and project_number and region and run_id and kms_version and root_pem_file
                           and registration_file and next_kms_version and next_registration_file and root_sha256),
                           "preflight_level": "environment_only",
                           "missing": [name for name, value in (("existing_isolated_bucket", bucket),
                            ("old_writer_identity", old_writer), ("new_writer_identity", new_writer),
-                           ("verifier_identity", verifier), ("project", project), ("expected_region", region),
+                           ("verifier_identity", verifier), ("project", project),
+                           ("pinned_project_number", project_number), ("expected_region", region),
                            ("synthetic_run_id", run_id), ("kms_signer_version", kms_version),
                            ("independent_root_pin", root_pem_file),
                            ("independent_root_fingerprint", root_sha256),
