@@ -105,6 +105,48 @@ def main() -> None:
             lock.wait(timeout=5)
             assert sql("SELECT seq FROM auth_probe.fence WHERE id=1").stdout.strip() == "1"
             results["concurrent_bypass"] = "DENIED"
+
+            # Reverse order: a current reader holding the fence locks before revoke.
+            sql("UPDATE auth_probe.grants SET state='ACTIVE' WHERE id=1; "
+                "UPDATE auth_probe.fence SET seq=0 WHERE id=1")
+            reader = subprocess.Popen(
+                ["mariadb", "--no-defaults", f"--socket={socket}", "-uroot", "-e",
+                 "START TRANSACTION; SELECT seq FROM auth_probe.fence WHERE id=1 FOR UPDATE; "
+                 "DO SLEEP(2); SELECT state FROM auth_probe.grants WHERE id=1; COMMIT;"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            time.sleep(0.3)
+            started = time.monotonic()
+            sql("CALL auth_probe.revoke_synthetic()", "auth_mutator")
+            waited = time.monotonic() - started
+            reader_output, _ = reader.communicate(timeout=5)
+            assert reader.returncode == 0 and "ACTIVE" in reader_output
+            assert waited >= 3.0, waited
+            assert sql("SELECT g.state, f.seq FROM auth_probe.grants g JOIN auth_probe.fence f ON f.id=g.id").stdout.strip() == "REVOKED\t1"
+            results["reader_before_revocation"] = "PASS"
+
+            # The external journal is deliberately a separate in-memory witness here.
+            # MariaDB committed a permissive change, but publication is still pending.
+            external = {1: ("COMMIT", "REVOKED"), 2: ("PREPARE", "ACTIVE")}
+            sql("START TRANSACTION; UPDATE auth_probe.grants SET state='ACTIVE' WHERE id=1; "
+                "UPDATE auth_probe.fence SET seq=2 WHERE id=1; COMMIT")
+
+            def authorized() -> bool:
+                state, revision = sql(
+                    "SELECT g.state, f.seq FROM auth_probe.grants g JOIN auth_probe.fence f ON f.id=g.id"
+                ).stdout.strip().split("\t")
+                latest = max(external)
+                return int(revision) == latest and external[latest] == ("COMMIT", state) and state == "ACTIVE"
+
+            assert not authorized()
+            results["external_commit_gap"] = "DENIED"
+            external[2] = ("COMMIT", "ACTIVE")
+            assert authorized()
+            # Simulate restoring a local snapshot behind the independent witness.
+            sql("UPDATE auth_probe.grants SET state='REVOKED' WHERE id=1; "
+                "UPDATE auth_probe.fence SET seq=1 WHERE id=1")
+            assert not authorized()
+            results["restore_behind_witness"] = "DENIED"
         finally:
             if server.poll() is None:
                 run("mariadb-admin", "--no-defaults", f"--socket={socket}",
