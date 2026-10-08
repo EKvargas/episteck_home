@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import base64
+import io
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -90,6 +91,18 @@ def test_runner_rejects_shared_key_or_identity_before_cloud_access():
         module.run(*((args[0], args[1], args[1]) + args[3:]))
 
 
+def test_ashburn_token_input_stays_in_memory(monkeypatch):
+    monkeypatch.setenv("KAP2_TOKEN_STDIN", "1")
+    monkeypatch.setattr(module, "_token_bundle", None)
+    monkeypatch.setattr(module, "_token_bundle_loaded_at", None)
+    monkeypatch.setattr(module.sys, "stdin", io.StringIO(json.dumps(
+        {"tokens": {"operator": "operator-short-lived", "old-service": "old-short-lived"}}) + "\n"))
+    assert module.token() == "operator-short-lived"
+    assert module.token("old-service") == "old-short-lived"
+    with pytest.raises(RuntimeError, match="missing short-lived"):
+        module.token("unlisted-service")
+
+
 @pytest.mark.parametrize("old_key_after_cutover", [403, 200])
 def test_full_signed_runner_with_synthetic_clients(monkeypatch, tmp_path, old_key_after_cutover):
     run_id = "a" * 32
@@ -173,6 +186,7 @@ def test_full_signed_runner_with_synthetic_clients(monkeypatch, tmp_path, old_ke
     cutover = {"phase": "before"}
     monkeypatch.setattr(module, "Client", MemoryClient)
     monkeypatch.setattr(module, "KmsSigner", SyntheticKmsSigner)
+    monkeypatch.setattr(module, "induced_timeout_create", lambda client, key, content: client.create(key, content))
     monkeypatch.setattr(module, "token", lambda service=None: {
         None: "operator-token", "old-service": "old-issued-token", "new-service": "new-token",
         "verifier-service": "verifier-token",
@@ -182,6 +196,8 @@ def test_full_signed_runner_with_synthetic_clients(monkeypatch, tmp_path, old_ke
         if url.endswith("/b/kap2-probe-synthetic"):
             return Response({"projectNumber": "123", "labels": {"kap2_probe": "true"},
                              "location": "US-EAST4"})
+        if "cloudresourcemanager.googleapis.com" in url:
+            return Response({"projectNumber": "123"})
         if "/cryptoKeyVersions/" in url:
             return Response({"protectionLevel": "SOFTWARE", "algorithm": "EC_SIGN_ED25519",
                              "state": "ENABLED"})
@@ -226,10 +242,20 @@ def test_full_signed_runner_with_synthetic_clients(monkeypatch, tmp_path, old_ke
                         versions[2], str(second_file), root_fingerprint(pem(root)))
     assert result["cases"]["writer_takeover"] == "ROOT_REGISTERED_SIGNER_EPOCH"
     assert result["cases"]["chain_corruption"] == "BLOCKED"
+    assert result["cases"]["induced_http_read_timeout_after_gcs_acceptance"] == "EXACT_READBACK_AND_COMMIT"
     assert result["cases"]["old_issued_token_before_new_admission"] == [
         {"old_key": 403, "new_key": 403, "journal_create": 403}] * 3
     assert result["total_object_requests"]["create"] <= module.MAX_CREATES
     assert result["kms_sign_requests"] <= 2 * module.MAX_SIGN_REQUESTS
+
+
+def test_induced_timeout_follows_accepted_upstream_create():
+    class AcceptedClient:
+        def create(self, key, content):
+            return 200, module.canonical(content), "1"
+
+    assert module.induced_timeout_create(AcceptedClient(), "synthetic/slot", {"synthetic": True}) == (
+        200, b'{"synthetic":true}', "1")
 
 
 def test_kms_signer_compares_registered_key_and_verifies_signature(monkeypatch):

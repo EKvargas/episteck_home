@@ -14,9 +14,12 @@ import os
 import re
 import statistics
 import subprocess
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from threading import Thread
 from typing import Callable
 from urllib.parse import quote
 
@@ -37,6 +40,8 @@ PERMISSIONS = (
 MAX_CREATES = 160
 MAX_OBJECT_REQUESTS = 5000
 MAX_SIGN_REQUESTS = 160
+_token_bundle: dict | None = None
+_token_bundle_loaded_at: float | None = None
 
 
 def sha(data: bytes) -> str:
@@ -44,11 +49,71 @@ def sha(data: bytes) -> str:
 
 
 def token(service: str | None = None) -> str:
+    global _token_bundle, _token_bundle_loaded_at
+    if os.environ.get("KAP2_TOKEN_STDIN") == "1":
+        if _token_bundle is None:
+            _token_bundle = json.loads(sys.stdin.readline())
+            _token_bundle_loaded_at = time.monotonic()
+        value = _token_bundle.get("tokens", {}).get(service or "operator")
+        if not isinstance(value, str) or not value:
+            raise RuntimeError("missing short-lived in-memory probe token")
+        return value
     command = ["gcloud", "auth", "print-access-token"]
     if service:
         command.append(f"--impersonate-service-account={service}")
     completed = subprocess.run(command, check=True, capture_output=True, text=True)
     return completed.stdout.strip()
+
+
+def confirm(phase: str, prompt: str) -> str:
+    control = os.environ.get("KAP2_CONTROL_DIR")
+    if not control:
+        return input(prompt)
+    directory = Path(control)
+    if not str(directory).startswith("/tmp/kap2-gcs-probe-") or not directory.is_dir():
+        raise RuntimeError("invalid isolated probe control directory")
+    (directory / f"AWAIT_{phase}").touch()
+    print(f"KAP2_AWAIT_{phase}", flush=True)
+    deadline = time.monotonic() + 1200
+    while time.monotonic() < deadline:
+        if (directory / phase).is_file():
+            return phase
+        time.sleep(1)
+    raise TimeoutError(f"{phase} operator barrier timed out")
+
+
+def induced_timeout_create(client: Client, key: str, content: dict) -> tuple[int, bytes, str | None]:
+    """Lose a real HTTP response after an upstream GCS conditional create."""
+    result: dict[str, tuple[int, bytes, str | None] | Exception] = {}
+
+    class DropResponse(BaseHTTPRequestHandler):
+        def do_POST(self):
+            try:
+                result["upstream"] = client.create(key, content)
+            except Exception as exc:
+                result["error"] = exc
+            time.sleep(0.25)  # Deliberately exceed the loopback client's read timeout.
+
+        def log_message(self, format, *args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), DropResponse)
+    thread = Thread(target=server.handle_request, daemon=True)
+    thread.start()
+    try:
+        try:
+            requests.post(f"http://127.0.0.1:{server.server_port}/", data=b"synthetic",
+                          timeout=(1, 0.05))
+        except requests.exceptions.ReadTimeout:
+            pass
+        else:
+            raise RuntimeError("induced HTTP response timeout did not occur")
+        thread.join(timeout=20)
+        if thread.is_alive() or "error" in result or "upstream" not in result:
+            raise RuntimeError("upstream create outcome not established") from result.get("error")
+        return result["upstream"]
+    finally:
+        server.server_close()
 
 
 class Client:
@@ -229,11 +294,12 @@ def run(bucket: str, old_writer_service: str, new_writer_service: str, verifier_
     info = metadata.json()
     if info.get("projectNumber") is None or info.get("labels", {}).get("kap2_probe") != "true":
         raise ValueError("bucket lacks explicit kap2_probe=true isolation label")
-    project_number = subprocess.run(
-        ["gcloud", "projects", "describe", project, "--format=value(projectNumber)"],
-        check=True, capture_output=True, text=True,
-    ).stdout.strip()
-    if str(info["projectNumber"]) != project_number:
+    project_response = requests.get(
+        f"https://cloudresourcemanager.googleapis.com/v1/projects/{quote(project, safe='')}",
+        headers={"Authorization": f"Bearer {operator}"}, timeout=20,
+    )
+    project_response.raise_for_status()
+    if str(info["projectNumber"]) != str(project_response.json().get("projectNumber")):
         raise ValueError("isolated bucket is outside the explicitly named project")
     if info.get("versioning", {}).get("enabled", False):
         raise ValueError("versioned bucket is outside this immutable live-view probe")
@@ -371,6 +437,24 @@ def run(bucket: str, old_writer_service: str, new_writer_service: str, verifier_
             "requests": {name: client.counts[name] - before[name] for name in client.counts},
         }
 
+    number = sequence + 1
+    timeout_slot = {"sequence": number, "epoch": epoch, "kind": "MUTATION",
+                    "previous": previous, "after": "ACTIVE", "synthetic": True}
+    timeout_envelope = current_signer.envelope({**timeout_slot, "signer_epoch": current_trust.epoch})
+    timeout_key = client.key("slots", number)
+    timeout_status, timeout_bytes, _ = induced_timeout_create(client, timeout_key, timeout_envelope)
+    read_status, readback, _ = verifier_client.get(timeout_key)
+    if timeout_status != 200 or read_status != 200 or readback != timeout_bytes:
+        raise RuntimeError("timeout-after-accepted-create exact readback failed")
+    outcome = {"slot_sha256": sha(readback), "decision": "COMMIT"}
+    outcome_status, outcome_bytes, _ = signed_create(client.key("outcomes", number), outcome)
+    if outcome_status != 200:
+        raise RuntimeError("timeout recovery outcome publication failed")
+    previous, sequence = sha(outcome_bytes), number
+    if head()[:2] != ("READY", sequence):
+        raise RuntimeError("timeout recovery did not produce a verified head")
+    cases["induced_http_read_timeout_after_gcs_acceptance"] = "EXACT_READBACK_AND_COMMIT"
+
     state, observed_head, _, _ = head(after_first_page=append)
     assert state == "UNVERIFIED" or (state == "READY" and observed_head == sequence), (state, observed_head)
     assert head()[:2] == ("READY", sequence)
@@ -385,9 +469,11 @@ def run(bucket: str, old_writer_service: str, new_writer_service: str, verifier_
     old_token = token(old_writer_service)
     old_client.bearer = old_token
     token_issued_at = time.monotonic()
-    confirmation = input("Drain old writers; revoke old key signing and bucket create IAM; "
-                         "wait for propagation. Type CUTOVER to test old token before new writer admission: ")
-    if confirmation != "CUTOVER" or time.monotonic() - token_issued_at > 1200:
+    confirmation = confirm("CUTOVER", "Drain old writers; revoke old key signing and bucket create IAM; "
+                           "wait for propagation. Type CUTOVER to test old token before new writer admission: ")
+    token_age = time.monotonic() - (_token_bundle_loaded_at if os.environ.get("KAP2_TOKEN_STDIN") == "1"
+                                    else token_issued_at)
+    if confirmation != "CUTOVER" or token_age > 1200:
         raise RuntimeError("cutover not confirmed or old token too old for a valid denial test")
     if "storage.objects.create" in permissions(old_token):
         raise RuntimeError("old token still has object-create permission")
@@ -407,8 +493,8 @@ def run(bucket: str, old_writer_service: str, new_writer_service: str, verifier_
     cases["old_issued_token_before_new_admission"] = denied
     # New writer starts without create/sign grants. The operator admits it only
     # after the old-token denial rounds, then the runner checks its bucket IAM.
-    confirmation = input("Now grant the new writer bucket create and its own key signing; "
-                         "type ADMIT after propagation: ")
+    confirmation = confirm("ADMIT", "Now grant the new writer bucket create and its own key signing; "
+                           "type ADMIT after propagation: ")
     if confirmation != "ADMIT":
         raise RuntimeError("new writer admission not confirmed")
     new_token = token(new_writer_service)
