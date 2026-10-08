@@ -1,6 +1,6 @@
 # KAP-2 Home witness: isolated GCS probe provisioning proposal
 
-**Proposal only, updated 2026-10-08.** Erick's explicit authorization is required before any cloud probe provisioning. No project, bucket, identity, key, retention policy, or paid resource has been created. PR #59 is accepted as a candidate for validation, not activation.
+**Pre-run proposal, updated 2026-10-08.** Erick subsequently authorized the isolated cloud probe and the open billing account. The actual provisioning, measurements and cleanup outcome are tracked in [live probe evidence](evidence/2026-10-08/LIVE_PROBE_EVIDENCE.md). PR #59 is accepted as a candidate for validation, not activation.
 
 ## Scope and location decision
 

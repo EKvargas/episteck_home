@@ -1,0 +1,32 @@
+﻿{
+    "region":  "us-east4",
+    "method":  "same_preissued_token_after_revoke",
+    "checks":  [
+                   {
+                       "seconds_after_revoke":  0.4,
+                       "old_key_http":  403
+                   }
+               ],
+    "rounds":  [
+                   {
+                       "journal_create_http":  403,
+                       "old_key_http":  403,
+                       "new_key_http":  403
+                   },
+                   {
+                       "journal_create_http":  403,
+                       "old_key_http":  403,
+                       "new_key_http":  403
+                   },
+                   {
+                       "journal_create_http":  403,
+                       "old_key_http":  403,
+                       "new_key_http":  403
+                   }
+               ],
+    "baseline_sign_http":  200,
+    "token_minted_before_revoke":  true,
+    "revoked_at_utc":  "2026-10-08T15:30:56.9668696Z",
+    "outcome":  "three_rounds_denied_before_new_admission",
+    "temporary_signer_grant_removed":  true
+}
