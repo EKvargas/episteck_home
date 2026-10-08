@@ -1,5 +1,7 @@
 # KAP-2 Home typed policy and authorization fence — design for review
 
+**Review amendment:** [bounded witness and writer fence](KNOWLEDGE_KAP2_BOUNDED_WITNESS_AMENDMENT.md) supersedes this document's per-request full-history scan and IAM-drain writer takeover proposals. PR #61's live evidence rejected those mechanisms; this base document remains the record of typed policy, local MariaDB fencing and mutation-boundary requirements.
+
 **Status:** revised draft design, 2026-10-07, after architectural disposition of PR #59 at `c5716b15e07577ba9ca54567b0087b63a4a78b9c`. No production policy, schema, journal, credential, migration, or endpoint is implemented here.
 
 **Dependency:** [accepted Authorization Plan runtime contract](KNOWLEDGE_AUTHORIZATION_PLAN_RUNTIME_CONTRACT.md) in PR #56 (`2b1b9e5f896594027d35afe45d5fcabff70eafb7`), then KAP-1 contract/tests in PR #58 (`e5b2e4ff47245d7d1af4d74873e7eaabc57e7718`). This design branch starts at that exact PR #58 head. PR #56 and PR #58 remain unmerged; review of this document does not merge or deploy either dependency.
