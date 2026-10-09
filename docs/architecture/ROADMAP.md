@@ -81,7 +81,13 @@ SQLite has **not** been installed as a Knowledge runtime. See the accepted
 The Architecture Board accepted the Authorization Plan runtime contract in PR #56.
 PR #56 is documentation-only and remains open; its acceptance does not authorize
 production endpoints, credentials, certificates, deployment, or migration. KAP-1
-contract implementation is under draft review, based on PR #56's head. The accepted
+is architecturally accepted at PR #58 head `e5b2e4ff47245d7d1af4d74873e7eaabc57e7718`
+but unmerged. KAP-2 is open. After PR #63 at
+`3f69b0bedb073e9200a8dd7f7669bb25b2f2717c`, the architect rejected the
+current request-time GCS mechanism; PRs #61–63 remain evidence. The
+[transactional-witness feasibility brief](proposals/KNOWLEDGE_KAP2_TRANSACTIONAL_WITNESS_FEASIBILITY.md)
+evaluates a separate MariaDB instance and leaves restore proof for review.
+KAP-3–10 remain ahead. The accepted
 sequence and per-item criteria are in the runtime contract §15; live gates #2
 (latency), #3 (timing/existence-oracle closure), and #5 (real R14/domain measurement)
 remain open.
