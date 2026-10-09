@@ -37,6 +37,8 @@
 - [x] Implement a disconnected local gateway object that takes the exclusive process lock; startup and reconnect never load an `OPEN` flag from SQL. A database disconnect closes admission immediately. No network listener is exposed.
 - [x] Run the gateway tests against a private socket-only MariaDB and verify the first request after restart denies; [local evidence](../../../spike/knowledge-kap2-transactional-witness/evidence/2026-10-09/LOCAL_GATEWAY_EVIDENCE.md) is recorded in the Task 1 implementation PR.
 
+PR #66 at `cd6abedac61f5305760d357ad74a70127c6fb607` additionally proves denial after `flock` is explicitly released while the descriptor remains open and an independent process acquires it, as well as denial after killing only the pinned writer connection. Focused real MariaDB result: `9 passed in 47.42s`. Task 1 remains a disconnected disposable candidate.
+
 ### Task 2 — Home Knowledge-only guarded authority and reauthorization
 
 **Files to create:** `apps/episteck_home/episteck_home/knowledge_authority/` and `apps/episteck_home/tests/test_knowledge_authority.py`. **Files to inspect/integrate:** `policy/typed_access.py` from accepted PR #60, existing `policy/access.py`, `identity/session.py`, relevant DocType controllers and `api.py`. **Output:** a current-incarnation Knowledge authorization snapshot; existing Home policy results remain unchanged.
@@ -45,6 +47,8 @@
 - [ ] Inventory every live writable authority source and protect canonical Knowledge projection/overlay so generic `save/delete`, `db.set_value`, raw SQL and administrator operations cannot bypass the revision lane. Retain ordinary Frappe writes.
 - [ ] Add guarded Home transaction/event/digest handling with exact-event retry and separate Knowledge-only reauthorization records; do not edit or revoke unrelated ConsentGrant rows during recovery.
 - [ ] Run policy, mutation, baseline API and privilege tests; commit the guarded authority unit separately.
+
+Task 2 draft implementation evidence is in [the disconnected Home authority probe](../../../spike/knowledge-kap2-home-authority/evidence/2026-10-09/LOCAL_TASK2_EVIDENCE.md): accepted typed evaluator plus current-incarnation overlay, internal Frappe Person issuer/source checks, disposable Home event/revision procedures and three real local MariaDB tests; `28` focused tests including the unchanged Person-policy baseline passed. A fresh marked Frappe site passed authenticated grant and Person self-activation through the local real witness/Home lane and the inherited PR #61 guarded probe's 30 named outcomes, then was removed with its private MariaDB/Redis services. This is **partial Task 2 candidate evidence**, not completion of the source inventory or one connected production guard. Circle issuance, canonical digest, protected service boundary and full mutation coverage remain open; KAP-2 is not complete.
 
 ### Task 3 — Recovery cutover and Knowledge context binding
 
