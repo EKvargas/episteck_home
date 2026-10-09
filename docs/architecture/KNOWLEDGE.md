@@ -116,17 +116,19 @@ Candidates evaluated and **not selected**:
 
 ## Knowledge Authorization Plan implementation progress
 
-**Updated:** 2026-10-06. The accepted runtime contract is
+**Updated:** 2026-10-09. The accepted runtime contract is
 [`KNOWLEDGE_AUTHORIZATION_PLAN_RUNTIME_CONTRACT.md`](proposals/KNOWLEDGE_AUTHORIZATION_PLAN_RUNTIME_CONTRACT.md).
 The Board accepted that contract in PR #56; PR #56 remains open. Its acceptance
 does not authorize production endpoints, credentials, certificates, deployment,
-or data migration. KAP-1 is being reviewed as a contract-only package change on a
-draft branch based on PR #56.
+or data migration. KAP-1 is architecturally accepted but remains unmerged. KAP-2
+is open. The architect rejected Candidate A's current request-time GCS path after
+PR #63 at `3f69b0bedb073e9200a8dd7f7669bb25b2f2717c`; PRs #61–63 remain
+experiment evidence. See the [transactional-witness feasibility brief](proposals/KNOWLEDGE_KAP2_TRANSACTIONAL_WITNESS_FEASIBILITY.md).
 
 | Item | Accepted scope and prerequisite | Current evidence / unmet acceptance |
 | --- | --- | --- |
 | KAP-1 | Versioned strict wire/domain contracts and test vectors; first. | **Architecturally accepted 2026-10-07** at PR #58 head `e5b2e4ff47245d7d1af4d74873e7eaabc57e7718` (37 local tests passed); PR remains unmerged and no live use. Parsed operations and domain result markers are preserved immutably. Knowledge interval and owning-domain schemas require trusted validators and fail closed when absent. |
-| KAP-2 | Home typed PERSON/CIRCLE policy, trusted partition binding, durable rollback-safe authorization revision; needs KAP-1. | [Revised design](proposals/KNOWLEDGE_KAP2_POLICY_FENCE_DESIGN.md) in draft PR #59; no production policy or fence. MariaDB local transaction fence accepted; separate Home GCS is a candidate witness pending proof; unproven legacy grants are quarantined from Knowledge; central mutation boundary needs database-enforced coverage. Synthetic protocol/DB probes pass; Ashburn and live GCS/Frappe evidence are still missing. |
+| KAP-2 | Home typed PERSON/CIRCLE policy, trusted partition binding, durable rollback-safe authorization revision; needs KAP-1. | **Open.** PR #60's pure evaluator is accepted only while disconnected. PR #59's local MariaDB fence remains a candidate; PR #61 has disposable Frappe/GCS evidence; PRs #62–63 tested bounded Candidate A. The architect rejected its current request-time GCS mechanism after PR #63. A separate Nuremberg MariaDB witness is under [feasibility review](proposals/KNOWLEDGE_KAP2_TRANSACTIONAL_WITNESS_FEASIBILITY.md); independent witness-restore proof or a Board contract change, complete mutation guard and live latency gates remain unmet. No production policy/fence is active. |
 | KAP-3 | Dedicated `olin-runtime` machine identity and Home-owned bounded one-use request context; needs KAP-2. | Not implemented. Provisioning is separately gated; no credential exists for this path. |
 | KAP-4 | Complete RT#1 Authorization Plan evaluation; needs KAP-3. | Not implemented. No Home endpoint or integration tests exist. |
 | KAP-5 | Home R13 signer and trusted service/SPKI registration; needs KAP-4. | Not implemented. No key provisioning, trust registration, or issuance tests exist. |
