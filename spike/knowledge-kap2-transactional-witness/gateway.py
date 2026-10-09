@@ -60,9 +60,31 @@ class Gateway:
             current = self.lock_path.stat()
             if (held.st_dev, held.st_ino) != (current.st_dev, current.st_ino):
                 raise OSError("lock path was replaced")
+            # Linux fdinfo reports locks owned by this open file description.
+            # A still-open descriptor does not prove flock ownership after LOCK_UN.
+            fdinfo = Path(f"/proc/self/fdinfo/{self._lock_fd}").read_text()
+            own_lock = any(
+                parts[0] == "lock:" and parts[2:5] == ["FLOCK", "ADVISORY", "WRITE"]
+                and parts[5] == str(os.getpid())
+                for line in fdinfo.splitlines()
+                if (parts := line.split()) and len(parts) >= 6
+            )
+            if not own_lock:
+                raise OSError("lock descriptor no longer owns flock")
         except OSError as exc:
             self.closed = True
             raise GatewayClosed("gateway instance lock was lost") from exc
+
+    def _check_connections(self) -> None:
+        """Both pinned sessions must survive; neither may reconnect silently."""
+        try:
+            if self._reader is None or self._writer is None:
+                raise OSError("pinned witness connection is missing")
+            self._reader.ping(reconnect=False)
+            self._writer.ping(reconnect=False)
+        except (pymysql.MySQLError, OSError) as exc:
+            self.closed = True
+            raise GatewayClosed("pinned witness connection was lost") from exc
 
     @staticmethod
     def _call(connection: pymysql.Connection, name: str,
@@ -84,6 +106,7 @@ class Gateway:
         if self.closed or incarnation != self._incarnation:
             raise GatewayClosed("incarnation is not admitted")
         self._check_lock()
+        self._check_connections()
 
     def recover(self, partition: str) -> str:
         """Install a fresh default-deny incarnation; never trust a restored READY row."""
@@ -103,6 +126,7 @@ class Gateway:
         self._reader = self._connect("gw_reader", self._passwords[0])
         self._writer = self._connect("gw_writer2", self._passwords[1])
         row = self._read_current(partition)
+        self._check_connections()
         if row != (candidate, 0, 2, 2, "COMMITTED", None, "DENY_ALL"):
             raise GatewayClosed("fresh default-deny recovery readback failed")
         self._incarnation = candidate
@@ -115,6 +139,7 @@ class Gateway:
             return False
         try:
             self._check_lock()
+            self._check_connections()
             row = self._read_current(partition)
         except (GatewayClosed, pymysql.MySQLError, OSError):
             self.closed = True

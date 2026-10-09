@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 import os
+import fcntl
 import subprocess
 import sys
 import tempfile
@@ -13,7 +14,7 @@ from pathlib import Path
 import pymysql
 import pytest
 
-from gateway import Gateway, GatewayBusy
+from gateway import Gateway, GatewayBusy, GatewayClosed
 
 
 class PrivateDB:
@@ -211,6 +212,70 @@ def test_lost_process_lock_closes_admission(db: PrivateDB) -> None:
         os.close(gateway._lock_fd)  # synthetic lock-loss injection
         assert gateway.authorize("p1", incarnation, 1, "ALLOW_A") is False
         assert gateway.closed is True
+
+
+def test_released_flock_with_open_descriptor_closes_admission(db: PrivateDB) -> None:
+    with new_gateway(db) as gateway:
+        incarnation = gateway.recover("p1")
+        gateway.prepare("p1", incarnation, "grant-1", 0, "ALLOW_A")
+        gateway.commit("p1", incarnation, "grant-1", "ALLOW_A")
+        assert gateway.authorize("p1", incarnation, 1, "ALLOW_A") is True
+        assert gateway._lock_fd is not None
+        fcntl.flock(gateway._lock_fd, fcntl.LOCK_UN)
+        assert os.fstat(gateway._lock_fd)
+        contender = subprocess.Popen(
+            [sys.executable, "-c",
+             "import fcntl,os,sys; fd=os.open(sys.argv[1],os.O_RDWR); "
+             "fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB); "
+             "print('ACQUIRED',flush=True); sys.stdin.read(1)",
+             str(db.root / "gateway.lock")],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            assert contender.stdout is not None
+            assert contender.stdout.readline().strip() == "ACQUIRED"
+            assert gateway.authorize("p1", incarnation, 1, "ALLOW_A") is False
+            assert gateway.closed is True
+            with pytest.raises(GatewayClosed):
+                gateway.prepare("p1", incarnation, "grant-2", 1, "ALLOW_B")
+            with pytest.raises(GatewayClosed):
+                gateway.commit("p1", incarnation, "grant-1", "ALLOW_A")
+        finally:
+            assert contender.stdin is not None
+            contender.stdin.write("x")
+            contender.stdin.close()
+            assert contender.wait(timeout=5) == 0
+
+
+def test_replaced_lock_path_closes_admission(db: PrivateDB) -> None:
+    with new_gateway(db) as gateway:
+        incarnation = gateway.recover("p1")
+        lock_path = db.root / "gateway.lock"
+        lock_path.rename(db.root / "replaced.lock")
+        lock_path.touch()
+        assert gateway.authorize("p1", incarnation, 0, "DENY_ALL") is False
+        assert gateway.closed is True
+        with pytest.raises(GatewayClosed):
+            gateway.prepare("p1", incarnation, "grant-1", 0, "ALLOW_A")
+
+
+def test_writer_connection_loss_closes_admission_with_usable_reader(db: PrivateDB) -> None:
+    with new_gateway(db) as gateway:
+        incarnation = gateway.recover("p1")
+        gateway.prepare("p1", incarnation, "grant-1", 0, "ALLOW_A")
+        gateway.commit("p1", incarnation, "grant-1", "ALLOW_A")
+        assert gateway.authorize("p1", incarnation, 1, "ALLOW_A") is True
+        assert gateway._reader is not None and gateway._writer is not None
+        db.sql(f"KILL CONNECTION {gateway._writer.thread_id()}")
+        gateway._reader.ping(reconnect=False)
+        assert gateway.authorize("p1", incarnation, 1, "ALLOW_A") is False
+        assert gateway.closed is True
+        with pytest.raises(GatewayClosed):
+            gateway.prepare("p1", incarnation, "grant-2", 1, "ALLOW_B")
+        new_incarnation = gateway.recover("p1")
+        assert new_incarnation != incarnation
+        assert gateway.authorize("p1", incarnation, 1, "ALLOW_A") is False
 
 
 def test_restored_committed_ready_rows_cannot_open_gate(db: PrivateDB) -> None:
