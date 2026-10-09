@@ -103,8 +103,10 @@ Plan contract in PR #56, still open at head
 accepted at PR #58 head `e5b2e4ff47245d7d1af4d74873e7eaabc57e7718` but
 unmerged. KAP-2 is open; the architect rejected the current request-time GCS
 mechanism after PR #63 at `3f69b0bedb073e9200a8dd7f7669bb25b2f2717c`.
-PRs #61–63 remain experiment evidence. A separate MariaDB witness is under
-feasibility review, with restore safety unresolved. KAP-3–10 remain ahead; there
+PRs #61–63 remain experiment evidence. The Board selected a Knowledge-only
+fresh-incarnation/quarantine amendment after witness recovery. A separate MariaDB
+witness and independent default-closed admission gate remain unimplemented;
+operator assignment and integration proof are open. KAP-3–10 remain ahead; there
 is no Home Knowledge endpoint, runtime deployment, or live Knowledge verification.
 The complete KAP-1–10 evidence and dependency map is
 in [Knowledge Architecture](KNOWLEDGE.md#knowledge-authorization-plan-implementation-progress).
