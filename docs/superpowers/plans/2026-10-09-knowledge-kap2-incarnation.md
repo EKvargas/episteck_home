@@ -30,12 +30,12 @@
 
 ### Task 1 — Private witness and admission gateway
 
-**Files to create:** `services/home-witness-gateway/` gateway package, versioned SQL migrations and `tests/test_admission.py`; no direct edits to existing Home APIs. **Input:** authenticated Home partition/event request. **Output:** current `(incarnation, revision, state, digest, epochs)` or a fail-closed error.
+**Task 1 disposable files:** `spike/knowledge-kap2-transactional-witness/gateway.py`, `gateway_schema.sql` and `test_gateway.py`; no direct edits to existing Home APIs. **Input:** local synthetic partition/event call through scoped MariaDB principals. **Output:** current `(incarnation, revision, state, digest, epochs)` or a fail-closed error. A remote authenticated listener and dynamic epoch registration belong to a later integration review.
 
-- [ ] Write disposable tests for startup `CLOSED`, restart/connection loss `CLOSED`, competing instance exclusion, obsolete epoch procedure denial and direct DML denial.
-- [ ] Implement private MariaDB schema and definer procedures for exact-event PENDING/COMMITTED, epoch transition and current locking read; restrict read/mutate/recovery database principals separately.
-- [ ] Implement a gateway listener that opens only after taking the exclusive process lock; startup and reconnect never load an `OPEN` flag from SQL. A database disconnect closes the listener's admission immediately.
-- [ ] Run the gateway tests against a private socket-only MariaDB and verify the first request after restart denies. Commit this independently reviewable unit.
+- [x] Write disposable tests for startup `CLOSED`, restart/connection loss `CLOSED`, competing instance exclusion, obsolete epoch procedure denial and direct DML denial.
+- [x] Implement private MariaDB schema and definer procedures for exact-event PENDING/COMMITTED, fixed epoch-1/2 transition and current locking read; restrict read/mutate/recovery database principals separately.
+- [x] Implement a disconnected local gateway object that takes the exclusive process lock; startup and reconnect never load an `OPEN` flag from SQL. A database disconnect closes admission immediately. No network listener is exposed.
+- [x] Run the gateway tests against a private socket-only MariaDB and verify the first request after restart denies; [local evidence](../../../spike/knowledge-kap2-transactional-witness/evidence/2026-10-09/LOCAL_GATEWAY_EVIDENCE.md) is recorded in the Task 1 implementation PR.
 
 ### Task 2 — Home Knowledge-only guarded authority and reauthorization
 
@@ -66,4 +66,4 @@
 
 ## Gate before implementation
 
-Architect review must accept the §19 contract wording, the domain-read basis boundary and the independently enforced gate threat model. The user must assign a witness operator and backup delegate before any installation. A later instruction must separately authorize disposable integration resources and any production work.
+The architect accepts the §19 scope and default-closed gateway only as a disposable integration candidate; Board ratification is pending. A later review must assess the domain-read basis boundary and the independently enforced gateway threat model. The user must assign a witness operator and backup delegate before any persistent installation. A later instruction must separately authorize disposable Home integration resources and any production work.

@@ -87,9 +87,12 @@ but unmerged. KAP-2 is open. After PR #63 at
 current request-time GCS mechanism; PRs #61–63 remain evidence. The
 [transactional-witness feasibility brief](proposals/KNOWLEDGE_KAP2_TRANSACTIONAL_WITNESS_FEASIBILITY.md)
 evaluates a separate MariaDB instance and leaves restore proof for review.
-The Board selected the [Knowledge-only fresh-incarnation/quarantine amendment](proposals/KNOWLEDGE_KAP2_INCARNATION_ADMISSION_AMENDMENT.md)
-for witness restart, replacement and uncertain recovery; admission enforcement,
-operator assignment and disposable integration remain open.
+The architect accepts the [Knowledge-only fresh-incarnation/quarantine candidate](proposals/KNOWLEDGE_KAP2_INCARNATION_ADMISSION_AMENDMENT.md)
+for disposable integration after witness restart, replacement and uncertain recovery;
+Board ratification, admission enforcement, operator assignment and the later
+disposable Home integration remain open.
+Task 1's disconnected private-MariaDB gateway has local synthetic evidence only;
+it has no Home endpoint, persistent host installation or production admission path.
 KAP-3–10 remain ahead. The accepted
 sequence and per-item criteria are in the runtime contract §15; live gates #2
 (latency), #3 (timing/existence-oracle closure), and #5 (real R14/domain measurement)
