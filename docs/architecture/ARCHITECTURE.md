@@ -142,6 +142,10 @@ Control Plane.
 9. **Trusted actor binding** — actor is derived from an authenticated session, never
    supplied; confidential BFF on the EU node; dual principal; native OIDC deferred
    because Frappe cannot require PKCE. → `adr/0009-trusted-actor-binding.md`
+10. **Knowledge witness recovery** — default-closed admission and a fresh authorization
+    incarnation quarantine prior Knowledge permission after witness restart or uncertain
+    recovery; unrelated Home permissions remain unchanged. →
+    `adr/0010-knowledge-authorization-recovery-incarnation.md`
 
 ## 5. Cross-cutting rules
 
