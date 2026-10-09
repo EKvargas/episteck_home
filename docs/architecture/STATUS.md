@@ -113,6 +113,12 @@ is no Home Knowledge endpoint, runtime deployment, or live Knowledge verificatio
 The complete KAP-1–10 evidence and dependency map is
 in [Knowledge Architecture](KNOWLEDGE.md#knowledge-authorization-plan-implementation-progress).
 
+A limited, disconnected PERSON vertical now has 14 local two-MariaDB tests and
+a marked disposable Frappe integration run. It covers selected guarded sources,
+the Home partition lane, evaluated-state digest, fresh-incarnation recovery,
+and selected ordinary Home behavior. KAP-2 remains open; see the linked progress
+map for scope and unproved production acceptance.
+
 Home's F3 implementation, Finance, and Episteck UI are separate tracks and do not
 change this Knowledge sequence. Open runtime gates #2 (latency), #3
 (timing/existence-oracle closure), and #5 (real R14/domain measurement) remain open.
