@@ -1,0 +1,19 @@
+{
+  "cleanup": {
+    "private_db_stopped": true,
+    "private_redis_stopped": true,
+    "private_witness_stopped": true,
+    "site_removed": true
+  },
+  "person_vertical": {
+    "authenticated_grant": true,
+    "existing_api_unchanged": true,
+    "first_read_closed": true,
+    "frappe_generic_writes_denied": true,
+    "fresh_incarnation_selected_reauthorization": true,
+    "ordinary_person_write": true,
+    "ordinary_session_lifecycle": true,
+    "person_self": true
+  },
+  "site": "marked_disposable"
+}
