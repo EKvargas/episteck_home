@@ -1,0 +1,285 @@
+{
+  "files": {
+    "events.jsonl": {
+      "attempts": {
+        "bucket_get": 376,
+        "create": 144,
+        "get": 3629,
+        "head_cas": 145,
+        "key_metadata": 6,
+        "kms_sign": 143,
+        "list": 40,
+        "other_object": 1
+      },
+      "final_statuses": [
+        "FAIL",
+        "PASS_WITH_OPEN_PROOFS"
+      ],
+      "lines": 9071,
+      "object_attempts": 3959,
+      "responses": {
+        "bucket_get:200": 375,
+        "bucket_get:404": 1,
+        "create:200": 142,
+        "create:403": 2,
+        "get:200": 3197,
+        "get:404": 431,
+        "get:ReadTimeout": 1,
+        "head_cas:200": 143,
+        "head_cas:403": 1,
+        "head_cas:429": 1,
+        "key_metadata:200": 6,
+        "kms_sign:200": 143,
+        "list:200": 40,
+        "other_object:403": 1
+      }
+    },
+    "fault-reads.jsonl": {
+      "attempts": {
+        "bucket_get": 9,
+        "get": 8,
+        "key_metadata": 3
+      },
+      "final_statuses": [
+        "FAULT_READS_PASS"
+      ],
+      "lines": 47,
+      "object_attempts": 8,
+      "responses": {
+        "bucket_get:200": 7,
+        "bucket_get:403": 1,
+        "bucket_get:404": 1,
+        "get:200": 5,
+        "get:403": 1,
+        "get:404": 1,
+        "get:Timeout": 1,
+        "key_metadata:200": 3
+      }
+    },
+    "preflight.jsonl": {
+      "attempts": {
+        "bucket_get": 3,
+        "key_metadata": 3
+      },
+      "final_statuses": [
+        "FAIL",
+        "PREFLIGHT_PASS"
+      ],
+      "lines": 19,
+      "object_attempts": 0,
+      "responses": {
+        "bucket_get:200": 2,
+        "bucket_get:403": 1,
+        "key_metadata:200": 3
+      }
+    },
+    "smoke.jsonl": {
+      "attempts": {
+        "bucket_get": 5,
+        "create": 1,
+        "get": 3,
+        "head_cas": 1,
+        "key_metadata": 6,
+        "kms_sign": 2
+      },
+      "final_statuses": [
+        "FAIL",
+        "SMOKE_PASS"
+      ],
+      "lines": 47,
+      "object_attempts": 5,
+      "responses": {
+        "bucket_get:200": 5,
+        "create:200": 1,
+        "get:200": 2,
+        "get:404": 1,
+        "head_cas:200": 1,
+        "key_metadata:200": 6,
+        "kms_sign:200": 1
+      }
+    },
+    "stale-cas.jsonl": {
+      "attempts": {
+        "bucket_get": 2,
+        "head_cas": 2,
+        "key_metadata": 3
+      },
+      "final_statuses": [
+        "STALE_CAS_PASS"
+      ],
+      "lines": 20,
+      "object_attempts": 2,
+      "responses": {
+        "bucket_get:200": 2,
+        "head_cas:412": 2,
+        "key_metadata:200": 3
+      }
+    }
+  },
+  "main_final": {
+    "after_takeover_allows": true,
+    "before_takeover_allows": true,
+    "benchmark": {
+      "0": {
+        "cold": {
+          "individual_ms": {
+            "max": 200.76658949255943,
+            "min": 105.13057932257652,
+            "n": 60,
+            "p50": 142.2581896185875,
+            "p95": 174.21382665634155,
+            "p99": 187.46580556035042
+          },
+          "pair_ms": {
+            "max": 339.25921097397804,
+            "min": 252.99768149852753,
+            "n": 30,
+            "p50": 287.09735348820686,
+            "p95": 311.22224032878876,
+            "p99": 339.25921097397804
+          }
+        },
+        "warm": {
+          "individual_ms": {
+            "max": 203.04955914616585,
+            "min": 105.99732771515846,
+            "n": 60,
+            "p50": 127.01981514692307,
+            "p95": 140.43498411774635,
+            "p99": 146.06055989861488
+          },
+          "pair_ms": {
+            "max": 347.2790941596031,
+            "min": 222.68040478229523,
+            "n": 30,
+            "p50": 254.3897032737732,
+            "p95": 279.00662273168564,
+            "p99": 347.2790941596031
+          }
+        }
+      },
+      "1": {
+        "cold": {
+          "individual_ms": {
+            "max": 293.6454452574253,
+            "min": 165.07147625088692,
+            "n": 60,
+            "p50": 203.90332117676735,
+            "p95": 261.2454518675804,
+            "p99": 284.08169001340866
+          },
+          "pair_ms": {
+            "max": 503.2762624323368,
+            "min": 371.5663067996502,
+            "n": 30,
+            "p50": 412.05691918730736,
+            "p95": 466.91519021987915,
+            "p99": 503.2762624323368
+          }
+        },
+        "warm": {
+          "individual_ms": {
+            "max": 239.65074121952057,
+            "min": 155.371755361557,
+            "n": 60,
+            "p50": 177.26865410804749,
+            "p95": 198.52354004979134,
+            "p99": 204.38390970230103
+          },
+          "pair_ms": {
+            "max": 431.29440024495125,
+            "min": 324.4571015238762,
+            "n": 30,
+            "p50": 354.4240854680538,
+            "p95": 381.75512850284576,
+            "p99": 431.29440024495125
+          }
+        }
+      },
+      "8": {
+        "cold": {
+          "individual_ms": {
+            "max": 1247.315425425768,
+            "min": 581.5984196960926,
+            "n": 60,
+            "p50": 699.6735110878944,
+            "p95": 856.1655916273594,
+            "p99": 1131.6396743059158
+          },
+          "pair_ms": {
+            "max": 2021.9371542334557,
+            "min": 1252.4924241006374,
+            "n": 30,
+            "p50": 1400.571271777153,
+            "p95": 1832.7800184488297,
+            "p99": 2021.9371542334557
+          }
+        },
+        "warm": {
+          "individual_ms": {
+            "max": 860.4280278086662,
+            "min": 537.9901863634586,
+            "n": 60,
+            "p50": 607.4112355709076,
+            "p95": 669.2532002925873,
+            "p99": 680.7742565870285
+          },
+          "pair_ms": {
+            "max": 1523.4590135514736,
+            "min": 1145.4060450196266,
+            "n": 30,
+            "p50": 1207.726377993822,
+            "p95": 1335.3442400693893,
+            "p99": 1523.4590135514736
+          }
+        }
+      }
+    },
+    "combined_rollback_denies": true,
+    "competing_publishers_blocked": true,
+    "counts": {
+      "bucket_get": 376,
+      "create": 144,
+      "get": 3629,
+      "head_cas": 145,
+      "key_metadata": 6,
+      "kms_sign": {
+        "checkpoint": 9,
+        "new": 5,
+        "old": 129
+      },
+      "list": 40,
+      "other_object": 1
+    },
+    "credential_isolation": {
+      "head_cannot_delete_journal": true,
+      "head_cannot_replace_journal": true,
+      "old_writer_cannot_append_journal": true,
+      "old_writer_cannot_replace_head": true
+    },
+    "delayed_prepare_denies": true,
+    "full_audits": [
+      {
+        "latency_ms": 8410.745,
+        "listed_objects": 137,
+        "verified_objects": 137
+      },
+      {
+        "latency_ms": 5167.526,
+        "listed_objects": 137,
+        "verified_objects": 137
+      }
+    ],
+    "lost_connection_denies": true,
+    "missing_bucket_denies": true,
+    "old_signer_still_works": true,
+    "old_writer_rejected_by_publisher": true,
+    "probe": "kap2_real_bounded_ashburn",
+    "restored_current_denies": true,
+    "revoked_denies": true,
+    "status": "PASS_WITH_OPEN_PROOFS",
+    "timeout_denies": true,
+    "wrong_incarnation_denies": true
+  },
+  "object_attempts_total": 3974
+}

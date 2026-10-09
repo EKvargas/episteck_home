@@ -1,0 +1,47 @@
+{"category": "bucket_get", "counts": {"bucket_get": 1, "create": 0, "get": 0, "head_cas": 0, "key_metadata": 0, "kms_sign": {}, "list": 0, "other_object": 0}, "key": "", "type": "attempt_reserved", "utc": 1791540572.2379715}
+{"category": "bucket_get", "latency_ms": 75.929, "method": "GET", "role": "verifier", "status": 200, "type": "request", "utc": 1791540572.3153074}
+{"category": "bucket_get", "counts": {"bucket_get": 2, "create": 0, "get": 0, "head_cas": 0, "key_metadata": 0, "kms_sign": {}, "list": 0, "other_object": 0}, "key": "", "type": "attempt_reserved", "utc": 1791540572.3166864}
+{"category": "bucket_get", "latency_ms": 33.776, "method": "GET", "role": "verifier", "status": 200, "type": "request", "utc": 1791540572.3514514}
+{"pins": {"kap2-bnd-head-771685799600": ["771685799600", "2026-10-09T09:47:29.831Z", "us-east4", "kap2-bnd-head-771685799600"], "kap2-bnd-journal-771685799600": ["771685799600", "2026-10-09T09:47:30.557Z", "us-east4", "kap2-bnd-journal-771685799600"]}, "type": "bucket_pin", "utc": 1791540572.3528285}
+{"category": "key_metadata", "counts": {"bucket_get": 2, "create": 0, "get": 0, "head_cas": 0, "key_metadata": 1, "kms_sign": {}, "list": 0, "other_object": 0}, "key": "", "type": "attempt_reserved", "utc": 1791540572.3537076}
+{"category": "key_metadata", "latency_ms": 98.458, "method": "GET", "role": "operator", "status": 200, "type": "request", "utc": 1791540572.453286}
+{"key": "new", "public_sha256": "df8c9f5acc4a1a348b314a3807ddabd9e5fbfb7cc827636686663dc55750baec", "type": "key_pin", "utc": 1791540572.4558175, "version": "projects/episteck-kap2-bnd-261009/locations/us-east4/keyRings/kap2-bnd-261009/cryptoKeys/new-epoch/cryptoKeyVersions/1"}
+{"category": "key_metadata", "counts": {"bucket_get": 2, "create": 0, "get": 0, "head_cas": 0, "key_metadata": 2, "kms_sign": {}, "list": 0, "other_object": 0}, "key": "", "type": "attempt_reserved", "utc": 1791540572.4569392}
+{"category": "key_metadata", "latency_ms": 61.648, "method": "GET", "role": "operator", "status": 200, "type": "request", "utc": 1791540572.5197978}
+{"key": "old", "public_sha256": "48954998c946f8330ea19630f6b585ea960825d83f4efa4b12c7257d56339c8d", "type": "key_pin", "utc": 1791540572.521297, "version": "projects/episteck-kap2-bnd-261009/locations/us-east4/keyRings/kap2-bnd-261009/cryptoKeys/old-epoch/cryptoKeyVersions/1"}
+{"category": "key_metadata", "counts": {"bucket_get": 2, "create": 0, "get": 0, "head_cas": 0, "key_metadata": 3, "kms_sign": {}, "list": 0, "other_object": 0}, "key": "", "type": "attempt_reserved", "utc": 1791540572.5222304}
+{"category": "key_metadata", "latency_ms": 51.85, "method": "GET", "role": "operator", "status": 200, "type": "request", "utc": 1791540572.5748675}
+{"key": "checkpoint", "public_sha256": "33ab7cc296c49ac1b1808107fef9aaa5a3fd3026d7b905742e4dfe0b490a425e", "type": "key_pin", "utc": 1791540572.5762644, "version": "projects/episteck-kap2-bnd-261009/locations/us-east4/keyRings/kap2-bnd-261009/cryptoKeys/checkpoint/cryptoKeyVersions/1"}
+{"category": "get", "counts": {"bucket_get": 2, "create": 0, "get": 1, "head_cas": 0, "key_metadata": 3, "kms_sign": {}, "list": 0, "other_object": 0}, "key": "", "type": "attempt_reserved", "utc": 1791540572.5803313}
+{"category": "get", "latency_ms": 55.588, "method": "GET", "role": "verifier", "status": 200, "type": "request", "utc": 1791540572.636904}
+{"category": "get", "counts": {"bucket_get": 2, "create": 0, "get": 2, "head_cas": 0, "key_metadata": 3, "kms_sign": {}, "list": 0, "other_object": 0}, "key": "", "type": "attempt_reserved", "utc": 1791540572.6383142}
+{"category": "get", "latency_ms": 27.425, "method": "GET", "role": "verifier", "status": 200, "type": "request", "utc": 1791540572.6666474}
+{"generation": "1791539844182447", "seq": 0, "type": "resume_attached", "utc": 1791540572.669612}
+{"category": "bucket_get", "counts": {"bucket_get": 3, "create": 0, "get": 2, "head_cas": 0, "key_metadata": 3, "kms_sign": {}, "list": 0, "other_object": 0}, "key": "", "type": "attempt_reserved", "utc": 1791540572.671815}
+{"category": "bucket_get", "latency_ms": 37.635, "method": "GET", "role": "verifier", "status": 200, "type": "request", "utc": 1791540572.7107415}
+{"category": "get", "counts": {"bucket_get": 3, "create": 0, "get": 3, "head_cas": 0, "key_metadata": 3, "kms_sign": {}, "list": 0, "other_object": 0}, "key": "", "type": "attempt_reserved", "utc": 1791540572.7122626}
+{"category": "get", "latency_ms": 28.176, "method": "GET", "role": "verifier", "status": 200, "type": "request", "utc": 1791540572.7415981}
+{"category": "get", "counts": {"bucket_get": 3, "create": 0, "get": 4, "head_cas": 0, "key_metadata": 3, "kms_sign": {}, "list": 0, "other_object": 0}, "key": "", "type": "attempt_reserved", "utc": 1791540572.7429626}
+{"category": "get", "latency_ms": 97.368, "method": "GET", "role": "verifier", "status": 200, "type": "request", "utc": 1791540572.841251}
+{"category": "get", "counts": {"bucket_get": 3, "create": 0, "get": 5, "head_cas": 0, "key_metadata": 3, "kms_sign": {}, "list": 0, "other_object": 0}, "key": "", "type": "attempt_reserved", "utc": 1791540572.8430662}
+{"category": "get", "latency_ms": 25.749, "method": "GET", "role": "verifier", "status": 404, "type": "request", "utc": 1791540572.8698432}
+{"category": "bucket_get", "counts": {"bucket_get": 4, "create": 0, "get": 5, "head_cas": 0, "key_metadata": 3, "kms_sign": {}, "list": 0, "other_object": 0}, "key": "", "type": "attempt_reserved", "utc": 1791540572.8723307}
+{"category": "bucket_get", "latency_ms": 29.195, "method": "GET", "role": "verifier", "status": 200, "type": "request", "utc": 1791540572.902448}
+{"category": "get", "counts": {"bucket_get": 4, "create": 0, "get": 6, "head_cas": 0, "key_metadata": 3, "kms_sign": {}, "list": 0, "other_object": 0}, "key": "", "type": "attempt_reserved", "utc": 1791540572.903744}
+{"category": "get", "latency_ms": 0.027, "method": "GET", "role": "verifier", "status": 200, "type": "request", "utc": 1791540572.904788}
+{"category": "bucket_get", "counts": {"bucket_get": 5, "create": 0, "get": 6, "head_cas": 0, "key_metadata": 3, "kms_sign": {}, "list": 0, "other_object": 0}, "key": "", "type": "attempt_reserved", "utc": 1791540572.906822}
+{"category": "bucket_get", "latency_ms": 28.894, "method": "GET", "role": "verifier", "status": 200, "type": "request", "utc": 1791540572.9365244}
+{"category": "get", "counts": {"bucket_get": 5, "create": 0, "get": 7, "head_cas": 0, "key_metadata": 3, "kms_sign": {}, "list": 0, "other_object": 0}, "key": "", "type": "attempt_reserved", "utc": 1791540572.9376407}
+{"category": "get", "latency_ms": 0.026, "method": "GET", "role": "verifier", "status": 403, "type": "request", "utc": 1791540572.9384677}
+{"category": "bucket_get", "counts": {"bucket_get": 6, "create": 0, "get": 7, "head_cas": 0, "key_metadata": 3, "kms_sign": {}, "list": 0, "other_object": 0}, "key": "", "type": "attempt_reserved", "utc": 1791540572.9402409}
+{"category": "bucket_get", "latency_ms": 25.013, "method": "GET", "role": "verifier", "status": 200, "type": "request", "utc": 1791540572.965982}
+{"category": "get", "counts": {"bucket_get": 6, "create": 0, "get": 8, "head_cas": 0, "key_metadata": 3, "kms_sign": {}, "list": 0, "other_object": 0}, "key": "", "type": "attempt_reserved", "utc": 1791540572.967507}
+{"category": "get", "latency_ms": 0.025, "method": "GET", "role": "verifier", "transport_error": "Timeout", "type": "request", "utc": 1791540572.9683344}
+{"category": "bucket_get", "counts": {"bucket_get": 7, "create": 0, "get": 8, "head_cas": 0, "key_metadata": 3, "kms_sign": {}, "list": 0, "other_object": 0}, "key": "", "type": "attempt_reserved", "utc": 1791540572.970727}
+{"category": "bucket_get", "latency_ms": 28.367, "method": "GET", "role": "verifier", "status": 200, "type": "request", "utc": 1791540572.9999828}
+{"category": "bucket_get", "counts": {"bucket_get": 8, "create": 0, "get": 8, "head_cas": 0, "key_metadata": 3, "kms_sign": {}, "list": 0, "other_object": 0}, "key": "", "type": "attempt_reserved", "utc": 1791540573.0029855}
+{"category": "bucket_get", "latency_ms": 129.035, "method": "GET", "role": "verifier", "status": 404, "type": "request", "utc": 1791540573.133089}
+{"category": "bucket_get", "counts": {"bucket_get": 9, "create": 0, "get": 8, "head_cas": 0, "key_metadata": 3, "kms_sign": {}, "list": 0, "other_object": 0}, "key": "", "type": "attempt_reserved", "utc": 1791540573.1357949}
+{"category": "bucket_get", "latency_ms": 107.122, "method": "GET", "role": "verifier", "status": 403, "type": "request", "utc": 1791540573.243989}
+{"results": {"baseline_allows": true, "injected_head_403_denies": true, "injected_malformed_head_denies": true, "injected_timeout_denies": true, "real_missing_bucket_denies": true, "real_permission_failure_denies": true, "wrong_incarnation_denies": true}, "type": "fault_reads", "utc": 1791540573.245609}
+{"result": {"counts": {"bucket_get": 9, "create": 0, "get": 8, "head_cas": 0, "key_metadata": 3, "kms_sign": {}, "list": 0, "other_object": 0}, "fault_reads": {"baseline_allows": true, "injected_head_403_denies": true, "injected_malformed_head_denies": true, "injected_timeout_denies": true, "real_missing_bucket_denies": true, "real_permission_failure_denies": true, "wrong_incarnation_denies": true}, "probe": "kap2_real_bounded_ashburn", "status": "FAULT_READS_PASS"}, "type": "final", "utc": 1791540573.2467215}

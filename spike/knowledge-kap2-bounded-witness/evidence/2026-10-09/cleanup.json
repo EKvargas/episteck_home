@@ -1,0 +1,28 @@
+{
+  "project_id": "episteck-kap2-bnd-261009",
+  "project_number": "771685799600",
+  "project_lifecycle_after_delete": "DELETE_REQUESTED",
+  "billing_enabled_after_delete": false,
+  "pre_cleanup_inventory": {
+    "head_objects": 2,
+    "journal_objects": 143,
+    "unexpected_object_names": 0
+  },
+  "verified_before_project_delete": {
+    "head_objects_remaining": 0,
+    "journal_objects_remaining": 0,
+    "buckets_remaining": 0,
+    "service_accounts_remaining": 0,
+    "matching_budget_remaining": 0,
+    "key_scoped_signer_bindings_remaining": 0,
+    "private_mariadb_stopped": true,
+    "ashburn_disposable_directory_removed": true
+  },
+  "kms_versions": {
+    "old_epoch": "DISABLED",
+    "new_epoch": "DISABLED",
+    "checkpoint": "DISABLED"
+  },
+  "irreversible_key_destruction": false,
+  "residue": "Project deletion is asynchronous; key rings, disabled keys, audit metadata and unsettled final billing can remain until closure completes."
+}
