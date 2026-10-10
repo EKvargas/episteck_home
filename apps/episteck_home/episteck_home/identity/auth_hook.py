@@ -105,6 +105,7 @@ def establish_delegated_context() -> None:
         # never the message, which could quote a token or a header.
         frappe.local.episteck_delegated_user = None
         frappe.local.episteck_delegation_audience = None
+        frappe.local.episteck_delegated_session_id = None
         _stage(f"{STAGE_EXCEPTION}:{type(error).__name__}")
         try:
             frappe.log_error(
@@ -118,6 +119,9 @@ def establish_delegated_context() -> None:
 def _establish() -> None:
     frappe.local.episteck_delegated_user = None
     frappe.local.episteck_delegation_audience = None
+    # Set only after the session binds; read by get_runtime_grant_status. It lives in
+    # request-local state and is never logged, returned, or put in a stage code.
+    frappe.local.episteck_delegated_session_id = None
     _stage(STAGE_START)
 
     token = frappe.get_request_header(DELEGATION_HEADER)
@@ -197,6 +201,7 @@ def _establish() -> None:
     frappe.local.episteck_delegated_user = session_user
     frappe.local.episteck_machine_caller = machine_user
     frappe.local.episteck_delegation_audience = context.audience
+    frappe.local.episteck_delegated_session_id = context.session_id
     _stage(STAGE_BOUND)
 
 

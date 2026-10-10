@@ -239,6 +239,7 @@ WHITELISTED = [
     "get_care_dashboard",
     "whoami",
     "get_home_bootstrap",
+    "get_runtime_grant_status",
 ]
 
 

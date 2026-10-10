@@ -71,6 +71,16 @@ Frappe `auth_hooks` verifies the delegation and maps the session to a User throu
 rather than a token claim, **logout and revocation deny the very next call** even if
 the token is still unexpired.
 
+### Session lifetimes `[H5]`
+- **Browser session:** 12 h (`bff_session` + `Home Delegated Session`).
+- **Agent runtime grant:** up to 90 days, created only by a human with an OAuth token and a
+  login at most 10 minutes old, only for runtimes in `home_runtime_ids` and users in
+  `home_runtime_grantees`. Rotated on renewal, revoked immediately by `/runtime/revoke` or
+  `/logout/all`. The BFF row stores no OAuth tokens.
+- Accepted risk (owner, P4): a compromised agent account can act as the owner for the grant's
+  lifetime. Controls: network allowlist to the gateway, no agent credentials or mint socket,
+  limited audiences, mint rate limit, visible last use, immediate revocation.
+
 ### Binding integrity
 - `Person.linked_user` is **unique**: one User maps to at most one Person.
 - Two Persons for one User, or a User with no Person, **fails closed** — never guesses.

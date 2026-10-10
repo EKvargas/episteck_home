@@ -108,7 +108,11 @@ replay-resistant token carries an **opaque session id** and never a Person id. A
 to a User via a `Home Delegated Session` record, so logout and revocation deny the very
 next call. `Person.linked_user` is unique; ambiguity fails closed.
 
-See `adr/0009-trusted-actor-binding.md`.
+**Agent runtime grant `[H5]`.** The agent no longer depends on a browser login: the owner
+grants `home-agent-primary` a revocable session of at most 90 days (self-service, human OAuth
+token only, runtime and grantee allowlists in site config). Delegations are still 120 s,
+single use, without a Person id. See `adr/0009-trusted-actor-binding.md` and
+`adr/0010-agent-runtime-grant.md`.
 
 The Nuremberg Home MCP is a thin business adapter only. It owns no identity, consent,
 or family data and exposes no consent mutation. It canonicalizes agent-supplied
@@ -142,6 +146,10 @@ Control Plane.
 9. **Trusted actor binding** — actor is derived from an authenticated session, never
    supplied; confidential BFF on the EU node; dual principal; native OIDC deferred
    because Frappe cannot require PKCE. → `adr/0009-trusted-actor-binding.md`
+10. **Agent runtime grant** `[H5]` — the owner explicitly grants `home-agent-primary` up to
+    90 days of delegated access, revocable and independent of browser sessions. A grant is a
+    long-lived `Home Delegated Session` (`client = agent-runtime:<id>`); the BFF keeps only a
+    pointer row with no OAuth tokens. → `adr/0010-agent-runtime-grant.md`
 
 ## 5. Cross-cutting rules
 

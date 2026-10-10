@@ -67,6 +67,16 @@ approval. No G1.7 stage is created.
 Full runtime, provenance, network, rollback, and trust-boundary evidence is in
 `G1_6_VALIDATION.md`.
 
+## H5 — agent runtime grant (IN REVIEW, not deployed)
+
+| Item | State |
+| --- | --- |
+| Home: `open_runtime_grant`, `close_runtime_grant`, `get_runtime_grant_status` | PR1 in review |
+| BFF: grant table, `/runtime`, mint precedence, `RUNTIME_LEGACY_BINDING` | PR2 pending |
+| Live verification | not run |
+
+Design: `adr/0010-agent-runtime-grant.md`.
+
 ## G2 blockers
 
 1. Complete the **Knowledge Technology Gate** before G2 implementation.
