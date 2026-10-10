@@ -10,6 +10,7 @@ import importlib
 import inspect
 import sys
 import types
+from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
@@ -123,7 +124,11 @@ def _make_fake_frappe():
     fake.loaded_person_ids = []
     fake.get_all_calls = []
     fake.db = FakeDatabase(fake)
-    fake.utils = SimpleNamespace(today=lambda: "2026-09-15", now=lambda: "2026-09-15 12:00:00")
+    fake.utils = SimpleNamespace(
+        today=lambda: "2026-09-15",
+        now=lambda: "2026-09-15 12:00:00",
+        now_datetime=lambda: datetime(2026, 9, 15, 12, 0, 0),
+    )
     fake.get_request_header = lambda name: None
 
     def whitelist(*args, **kwargs):
