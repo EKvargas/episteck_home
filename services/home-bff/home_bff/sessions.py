@@ -28,6 +28,10 @@ ISSUER = "episteck-home-bff"
 # Delegations live for a single agent turn, not a session (proposal §18 Q2).
 DELEGATION_TTL_SECONDS = 120
 
+# A runtime grant needs a login at most this old (H5): a stolen session cookie alone
+# cannot hand the agent a 90-day permission.
+RECENT_LOGIN_SECONDS = 600
+
 # Cookie policy for the browser-facing session reference.
 #
 # ``samesite=lax`` is REQUIRED here, not a weakening of ``strict``: the cookie is set

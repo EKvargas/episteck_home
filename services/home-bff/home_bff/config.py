@@ -26,6 +26,28 @@ def _optional(key: str, default: str) -> str:
     return (os.environ.get(key) or "").strip() or default
 
 
+def _flag(key: str, default: bool) -> bool:
+    raw = (os.environ.get(key) or "").strip().lower()
+    if not raw:
+        return default
+    if raw in {"on", "true", "1"}:
+        return True
+    if raw in {"off", "false", "0"}:
+        return False
+    raise ConfigError(f"{key} must be on or off")
+
+
+def _bounded_int(key: str, default: int, low: int, high: int) -> int:
+    raw = _optional(key, str(default))
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ConfigError(f"{key} must be an integer") from None
+    if not low <= value <= high:
+        raise ConfigError(f"{key} must be between {low} and {high}")
+    return value
+
+
 @dataclass(frozen=True)
 class Settings:
     home_base_url: str
@@ -38,6 +60,10 @@ class Settings:
     mint_socket_path: str
     port: int
     scope: str
+    # H5. Transition flag: while on, a browser login still claims the runtime and the
+    # mint falls back to that binding when no grant exists. Off = grant only.
+    runtime_legacy_binding: bool = True
+    runtime_grant_days: int = 90
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -57,4 +83,6 @@ class Settings:
             mint_socket_path=_required("BFF_MINT_SOCKET_PATH"),
             port=int(_optional("BFF_PORT", "9933")),
             scope=_optional("BFF_SCOPE", "all openid"),
+            runtime_legacy_binding=_flag("RUNTIME_LEGACY_BINDING", True),
+            runtime_grant_days=_bounded_int("BFF_RUNTIME_GRANT_DAYS", 90, 1, 90),
         )
