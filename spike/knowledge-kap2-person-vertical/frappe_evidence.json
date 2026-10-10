@@ -13,7 +13,8 @@
     "fresh_incarnation_selected_reauthorization": true,
     "ordinary_person_write": true,
     "ordinary_session_lifecycle": true,
-    "person_self": true
+    "person_self": true,
+    "serving_privileges_narrow": true
   },
   "site": "marked_disposable"
 }
