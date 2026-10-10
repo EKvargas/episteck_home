@@ -12,7 +12,7 @@ single-use, so that second call was replay-denied in production; the doubles her
 would have hidden it, because a double has no replay store. Every double now counts
 its calls so a test can assert the one-call contract directly.
 """
-from app.home_control.client import AccessDecision
+from app.home_control.client import SESSION_INVALID, AccessDecision
 
 # The delegated human session used across Nutrition tests.
 SESSION = "test-delegation-token"
@@ -50,7 +50,9 @@ class AllowAllAuthorizer(_CountingAuthorizer):
         self._record(delegation)
         if not delegation:
             return AccessDecision(
-                False, "no authenticated human session (fail closed)"
+                False,
+                "no authenticated human session (fail closed)",
+                SESSION_INVALID,
             )
         return AccessDecision(True, "test allow")
 
@@ -59,7 +61,9 @@ class AllowAllAuthorizer(_CountingAuthorizer):
         self.requirements.append(tuple(requirements))
         if not delegation:
             return AccessDecision(
-                False, "no authenticated human session (fail closed)"
+                False,
+                "no authenticated human session (fail closed)",
+                SESSION_INVALID,
             )
         return AccessDecision(True, "test allow")
 
