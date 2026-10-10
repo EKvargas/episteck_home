@@ -45,6 +45,7 @@ class PersonAuthority:
                  clock: Callable[[], datetime] | None = None) -> None:
         self.witness = witness
         self.binding = binding
+        self.home_socket = home_socket
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.reader = pymysql.connect(unix_socket=home_socket, user="ha_reader",
                                       password=reader_password, database="home_auth",
@@ -94,8 +95,10 @@ class PersonAuthority:
                     cursor.execute("SELECT RELEASE_LOCK(%s)", (name,))
                     if cursor.fetchone() != (1,):
                         self.open = False
-            except pymysql.MySQLError:
+                        raise RuntimeError("Home partition lane release was not proven")
+            except pymysql.MySQLError as exc:
                 self.open = False
+                raise RuntimeError("Home partition lane cleanup is uncertain") from exc
 
     def _assert_lane(self, conn: pymysql.Connection, name: str) -> None:
         conn.ping(reconnect=False)
@@ -117,8 +120,9 @@ class PersonAuthority:
             user = cursor.fetchone()
         return row[0], user[0] if user else None
 
-    def _actor(self, conn: pymysql.Connection, site: _Site) -> str:
-        user = self.binding.user_name()
+    def _actor(self, conn: pymysql.Connection, site: _Site,
+               user: str | None = None) -> str:
+        user = self.binding.user_name() if user is None else user
         if type(user) is not str or not user or user == "Guest":
             raise PermissionError("authenticated Home human required")
         with conn.cursor() as cursor:
@@ -214,26 +218,35 @@ class PersonAuthority:
         return frozenset(action.strip() for action in (value or "").replace("\n", ",").split(",")
                          if action.strip())
 
-    def recover(self) -> str:
+    def recover(self, *, recovery_password: str) -> str:
         self.open = False
-        site = self._site(self.mutator)
-        with self._lane(self.mutator, site):
-            incarnation = self.witness.recover(site.partition)
-            self.mutator.begin()
-            try:
-                with self.mutator.cursor() as cursor:
-                    cursor.execute("UPDATE home_auth.head SET incarnation=%s,revision=0,digest='DENY_ALL' "
-                                   "WHERE partition_id=%s", (incarnation, site.partition))
-                self.mutator.commit()
-            except Exception:
-                self.mutator.rollback()
-                raise
-            home = self._head(self.mutator, site.partition)
-            witness_row = self.witness._read_current(site.partition)
-            if home != (incarnation, 0, "DENY_ALL") or witness_row != (
-                incarnation, 0, 2, 2, "COMMITTED", None, "DENY_ALL"
-            ):
-                raise RuntimeError("fresh default-deny Home/witness readback failed")
+        recovery = pymysql.connect(
+            unix_socket=self.home_socket, user="ha_recovery",
+            password=recovery_password, database="home_auth", autocommit=True,
+            connect_timeout=2, read_timeout=2, write_timeout=2)
+        try:
+            site = self._site(recovery)
+            with self._lane(recovery, site):
+                incarnation = self.witness.recover(site.partition)
+                recovery.begin()
+                try:
+                    with recovery.cursor() as cursor:
+                        cursor.execute("CALL home_auth.reset_person_incarnation(%s,%s)",
+                                       (site.partition, incarnation))
+                        while cursor.nextset():
+                            pass
+                    recovery.commit()
+                except Exception:
+                    recovery.rollback()
+                    raise
+                home = self._head(recovery, site.partition)
+                witness_row = self.witness._read_current(site.partition)
+                if home != (incarnation, 0, "DENY_ALL") or witness_row != (
+                    incarnation, 0, 2, 2, "COMMITTED", None, "DENY_ALL"
+                ):
+                    raise RuntimeError("fresh default-deny Home/witness readback failed")
+        finally:
+            recovery.close()
         self.open = True
         return incarnation
 
@@ -296,7 +309,8 @@ class PersonAuthority:
             self.mutator.begin()
             home_committed = False
             try:
-                issuer = self._actor(self.mutator, site)
+                issuer_user = self.binding.user_name()
+                issuer = self._actor(self.mutator, site, issuer_user)
                 if caller_issuer is not None and caller_issuer != issuer:
                     raise PermissionError("caller issuer disagrees with authenticated Person")
                 incarnation, revision, _ = self._head(self.mutator, site.partition)
@@ -318,6 +332,7 @@ class PersonAuthority:
                     self.witness.commit(site.partition, incarnation, event_id, prior[2])
                     return prior[1], prior[2]
                 with self.mutator.cursor() as cursor:
+                    actor_id, target_id = issuer, issuer
                     if kind == "GRANT":
                         cursor.execute(f"SELECT actor_person,subject_person,domain,actions,state,"
                                        f"valid_from,valid_until,granted_by FROM `{site.database}`.`tabConsent Grant` "
@@ -334,53 +349,33 @@ class PersonAuthority:
                         dependency = cursor.fetchone()
                         if not dependency or dependency[0] != 1:
                             raise PermissionError("grant dependency is not current")
-                        cursor.execute("INSERT INTO home_auth.activations VALUES "
-                                       "(%s,%s,%s,'GRANT',%s,%s,%s,%s,%s,%s)",
-                                       (site.partition, incarnation, event_id, grant[0], grant[1],
-                                        domain, action, source, issuer))
-                    elif kind == "SELF":
-                        cursor.execute("INSERT INTO home_auth.activations VALUES "
-                                       "(%s,%s,%s,'SELF',%s,%s,%s,%s,'',%s)",
-                                       (site.partition, incarnation, event_id, issuer, issuer,
-                                        domain, action, issuer))
+                        actor_id, target_id = grant[0], grant[1]
                     elif kind in {"REVOKE", "DEPENDENCY_OFF"}:
                         cursor.execute(f"SELECT subject_person FROM `{site.database}`.`tabConsent Grant` "
                                        "WHERE name=%s", (source,))
                         owner = cursor.fetchone()
                         if not owner or owner[0] != issuer:
                             raise PermissionError("current grant issuer required")
-                        if kind == "REVOKE":
-                            cursor.execute(f"UPDATE `{site.database}`.`tabConsent Grant` "
-                                           "SET state='REVOKED' WHERE name=%s", (source,))
-                        else:
-                            cursor.execute("UPDATE home_auth.dependency SET current_state=0 "
-                                           "WHERE partition_id=%s AND grant_id=%s",
-                                           (site.partition, source))
-                            if cursor.rowcount != 1:
-                                raise PermissionError("current dependency absent")
                     elif kind == "DISABLE_ISSUER":
-                        if source != self.binding.user_name():
+                        if source != issuer_user:
                             raise PermissionError("issuer may only disable own bound User")
-                        cursor.execute(f"UPDATE `{site.database}`.`tabUser` SET enabled=0 WHERE name=%s",
-                                       (source,))
-                        if cursor.rowcount != 1:
-                            raise PermissionError("issuer User absent")
                     elif kind == "UNLINK_ISSUER":
                         if source != issuer:
                             raise PermissionError("issuer may only unlink own Person")
-                        cursor.execute(f"UPDATE `{site.database}`.`tabPerson` SET linked_user=NULL "
-                                       "WHERE name=%s", (issuer,))
-                        if cursor.rowcount != 1:
-                            raise PermissionError("issuer Person binding absent")
-                    else:
+                    elif kind != "SELF":
                         raise ValueError("unsupported authority mutation")
+                    cursor.execute("CALL home_auth.stage_person_mutation(" + ",".join(["%s"] * 12) + ")",
+                                   (site.partition, incarnation, revision, event_id, kind, source,
+                                    actor_id, target_id, domain, action, issuer, issuer_user))
+                    while cursor.nextset():
+                        pass
                     next_revision = revision + 1
                     digest, _, _, _ = self._state(self.mutator, site, incarnation, next_revision)
-                    cursor.execute("UPDATE home_auth.head SET revision=%s,digest=%s "
-                                   "WHERE partition_id=%s", (next_revision, digest, site.partition))
-                    cursor.execute("INSERT INTO home_auth.events VALUES (%s,%s,%s,%s,%s,%s,%s)",
-                                   (site.partition, incarnation, event_id, request_sha,
-                                    next_revision, digest, kind))
+                    cursor.execute("CALL home_auth.record_person_event(%s,%s,%s,%s,%s,%s,%s)",
+                                   (site.partition, incarnation, revision, event_id, request_sha,
+                                    digest, kind))
+                    while cursor.nextset():
+                        pass
                 self._assert_lane(self.mutator, self._lane_name(site.partition))
                 self.witness.prepare(site.partition, incarnation, event_id, revision, digest)
                 self.mutator.commit()

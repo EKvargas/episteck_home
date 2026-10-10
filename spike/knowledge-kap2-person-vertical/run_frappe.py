@@ -15,7 +15,7 @@ from pathlib import Path
 GATEWAY_DIR = Path(__file__).parents[1] / "knowledge-kap2-transactional-witness"
 sys.path.insert(0, str(GATEWAY_DIR))
 from test_gateway import PrivateDB  # noqa: E402
-from test_integrated import install_guards  # noqa: E402
+from test_integrated import install_guards, install_procedures  # noqa: E402
 
 
 def run_command(args: list[str], *, cwd: Path, env: dict[str, str],
@@ -94,7 +94,6 @@ def _run_site(bench, site, site_path, app, env, result, db, witness_db):
                     raise RuntimeError("private Redis did not start")
             db.sql("ALTER USER 'root'@'localhost' IDENTIFIED BY 'synthetic-person-root'")
             env["KAP2_DB_SOCKET"] = str(db.socket)
-            env["KAP2_DB_ROOT_PASSWORD"] = root_password
             env["KAP2_WITNESS_SOCKET"] = str(witness_db.socket)
             database = "_" + secrets.token_hex(8)
             run_command([
@@ -126,14 +125,25 @@ def _run_site(bench, site, site_path, app, env, result, db, witness_db):
             run_command(["mariadb", "--no-defaults", f"--socket={db.socket}",
                          "-uroot", f"-p{root_password}"], cwd=bench, env=env,
                         input_text=schema)
+            install_procedures(db, database, root_password)
             run_command(["mariadb", "--no-defaults", f"--socket={db.socket}",
                          "-uroot", f"-p{root_password}", "-e",
                          "CREATE USER 'ha_mutator'@'localhost' IDENTIFIED BY 'synthetic-mutator';"
                          "CREATE USER 'ha_reader'@'localhost' IDENTIFIED BY 'synthetic-reader';"
-                         "GRANT SELECT,INSERT,UPDATE,DELETE ON home_auth.* TO 'ha_mutator'@'localhost';"
+                         "CREATE USER 'ha_recovery'@'localhost' IDENTIFIED BY 'synthetic-home-recover';"
+                         "GRANT SELECT ON home_auth.* TO 'ha_mutator'@'localhost';"
                          "GRANT SELECT ON home_auth.* TO 'ha_reader'@'localhost';"
-                         f"GRANT SELECT,INSERT,UPDATE,DELETE ON `{database}`.* TO 'ha_mutator'@'localhost';"
-                         f"GRANT SELECT ON `{database}`.* TO 'ha_reader'@'localhost';"
+                         f"GRANT SELECT ON `{database}`.`tabUser` TO 'ha_mutator'@'localhost';"
+                         f"GRANT SELECT ON `{database}`.`tabPerson` TO 'ha_mutator'@'localhost';"
+                         f"GRANT SELECT ON `{database}`.`tabConsent Grant` TO 'ha_mutator'@'localhost';"
+                         f"GRANT SELECT ON `{database}`.`tabUser` TO 'ha_reader'@'localhost';"
+                         f"GRANT SELECT ON `{database}`.`tabPerson` TO 'ha_reader'@'localhost';"
+                         f"GRANT SELECT ON `{database}`.`tabConsent Grant` TO 'ha_reader'@'localhost';"
+                         "GRANT EXECUTE ON PROCEDURE home_auth.stage_person_mutation TO 'ha_mutator'@'localhost';"
+                         "GRANT EXECUTE ON PROCEDURE home_auth.record_person_event TO 'ha_mutator'@'localhost';"
+                         "GRANT SELECT ON home_auth.binding TO 'ha_recovery'@'localhost';"
+                         "GRANT SELECT ON home_auth.head TO 'ha_recovery'@'localhost';"
+                         "GRANT EXECUTE ON PROCEDURE home_auth.reset_person_incarnation TO 'ha_recovery'@'localhost';"
                          f"INSERT INTO home_auth.binding VALUES ('{site}','home-probe','p1','{database}',1);"
                          "INSERT INTO home_auth.head VALUES ('p1','old-incarnation',0,'OLD_ALLOW');"
                          f"INSERT INTO home_auth.dependency VALUES ('p1','{fixture['grant']}',1)"],

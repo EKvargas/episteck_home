@@ -119,6 +119,12 @@ the Home partition lane, evaluated-state digest, fresh-incarnation recovery,
 and selected ordinary Home behavior. KAP-2 remains open; see the linked progress
 map for scope and unproved production acceptance.
 
+The follow-on PERSON foundation uses procedure-only serving mutations and a
+separate recovery principal in disposable MariaDB. Eighteen local tests and a
+marked Frappe 15.99.0 run pass, including a physical restore of both older
+permissive datadirs with default-closed first read. This is local evidence only;
+KAP-2 still needs the Board/operator decisions and remote integration proof.
+
 Home's F3 implementation, Finance, and Episteck UI are separate tracks and do not
 change this Knowledge sequence. Open runtime gates #2 (latency), #3
 (timing/existence-oracle closure), and #5 (real R14/domain measurement) remain open.

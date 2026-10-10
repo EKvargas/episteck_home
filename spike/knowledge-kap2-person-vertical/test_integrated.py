@@ -6,6 +6,8 @@ import sys
 import tempfile
 import threading
 import time
+import re
+import shutil
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -66,20 +68,45 @@ def install_home(db: PrivateDB) -> None:
            "('grant-1','actor','owner','KNOWLEDGE','VIEW','ACTIVE',NULL,NULL,'owner',NULL)")
     schema = Path(__file__).with_name("integrated_schema.sql").read_text()
     db.run("mariadb", "--no-defaults", f"--socket={db.socket}", "-uroot", input_text=schema)
+    install_procedures(db, "_aaaaaaaaaaaaaaaa")
     db.sql("INSERT INTO home_auth.binding VALUES "
            "('kap2-probe-person','home-probe','p1','_aaaaaaaaaaaaaaaa',1);"
            "INSERT INTO home_auth.head VALUES ('p1','old-incarnation',0,'OLD_ALLOW');"
            "INSERT INTO home_auth.dependency VALUES ('p1','grant-1',1);"
            "CREATE USER 'ha_mutator'@'localhost' IDENTIFIED BY 'synthetic-mutator';"
            "CREATE USER 'ha_reader'@'localhost' IDENTIFIED BY 'synthetic-reader';"
+           "CREATE USER 'ha_recovery'@'localhost' IDENTIFIED BY 'synthetic-home-recover';"
+           "CREATE USER 'ha_fixture'@'localhost' IDENTIFIED BY 'synthetic-fixture';"
            "CREATE USER 'site_runtime'@'localhost' IDENTIFIED BY 'synthetic-site';"
            "CREATE USER 'ha_old'@'localhost' IDENTIFIED BY 'synthetic-old';"
-           "GRANT SELECT,INSERT,UPDATE,DELETE ON home_auth.* TO 'ha_mutator'@'localhost';"
-           "GRANT SELECT,INSERT,UPDATE,DELETE ON _aaaaaaaaaaaaaaaa.* TO 'ha_mutator'@'localhost';"
+           "GRANT SELECT ON home_auth.* TO 'ha_mutator'@'localhost';"
+           "GRANT SELECT ON _aaaaaaaaaaaaaaaa.`tabUser` TO 'ha_mutator'@'localhost';"
+           "GRANT SELECT ON _aaaaaaaaaaaaaaaa.`tabPerson` TO 'ha_mutator'@'localhost';"
+           "GRANT SELECT ON _aaaaaaaaaaaaaaaa.`tabConsent Grant` TO 'ha_mutator'@'localhost';"
+           "GRANT EXECUTE ON PROCEDURE home_auth.stage_person_mutation TO 'ha_mutator'@'localhost';"
+           "GRANT EXECUTE ON PROCEDURE home_auth.record_person_event TO 'ha_mutator'@'localhost';"
            "GRANT SELECT ON home_auth.* TO 'ha_reader'@'localhost';"
-           "GRANT SELECT ON _aaaaaaaaaaaaaaaa.* TO 'ha_reader'@'localhost';"
+           "GRANT SELECT ON _aaaaaaaaaaaaaaaa.`tabUser` TO 'ha_reader'@'localhost';"
+           "GRANT SELECT ON _aaaaaaaaaaaaaaaa.`tabPerson` TO 'ha_reader'@'localhost';"
+           "GRANT SELECT ON _aaaaaaaaaaaaaaaa.`tabConsent Grant` TO 'ha_reader'@'localhost';"
+           "GRANT SELECT ON home_auth.binding TO 'ha_recovery'@'localhost';"
+           "GRANT SELECT ON home_auth.head TO 'ha_recovery'@'localhost';"
+           "GRANT EXECUTE ON PROCEDURE home_auth.reset_person_incarnation TO 'ha_recovery'@'localhost';"
+           "GRANT SELECT,INSERT,UPDATE,DELETE ON home_auth.* TO 'ha_fixture'@'localhost';"
+           "GRANT SELECT,INSERT,UPDATE,DELETE ON _aaaaaaaaaaaaaaaa.* TO 'ha_fixture'@'localhost';"
            "GRANT SELECT,INSERT,UPDATE,DELETE ON _aaaaaaaaaaaaaaaa.* TO 'site_runtime'@'localhost'")
     install_guards(db, "_aaaaaaaaaaaaaaaa")
+
+
+def install_procedures(db: PrivateDB, site_database: str,
+                       root_password: str = "") -> None:
+    if not re.fullmatch(r"_[0-9a-f]{16}", site_database):
+        raise ValueError("invalid disposable Frappe database")
+    sql = Path(__file__).with_name("integrated_procedures.sql").read_text().replace(
+        "__SITE_DB__", site_database)
+    credentials = [f"-p{root_password}"] if root_password else []
+    db.run("mariadb", "--no-defaults", f"--socket={db.socket}", "-uroot",
+           *credentials, input_text=sql)
 
 
 def install_guards(db: PrivateDB, site_database: str, root_password: str = "") -> None:
@@ -97,18 +124,22 @@ def install_guards(db: PrivateDB, site_database: str, root_password: str = "") -
                 table = f"`{site_database}`.`tab{doctype}`"
                 changed = " OR ".join(f"NOT (OLD.`{field}` <=> NEW.`{field}`)" for field in fields)
                 cursor.execute(f"CREATE TRIGGER `{site_database}`.kap2_person_{number}_u BEFORE UPDATE ON {table} "
-                               f"FOR EACH ROW BEGIN IF USER()<>'ha_mutator@localhost' AND ({changed}) "
+                               f"FOR EACH ROW BEGIN IF USER() NOT IN ('ha_mutator@localhost',"
+                               f"'ha_fixture@localhost') AND ({changed}) "
                                "THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='KAP2_PERSON_GUARD'; END IF; END")
                 cursor.execute(f"CREATE TRIGGER `{site_database}`.kap2_person_{number}_d BEFORE DELETE ON {table} "
-                               "FOR EACH ROW BEGIN IF USER()<>'ha_mutator@localhost' "
+                               "FOR EACH ROW BEGIN IF USER() NOT IN ('ha_mutator@localhost',"
+                               "'ha_fixture@localhost') "
                                "THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='KAP2_PERSON_GUARD'; END IF; END")
             cursor.execute(f"CREATE TRIGGER `{site_database}`.kap2_person_grant_i BEFORE INSERT ON "
                            f"`{site_database}`.`tabConsent Grant` FOR EACH ROW BEGIN "
-                           "IF USER()<>'ha_mutator@localhost' THEN SIGNAL SQLSTATE '45000' "
+                           "IF USER() NOT IN ('ha_mutator@localhost','ha_fixture@localhost') "
+                           "THEN SIGNAL SQLSTATE '45000' "
                            "SET MESSAGE_TEXT='KAP2_PERSON_GUARD'; END IF; END")
             cursor.execute(f"CREATE TRIGGER `{site_database}`.kap2_person_link_i BEFORE INSERT ON "
                            f"`{site_database}`.`tabPerson` FOR EACH ROW BEGIN "
-                           "IF USER()<>'ha_mutator@localhost' AND NEW.linked_user IS NOT NULL "
+                           "IF USER() NOT IN ('ha_mutator@localhost','ha_fixture@localhost') "
+                           "AND NEW.linked_user IS NOT NULL "
                            "THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='KAP2_PERSON_GUARD'; END IF; END")
     finally:
         root.close()
@@ -135,7 +166,7 @@ def test_trusted_binding_recovery_grant_and_self(services):
     gateway, authority = new_authority(home, witness_db, binding)
     try:
         assert not authority.authorize(person_requirement("owner")).allow
-        incarnation = authority.recover()
+        incarnation = authority.recover(recovery_password="synthetic-home-recover")
         assert len(incarnation) == 64
         assert authority.open
         assert not authority.authorize(person_requirement("owner")).allow
@@ -175,7 +206,7 @@ def test_revocation_and_dependency_mutations_deny_with_new_revision(services):
     binding = Binding()
     gateway, authority = new_authority(home, witness_db, binding)
     try:
-        authority.recover()
+        authority.recover(recovery_password="synthetic-home-recover")
         authority.activate_grant("grant-1", "grant-event")
         binding.user = "actor-user"
         assert authority.authorize(person_requirement("owner")).allow
@@ -198,8 +229,8 @@ def test_revocation_and_dependency_mutations_deny_with_new_revision(services):
 def test_expiry_and_issuer_invalidation_deny(services, issuer_change):
     home, witness_db = services
     start = datetime(2026, 10, 9, 12, tzinfo=timezone.utc)
-    with pymysql.connect(unix_socket=str(home.socket), user="ha_mutator",
-                         password="synthetic-mutator", autocommit=True) as privileged:
+    with pymysql.connect(unix_socket=str(home.socket), user="ha_fixture",
+                         password="synthetic-fixture", autocommit=True) as privileged:
         with privileged.cursor() as cursor:
             cursor.execute("UPDATE _aaaaaaaaaaaaaaaa.`tabConsent Grant` "
                            "SET valid_until='2026-10-09 13:00:00' WHERE name='grant-1'")
@@ -208,7 +239,7 @@ def test_expiry_and_issuer_invalidation_deny(services, issuer_change):
     gateway, authority = new_authority(home, witness_db, binding)
     authority.clock = lambda: current[0]
     try:
-        authority.recover()
+        authority.recover(recovery_password="synthetic-home-recover")
         authority.activate_grant("grant-1", "grant-event")
         binding.user = "actor-user"
         assert authority.authorize(person_requirement("owner")).allow
@@ -248,6 +279,39 @@ def test_site_and_old_principals_cannot_bypass_guard(services):
             assert cursor.rowcount == 1
             with pytest.raises(pymysql.MySQLError):
                 cursor.execute("UPDATE home_auth.head SET digest='FORGED'")
+
+
+def test_serving_and_recovery_principals_have_no_direct_authority_dml(services):
+    home, _ = services
+    with pymysql.connect(unix_socket=str(home.socket), user="ha_mutator",
+                         password="synthetic-mutator", autocommit=True) as serving:
+        with serving.cursor() as cursor:
+            for statement in (
+                "UPDATE home_auth.head SET revision=99 WHERE partition_id='p1'",
+                "UPDATE home_auth.binding SET partition_id='p2'",
+                "INSERT INTO home_auth.events VALUES ('p1','x','fake','x',99,'x','GRANT')",
+                "DELETE FROM home_auth.activations WHERE partition_id='p1'",
+                "UPDATE home_auth.dependency SET current_state=1 WHERE grant_id='grant-1'",
+                "UPDATE _aaaaaaaaaaaaaaaa.`tabConsent Grant` SET state='REVOKED'",
+                "UPDATE _aaaaaaaaaaaaaaaa.`tabUser` SET enabled=0",
+                "UPDATE _aaaaaaaaaaaaaaaa.`tabPerson` SET linked_user=NULL",
+            ):
+                with pytest.raises(pymysql.MySQLError, match="command denied"):
+                    cursor.execute(statement)
+            with pytest.raises(pymysql.MySQLError):
+                cursor.execute("CALL home_auth.reset_person_incarnation('p1',REPEAT('a',64))")
+            with pytest.raises(pymysql.MySQLError, match="KAP2_LANE_REQUIRED"):
+                cursor.execute("CALL home_auth.stage_person_mutation(" + ",".join(["%s"] * 12) + ")",
+                               ("p1", "old-incarnation", 0, "fake", "SELF", "", "owner",
+                                "owner", "KNOWLEDGE", "VIEW", "owner", "owner-user"))
+    with pymysql.connect(unix_socket=str(home.socket), user="ha_recovery",
+                         password="synthetic-home-recover", autocommit=True) as recovery:
+        with recovery.cursor() as cursor:
+            with pytest.raises(pymysql.MySQLError):
+                cursor.execute("UPDATE home_auth.head SET digest='FORGED'")
+            with pytest.raises(pymysql.MySQLError):
+                cursor.execute("CALL home_auth.record_person_event(" + ",".join(["%s"] * 7) + ")",
+                               ("p1", "x", 0, "fake", "x" * 64, "DENY_ALL", "SELF"))
     with pymysql.connect(unix_socket=str(home.socket), user="ha_old",
                          password="synthetic-old", autocommit=True) as old:
         with old.cursor() as cursor:
@@ -265,7 +329,7 @@ def test_reader_first_and_writer_first_revocation_races(services, order):
 
     gateway, authority = new_authority(home, witness_db, ThreadBinding())
     try:
-        authority.recover()
+        authority.recover(recovery_password="synthetic-home-recover")
         authority.activate_grant("grant-1", "grant-event")
         errors: list[BaseException] = []
         results: list[bool] = []
@@ -342,7 +406,7 @@ def test_commit_gap_unknown_ack_and_fresh_reauthorization(services):
     binding = Binding()
     gateway, authority = new_authority(home, witness_db, binding)
     try:
-        old_incarnation = authority.recover()
+        old_incarnation = authority.recover(recovery_password="synthetic-home-recover")
         authority.activate_grant("grant-1", "initial")
         binding.user = "actor-user"
         assert authority.authorize(person_requirement("owner")).allow
@@ -365,7 +429,7 @@ def test_commit_gap_unknown_ack_and_fresh_reauthorization(services):
         # remains in Home. An explicit authenticated self activation restores
         # only that permission.
         binding.user = "owner-user"
-        new_incarnation = authority.recover()
+        new_incarnation = authority.recover(recovery_password="synthetic-home-recover")
         assert new_incarnation != old_incarnation
         assert not authority.authorize(person_requirement("owner")).allow
         authority.activate_self("KNOWLEDGE", "VIEW", "fresh-self")
@@ -386,7 +450,7 @@ def test_prepare_before_home_commit_keeps_reader_out(services):
 
     gateway, authority = new_authority(home, witness_db, ThreadBinding())
     try:
-        authority.recover()
+        authority.recover(recovery_password="synthetic-home-recover")
         authority.activate_grant("grant-1", "initial")
         entered = threading.Event()
         release = threading.Event()
@@ -433,7 +497,7 @@ def test_pending_and_combined_restore_deny_first_read(services):
     binding = Binding()
     gateway, authority = new_authority(home, witness_db, binding)
     try:
-        incarnation = authority.recover()
+        incarnation = authority.recover(recovery_password="synthetic-home-recover")
         authority.activate_grant("grant-1", "initial")
         binding.user = "actor-user"
         assert authority.authorize(person_requirement("owner")).allow
@@ -464,7 +528,7 @@ def test_pending_and_combined_restore_deny_first_read(services):
         try:
             assert not restarted.authorize(person_requirement("owner")).allow
             binding.user = "owner-user"
-            restarted.recover()
+            restarted.recover(recovery_password="synthetic-home-recover")
             assert not restarted.authorize(person_requirement("owner")).allow
         finally:
             restarted.close()
@@ -481,26 +545,26 @@ def test_canonical_evaluated_state_digest_and_fresh_grant(services):
     binding = Binding()
     gateway, authority = new_authority(home, witness_db, binding)
     try:
-        authority.recover()
+        authority.recover(recovery_password="synthetic-home-recover")
         authority.activate_grant("grant-1", "first-grant")
         binding.user = "actor-user"
         assert authority.authorize(person_requirement("owner")).allow
         # A privileged out-of-lane source edit cannot retain a valid witness
         # comparison: the digest covers the same source fields as evaluation.
-        with pymysql.connect(unix_socket=str(home.socket), user="ha_mutator",
-                             password="synthetic-mutator", autocommit=True) as privileged:
+        with pymysql.connect(unix_socket=str(home.socket), user="ha_fixture",
+                             password="synthetic-fixture", autocommit=True) as privileged:
             with privileged.cursor() as cursor:
                 cursor.execute("UPDATE _aaaaaaaaaaaaaaaa.`tabConsent Grant` "
                                "SET actions='CREATE' WHERE name='grant-1'")
         assert not authority.authorize(person_requirement("owner")).allow
-        with pymysql.connect(unix_socket=str(home.socket), user="ha_mutator",
-                             password="synthetic-mutator", autocommit=True) as privileged:
+        with pymysql.connect(unix_socket=str(home.socket), user="ha_fixture",
+                             password="synthetic-fixture", autocommit=True) as privileged:
             with privileged.cursor() as cursor:
                 cursor.execute("UPDATE _aaaaaaaaaaaaaaaa.`tabConsent Grant` "
                                "SET actions='VIEW' WHERE name='grant-1'")
         assert authority.authorize(person_requirement("owner")).allow
         binding.user = "owner-user"
-        authority.recover()
+        authority.recover(recovery_password="synthetic-home-recover")
         binding.user = "actor-user"
         assert not authority.authorize(person_requirement("owner")).allow
         binding.user = "owner-user"
@@ -516,7 +580,7 @@ def test_combined_home_witness_row_restore_starts_closed(services):
     home, witness_db = services
     binding = Binding()
     gateway, authority = new_authority(home, witness_db, binding)
-    authority.recover()
+    authority.recover(recovery_password="synthetic-home-recover")
     authority.activate_grant("grant-1", "initial")
     old_home = authority._head(authority.mutator, "p1")
     old_witness = gateway._read_current("p1")
@@ -528,8 +592,8 @@ def test_combined_home_witness_row_restore_starts_closed(services):
     gateway.close()
     # A privileged synthetic backup restore replays *both* older heads and
     # grant source rows. It runs only after the active gateway is stopped.
-    with pymysql.connect(unix_socket=str(home.socket), user="ha_mutator",
-                         password="synthetic-mutator", autocommit=True) as restored:
+    with pymysql.connect(unix_socket=str(home.socket), user="ha_fixture",
+                         password="synthetic-fixture", autocommit=True) as restored:
         with restored.cursor() as cursor:
             cursor.execute("UPDATE home_auth.head SET incarnation=%s,revision=%s,digest=%s "
                            "WHERE partition_id='p1'", old_home)
@@ -546,7 +610,7 @@ def test_combined_home_witness_row_restore_starts_closed(services):
         binding.user = "actor-user"
         assert not restarted.authorize(person_requirement("owner")).allow
         binding.user = "owner-user"
-        restarted.recover()
+        restarted.recover(recovery_password="synthetic-home-recover")
         binding.user = "actor-user"
         assert not restarted.authorize(person_requirement("owner")).allow
     finally:
@@ -554,12 +618,107 @@ def test_combined_home_witness_row_restore_starts_closed(services):
         new_gateway.close()
 
 
+def test_physical_restore_of_both_older_permissive_datadirs_starts_closed(services):
+    home, witness_db = services
+    binding = Binding()
+    gateway, authority = new_authority(home, witness_db, binding)
+    try:
+        old_incarnation = authority.recover(recovery_password="synthetic-home-recover")
+        authority.activate_grant("grant-1", "old-grant")
+        authority.activate_self("KNOWLEDGE", "VIEW", "old-self")
+        old_home = authority._head(authority.mutator, "p1")
+        old_witness = gateway._read_current("p1")
+        binding.user = "actor-user"
+        assert authority.authorize(person_requirement("owner")).allow
+    finally:
+        authority.close()
+        gateway.close()
+
+    # Both copies are cold, consistent physical datadirs. Every source and
+    # destination is checked to stay inside its own disposable test root.
+    home.stop()
+    witness_db.stop()
+    for server in (home, witness_db):
+        root = server.root.resolve()
+        source = server.data.resolve()
+        backup = (root / "permissive-backup").resolve()
+        assert source.is_relative_to(root) and backup.is_relative_to(root)
+        assert source.is_dir() and not backup.exists()
+        shutil.copytree(source, backup)
+    home.start()
+    witness_db.start()
+
+    gateway, authority = new_authority(home, witness_db, binding)
+    try:
+        binding.user = "actor-user"
+        assert not authority.authorize(person_requirement("owner")).allow
+        binding.user = "owner-user"
+        later_incarnation = authority.recover(recovery_password="synthetic-home-recover")
+        assert later_incarnation != old_incarnation
+        authority.activate_grant("grant-1", "later-grant")
+        authority.activate_self("KNOWLEDGE", "VIEW", "later-self")
+        binding.user = "actor-user"
+        assert authority.authorize(person_requirement("owner")).allow
+        binding.user = "owner-user"
+        authority.revoke_grant("grant-1", "later-revocation")
+        binding.user = "actor-user"
+        assert not authority.authorize(person_requirement("owner")).allow
+        assert witness_db.sql("SELECT revision,state FROM witness.head WHERE partition_id='p1'") == "3\tCOMMITTED"
+    finally:
+        authority.close()
+        gateway.close()
+
+    home.stop()
+    witness_db.stop()
+    for server in (home, witness_db):
+        root = server.root.resolve()
+        current = server.data.resolve()
+        old = (root / "permissive-backup").resolve()
+        revoked = (root / "revoked-data").resolve()
+        assert all(path.is_relative_to(root) for path in (current, old, revoked))
+        assert current.is_dir() and old.is_dir() and not revoked.exists()
+        current.rename(revoked)
+        shutil.copytree(old, current)
+    home.start()
+    witness_db.start()
+
+    gateway, authority = new_authority(home, witness_db, binding)
+    try:
+        assert authority._head(authority.reader, "p1") == old_home
+        assert gateway._read_current("p1") == old_witness
+        assert home.sql("SELECT state FROM _aaaaaaaaaaaaaaaa.`tabConsent Grant` "
+                        "WHERE name='grant-1'") == "ACTIVE"
+        binding.user = "actor-user"
+        assert not authority.authorize(person_requirement("owner")).allow
+        binding.user = "owner-user"
+        fresh = authority.recover(recovery_password="synthetic-home-recover")
+        assert fresh not in (old_incarnation, later_incarnation)
+        assert not authority.authorize(person_requirement("owner")).allow
+        binding.user = "actor-user"
+        assert not authority.authorize(person_requirement("owner")).allow
+        binding.user = "owner-user"
+        authority.activate_self("KNOWLEDGE", "VIEW", "fresh-self")
+        assert authority.authorize(person_requirement("owner")).allow
+        binding.user = "actor-user"
+        assert not authority.authorize(person_requirement("owner")).allow
+        binding.user = "owner-user"
+        authority.activate_grant("grant-1", "fresh-grant")
+        binding.user = "actor-user"
+        assert authority.authorize(person_requirement("owner")).allow
+        print("PHYSICAL_RESTORE_EVIDENCE: matching_older_heads=true; "
+              "first_read_denied=true; old_activations_quarantined=true; "
+              "selected_reauthorization=true; source=synthetic")
+    finally:
+        authority.close()
+        gateway.close()
+
+
 @pytest.mark.parametrize("stopped", ["home", "witness"])
 def test_database_restart_denies_first_read(services, stopped):
     home, witness_db = services
     binding = Binding()
     gateway, authority = new_authority(home, witness_db, binding)
-    authority.recover()
+    authority.recover(recovery_password="synthetic-home-recover")
     authority.activate_grant("grant-1", "initial")
     binding.user = "actor-user"
     assert authority.authorize(person_requirement("owner")).allow
@@ -575,9 +734,43 @@ def test_database_restart_denies_first_read(services, stopped):
     try:
         assert not restarted.authorize(person_requirement("owner")).allow
         binding.user = "owner-user"
-        restarted.recover()
+        restarted.recover(recovery_password="synthetic-home-recover")
         binding.user = "actor-user"
         assert not restarted.authorize(person_requirement("owner")).allow
     finally:
         restarted.close()
         new_gateway.close()
+
+
+@pytest.mark.parametrize("failure", ["connection", "lost_lock"])
+def test_computed_allow_is_discarded_after_home_lane_failure(services, failure):
+    home, witness_db = services
+    binding = Binding()
+    gateway, authority = new_authority(home, witness_db, binding)
+    try:
+        authority.recover(recovery_password="synthetic-home-recover")
+        authority.activate_grant("grant-1", "initial")
+        binding.user = "actor-user"
+        assert authority.authorize(person_requirement("owner")).allow
+        original = gateway.authorize
+
+        def lose_home_after_witness(*args):
+            assert original(*args) is True
+            if failure == "connection":
+                with authority.reader.cursor() as cursor:
+                    cursor.execute("SELECT CONNECTION_ID()")
+                    connection_id = cursor.fetchone()[0]
+                home.sql(f"KILL CONNECTION {connection_id}")
+            else:
+                with authority.reader.cursor() as cursor:
+                    cursor.execute("SELECT RELEASE_LOCK(%s)",
+                                   (authority._lane_name("p1"),))
+                    assert cursor.fetchone() == (1,)
+            return True
+
+        gateway.authorize = lose_home_after_witness
+        assert not authority.authorize(person_requirement("owner")).allow
+        assert authority.open is False
+    finally:
+        authority.close()
+        gateway.close()

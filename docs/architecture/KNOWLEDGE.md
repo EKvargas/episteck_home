@@ -131,7 +131,7 @@ and [admission amendment](proposals/KNOWLEDGE_KAP2_INCARNATION_ADMISSION_AMENDME
 | Item | Accepted scope and prerequisite | Current evidence / unmet acceptance |
 | --- | --- | --- |
 | KAP-1 | Versioned strict wire/domain contracts and test vectors; first. | **Architecturally accepted 2026-10-07** at PR #58 head `e5b2e4ff47245d7d1af4d74873e7eaabc57e7718` (37 local tests passed); PR remains unmerged and no live use. Parsed operations and domain result markers are preserved immutably. Knowledge interval and owning-domain schemas require trusted validators and fail closed when absent. |
-| KAP-2 | Home typed PERSON/CIRCLE policy, trusted partition binding, Knowledge authorization incarnation and transactional revision fence candidate; needs KAP-1. | **Open.** PR #60's pure evaluator is accepted only while disconnected. PR #59's local MariaDB fence remains a candidate; PRs #61–63 are experiment evidence. Candidate A's current request-time GCS path is rejected. The architect accepts [fresh-incarnation quarantine](proposals/KNOWLEDGE_KAP2_INCARNATION_ADMISSION_AMENDMENT.md) and default-closed admission for disposable integration, not Board ratification. Task 1 has a [disconnected local MariaDB gateway probe](../../spike/knowledge-kap2-transactional-witness/evidence/2026-10-09/LOCAL_GATEWAY_EVIDENCE.md); it does not prove a remote witness. The limited PERSON integration below proves only its listed local paths. Operator assignment, exhaustive guarded mutation coverage, physical/remote restore integration and latency proof are unmet. No production policy/fence is active. |
+| KAP-2 | Home typed PERSON/CIRCLE policy, trusted partition binding, Knowledge authorization incarnation and transactional revision fence candidate; needs KAP-1. | **Open.** PR #60's pure evaluator is accepted only while disconnected. PR #59's local MariaDB fence remains a candidate; PRs #61–63 are experiment evidence. Candidate A's current request-time GCS path is rejected. The architect accepts [fresh-incarnation quarantine](proposals/KNOWLEDGE_KAP2_INCARNATION_ADMISSION_AMENDMENT.md) and default-closed admission for disposable integration, not Board ratification. Task 1 has a [disconnected local MariaDB gateway probe](../../spike/knowledge-kap2-transactional-witness/evidence/2026-10-09/LOCAL_GATEWAY_EVIDENCE.md); it does not prove a remote witness. The limited PERSON integration below proves only its listed local paths. Operator assignment, exhaustive guarded mutation coverage, remote restore integration and latency proof are unmet. A local physical two-database restore has been exercised in the disconnected PERSON foundation below. No production policy/fence is active. |
 | KAP-3 | Dedicated `olin-runtime` machine identity and Home-owned bounded one-use request context; needs KAP-2. | Not implemented. Provisioning is separately gated; no credential exists for this path. |
 | KAP-4 | Complete RT#1 Authorization Plan evaluation; needs KAP-3. | Not implemented. No Home endpoint or integration tests exist. |
 | KAP-5 | Home R13 signer and trusted service/SPKI registration; needs KAP-4. | Not implemented. No key provisioning, trust registration, or issuance tests exist. |
@@ -153,6 +153,19 @@ restore. CIRCLE issuance, delegated context, exhaustive source inventory,
 procedure-only Home mutator privileges, remote witness integration, latency and
 recovery operations remain unproved. KAP-2 is open; Board ratification and
 witness operator/delegate assignment remain prerequisites for activation.
+
+**KAP-2 local PERSON foundation follow-on (2026-10-10):** The
+[procedure and physical-restore acceptance matrix](../../spike/knowledge-kap2-person-vertical/PROCEDURE_ACCEPTANCE.md)
+records 18 passing local two-MariaDB tests and a Frappe 15.99.0 disposable
+site run. The serving Home principal has SELECT and only two named mutation
+procedure grants; a separate recovery principal executes the default-deny
+incarnation reset. Tests deny direct serving DML, uncertain allows after Home
+lock/connection loss, and first authorization after a physical restore of both
+older permissive datadirs. Explicit current-incarnation reauthorization restores
+only selected PERSON scopes. This remains disconnected local evidence, not
+Board ratification, remote witness integration, or KAP-2 completion. Production
+principal hardening, complete Home source coverage, independent restore and
+latency proof, and operator/delegate assignment remain open.
 
 “Implemented locally” and “unit-tested” do not mean merged, deployed, or live
 verified. Track each state separately in the KAP draft PRs and update this table

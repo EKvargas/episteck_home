@@ -89,7 +89,7 @@ def run() -> dict:
         assert old_api["allow"] is True
         assert authority.authorize(req).allow is False
         output["first_read_closed"] = True
-        authority.recover()
+        authority.recover(recovery_password="synthetic-home-recover")
         assert authority.authorize(req).allow is False
         frappe.set_user(owner_user)
         authority.activate_grant(grant, "frappe-grant")
@@ -124,6 +124,23 @@ def run() -> dict:
         assert rejected(lambda: frappe.db.set_value("User", owner_user, "enabled", 0))
         output["frappe_generic_writes_denied"] = True
 
+        with pymysql.connect(unix_socket=socket, user="ha_mutator",
+                             password="synthetic-mutator",
+                             database=frappe.conf.db_name, autocommit=True) as serving:
+            with serving.cursor() as cursor:
+                for statement in (
+                    "SELECT name FROM `tabDocType` LIMIT 1",
+                    "UPDATE home_auth.head SET digest='FORGED' WHERE partition_id='p1'",
+                    "UPDATE `tabConsent Grant` SET state='REVOKED' WHERE name=%s",
+                ):
+                    try:
+                        cursor.execute(statement, (grant,) if "%s" in statement else None)
+                    except pymysql.MySQLError as exc:
+                        assert exc.args[0] in {1044, 1142, 1143}
+                    else:
+                        raise AssertionError("restricted serving principal bypassed a grant")
+        output["serving_privileges_narrow"] = True
+
         # The site principal retains ordinary, unrelated Home data writes.
         frappe.db.set_value("Person", actor_person, "notes", "synthetic ordinary note")
         assert frappe.db.get_value("Person", actor_person, "notes") == "synthetic ordinary note"
@@ -138,7 +155,7 @@ def run() -> dict:
         output["existing_api_unchanged"] = True
         output["ordinary_session_lifecycle"] = True
         frappe.set_user(owner_user)
-        authority.recover()
+        authority.recover(recovery_password="synthetic-home-recover")
         assert authority.authorize(req).allow is False
         frappe.set_user(actor_user)
         assert authority.authorize(req).allow is False
