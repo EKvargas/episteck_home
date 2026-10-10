@@ -1,5 +1,14 @@
 # Roadmap
 
+## Knowledge Authorization Plan (draft delivery path, 2026-10-10)
+
+KAP-1 contracts are architecturally accepted and unmerged. KAP-2 has a disconnected,
+local PERSON foundation but remains open; the fresh-incarnation recovery amendment
+awaits Board ratification. KAP-3–10 are subsequent prerequisites. The rejected GCS
+request-time path is retained only as evidence. The
+[consolidation handoff](proposals/KNOWLEDGE_KAP2_CONSOLIDATION_HANDOFF.md) names the
+selected files, PR dependencies, finite next integration gate and deployment hold.
+
 ## Delivered (stages A–G1)
 - Nuremberg node baseline; Tailscale mesh; infra-agent + home-agent (independent Hermes).
 - Mealie MVP (recipe/meal-plan/shopping provider).

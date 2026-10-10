@@ -1,0 +1,59 @@
+{
+  "authority_policy": {
+    "canonical_sql_bypass_denied": true,
+    "current_activation_allowed": true,
+    "current_issuer_and_grant_checked": true,
+    "existing_wrapper_unchanged": true,
+    "frappe_actor_bound": true,
+    "marked_disposable_site": true,
+    "old_grant_quarantined": true,
+    "old_incarnation_denied": true,
+    "person_self_activation_required": true,
+    "real_local_lane_grant_and_self": true,
+    "witness": "synthetic policy stub"
+  },
+  "cleanup": {
+    "private_db_stopped": true,
+    "private_redis_stopped": true,
+    "site_removed": true
+  },
+  "guarded_frappe": {
+    "disposable_protected_paths_verified": true,
+    "mode": "guarded",
+    "observations": {
+      "active_matching_commit_reader": "allowed",
+      "active_pending_reader": "denied",
+      "admin_grant_reenable_save": "guard_denied",
+      "admin_user_reenable_save": "guard_denied",
+      "circle_exit_delete": "guard_denied",
+      "cutover_privileged_sessions_drained": "old_connection_killed",
+      "frappe_controller_reader_first": "reader_before_revocation_then_denied",
+      "frappe_controller_writer_first": "fresh_active_writer_lock_reader_waited_denied",
+      "grant_reenable_raw_sql": "guard_denied",
+      "grant_reenable_set_value": "guard_denied",
+      "grant_revoke_save": "guard_denied",
+      "initial_authority": "active_committed",
+      "membership_insert": "guard_denied",
+      "ordinary_circle_note_save": "allowed_and_changed",
+      "ordinary_person_note_save": "allowed_and_changed",
+      "ordinary_reads": "allowed",
+      "ordinary_user_name_save": "allowed_and_changed",
+      "person_relink_save": "guard_denied",
+      "person_relink_set_value": "guard_denied",
+      "protected_revocation": "legacy_wrapper_denies",
+      "revoked_matching_commit_reader": "denied",
+      "revoked_pending_reader": "denied",
+      "runtime_trigger_drop": "privilege_denied",
+      "session_reenable_raw_sql": "guard_denied",
+      "session_reenable_set_value": "guard_denied",
+      "session_revoke_controller": "guard_denied",
+      "user_disable_save": "guard_denied",
+      "user_reenable_raw_sql": "guard_denied",
+      "user_reenable_set_value": "guard_denied",
+      "writer_first_initial_authorization": "allowed"
+    },
+    "probe": "frappe_authority_paths",
+    "site": "marked_disposable"
+  },
+  "site": "marked_disposable"
+}
