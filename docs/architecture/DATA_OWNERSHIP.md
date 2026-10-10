@@ -7,6 +7,7 @@ reference it, they do not duplicate it.
 | --- | --- | --- |
 | Person, Circle, CircleMembership, CareRelationship, ConsentGrant, CareJourney | **Home Control Plane** (`episteck_home` on home.episteck.com) | Identity + relationships + consent + coordination |
 | Nutrition Profile, nutrient targets + provenance, planned/actual intake, deterministic calculations | **svc-nutrition** (Nuremberg) | Authoritative Nutrition store (SQLite → repo abstraction) |
+| Account balances (as observed by the bank/provider), movements, ECB reference rates used for valuation; later classification and receivables | **svc-finance** `[I1 — code in review, not deployed]` (Nuremberg) | Authoritative Finance store (SQLite). The bank is the source of each balance; Finance keeps the canonical copy. Consent and feature activation stay in Home. Real financial data lives only on Nuremberg. See ADR-0010 |
 | Recipes, meal plans, shopping lists | **Mealie** (Nuremberg) | Provider only, behind Episteck adapter |
 | Clinical truth (diagnoses, conditions) | **FHIR service** `[PLANNED]` | Not built |
 | Measurements + device provenance (weight, BP, etc.) | **Device Gateway** `[PLANNED]` | Not built |

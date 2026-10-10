@@ -22,7 +22,7 @@ data access. Authorization is explicit and consent-driven.
 | --- | --- | --- |
 | **Home Control Plane** — `episteck_home` Frappe app on **home.episteck.com** | Ashburn VPS | Canonical identity, family/care relationships, consent, coordination. `[LIVE]` |
 | **Episteck company ERP** — `erp.episteck.com` | Ashburn VPS | Company-internal ERP. **Separate** from Home. Not part of this product. |
-| **Domain services** | Nuremberg node | Independent specialized services (Nutrition, Mealie, future FHIR/Device Gateway/Mind/Knowledge) |
+| **Domain services** | Nuremberg node | Independent specialized services (Nutrition, Mealie, Finance `[I1, not deployed]`, future FHIR/Device Gateway/Mind/Knowledge) |
 | **Agents** | Nuremberg node | Two independent Hermes instances: `infra-agent` (privileged ops) and `home-agent` (unprivileged, user-facing) |
 | **Home BFF** — confidential OAuth client + session boundary | **Nuremberg node (EU)** | Holds the client secret and user tokens server-side; browser gets an opaque cookie. Mints short-lived delegations. `[G1.6]` |
 
@@ -43,6 +43,11 @@ flowchart TB
     subgraph NUT["svc-nutrition (rootless Podman)"]
       NAPI["Nutrition API :9930 (loopback)"]
       NMCP["Nutrition MCP :9931 (loopback)"]
+    end
+    subgraph FIN["svc-finance (rootless Podman) [I1 — not deployed]"]
+      FAPI["Finance API :9935 (loopback)"]
+      FMCP["Finance MCP :9936 (loopback)"]
+      FSYNC["sync timer (same image)"]
     end
     MEAL["Mealie :9925 (loopback + tailnet)"]
     BKP["restic → Hetzner Storage Box (off-box DR)"]
@@ -142,6 +147,9 @@ Control Plane.
 9. **Trusted actor binding** — actor is derived from an authenticated session, never
    supplied; confidential BFF on the EU node; dual principal; native OIDC deferred
    because Frappe cannot require PKCE. → `adr/0009-trusted-actor-binding.md`
+10. **svc-finance is the Finance source of truth** — bank-first connectors, immutable
+    facts, one balance authority per account, workspace-partitioned, authorization
+    delegated to Home, read-only in v1. → `adr/0010-svc-finance-domain-service.md`
 
 ## 5. Cross-cutting rules
 

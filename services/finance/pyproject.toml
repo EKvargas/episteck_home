@@ -1,0 +1,27 @@
+[project]
+name = "episteck-finance-service"
+version = "0.1.0"
+requires-python = ">=3.11"
+# fastmcp is PINNED to 4.0.3 for the same reason as services/nutrition: the delegation
+# seam reads headers through fastmcp.server.dependencies.get_http_headers, whose
+# credential-stripping default is not a stability guarantee. fastapi>=0.140 is REQUIRED
+# BY that pin (fastmcp 4.0.3 needs starlette>=1.0.1). Upgrade deliberately and re-run
+# tests/test_mcp_transport.py.
+dependencies = [
+    "fastapi>=0.140",
+    "uvicorn>=0.30",
+    "pydantic>=2",
+    "httpx>=0.27",
+    "fastmcp==4.0.3",
+    "pyjwt[crypto]>=2.8",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

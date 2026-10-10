@@ -67,6 +67,14 @@ approval. No G1.7 stage is created.
 Full runtime, provenance, network, rollback, and trust-boundary evidence is in
 `G1_6_VALIDATION.md`.
 
+## Olin Finance I1 (in progress)
+
+| Item | State |
+| --- | --- |
+| Architecture proposal (PR #74) and ADR-0010 | 📝 proposed |
+| `services/finance` (store, read model, API/MCP, connectors) | 🚧 in review, Phase A; **not deployed**, no real data touched |
+| Home changes H1–H5 (audience, `authorize_batch`, Feature Activation, route, runtime grant) | ⏳ Phase B, after H5 merges |
+
 ## G2 blockers
 
 1. Complete the **Knowledge Technology Gate** before G2 implementation.
