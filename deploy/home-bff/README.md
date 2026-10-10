@@ -167,3 +167,44 @@ credentials independently.
 | Restart | survives (sessions persist across deploys) |
 | Logout | row deleted locally; Home session revoked; upstream token revoked |
 | Backup | **excluded** — holds only re-obtainable credentials, never domain data |
+
+
+## Agent runtime grant (H5)
+
+Lets the owner grant `home-agent-primary` up to 90 days of delegated access without a
+daily login. Design: ADR-0010. Page: `https://bff.home.episteck.com/runtime`.
+
+| Item | Detail |
+| --- | --- |
+| Routes (exact nginx locations) | `GET /runtime`, `POST /runtime/grant`, `POST /runtime/revoke`, `POST /logout/all` |
+| Grant needs | session cookie + CSRF (Origin or `Sec-Fetch-Site`, plus form token) + login at most 10 min old |
+| State | table `runtime_grant` in `bff.sqlite`: pointer only, **no OAuth tokens** |
+| Mint | resolves the grant first; falls back to the browser binding while `RUNTIME_LEGACY_BINDING=on` |
+| Rate limit | 600 mints/min, then 429 and the log line `mint rate limit exceeded` |
+| `BFF_RUNTIME_GRANT_DAYS` | optional, 1..90, default 90 (Home enforces its own maximum) |
+
+### Home site config (operator, no migrate)
+
+Set on `home.episteck.com` before the first grant:
+
+```bash
+bench --site home.episteck.com set-config home_runtime_ids '["home-agent-primary"]'
+bench --site home.episteck.com set-config home_runtime_grant_max_days 90
+bench --site home.episteck.com set-config home_runtime_grantees '["<owner user>"]'
+```
+
+An absent or empty `home_runtime_grantees` denies every grant.
+
+### Transition flag
+
+`RUNTIME_LEGACY_BINDING` is set to `on` in both Quadlet units (public app and mint
+must carry the same value). While `on`, a browser login still claims the runtime and
+the mint falls back to that binding. After the live verification, change both units to
+`off` (grant only) and restart `home-bff-mint` first, then `home-bff`.
+
+### Rollback
+
+Install the previous image tag in both Quadlets, `daemon-reload`, restart
+(`home-bff-mint` first), and restore the previous `nginx-home-bff.conf`. The browser
+binding works again; grants that exist in Home are ignored without effect. The extra
+`runtime_grant` table is harmless to an older image.
