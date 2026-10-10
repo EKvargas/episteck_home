@@ -1,11 +1,21 @@
 # Knowledge Architecture (PURE CONTRACTS IMPLEMENTED — no runtime installed)
 
+## KAP delivery state (draft consolidation, 2026-10-10)
+
+KAP-1 wire contracts are architecturally accepted but remain unmerged. KAP-2 is open:
+the typed evaluator, default-closed transactional witness gateway and procedure-only
+PERSON foundation are disconnected disposable candidates. The fresh-incarnation
+recovery amendment is **proposed and Board ratification is pending**. The request-time
+GCS Candidate A was rejected. KAP-3–10 remain ahead. See the
+[consolidation handoff](proposals/KNOWLEDGE_KAP2_CONSOLIDATION_HANDOFF.md) for exact
+PR/worktree disposition, validation and deployment implications.
+
 Episteck **Knowledge** is a governance layer for durable, reusable, contextual
 personal/family knowledge — with ownership, provenance, consent, sharing, and
 correction/deletion. It is **not** a duplicate store for structured domain facts
 (those stay in their owning services) and **not** the Hermes working memory.
 
-> The dependency-free contracts live in `packages/home-contracts`. They provide no
+> The pure contracts live in `packages/home-contracts`. They provide no
 > storage, extraction, indexing, retrieval, embeddings, or service runtime. **No**
 > Knowledge store is installed: not SQLite, Mem0, Graphiti, RAGFlow, Postgres/pgvector
 > or Docling.

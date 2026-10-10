@@ -1,5 +1,14 @@
 # Status
 
+## Knowledge delivery update (draft, 2026-10-10)
+
+KAP-1 is architecturally accepted; KAP-2 is open after the bounded disposable
+PERSON foundation. The proposed recovery amendment has no Board ratification.
+The GCS request-time authorization path is rejected. The disconnected selected
+implementation and all open PR/worktree dispositions are in the
+[KAP-2 consolidation handoff](proposals/KNOWLEDGE_KAP2_CONSOLIDATION_HANDOFF.md).
+No Knowledge endpoint, witness service or production schema is activated.
+
 **Updated:** 2026-09-19
 
 ## Live now
