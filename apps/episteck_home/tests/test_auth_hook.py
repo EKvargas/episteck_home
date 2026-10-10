@@ -283,3 +283,59 @@ def test_recorded_audience_is_reset_on_every_request(hook):
     fake.headers.clear()
     module.establish_delegated_context()
     assert fake.local.episteck_delegation_audience is None
+
+
+# ------------------------------------------------- H5: bound session id (local only)
+
+
+def test_session_id_is_set_only_after_the_session_binds(hook):
+    module, fake = hook
+    fake.headers["X-Episteck-Delegation"] = _token(jti="tok-s1")
+    module.establish_delegated_context()
+    assert fake.local.episteck_delegated_session_id == "sess-1"
+
+
+@pytest.mark.parametrize(
+    "case", ["no_token", "guest", "forged", "unknown", "revoked", "disabled", "replay", "exception"]
+)
+def test_session_id_is_none_on_every_failure_path(hook, case):
+    module, fake = hook
+    fake.local.episteck_delegated_session_id = "stale-from-previous-request"
+    token = _token(jti=f"tok-f-{case}")
+    if case == "guest":
+        fake.session.user = "Guest"
+    if case == "forged":
+        token = token[:-3] + "AAA"
+    if case == "unknown":
+        token = _token(jti="tok-u", sid="sess-missing")
+    if case == "revoked":
+        token = _token(jti="tok-r", sid="sess-revoked")
+    if case == "disabled":
+        token = _token(jti="tok-d", sid="sess-disabled")
+    if case == "replay":
+        fake.headers["X-Episteck-Delegation"] = token
+        module.establish_delegated_context()
+        fake.local.episteck_delegated_session_id = "stale-from-previous-request"
+    if case == "exception":
+        def explode(*args, **kwargs):
+            raise RuntimeError("database down")
+        fake.get_all = explode
+    if case != "no_token":
+        fake.headers["X-Episteck-Delegation"] = token
+    module.establish_delegated_context()
+    assert fake.local.episteck_delegated_session_id is None
+
+
+def test_session_id_never_reaches_logs_or_stage_codes(hook):
+    module, fake = hook
+    logged = []
+    fake.log_error = lambda *args, **kwargs: logged.append((args, kwargs))
+
+    def explode(*args, **kwargs):
+        raise RuntimeError("sess-1 leaked?")
+
+    fake.get_all = explode
+    fake.headers["X-Episteck-Delegation"] = _token(jti="tok-l1")
+    module.establish_delegated_context()
+    assert "sess-1" not in repr(logged)
+    assert "sess-1" not in fake.local.episteck_delegation_stage
