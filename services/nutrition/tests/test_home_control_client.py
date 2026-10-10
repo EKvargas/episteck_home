@@ -665,3 +665,57 @@ def test_rejected_credential_or_session_has_its_own_log_category(caplog):
     caplog.set_level("WARNING", logger="nutrition.home_control")
     _client(_respond(403, {})).check_access("PSN-B", "NUTRITION", "VIEW", SESSION)
     assert "home_rejected_credential_or_session" in caplog.text
+
+
+# ==========================================================================
+# Unusable delegation and batch-mismatch coverage (fix round)
+# ==========================================================================
+
+UNUSABLE = "tok\u00e9n\u2603"
+
+
+def test_unusable_delegation_is_session_invalid_without_a_request(caplog):
+    caplog.set_level("WARNING", logger="nutrition.home_control")
+    counter = _Counter(_allow)
+    decision = _client(counter).check_access("PSN-B", "NUTRITION", "VIEW", UNUSABLE)
+    assert decision.outcome == SESSION_INVALID
+    assert counter.requests == []
+    assert "session_invalid" in caplog.text
+    assert UNUSABLE not in caplog.text
+    assert "PSN-B" not in caplog.text
+
+
+def test_unusable_delegation_is_session_invalid_without_a_request_many(caplog):
+    caplog.set_level("WARNING", logger="nutrition.home_control")
+    counter = _Counter(_allow)
+    decision = _client(counter).check_access_many("PSN-B", REQS, UNUSABLE)
+    assert decision.outcome == SESSION_INVALID
+    assert counter.requests == []
+    assert "session_invalid" in caplog.text
+    assert UNUSABLE not in caplog.text
+    assert "PSN-B" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "handler",
+    [
+        _respond(200, _message(allow=True, reason="all requirements allowed", decisions=list(reversed(COVERED)))),
+        _respond(200, _message(allow=True, reason="all requirements allowed", decisions=[COVERED[0], "nope"])),
+        _respond(200, content=b"<html>not json</html>"),
+    ],
+)
+def test_check_access_many_batch_mismatch_is_unavailable(handler):
+    counter = _Counter(handler)
+    decision = _client(counter).check_access_many("PSN-B", REQS, SESSION)
+    assert decision.outcome == UNAVAILABLE
+    assert len(counter.requests) == 1
+
+
+def test_check_access_many_connect_error_is_unavailable():
+    def handler(request):
+        raise httpx.ConnectError("refused", request=request)
+
+    counter = _Counter(handler)
+    decision = _client(counter).check_access_many("PSN-B", REQS, SESSION)
+    assert decision.outcome == UNAVAILABLE
+    assert len(counter.requests) == 1

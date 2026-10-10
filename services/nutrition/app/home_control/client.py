@@ -187,6 +187,10 @@ class HomeControlPlaneClient:
                 params={"subject_person_id": subject_person_id, "domain": domain, "action": action},
                 headers={DELEGATION_HEADER: delegation},
             )
+        except (ValueError, httpx.InvalidURL):
+            # An unusable credential (e.g. non-latin-1 header value) fails while the
+            # request is built, so nothing was sent.
+            return _refused("session_invalid", _NO_SESSION)
         except httpx.HTTPError:
             return _refused("home_unreachable", _INDETERMINATE)
         refusal = _transport_refusal(response)
@@ -253,6 +257,10 @@ class HomeControlPlaneClient:
                 },
                 headers={DELEGATION_HEADER: delegation},
             )
+        except (ValueError, httpx.InvalidURL):
+            # An unusable credential (e.g. non-latin-1 header value) fails while the
+            # request is built, so nothing was sent.
+            return _refused("session_invalid", _NO_SESSION)
         except httpx.HTTPError:
             return _refused("home_unreachable", _INDETERMINATE)
         refusal = _transport_refusal(response)

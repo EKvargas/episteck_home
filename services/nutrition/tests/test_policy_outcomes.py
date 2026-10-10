@@ -112,3 +112,31 @@ def test_cross_subject_denial_does_not_leak_or_read(http):
     assert denied.status_code == 403
     assert denied.json() == {"detail": "ACCESS_DENIED"}
     assert repo.reads == ["PSN-A"]
+
+
+def test_unusable_delegation_answers_401_not_500_with_the_real_client(http):
+    import httpx
+
+    from app import main
+    from app.home_control.client import HomeControlPlaneClient
+
+    sent = []
+
+    def handler(request):
+        sent.append(request)
+        return httpx.Response(200, json={"message": {"allow": True, "reason": "x"}})
+
+    real = HomeControlPlaneClient(
+        "https://home.episteck.com", "k", "s", transport=httpx.MockTransport(handler)
+    )
+    client, repo, _ = http
+    main.svc = NutritionService(repo, SyntheticFoodProvider(), authorizer=real)
+    main.app.dependency_overrides[main.human_session] = lambda: "tok\u00e9n\u2603"
+    try:
+        response = client.get("/profile/PSN-A")
+    finally:
+        main.app.dependency_overrides.pop(main.human_session, None)
+    assert response.status_code == 401
+    assert response.json() == {"detail": "SESSION_INVALID"}
+    assert sent == []
+    assert repo.reads == []
