@@ -142,3 +142,35 @@ def test_non_integer_validity_is_rejected():
 
 def test_inverted_window_is_rejected():
     assert not _verify(sign(_claims(iat=NOW, exp=NOW - 10), SECRET)).valid
+
+
+NUTRITION = "svc-nutrition"
+BOTH = frozenset({AUDIENCE, NUTRITION})
+
+
+def test_audience_set_accepts_a_member():
+    token = sign(_claims(aud=NUTRITION), SECRET)
+    result = verify(token, secret=SECRET, expected_issuer=ISSUER, expected_audience=BOTH, now=NOW)
+    assert result.valid
+    assert result.context.audience == NUTRITION
+
+
+def test_audience_set_rejects_a_non_member():
+    token = sign(_claims(aud="svc-other"), SECRET)
+    result = verify(token, secret=SECRET, expected_issuer=ISSUER, expected_audience=BOTH, now=NOW)
+    assert not result.valid
+    assert result.reason == "delegation audience mismatch (fail closed)"
+
+
+def test_empty_audience_set_fails_closed():
+    token = sign(_claims(), SECRET)
+    result = verify(token, secret=SECRET, expected_issuer=ISSUER, expected_audience=frozenset(), now=NOW)
+    assert not result.valid
+    assert result.reason == "delegation unavailable (fail closed)"
+
+
+def test_non_string_audience_claim_is_a_mismatch_not_an_error():
+    token = sign(_claims(aud=[AUDIENCE]), SECRET)
+    result = verify(token, secret=SECRET, expected_issuer=ISSUER, expected_audience=BOTH, now=NOW)
+    assert not result.valid
+    assert result.reason == "delegation audience mismatch (fail closed)"

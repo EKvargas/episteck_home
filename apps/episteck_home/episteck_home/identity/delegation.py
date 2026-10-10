@@ -96,7 +96,7 @@ def verify(
     *,
     secret: str | None,
     expected_issuer: str,
-    expected_audience: str,
+    expected_audience: str | frozenset[str] | set[str],
     now: int,
     seen_token_ids: set[str] | None = None,
 ) -> VerificationResult:
@@ -114,8 +114,21 @@ def verify(
     atomic ``SET NX EX`` claim in the shared Redis cache, and by ``auth_hook``, which
     calls it after this function has proven the token authentic. This module stays
     pure and has no cache dependency, so it remains testable in isolation.
+
+    ``expected_audience`` may be one audience or a set; the token's ``aud`` must be a member.
     """
-    if not token or not secret or not expected_issuer or not expected_audience:
+    allowed_audiences = (
+        frozenset({expected_audience})
+        if isinstance(expected_audience, str)
+        else frozenset(expected_audience)
+    )
+    if (
+        not token
+        or not secret
+        or not expected_issuer
+        or not allowed_audiences
+        or "" in allowed_audiences
+    ):
         return _deny("delegation unavailable (fail closed)")
 
     try:
@@ -146,7 +159,8 @@ def verify(
         return _deny("unexpected delegation issuer (fail closed)")
 
     # Audience binding: a token minted for one service must not work at another.
-    if claims["aud"] != expected_audience:
+    audience = claims["aud"]
+    if not isinstance(audience, str) or audience not in allowed_audiences:
         return _deny("delegation audience mismatch (fail closed)")
 
     issued_at, expires_at = claims["iat"], claims["exp"]
