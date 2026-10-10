@@ -71,7 +71,13 @@ def _make_fake_frappe(current_user=OWNER, conf=None, linked_people=None):
         raise exc(message)
 
     fake.throw = throw
-    fake.whitelist = lambda *a, **k: (lambda fn: fn)
+    def whitelist(*a, **k):
+        def decorate(fn):
+            fn._methods = k.get("methods")
+            return fn
+        return decorate
+
+    fake.whitelist = whitelist
     fake.get_doc = lambda data: FakeDoc(data, fake)
 
     def get_all(doctype, filters=None, fields=None, **kwargs):
@@ -416,3 +422,29 @@ def test_status_denies_when_actor_has_no_person(status):
     fake.people_by_user[OWNER] = []
     with pytest.raises(_PermissionError):
         module.get_runtime_grant_status()
+
+
+# ------------------------------------------- review fixes: transport and config typing
+
+
+def test_grant_writers_are_post_only(build):
+    """A bare whitelist accepts GET, which skips Frappe CSRF: a cross-site link could rotate."""
+    module, _ = build()
+    assert module.open_runtime_grant._methods == ["POST"]
+    assert module.close_runtime_grant._methods == ["POST"]
+
+
+def test_max_days_digit_string_is_honoured(build):
+    # `bench set-config` stores a plain string unless -p is passed.
+    module, _ = build(conf={"home_runtime_grant_max_days": "30", "home_runtime_grantees": [OWNER]})
+    module.open_runtime_grant("home-agent-primary", 30)
+    with pytest.raises(_ValidationError):
+        module.open_runtime_grant("home-agent-primary", 31)
+
+
+@pytest.mark.parametrize("bad", ["abc", "", -5, 0, 1.5, True, [90]])
+def test_malformed_max_days_fails_closed(build, bad):
+    module, fake = build(conf={"home_runtime_grant_max_days": bad, "home_runtime_grantees": [OWNER]})
+    with pytest.raises(_ValidationError):
+        module.open_runtime_grant("home-agent-primary", 1)
+    assert fake.rows == {}

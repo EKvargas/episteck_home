@@ -139,10 +139,21 @@ def _conf_list(key: str, default: tuple[str, ...]) -> list[str]:
 
 
 def _max_grant_days() -> int:
+    """Unset -> 90. Set but malformed -> 0, which rejects every ttl (fail closed).
+
+    ``bench set-config`` stores a plain string unless ``-p`` is passed, so a digit
+    string is honoured rather than silently replaced by the default.
+    """
     value = frappe.conf.get("home_runtime_grant_max_days")
-    if isinstance(value, int) and not isinstance(value, bool) and value >= 1:
-        return value
-    return DEFAULT_MAX_DAYS
+    if value is None:
+        return DEFAULT_MAX_DAYS
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int):
+        return value if value >= 1 else 0
+    if isinstance(value, str) and value.isascii() and value.isdigit() and len(value) <= 6:
+        return int(value)
+    return 0
 
 
 def _parse_ttl_days(value, max_days: int) -> int:
@@ -160,7 +171,9 @@ def _parse_ttl_days(value, max_days: int) -> int:
     return days
 
 
-@frappe.whitelist()
+# POST only: a bare whitelist accepts GET, and Frappe checks CSRF only for unsafe
+# methods, so a cross-site link could otherwise rotate (revoke) the live grant.
+@frappe.whitelist(methods=["POST"])
 def open_runtime_grant(runtime_id: str, ttl_days) -> dict:
     """Grant an agent runtime the CALLER's identity for ``ttl_days``. No user parameter.
 
@@ -211,7 +224,7 @@ def open_runtime_grant(runtime_id: str, ttl_days) -> dict:
     return {"session_id": doc.name, "expires_at": str(doc.expires_at)}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def close_runtime_grant(session_id: str) -> dict:
     """Revoke a runtime grant. Only its owner can; non-grants are never closed here."""
     user = _require_human()
