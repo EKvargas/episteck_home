@@ -99,3 +99,24 @@ def test_grant_days_bounds(monkeypatch, raw):
 
 def test_grant_days_accepts_30(monkeypatch):
     assert _settings(monkeypatch, BFF_RUNTIME_GRANT_DAYS="30").runtime_grant_days == 30
+
+
+# Review fix C1: under Referrer-Policy no-referrer a real browser sends "Origin: null"
+# on a same-origin form POST, together with Sec-Fetch-Site: same-origin.
+
+
+def test_origin_null_with_same_origin_fetch_site_passes():
+    assert _verify(origin="null", sec_fetch_site="same-origin") is True
+
+
+def test_origin_null_without_fetch_metadata_fails():
+    assert _verify(origin="null", sec_fetch_site=None) is False
+
+
+@pytest.mark.parametrize("site", ["cross-site", "same-site", "none"])
+def test_matching_origin_but_non_same_origin_fetch_site_fails(site):
+    assert _verify(origin=ORIGIN, sec_fetch_site=site) is False
+
+
+def test_foreign_origin_fails_even_if_fetch_site_claims_same_origin():
+    assert _verify(origin="https://evil.example", sec_fetch_site="same-origin") is False

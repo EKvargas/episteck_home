@@ -5,6 +5,7 @@ import httpx
 import pytest
 
 from home_bff.frappe_client import (
+    AccessRefused,
     ControlPlaneUnreachable,
     HomeOAuthClient,
     SessionOpenError,
@@ -64,8 +65,6 @@ def test_close_true_false_and_unreachable():
     assert ok.close_runtime_grant("tok", "HDS-1") is True
     no = _client(lambda r: httpx.Response(200, json={"message": {"closed": False}}))
     assert no.close_runtime_grant("tok", "HDS-1") is False
-    refused = _client(lambda r: httpx.Response(403, json={}))
-    assert refused.close_runtime_grant("tok", "HDS-1") is False
 
     def boom(request):
         raise httpx.ConnectError("down")
@@ -83,3 +82,16 @@ def test_close_uses_close_runtime_grant_path():
 
     _client(handle).close_runtime_grant("tok", "HDS-1")
     assert seen["path"] == CLOSE
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_close_with_a_rejected_token_raises_instead_of_claiming_not_owner(status):
+    """An expired access token is not an ownership answer (review fix C2)."""
+    client = _client(lambda r: httpx.Response(status, json={}))
+    with pytest.raises(AccessRefused):
+        client.close_runtime_grant("tok", "HDS-1")
+
+
+def test_access_refused_is_a_session_open_error_for_existing_handlers():
+    assert issubclass(AccessRefused, SessionOpenError)
+    assert not issubclass(AccessRefused, ControlPlaneUnreachable)

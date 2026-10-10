@@ -34,6 +34,7 @@ from . import csrf, runtime_page, sessions
 from .bootstrap import validate_bootstrap_response
 from .config import Settings
 from .frappe_client import (
+    AccessRefused,
     ControlPlaneUnreachable,
     HomeOAuthClient,
     SessionOpenError,
@@ -442,7 +443,9 @@ def create_app(
         """
         grant = store.resolve_runtime_grant(RUNTIME_ID)
         if grant is None:
-            return "none"
+            # No grant, but the legacy browser binding (flag on) may still let the
+            # agent act: revoking must reach it too.
+            return "revoked" if store.clear_runtime_binding(RUNTIME_ID) else "none"
         outcome = client.close_runtime_grant(session.access_token, grant.home_session_id)
         if outcome is False:
             return "kept"
@@ -451,6 +454,7 @@ def create_app(
                 "runtime grant revoke: control plane unreachable, local grant removed"
             )
         store.delete_runtime_grant(RUNTIME_ID)
+        store.clear_runtime_binding(RUNTIME_ID)
         return "revoked"
 
     @app.get("/runtime")
@@ -523,6 +527,11 @@ def create_app(
             return error
         try:
             outcome = _revoke_grant(session, store, client)
+        except AccessRefused:
+            # The stored access token was rejected (expired): this is not an
+            # ownership answer. A fresh login gets a valid token, then revoke again.
+            logger.warning("runtime grant revoke: login required")
+            return RedirectResponse("/login?next=/runtime", status_code=303)
         except (StoreUnavailableError, sqlite3.DatabaseError):
             return _page(
                 session, store, status_code=503,
@@ -549,6 +558,10 @@ def create_app(
         # Revoke the grant while the token is still valid, then tear the session down.
         try:
             outcome = _revoke_grant(session, store, client)
+        except AccessRefused:
+            # Do not log out leaving the grant alive: log in again, then revoke.
+            logger.warning("runtime grant revoke: login required")
+            return RedirectResponse("/login?next=/runtime", status_code=303)
         except (StoreUnavailableError, sqlite3.DatabaseError):
             outcome = "kept"
         try:

@@ -10,12 +10,13 @@ from html import escape
 
 from .store import RuntimeGrant
 
-# Deliberately strict: forms post back to this origin only; no scripts at all.
+# Deliberately strict: no scripts at all. No form-action: Chrome and Safari apply it
+# to every redirect after a form submit, which would block the stale-login hop to Home.
 PAGE_HEADERS = {
     "Cache-Control": "no-store",
     "Referrer-Policy": "no-referrer",
     "Content-Security-Policy": (
-        "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; "
+        "default-src 'none'; style-src 'unsafe-inline'; "
         "frame-ancestors 'none'; base-uri 'none'"
     ),
 }

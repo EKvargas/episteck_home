@@ -509,6 +509,14 @@ class SessionStore:
             )
         return cursor.rowcount > 0
 
+    def clear_runtime_binding(self, runtime_id: str) -> bool:
+        """Release the legacy browser binding of a runtime (H5 revoke must reach it)."""
+        with self._mutation() as db:
+            cursor = db.execute(
+                "DELETE FROM runtime_binding WHERE runtime_id = ?", (runtime_id,)
+            )
+        return cursor.rowcount > 0
+
     # ------------------------------------------------------------- runtime grant
 
     def put_runtime_grant(

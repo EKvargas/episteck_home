@@ -10,7 +10,8 @@ from fastapi.testclient import TestClient
 
 from home_bff import csrf, sessions
 from home_bff.app import create_app
-from home_bff.frappe_client import ControlPlaneUnreachable, SessionOpenError
+from home_bff.internal_app import create_internal_app
+from home_bff.frappe_client import AccessRefused, ControlPlaneUnreachable, SessionOpenError
 from home_bff.runtime import RUNTIME_ID
 from home_bff.store import SessionStore
 from tests.test_app import DELEGATION_SECRET, FakeClient, make_settings
@@ -35,6 +36,8 @@ class GrantClient(FakeClient):
 
     def close_runtime_grant(self, access_token, home_session_id):
         self.close_calls.append((access_token, home_session_id))
+        if isinstance(self.close_result, Exception):
+            raise self.close_result
         return self.close_result
 
 
@@ -267,10 +270,17 @@ def test_logout_all_revokes_grant_and_session(ctx, close_result, row_kept, label
     assert ("at-1", "HDS-G") in client.close_calls
 
 
-def test_logout_all_without_grant_reports_none(ctx):
+def test_logout_all_without_grant_or_binding_reports_none(ctx):
+    http, store, *_ = ctx
+    cookie = login(http)
+    store.clear_runtime_binding(RUNTIME_ID)  # the flag-on login had claimed it
+    assert post(http, "/logout/all", cookie).json()["runtime_grant"] == "none"
+
+
+def test_logout_all_without_grant_but_with_legacy_binding_reports_revoked(ctx):
     http, *_ = ctx
     cookie = login(http)
-    assert post(http, "/logout/all", cookie).json()["runtime_grant"] == "none"
+    assert post(http, "/logout/all", cookie).json()["runtime_grant"] == "revoked"
 
 
 def test_logout_all_requires_csrf(ctx):
@@ -294,3 +304,84 @@ def test_logs_never_contain_credentials(ctx, caplog):
         post(http, "/logout/all", cookie)
     for secret in ("at-1", "rt-1", cookie, token(cookie), "HDS-GRANT-SECRET", DELEGATION_SECRET):
         assert secret not in caplog.text
+
+
+# ------------------------------------------------------- review fixes
+
+
+def test_browser_form_post_with_origin_null_and_same_origin_fetch_site_is_accepted(ctx):
+    """C1: this is exactly what Chromium/Firefox send under Referrer-Policy no-referrer."""
+    http, store, client, _ = ctx
+    cookie = login(http)
+    response = post(http, "/runtime/grant", cookie, origin="null",
+                    extra_headers={"Sec-Fetch-Site": "same-origin"})
+    assert response.status_code == 303
+    assert len(client.open_calls) == 1
+
+
+def test_revoke_with_an_expired_access_token_asks_for_a_fresh_login_and_keeps_row(ctx):
+    """C2: a rejected token is not 'not the owner'; the grant must stay revocable."""
+    http, store, client, _ = ctx
+    cookie = login(http)
+    put_grant(store)
+    client.close_result = AccessRefused("Control Plane refused the session (HTTP 401)")
+    response = post(http, "/runtime/revoke", cookie)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login?next=/runtime"
+    assert store.resolve_runtime_grant(RUNTIME_ID) is not None
+
+
+def test_logout_all_with_an_expired_token_does_not_log_out_and_asks_to_login(ctx):
+    http, store, client, _ = ctx
+    cookie = login(http)
+    put_grant(store)
+    client.close_result = AccessRefused("Control Plane refused the session (HTTP 403)")
+    response = post(http, "/logout/all", cookie)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login?next=/runtime"
+    assert store.get_session(cookie) is not None
+    assert client.revoked == []
+    assert store.resolve_runtime_grant(RUNTIME_ID) is not None
+
+
+def _mint(store):
+    app = create_internal_app(make_settings(), store=store)  # legacy flag defaults to on
+    with TestClient(app) as mint:
+        return mint.post("/internal/mint").status_code
+
+
+def test_revoke_also_releases_the_legacy_browser_binding_while_the_flag_is_on(ctx):
+    """I1: otherwise the page says revoked while mint keeps signing from the binding."""
+    http, store, client, _ = ctx
+    cookie = login(http)  # callback claims the runtime (flag on)
+    assert _mint(store) == 204
+    post(http, "/runtime/grant", cookie)
+    assert post(http, "/runtime/revoke", cookie).status_code == 303
+    assert store.resolve_runtime_grant(RUNTIME_ID) is None
+    assert _mint(store) == 401
+
+
+def test_logout_all_releases_the_legacy_binding_too(ctx):
+    http, store, client, _ = ctx
+    cookie = login(http)
+    post(http, "/runtime/grant", cookie)
+    assert post(http, "/logout/all", cookie).json()["runtime_grant"] == "revoked"
+    assert _mint(store) == 401
+
+
+def test_refused_revoke_does_not_release_the_binding(ctx):
+    http, store, client, _ = ctx
+    cookie = login(http)
+    put_grant(store)
+    client.close_result = False
+    post(http, "/runtime/revoke", cookie)
+    assert _mint(store) == 204  # grant still stands and wins
+
+
+def test_page_csp_does_not_block_the_stale_login_redirect(ctx):
+    """I2: form-action 'self' makes Chrome/Safari block the 303 -> 302 hop to Home."""
+    http, *_ = ctx
+    login(http)
+    policy = http.get("/runtime").headers["content-security-policy"]
+    assert "form-action" not in policy
+    assert "default-src 'none'" in policy

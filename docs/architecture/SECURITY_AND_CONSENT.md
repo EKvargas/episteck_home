@@ -75,8 +75,10 @@ the token is still unexpired.
 - **Browser session:** 12 h (`bff_session` + `Home Delegated Session`).
 - **Agent runtime grant:** up to 90 days, created only by a human with an OAuth token and a
   login at most 10 minutes old, only for runtimes in `home_runtime_ids` and users in
-  `home_runtime_grantees`. Rotated on renewal, revoked immediately by `/runtime/revoke` or
-  `/logout/all`. The BFF row stores no OAuth tokens.
+  `home_runtime_grantees`. Rotated on renewal, revoked by `/runtime/revoke` or
+  `/logout/all` (both also release the legacy browser binding while it exists). Revoking
+  needs a live BFF login: if the stored access token expired, the BFF sends the owner
+  through a fresh login instead of reporting a revocation it could not make. The BFF row stores no OAuth tokens.
 - Accepted risk (owner, P4): a compromised agent account can act as the owner for the grant's
   lifetime. Controls: network allowlist to the gateway, no agent credentials or mint socket,
   limited audiences, mint rate limit, visible last use, immediate revocation.

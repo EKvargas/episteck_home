@@ -39,6 +39,14 @@ class SessionOpenError(RuntimeError):
     """The Control Plane refused to open a delegated session (e.g. no Person)."""
 
 
+class AccessRefused(SessionOpenError):
+    """HTTP 401/403 from the Control Plane: the token or the user is not accepted.
+
+    This is NOT an ownership answer. Home answers "not yours" with a 200 and
+    ``closed: false``; a 401/403 usually means the stored access token expired.
+    """
+
+
 class ControlPlaneUnreachable(SessionOpenError):
     """Network failure or a 5xx from the Control Plane (not a refusal)."""
 
@@ -166,13 +174,16 @@ class HomeOAuthClient:
         return session_id
 
     def close_runtime_grant(self, access_token: str, home_session_id: str) -> bool | None:
-        """True = revoked, False = refused or not the owner, None = Home unreachable."""
+        """True = revoked, False = Home answered closed:false (not yours / gone),
+        None = Home unreachable. Raises AccessRefused when the token is rejected."""
         try:
             payload = self._as_user(
                 access_token, CLOSE_RUNTIME_GRANT_PATH, {"session_id": home_session_id}
             )
         except ControlPlaneUnreachable:
             return None
+        except AccessRefused:
+            raise
         except SessionOpenError:
             return False
         return bool((payload or {}).get("closed"))
@@ -256,6 +267,10 @@ class HomeOAuthClient:
         if response.status_code >= 500:
             raise ControlPlaneUnreachable(
                 f"Control Plane unavailable (HTTP {response.status_code})"
+            )
+        if response.status_code in (401, 403):
+            raise AccessRefused(
+                f"Control Plane refused the session (HTTP {response.status_code})"
             )
         if response.status_code != 200:
             # 403 here is the expected, correct outcome when the User has no linked

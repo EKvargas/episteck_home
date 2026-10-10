@@ -4,8 +4,11 @@ The BFF cookie is ``SameSite=Lax``, which already blocks cross-site POST, but th
 and revoke routes act with the user's authority over 90 days, so they get two more
 independent checks:
 
-1. **Origin** — the ``Origin`` header must equal this BFF's own origin; when a browser
-   omits it, ``Sec-Fetch-Site`` must be ``same-origin``. Neither present -> reject.
+1. **Fetch metadata / Origin** — ``Sec-Fetch-Site``, when sent, must be ``same-origin``.
+   A real browser form POST under ``Referrer-Policy: no-referrer`` sends
+   ``Origin: null`` *together with* ``Sec-Fetch-Site: same-origin``, so ``null`` is
+   accepted only with that proof. A concrete ``Origin`` must equal this BFF's own
+   origin. With neither a matching Origin nor same-origin fetch metadata -> reject.
 2. **Token** — a stateless per-session value, ``HMAC(HMAC(secret, label), session_id)``,
    rendered into the page's form. A different session or secret yields a different token.
 
@@ -42,10 +45,11 @@ def verify(
     sec_fetch_site: str | None,
     expected_origin: str,
 ) -> bool:
-    if origin is not None:
-        if origin != expected_origin:
-            return False
-    elif sec_fetch_site != "same-origin":
+    if sec_fetch_site is not None and sec_fetch_site != "same-origin":
+        return False
+    if origin is not None and origin != "null" and origin != expected_origin:
+        return False
+    if (origin is None or origin == "null") and sec_fetch_site != "same-origin":
         return False
     if not presented:
         return False

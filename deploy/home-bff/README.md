@@ -188,12 +188,22 @@ daily login. Design: ADR-0010. Page: `https://bff.home.episteck.com/runtime`.
 Set on `home.episteck.com` before the first grant:
 
 ```bash
-bench --site home.episteck.com set-config home_runtime_ids '["home-agent-primary"]'
-bench --site home.episteck.com set-config home_runtime_grant_max_days 90
-bench --site home.episteck.com set-config home_runtime_grantees '["<owner user>"]'
+bench --site home.episteck.com set-config -p home_runtime_ids '["home-agent-primary"]'
+bench --site home.episteck.com set-config -p home_runtime_grant_max_days 90
+bench --site home.episteck.com set-config -p home_runtime_grantees '["<owner user>"]'
 ```
 
-An absent or empty `home_runtime_grantees` denies every grant.
+`-p` is required: without it `set-config` stores a plain string and the lists are
+ignored (every grant is denied). Check the stored types before the first grant
+(read-only; the file also holds secrets, so grep only these keys):
+
+```bash
+grep -E 'home_runtime' sites/home.episteck.com/site_config.json
+# lists must look like ["..."], max days like 90 (no quotes)
+```
+
+An absent or empty `home_runtime_grantees` denies every grant. Use exactly one
+grantee: the BFF keeps one grant per runtime.
 
 ### Transition flag
 
