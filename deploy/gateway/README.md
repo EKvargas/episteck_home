@@ -89,3 +89,19 @@ Hermes and `svc-home-bff` are denied direct `9931/9932`; the gateway user reache
 both direct MCP ports (an MCP HTTP error is acceptable, connection refusal is
 not). On test rollback delete only `table inet episteck_gateway`; never flush the
 global nftables ruleset.
+
+## Hermes shows "Home MCP not connected" (2026-10-10)
+
+The gateway mints only while the BFF holds a live session bound to `home-agent-primary`.
+Without one, every gateway request returns 401 and Hermes reports that no Home MCP server
+is connected. The binding is claimed by an operator login at the **BFF**:
+`https://bff.home.episteck.com/login`. Logging in at `home.episteck.com` does not create
+a BFF session and does not help.
+
+1. Open `https://bff.home.episteck.com/login` and sign in as the operator's Frappe user.
+   The browser ends on JSON with `"status":"authenticated"` and a `runtime_binding` value.
+2. Keep that session. Logging out releases the binding.
+3. Re-run Hermes. A new login cannot replace another live owner (`already_bound`).
+
+Verification: `gateway/home/` requests in the Home Agent's `agent.log` change from
+`401 Unauthorized` to `200 OK`.
