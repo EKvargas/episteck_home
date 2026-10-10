@@ -23,7 +23,7 @@
 - Hub env var: `HOME_HUB_NUTRITION_BASE_URL=http://127.0.0.1:9930`. Quadlet network: `Network=pasta:-T,9933,-T,9930` (confirmed by R3 step 1 before merge).
 - No production Persons, grants, profiles, or fixtures are created. Production deploys are run by the operator.
 - F3b is independent of Knowledge/KAP and Ambient Bento; touch nothing in those areas.
-- Commit messages follow `.claude/rules/git-and-branching.md` and end with the session trailer `Claude-Session: https://claude.ai/code/session_013mMVjRsZ3JmCrKYvM6shvf`.
+- Commit messages and PR bodies follow `.claude/rules/git-and-branching.md` and end with the attribution lines the executing session's harness provides (its own session link, not one copied from an earlier session).
 
 ## Review Focus
 

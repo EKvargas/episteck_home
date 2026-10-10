@@ -1,7 +1,7 @@
 # Home F3b — Nutrition server adapter: implementation design
 
 **Date:** 2026-10-05 (revised 2026-10-06)
-**Status:** Approved for implementation planning (2026-10-06); revision 2 records decisions D1–D3 for review
+**Status:** Approved for implementation (2026-10-10): Rev 2, decisions D1–D3, and the implementation plan `docs/superpowers/plans/2026-10-06-home-f3b-nutrition-adapter.md`. Execution: subagent-driven. Merges and production deploys still require the operator's explicit go at each gate.
 **Parent architecture:** `docs/architecture/proposals/HOME_F3_ACTIVE_CONTEXT_DOMAIN_INTEGRATION.md` (Board-approved, PR #48), §4–§10. This spec fixes the implementation detail for phase F3b. Decision D1 corrects one §5 detail that conflicts with the deployed G1.6 code; nothing else in the architecture changes.
 **Baseline:** `origin/main` `6d4e361` (F3a live verification PASS, PR #57).
 **Independence:** F3b has no dependency on Knowledge/KAP work or the Ambient Bento theme, and neither depends on F3b.
@@ -322,5 +322,5 @@ This is re-checked again immediately before R3.
 
 ## Open questions
 
-- **D1 needs explicit approval.** It changes which audiences Home's auth hook accepts (narrowly, for one machine caller). If it is rejected, the fallback is the D1 rejected alternative, and F3b.1 drops the audience tasks.
+- None. **D1 approved by the operator on 2026-10-10.**
 - The pasta two-port spelling is an implementation check (R3 step 1), not a design choice.
