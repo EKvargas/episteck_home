@@ -34,6 +34,11 @@ SESSION_TTL_SECONDS = 12 * 60 * 60
 STATUS_ACTIVE = "Active"
 STATUS_REVOKED = "Revoked"
 
+# H5 agent runtime grant: a long-lived session whose ``client`` names the runtime.
+RUNTIME_CLIENT_PREFIX = "agent-runtime:"
+DEFAULT_RUNTIME_IDS = ("home-agent-primary",)
+DEFAULT_MAX_DAYS = 90
+
 
 def _require_human() -> str:
     """The authenticated user, which is never a caller assertion."""
@@ -104,6 +109,115 @@ def close_session(session_id: str) -> dict:
     if owner != user:
         # Same response for "not yours" and "does not exist": revealing which is
         # which would turn this into a session-id oracle.
+        return {"closed": False}
+
+    frappe.db.set_value(
+        DOCTYPE,
+        session_id,
+        {"status": STATUS_REVOKED, "revoked_at": frappe.utils.now_datetime()},
+        update_modified=False,
+    )
+    frappe.db.commit()
+    return {"closed": True}
+
+
+# ------------------------------------------------------------ runtime grant (H5)
+
+
+def _conf_list(key: str, default: tuple[str, ...]) -> list[str]:
+    """Site-config list. Unset -> default; set but malformed -> empty (deny)."""
+    value = frappe.conf.get(key)
+    if value is None:
+        return list(default)
+    if isinstance(value, (list, tuple)):
+        return [str(item) for item in value]
+    return []
+
+
+def _max_grant_days() -> int:
+    value = frappe.conf.get("home_runtime_grant_max_days")
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 1:
+        return value
+    return DEFAULT_MAX_DAYS
+
+
+def _parse_ttl_days(value, max_days: int) -> int:
+    """Integer 1..max_days. Accepts an HTTP form string of digits; nothing else."""
+    if isinstance(value, bool):
+        days = None
+    elif isinstance(value, int):
+        days = value
+    elif isinstance(value, str) and value.isascii() and value.isdigit():
+        days = int(value)
+    else:
+        days = None
+    if days is None or days < 1 or days > max_days:
+        frappe.throw("ttl_days is out of range", frappe.ValidationError)
+    return days
+
+
+@frappe.whitelist()
+def open_runtime_grant(runtime_id: str, ttl_days) -> dict:
+    """Grant an agent runtime the CALLER's identity for ``ttl_days``. No user parameter.
+
+    Same self-service seam as ``open_session``: the authenticated human is the only
+    possible owner, so a machine credential (no linked Person) can never create one.
+    Two extra controls: the runtime must be listed in ``home_runtime_ids`` and the
+    caller in ``home_runtime_grantees`` (absent or empty denies everyone). Any previous
+    Active grant of the same user and runtime is revoked (rotation).
+    """
+    user = _require_human()
+    _require_single_linked_person(user)
+    if runtime_id not in _conf_list("home_runtime_ids", DEFAULT_RUNTIME_IDS):
+        frappe.throw("runtime not allowed", frappe.PermissionError)
+    if user not in _conf_list("home_runtime_grantees", ()):
+        frappe.throw("not allowed to grant a runtime", frappe.PermissionError)
+    days = _parse_ttl_days(ttl_days, _max_grant_days())
+
+    client = f"{RUNTIME_CLIENT_PREFIX}{runtime_id}"[:140]
+    now = frappe.utils.now_datetime()
+    try:
+        previous = frappe.get_all(
+            DOCTYPE,
+            filters={"user": user, "client": client, "status": STATUS_ACTIVE},
+            fields=["name"],
+            limit_page_length=0,
+        )
+        for row in previous:
+            frappe.db.set_value(
+                DOCTYPE,
+                row["name"],
+                {"status": STATUS_REVOKED, "revoked_at": now},
+                update_modified=False,
+            )
+        doc = frappe.get_doc(
+            {
+                "doctype": DOCTYPE,
+                "user": user,
+                "status": STATUS_ACTIVE,
+                "expires_at": frappe.utils.add_to_date(now, days=days),
+                "client": client,
+            }
+        )
+        doc.insert(ignore_permissions=True)
+        frappe.db.commit()
+    except Exception:
+        frappe.db.rollback()
+        raise
+    return {"session_id": doc.name, "expires_at": str(doc.expires_at)}
+
+
+@frappe.whitelist()
+def close_runtime_grant(session_id: str) -> dict:
+    """Revoke a runtime grant. Only its owner can; non-grants are never closed here."""
+    user = _require_human()
+    if not session_id:
+        frappe.throw("session id is required", frappe.ValidationError)
+
+    owner = frappe.db.get_value(DOCTYPE, session_id, "user")
+    client = frappe.db.get_value(DOCTYPE, session_id, "client") or ""
+    if owner != user or not client.startswith(RUNTIME_CLIENT_PREFIX):
+        # Same answer for "not yours", "not a grant" and "does not exist".
         return {"closed": False}
 
     frappe.db.set_value(
