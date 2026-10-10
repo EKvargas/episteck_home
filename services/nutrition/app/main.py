@@ -8,6 +8,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from .deps import build_service
+from .service import AccessDenied, PolicyUnavailable, SessionInvalid
 
 
 app = FastAPI(title="Episteck Nutrition", version="0.3.0")
@@ -29,10 +30,15 @@ def human_session(
 
 
 def _authorized(operation: Callable[[], Any]):
+    """Map refusals to fixed bodies. ``from None`` keeps Home's reason out of responses."""
     try:
         return operation()
-    except PermissionError as error:
-        raise HTTPException(403, str(error)) from error
+    except SessionInvalid:
+        raise HTTPException(401, "SESSION_INVALID") from None
+    except PolicyUnavailable:
+        raise HTTPException(503, "SERVICE_UNAVAILABLE") from None
+    except (AccessDenied, PermissionError):
+        raise HTTPException(403, "ACCESS_DENIED") from None
 
 
 class FoodItem(BaseModel):

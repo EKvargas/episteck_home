@@ -20,12 +20,39 @@ from nutrition_domain import (
     compare_to_targets,
 )
 
+from .home_control.client import ALLOW, DENY, SESSION_INVALID, UNAVAILABLE, AccessDecision
 from .providers.food_provider import FoodProvider
 from .reference.pregnancy_targets import (
     pregnancy_targets_detailed,
     pregnancy_targets_map,
 )
 from .store.repository import NutritionRepository
+
+
+class AccessDenied(PermissionError):
+    """Home made a well-formed denial."""
+
+
+class SessionInvalid(PermissionError):
+    """No human actor could be established for the delegated session."""
+
+
+class PolicyUnavailable(PermissionError):
+    """Authorization could not be determined (Home unreachable or malformed)."""
+
+
+_REFUSALS: dict[str, type[PermissionError]] = {
+    DENY: AccessDenied,
+    SESSION_INVALID: SessionInvalid,
+    UNAVAILABLE: PolicyUnavailable,
+}
+
+
+def _refuse_unless_allowed(decision: AccessDecision) -> None:
+    """Literal ALLOW only. Every other outcome raises its typed refusal."""
+    if decision.allow and decision.outcome == ALLOW:
+        return
+    raise _REFUSALS.get(decision.outcome, PolicyUnavailable)(decision.reason)
 
 
 class AccessAuthorizer(Protocol):
@@ -88,9 +115,8 @@ class NutritionService:
             subject_person_id, "NUTRITION", action, delegation
         )
         # Literal allow only: anything else — deny, malformed, indeterminate,
-        # unreachable — is a refusal.
-        if not decision.allow:
-            raise PermissionError(decision.reason)
+        # unreachable — is a typed refusal.
+        _refuse_unless_allowed(decision)
 
     def _require_all(
         self, delegation: str | None, subject_person_id: str, actions: list[str]
@@ -110,8 +136,7 @@ class NutritionService:
             [("NUTRITION", action) for action in actions],
             delegation,
         )
-        if not decision.allow:
-            raise PermissionError(decision.reason)
+        _refuse_unless_allowed(decision)
 
     # --- profile ---
     def get_profile(self, delegation: str | None, subject_person_id: str):

@@ -133,7 +133,7 @@ def test_fastapi_authorization_denial_is_403(boundary_modules):
         "/profile/PSN-SUBJECT", headers={DELEGATION_HEADER: SESSION}
     )
     assert response.status_code == 403
-    assert response.json() == {"detail": "Home denied"}
+    assert response.json() == {"detail": "ACCESS_DENIED"}
 
 
 def test_legacy_consent_http_mutation_and_read_are_not_exposed(boundary_modules):
