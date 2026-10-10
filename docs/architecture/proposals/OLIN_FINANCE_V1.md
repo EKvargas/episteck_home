@@ -377,7 +377,7 @@ Las condiciones se verificaron el 2026-10-10 en la documentación oficial o en f
 | Trade Republic | wealthAPI | Brokerage | **Desde 1.000 €/mes** + 0,35 €/usuario | — | — | **No**: B2B |
 | Trade Republic | Wrappers no oficiales (pytr…) | Completa | 0 € | Desatendido | Frecuente; TR admite **un solo dispositivo** (desconecta el móvil) | Técnicamente sí; **rechazado** por ToS y fragilidad |
 | EquatePlus | Captura o PDF del estado del plan, trimestral y en cada *vest* | Disponible y restringido, valor | 0 € | Trimestral o por evento | No aplica | Sí (no hay API) |
-| Bank of America | SimpleFIN Bridge (vía MX) | Saldos y movimientos, 90 días | **15 $/año** (o 1,50 $/mes) | ~1/día | Según MX/banco | Sí. **Soporte de BofA no verificado**: comprobar en su buscador antes de pagar (1 mes a 1,50 $) |
+| Bank of America | SimpleFIN Bridge (vía MX) | Saldos y movimientos, 90 días | **15 $/año** (o 1,50 $/mes) | ~1/día | Según MX/banco | Sí. **BofA aparece en el buscador de SimpleFIN** (comprobado por el dueño el 2026-10-10). Falta confirmar con una conexión real el formato del Zelle y el refresco |
 | Bank of America | CSV oficial de BofA online | Movimientos | 0 € | Mensual (alternativa) | No aplica | Sí; cuesta 1 intervención/mes |
 | Efectivo USD | Libro derivado + recuento trimestral | — | 0 € | Por evento | No aplica | Sí |
 | Tipos de cambio | BCE (tipos de referencia, API pública) | EUR/USD diario | 0 € | Diario | No aplica | Sí |
@@ -646,7 +646,7 @@ Se ejecutan primero con fixtures y después, cuando procede, sobre datos reales 
 | --- | --- | --- |
 | No se aprueba H5 | Login diario: incumple el criterio | Diseño dedicado en I0. Si se rechaza, la v1 queda en web con pendientes, sin cron de chat |
 | Cambio de condiciones de Enable Banking (gratuidad o restricciones) | Coste o pérdida del conector | Interfaz de conector; alternativa FinTS para Sparkasse y CSV oficiales |
-| SimpleFIN no cubre BofA | Devoluciones sin verificación automática | CSV mensual de BofA o confirmación del dueño |
+| La conexión SimpleFIN–BofA falla o no trae el pagador del Zelle | Devoluciones sin verificación automática | CSV mensual de BofA o confirmación del dueño |
 | PSD2 de TR sin descripciones | Clasificación pobre del efectivo de TR | La mayoría son transferencias internas o inversión; reglas por importe y fecha |
 | Errores de extracción del LLM | Hechos reportados incorrectos | Niveles 1–3, eco, deshacer, el dinero solo se verifica por banco o confirmación |
 | Proveedor LLM no aprobado | Datos financieros a un tercero no evaluado | Decisión P2 antes de I1 |
@@ -664,7 +664,7 @@ P1–P4 quedaron decididas el 2026-10-10 (§0.1). Las demás siguen abiertas.
 3. **P3. Canal:** ¿aceptas Telegram como canal privado de Olin en v1, con la familia en WhatsApp y reenvíos? ¿Aceptarías en algún momento un número dedicado de WhatsApp vía Baileys (I6) con su riesgo?
 4. **P4. Concesión de runtime (H5):** ¿duración máxima aceptable (30, 60 o 90 días) y la revocación desde el Hub es suficiente?
 5. **P5. Sparkasse:** ¿hay algo atado a ella (nómina, crédito, Bausparvertrag, tarjeta de crédito, Schufa, domiciliaciones difíciles)? ¿Cambiar a N26 Standard ahora o después de I1?
-6. **P6. BofA:** ¿qué cuentas (checking o savings)? ¿Las devoluciones familiares llegan siempre por Zelle? ¿Pruebo SimpleFIN 1 mes (1,50 $)?
+6. **P6. BofA:** ¿qué cuentas (checking o savings)? ¿Las devoluciones familiares llegan siempre por Zelle? (BofA ya está confirmado en el buscador de SimpleFIN.)
 7. **P7. Intercambios:** ¿el amigo en España es siempre el mismo y con el mismo IBAN? ¿Quién propone el importe en USD y cuándo? ¿Cuántos intercambios hay al mes?
 8. **P8. Deudas heredadas:** ¿cuántos deudores, importes aproximados, y existe algún registro (notas, hoja de cálculo, chats)?
 9. **P9. Regalo o anticipo:** ¿cuál es el valor por defecto de una solicitud nueva y quién lo decide?
