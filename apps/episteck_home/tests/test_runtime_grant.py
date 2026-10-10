@@ -128,6 +128,8 @@ def build(monkeypatch):
         fake = _make_fake_frappe(**kwargs)
         monkeypatch.setitem(sys.modules, "frappe", fake)
         monkeypatch.setitem(sys.modules, "frappe.utils", fake.utils)
+        # actor/session bind `frappe` at import time: reload both against this fake.
+        importlib.reload(importlib.import_module("episteck_home.identity.actor"))
         module = importlib.reload(importlib.import_module("episteck_home.identity.session"))
         return module, fake
 
@@ -334,3 +336,83 @@ def test_close_denies_guest_and_requires_id(build):
     module, _ = build()
     with pytest.raises(_ValidationError):
         module.close_runtime_grant("")
+
+
+# ----------------------------------------------------------------- status
+
+MCP_CALLER = "home-mcp-service@episteck.invalid"
+
+
+def _delegate(fake, session_id, *, audience="home-control-plane", user=OWNER):
+    fake.local.episteck_delegated_user = user
+    fake.local.episteck_delegation_audience = audience
+    fake.local.episteck_delegated_session_id = session_id
+
+
+@pytest.fixture
+def status(build):
+    def make(*, caller=MCP_CALLER, client="agent-runtime:home-agent-primary",
+             expires=NOW + dt.timedelta(days=89, hours=5), **delegate):
+        module, fake = build(current_user=caller)
+        fake.rows["HDS-G"] = {"user": OWNER, "status": "Active", "client": client,
+                              "expires_at": expires}
+        _delegate(fake, delegate.pop("session_id", "HDS-G"), **delegate)
+        return module, fake
+
+    return make
+
+
+def test_status_reports_expiry_and_days_left_rounded_up(status):
+    module, _ = status()
+    assert module.get_runtime_grant_status() == {
+        "granted": True,
+        "expires_at": str(NOW + dt.timedelta(days=89, hours=5)),
+        "days_left": 90,
+    }
+
+
+def test_status_days_left_never_negative(status):
+    module, _ = status(expires=NOW - dt.timedelta(days=2))
+    assert module.get_runtime_grant_status()["days_left"] == 0
+
+
+def test_status_requires_a_delegation(build):
+    module, fake = build(current_user=MCP_CALLER)  # plain machine call, nothing bound
+    with pytest.raises(_PermissionError):
+        module.get_runtime_grant_status()
+
+
+def test_status_only_for_the_home_mcp_machine(status):
+    module, _ = status(caller="nutrition-auth-service@episteck.invalid")
+    with pytest.raises(_PermissionError):
+        module.get_runtime_grant_status()
+
+
+def test_status_rejects_a_nutrition_audience_delegation(status):
+    module, _ = status(audience="svc-nutrition")
+    with pytest.raises(_PermissionError):
+        module.get_runtime_grant_status()
+
+
+def test_status_without_bound_session_id_is_denied(status):
+    module, fake = status()
+    fake.local.episteck_delegated_session_id = None
+    with pytest.raises(_PermissionError):
+        module.get_runtime_grant_status()
+
+
+def test_status_for_a_browser_session_is_not_a_grant(status):
+    module, _ = status(client="bff-web")
+    assert module.get_runtime_grant_status() == {"granted": False}
+
+
+def test_status_returns_no_identifier_or_user(status):
+    module, _ = status()
+    assert set(module.get_runtime_grant_status()) <= {"granted", "expires_at", "days_left"}
+
+
+def test_status_denies_when_actor_has_no_person(status):
+    module, fake = status()
+    fake.people_by_user[OWNER] = []
+    with pytest.raises(_PermissionError):
+        module.get_runtime_grant_status()

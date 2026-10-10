@@ -23,7 +23,11 @@ self-service seam.
 """
 from __future__ import annotations
 
+import math
+
 import frappe
+
+from .actor import resolve_principals
 
 DOCTYPE = "Home Delegated Session"
 
@@ -228,3 +232,38 @@ def close_runtime_grant(session_id: str) -> dict:
     )
     frappe.db.commit()
     return {"closed": True}
+
+
+#: Machine callers allowed to read the grant status (the Home MCP service only).
+RUNTIME_STATUS_CALLERS = frozenset({"home-mcp-service@episteck.invalid"})
+
+
+@frappe.whitelist()
+def get_runtime_grant_status() -> dict:
+    """Expiry of the grant behind THIS delegated call. Returns no identifier.
+
+    Callable only with a control-plane delegation presented by the Home MCP service.
+    The session in use comes from the auth hook's request-local state, never from a
+    parameter, so a caller cannot ask about any session but its own.
+    """
+    principals = resolve_principals()  # control-plane audience only; fails closed
+    if not principals.is_delegated or principals.machine_caller not in RUNTIME_STATUS_CALLERS:
+        frappe.throw("not permitted", frappe.PermissionError)
+    session_id = getattr(frappe.local, "episteck_delegated_session_id", None)
+    if not session_id:
+        frappe.throw("not permitted", frappe.PermissionError)
+
+    client = frappe.db.get_value(DOCTYPE, session_id, "client") or ""
+    if not client.startswith(RUNTIME_CLIENT_PREFIX):
+        return {"granted": False}
+
+    expires_at = frappe.db.get_value(DOCTYPE, session_id, "expires_at")
+    if isinstance(expires_at, str):
+        expires_at = frappe.utils.get_datetime(expires_at)
+    # Both sides are site-local (see auth_hook._user_for_session): same clock.
+    remaining = (expires_at - frappe.utils.now_datetime()).total_seconds()
+    return {
+        "granted": True,
+        "expires_at": str(expires_at),
+        "days_left": max(0, math.ceil(remaining / 86400)),
+    }
