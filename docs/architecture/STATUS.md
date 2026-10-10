@@ -72,7 +72,7 @@ Full runtime, provenance, network, rollback, and trust-boundary evidence is in
 | Item | State |
 | --- | --- |
 | Home: `open_runtime_grant`, `close_runtime_grant`, `get_runtime_grant_status` | PR1 in review |
-| BFF: grant table, `/runtime`, mint precedence, `RUNTIME_LEGACY_BINDING` | PR2 pending |
+| BFF: grant table, `/runtime`, mint precedence, `RUNTIME_LEGACY_BINDING` | PR2 in review |
 | Live verification | not run |
 
 Design: `adr/0010-agent-runtime-grant.md`.
