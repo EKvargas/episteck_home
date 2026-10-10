@@ -23,14 +23,18 @@ from __future__ import annotations
 
 import hmac
 import logging
+import sqlite3
+import time
+from urllib.parse import parse_qs
 
-from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Response
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
-from . import sessions
+from . import csrf, runtime_page, sessions
 from .bootstrap import validate_bootstrap_response
 from .config import Settings
 from .frappe_client import (
+    ControlPlaneUnreachable,
     HomeOAuthClient,
     SessionOpenError,
     TokenExchangeError,
@@ -43,6 +47,11 @@ from .runtime import RUNTIME_ID
 from .store import SessionStore, StoreUnavailableError
 
 logger = logging.getLogger("home_bff")
+
+# Audiences a runtime grant may later be asked to mint for. Only home-control-plane is
+# minted today; svc-finance is recorded for H4 and has no effect until the BFF mints it.
+GRANT_AUDIENCES = frozenset({"home-control-plane", "svc-nutrition", "svc-finance"})
+SECONDS_PER_DAY = 86400
 
 # Delegations are minted for exactly one downstream audience per call.
 AUDIENCE_CONTROL_PLANE = sessions.AUDIENCE_CONTROL_PLANE
@@ -391,6 +400,169 @@ def create_app(
             "audience": minted.audience,
             "expires_at": minted.expires_at,
         }
+
+    # ----------------------------------------------- agent runtime grant (H5)
+
+    expected_origin = csrf.origin_of(settings.redirect_uri)
+
+    def _page(session, store, *, message=None, status_code=200) -> HTMLResponse:
+        body = runtime_page.render(
+            csrf_token=csrf.token_for(session.session_id, settings.delegation_secret),
+            grant=store.resolve_runtime_grant(RUNTIME_ID),
+            now=int(time.time()),
+            message=message,
+        )
+        return HTMLResponse(body, status_code=status_code, headers=runtime_page.PAGE_HEADERS)
+
+    async def _guard(request: Request, session_id: str | None, store: SessionStore):
+        """Live session + CSRF (Origin/Sec-Fetch-Site and token). Fails closed."""
+        session = store.get_session(session_id)
+        if session is None:
+            return None, JSONResponse({"detail": "no active session"}, status_code=401)
+        raw = (await request.body()).decode("utf-8", "replace")
+        form = parse_qs(raw, keep_blank_values=True)
+        if not csrf.verify(
+            session_id=session.session_id,
+            secret=settings.delegation_secret,
+            presented=(form.get("csrf") or [None])[0],
+            origin=request.headers.get("origin"),
+            sec_fetch_site=request.headers.get("sec-fetch-site"),
+            expected_origin=expected_origin,
+        ):
+            return None, JSONResponse(
+                {"detail": "request could not be verified"}, status_code=403
+            )
+        return session, None
+
+    def _revoke_grant(session, store: SessionStore, client: HomeOAuthClient) -> str:
+        """Ask Home first. Delete the pointer when Home confirms or is unreachable.
+
+        A refusal (not the owner, or already gone) keeps the row, so another logged-in
+        user cannot cut the owner's grant. Returns revoked / kept / none.
+        """
+        grant = store.resolve_runtime_grant(RUNTIME_ID)
+        if grant is None:
+            return "none"
+        outcome = client.close_runtime_grant(session.access_token, grant.home_session_id)
+        if outcome is False:
+            return "kept"
+        if outcome is None:
+            logger.warning(
+                "runtime grant revoke: control plane unreachable, local grant removed"
+            )
+        store.delete_runtime_grant(RUNTIME_ID)
+        return "revoked"
+
+    @app.get("/runtime")
+    def runtime_view(
+        session_id: str | None = Cookie(default=None, alias=sessions.COOKIE_NAME),
+        store: SessionStore = Depends(get_store),
+    ):
+        session = store.get_session(session_id)
+        if session is None:
+            return RedirectResponse("/login?next=/runtime", status_code=303)
+        return _page(session, store)
+
+    @app.post("/runtime/grant")
+    async def runtime_grant(
+        request: Request,
+        session_id: str | None = Cookie(default=None, alias=sessions.COOKIE_NAME),
+        store: SessionStore = Depends(get_store),
+        client: HomeOAuthClient = Depends(get_client),
+    ):
+        session, error = await _guard(request, session_id, store)
+        if error is not None:
+            return error
+        if int(time.time()) - session.created_at > sessions.RECENT_LOGIN_SECONDS:
+            # Granting 90 days of authority needs a recent login, not just a cookie.
+            return RedirectResponse("/login?next=/runtime", status_code=303)
+        try:
+            home_session_id = client.open_runtime_grant(
+                session.access_token, RUNTIME_ID, settings.runtime_grant_days
+            )
+        except ControlPlaneUnreachable:
+            logger.warning("runtime grant: control plane unreachable")
+            return _page(
+                session, store, status_code=503,
+                message="Home no responde. Intentalo de nuevo en unos minutos.",
+            )
+        except SessionOpenError:
+            logger.warning("runtime grant refused by the control plane")
+            return _page(
+                session, store, status_code=403,
+                message="Esta cuenta no puede conceder el permiso.",
+            )
+        try:
+            store.put_runtime_grant(
+                RUNTIME_ID,
+                home_session_id,
+                GRANT_AUDIENCES,
+                ttl_seconds=settings.runtime_grant_days * SECONDS_PER_DAY,
+            )
+        except (StoreUnavailableError, sqlite3.DatabaseError):
+            logger.warning("runtime grant could not be stored")
+            try:  # do not leave an Active grant that nothing points at
+                client.close_runtime_grant(session.access_token, home_session_id)
+            except Exception:
+                pass
+            return _page(
+                session, store, status_code=503,
+                message="No se pudo guardar el permiso. Intentalo de nuevo.",
+            )
+        return RedirectResponse("/runtime", status_code=303)
+
+    @app.post("/runtime/revoke")
+    async def runtime_revoke(
+        request: Request,
+        session_id: str | None = Cookie(default=None, alias=sessions.COOKIE_NAME),
+        store: SessionStore = Depends(get_store),
+        client: HomeOAuthClient = Depends(get_client),
+    ):
+        session, error = await _guard(request, session_id, store)
+        if error is not None:
+            return error
+        try:
+            outcome = _revoke_grant(session, store, client)
+        except (StoreUnavailableError, sqlite3.DatabaseError):
+            return _page(
+                session, store, status_code=503,
+                message="No se pudo revocar. Intentalo de nuevo.",
+            )
+        if outcome == "kept":
+            return _page(
+                session, store, status_code=409,
+                message="Home no confirmo la revocacion (no eres el titular o ya estaba revocada).",
+            )
+        return RedirectResponse("/runtime", status_code=303)
+
+    @app.post("/logout/all")
+    async def logout_all(
+        request: Request,
+        session_id: str | None = Cookie(default=None, alias=sessions.COOKIE_NAME),
+        store: SessionStore = Depends(get_store),
+        client: HomeOAuthClient = Depends(get_client),
+    ):
+        """Log out this session AND revoke the agent grant (owner decision, H5)."""
+        session, error = await _guard(request, session_id, store)
+        if error is not None:
+            return error
+        # Revoke the grant while the token is still valid, then tear the session down.
+        try:
+            outcome = _revoke_grant(session, store, client)
+        except (StoreUnavailableError, sqlite3.DatabaseError):
+            outcome = "kept"
+        try:
+            client.close_home_session(session.access_token, session.home_session_id)
+        except Exception:
+            logger.warning("upstream session close failed", exc_info=False)
+        try:
+            client.revoke_token(session.access_token)
+        except Exception:
+            logger.warning("upstream token revoke failed", exc_info=False)
+        store.delete_session(session.session_id)
+        result = JSONResponse({"status": "logged out", "runtime_grant": outcome})
+        _clear_session_cookie(result)
+        return result
 
     return app
 
