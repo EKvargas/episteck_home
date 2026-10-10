@@ -123,6 +123,12 @@ This matches the implemented Nutrition authorization order and single-use behavi
 
 **Board-accepted network principle for F3b:** retain Hub → BFF port 9933 and add only a narrow Hub server → Nutrition FastAPI port 9930 path. The deployment must empirically prove the exact Podman/pasta configuration: Hub → 9933 reachable; Hub → 9930 reachable; Hub → 9931/9932/9934 unreachable; public → 9930 unreachable. If that isolation cannot be proven, stop the rollout and return evidence for a new transport decision. `Network=host` and broad network exposure are not approved fallbacks.
 
+**F3b implementation note (D1, 2026-10-06):** as deployed by G1.6, Home verified every
+delegation against `home-control-plane` only, so a `svc-nutrition` delegation could not
+bind. F3b.1 makes Home accept `svc-nutrition` only from Nutrition's machine credential
+and only at the policy entry points. See
+`docs/superpowers/specs/2026-10-05-home-f3b-nutrition-adapter-design.md` D1–D3.
+
 ## 6. Response and UI state contract
 
 Preserve the existing `DataEnvelope<T>` axes and `SafeUIErrorCode`. For this vertical, `T` is a narrow discriminated profile summary:

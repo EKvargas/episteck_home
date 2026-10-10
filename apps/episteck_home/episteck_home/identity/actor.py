@@ -31,6 +31,14 @@ from dataclasses import dataclass
 
 import frappe
 
+# Delegation audiences. A Nutrition-audience delegation binds only for Nutrition's own
+# machine credential (auth_hook) and is accepted only by the policy entry points.
+CONTROL_PLANE_AUDIENCE = "home-control-plane"
+NUTRITION_AUDIENCE = "svc-nutrition"
+
+DEFAULT_AUDIENCES = frozenset({CONTROL_PLANE_AUDIENCE})
+POLICY_AUDIENCES = frozenset({CONTROL_PLANE_AUDIENCE, NUTRITION_AUDIENCE})
+
 
 @dataclass(frozen=True)
 class Principals:
@@ -66,7 +74,7 @@ def _mark_denial(category: str) -> None:
     frappe.local.episteck_denial_category = category
 
 
-def resolve_principals() -> Principals:
+def resolve_principals(*, accept_audiences: frozenset[str] = DEFAULT_AUDIENCES) -> Principals:
     """Resolve both principals from authenticated context only. Fail closed.
 
     Raises PermissionError when no human actor can be derived. A machine credential
@@ -80,6 +88,12 @@ def resolve_principals() -> Principals:
     # has already verified the delegation token and mapped its opaque session id to
     # a Frappe User; it never accepts a Person id from any caller.
     delegated_user = getattr(frappe.local, "episteck_delegated_user", None)
+    if delegated_user:
+        audience = getattr(frappe.local, "episteck_delegation_audience", None)
+        if audience not in accept_audiences:
+            # A Nutrition-scoped delegation may drive one policy decision, nothing else.
+            _mark_denial("actor.delegation_audience_not_accepted")
+            _throw("delegation not accepted for this operation")
     machine_caller = user if delegated_user else None
     effective_user = delegated_user or user
 
@@ -121,6 +135,6 @@ def _person_for_user(user: str) -> str | None:
     return people[0]["name"]
 
 
-def resolve_actor() -> str:
+def resolve_actor(*, accept_audiences: frozenset[str] = DEFAULT_AUDIENCES) -> str:
     """Return the trusted actor Person id. Never accepts a caller-supplied value."""
-    return resolve_principals().human_actor
+    return resolve_principals(accept_audiences=accept_audiences).human_actor

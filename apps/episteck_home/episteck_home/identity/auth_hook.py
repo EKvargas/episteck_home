@@ -40,12 +40,10 @@ import time
 import frappe
 
 from . import replay
+from .actor import CONTROL_PLANE_AUDIENCE, NUTRITION_AUDIENCE
 from .delegation import verify
 
 DELEGATION_HEADER = "X-Episteck-Delegation"
-
-# This Control Plane accepts delegations minted for it and no one else.
-CONTROL_PLANE_AUDIENCE = "home-control-plane"
 
 LOG_TITLE = "episteck_home.delegation"
 
@@ -77,6 +75,20 @@ def _config(key: str) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
 
 
+def _accepted_audiences(machine_user: str) -> frozenset[str]:
+    """Audiences this authenticated machine caller may present.
+
+    Any machine caller may present a Control Plane delegation (unchanged G1.6). A
+    Nutrition delegation binds only when presented by Nutrition's OWN machine user,
+    named in site config; if that key is unset, it never binds.
+    """
+    audiences = {CONTROL_PLANE_AUDIENCE}
+    nutrition_user = _config("home_nutrition_machine_user")
+    if nutrition_user and machine_user == nutrition_user:
+        audiences.add(NUTRITION_AUDIENCE)
+    return frozenset(audiences)
+
+
 def _now() -> int:
     """Epoch UTC. See TIME IS UTC above — never derive this from site-local time."""
     return int(time.time())
@@ -92,6 +104,7 @@ def establish_delegated_context() -> None:
         # live defect invisible. Record the exception CLASS and a static stage code —
         # never the message, which could quote a token or a header.
         frappe.local.episteck_delegated_user = None
+        frappe.local.episteck_delegation_audience = None
         _stage(f"{STAGE_EXCEPTION}:{type(error).__name__}")
         try:
             frappe.log_error(
@@ -104,6 +117,7 @@ def establish_delegated_context() -> None:
 
 def _establish() -> None:
     frappe.local.episteck_delegated_user = None
+    frappe.local.episteck_delegation_audience = None
     _stage(STAGE_START)
 
     token = frappe.get_request_header(DELEGATION_HEADER)
@@ -136,7 +150,7 @@ def _establish() -> None:
         token,
         secret=secret,
         expected_issuer=_config("home_delegation_issuer") or "episteck-home-bff",
-        expected_audience=CONTROL_PLANE_AUDIENCE,
+        expected_audience=_accepted_audiences(machine_user),
         now=now,
     )
     if not result.valid:
@@ -182,6 +196,7 @@ def _establish() -> None:
 
     frappe.local.episteck_delegated_user = session_user
     frappe.local.episteck_machine_caller = machine_user
+    frappe.local.episteck_delegation_audience = context.audience
     _stage(STAGE_BOUND)
 
 

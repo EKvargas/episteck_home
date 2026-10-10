@@ -82,6 +82,10 @@ only loopback MCP URLs and cannot read the secrets. The Frappe site allowlists t
 machine usernames for actor-aware business methods; this allowlist does not grant
 generic DocType access.
 
+`[F3b]` Site config `home_nutrition_machine_user` names Nutrition's Frappe API User. Home
+accepts a `svc-nutrition`-audience delegation only from that machine caller, and only at
+`check_access`/`check_access_many`. If the key is unset, such delegations never bind.
+
 The Home Agent's persistent policy requires literal `allow: true` before it may call
 a person-specific downstream tool. Denial, malformed output, timeout, or unavailable
 authorization stops the workflow without parameter substitution or escalation.

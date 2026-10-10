@@ -10,6 +10,7 @@ import importlib
 import inspect
 import sys
 import types
+from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
@@ -67,6 +68,7 @@ def _make_fake_frappe():
     fake.local = SimpleNamespace(
         episteck_delegated_user="person@example.invalid",
         episteck_machine_caller="home-mcp@example.invalid",
+        episteck_delegation_audience="home-control-plane",
     )
     fake.conf = {}
     fake.users = {
@@ -123,7 +125,11 @@ def _make_fake_frappe():
     fake.loaded_person_ids = []
     fake.get_all_calls = []
     fake.db = FakeDatabase(fake)
-    fake.utils = SimpleNamespace(today=lambda: "2026-09-15", now=lambda: "2026-09-15 12:00:00")
+    fake.utils = SimpleNamespace(
+        today=lambda: "2026-09-15",
+        now=lambda: "2026-09-15 12:00:00",
+        now_datetime=lambda: datetime(2026, 9, 15, 12, 0, 0),
+    )
     fake.get_request_header = lambda name: None
 
     def whitelist(*args, **kwargs):
@@ -778,3 +784,56 @@ def test_bootstrap_ignores_a_stray_delegation_header_and_uses_the_session_owner(
     result = api.get_home_bootstrap("sess-actor")
 
     assert result["viewer"]["person_id"] == "PSN-ACTOR"
+
+
+# --------------------------------------------------------------------------
+# F3b.1: a Nutrition-audience delegation drives policy decisions only
+# --------------------------------------------------------------------------
+
+NON_POLICY_CALLS = {
+    "get_person": lambda api: api.get_person("PSN-ACTOR"),
+    "list_my_circles": lambda api: api.list_my_circles(),
+    "list_circle_members": lambda api: api.list_circle_members("CIR-HOME"),
+    "list_people_i_care_for": lambda api: api.list_people_i_care_for(),
+    "get_access_to_person": lambda api: api.get_access_to_person("PSN-SUBJECT"),
+    "get_care_dashboard": lambda api: api.get_care_dashboard(),
+    "whoami": lambda api: api.whoami(),
+}
+
+
+@pytest.mark.parametrize("name", sorted(NON_POLICY_CALLS))
+def test_nutrition_audience_actor_is_refused_outside_policy_entry_points(home_api, name):
+    api, fake = home_api
+    fake.local.episteck_delegation_audience = "svc-nutrition"
+    with pytest.raises(FakePermissionError):
+        NON_POLICY_CALLS[name](api)
+
+
+@pytest.mark.parametrize("name", sorted(NON_POLICY_CALLS))
+def test_control_plane_actor_is_still_accepted_by_non_policy_methods(home_api, name):
+    api, _ = home_api
+    NON_POLICY_CALLS[name](api)  # must not raise a permission error
+
+
+def test_nutrition_audience_actor_is_accepted_by_check_access(home_api):
+    api, fake = home_api
+    fake.local.episteck_delegation_audience = "svc-nutrition"
+    assert api.check_access("PSN-SUBJECT", "NUTRITION", "VIEW") == {
+        "allow": False,
+        "reason": "no grant",
+    }
+
+
+def test_nutrition_audience_actor_is_accepted_by_check_access_many(home_api):
+    api, fake = home_api
+    fake.local.episteck_delegation_audience = "svc-nutrition"
+    result = api.check_access_many("PSN-SUBJECT", [{"domain": "NUTRITION", "action": "VIEW"}])
+    assert result["allow"] is False
+    assert len(result["decisions"]) == 1
+
+
+def test_bound_delegated_user_without_recorded_audience_is_refused(home_api):
+    api, fake = home_api
+    del fake.local.episteck_delegation_audience
+    with pytest.raises(FakePermissionError):
+        api.check_access("PSN-SUBJECT", "NUTRITION", "VIEW")
