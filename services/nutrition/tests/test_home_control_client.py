@@ -14,7 +14,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from app.home_control.client import AccessDecision, HomeControlPlaneClient
+from app.home_control.client import ALLOW, DENY, SESSION_INVALID, UNAVAILABLE, AccessDecision, HomeControlPlaneClient
 
 SESSION = "delegation-token-xyz"
 INDETERMINATE = AccessDecision(False, "authorization indeterminate (fail closed)")
@@ -536,3 +536,132 @@ def test_malformed_many_input_denies_without_network(subject, requirements):
 
     assert decision == INDETERMINATE
     assert counter.requests == []
+
+
+# ==========================================================================
+# F3b.2 outcome contract
+# ==========================================================================
+
+
+def _respond(status, body=None, *, content=None):
+    def handler(request):
+        if content is not None:
+            return httpx.Response(status, content=content)
+        return httpx.Response(status, json=body)
+    return handler
+
+
+def _message(**decision):
+    return {"message": decision}
+
+
+@pytest.mark.parametrize(
+    "handler, outcome",
+    [
+        (_respond(200, _message(allow=True, reason="self-access")), ALLOW),
+        (_respond(200, _message(allow=False, reason="no consent grant (fail closed)")), DENY),
+        (_respond(200, _message(allow=True)), UNAVAILABLE),
+        (_respond(200, _message(allow=True, reason="")), UNAVAILABLE),
+        (_respond(200, _message(allow=True, reason="   ")), UNAVAILABLE),
+        (_respond(200, _message(allow=True, reason=7)), UNAVAILABLE),
+        (_respond(200, _message(allow="true", reason="x")), UNAVAILABLE),
+        (_respond(200, {"message": [True]}), UNAVAILABLE),
+        (_respond(200, content=b"<html>not json</html>"), UNAVAILABLE),
+        (_respond(401, {"exc_type": "AuthenticationError"}), SESSION_INVALID),
+        (_respond(403, {"exc_type": "PermissionError"}), SESSION_INVALID),
+        (_respond(404, {}), UNAVAILABLE),
+        (_respond(500, {}), UNAVAILABLE),
+        (_respond(502, {}), UNAVAILABLE),
+    ],
+)
+def test_check_access_outcome_matrix(handler, outcome):
+    counter = _Counter(handler)
+    decision = _client(counter).check_access("PSN-B", "NUTRITION", "VIEW", SESSION)
+    assert decision.outcome == outcome
+    assert decision.allow is (outcome == ALLOW)
+    assert len(counter.requests) == 1
+
+
+def test_unreachable_home_is_unavailable():
+    def handler(request):
+        raise httpx.ConnectError("down", request=request)
+    decision = _client(handler).check_access("PSN-B", "NUTRITION", "VIEW", SESSION)
+    assert decision.outcome == UNAVAILABLE
+
+
+def test_timeout_is_unavailable():
+    def handler(request):
+        raise httpx.ReadTimeout("slow", request=request)
+    decision = _client(handler).check_access("PSN-B", "NUTRITION", "VIEW", SESSION)
+    assert decision.outcome == UNAVAILABLE
+
+
+def test_missing_delegation_is_session_invalid_without_a_request():
+    counter = _Counter(_allow)
+    decision = _client(counter).check_access("PSN-B", "NUTRITION", "VIEW", None)
+    assert decision.outcome == SESSION_INVALID
+    assert counter.requests == []
+
+
+def test_missing_arguments_are_unavailable_without_a_request():
+    counter = _Counter(_allow)
+    decision = _client(counter).check_access("", "NUTRITION", "VIEW", SESSION)
+    assert decision.outcome == UNAVAILABLE
+    assert counter.requests == []
+
+
+def test_reason_wording_never_changes_the_decision():
+    deny_worded_like_allow = _respond(200, _message(allow=False, reason="self-access"))
+    allow_worded_like_deny = _respond(200, _message(allow=True, reason="no consent grant (fail closed)"))
+    assert _client(deny_worded_like_allow).check_access("PSN-B", "NUTRITION", "VIEW", SESSION).outcome == DENY
+    assert _client(allow_worded_like_deny).check_access("PSN-B", "NUTRITION", "VIEW", SESSION).outcome == ALLOW
+
+
+REQS = [("NUTRITION", "VIEW"), ("NUTRITION", "CREATE")]
+COVERED = [
+    {"domain": "NUTRITION", "action": "VIEW", "allow": True},
+    {"domain": "NUTRITION", "action": "CREATE", "allow": True},
+]
+
+
+@pytest.mark.parametrize(
+    "handler, outcome",
+    [
+        (_respond(200, _message(allow=True, reason="all requirements allowed", decisions=COVERED)), ALLOW),
+        (_respond(200, _message(allow=False, reason="no matching active grant (fail closed)", decisions=[])), DENY),
+        (_respond(200, _message(allow=True, decisions=COVERED)), UNAVAILABLE),
+        (_respond(200, _message(allow=True, reason="all requirements allowed", decisions=COVERED[:1])), UNAVAILABLE),
+        (_respond(403, {}), SESSION_INVALID),
+        (_respond(503, {}), UNAVAILABLE),
+    ],
+)
+def test_check_access_many_outcome_matrix(handler, outcome):
+    counter = _Counter(handler)
+    decision = _client(counter).check_access_many("PSN-B", REQS, SESSION)
+    assert decision.outcome == outcome
+    assert len(counter.requests) == 1
+
+
+def test_access_decision_outcome_defaults_and_must_agree():
+    assert AccessDecision(True, "x").outcome == ALLOW
+    assert AccessDecision(False, "x").outcome == DENY
+    with pytest.raises(ValueError):
+        AccessDecision(True, "x", DENY)
+    with pytest.raises(ValueError):
+        AccessDecision(False, "x", ALLOW)
+
+
+def test_refusal_logs_a_category_without_identity_or_reason(caplog):
+    caplog.set_level("WARNING", logger="nutrition.home_control")
+    handler = _respond(200, _message(allow=False, reason="no matching active grant (fail closed)"))
+    _client(handler).check_access("PSN-B", "NUTRITION", "VIEW", SESSION)
+    assert "deny" in caplog.text
+    assert "PSN-B" not in caplog.text
+    assert SESSION not in caplog.text
+    assert "no matching" not in caplog.text
+
+
+def test_rejected_credential_or_session_has_its_own_log_category(caplog):
+    caplog.set_level("WARNING", logger="nutrition.home_control")
+    _client(_respond(403, {})).check_access("PSN-B", "NUTRITION", "VIEW", SESSION)
+    assert "home_rejected_credential_or_session" in caplog.text
