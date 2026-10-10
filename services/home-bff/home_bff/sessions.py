@@ -61,6 +61,14 @@ LOGIN_BINDING_COOKIE_FLAGS = {
     "path": "/",
 }
 
+# Carries "go to /runtime after login" across the OAuth round trip (H5). Only the
+# literal marker "runtime" is ever written or honoured, so it can never redirect
+# anywhere else.
+NEXT_COOKIE_NAME = "__Host-episteck_home_next"
+NEXT_COOKIE_VALUE = "runtime"
+NEXT_COOKIE_MAX_AGE_SECONDS = 600
+NEXT_COOKIE_FLAGS = LOGIN_BINDING_COOKIE_FLAGS
+
 
 def new_login_binding() -> str:
     """Opaque, high-entropy value carried only in the binding cookie."""

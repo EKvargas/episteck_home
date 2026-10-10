@@ -85,7 +85,10 @@ def create_app(
     # ------------------------------------------------------------------- login
 
     @app.get("/login")
-    def login(store: SessionStore = Depends(get_store)):
+    def login(
+        next: str | None = Query(default=None),
+        store: SessionStore = Depends(get_store),
+    ):
         """Start an authorization-code login. All security state stays server-side."""
         store.purge_expired()
 
@@ -123,6 +126,13 @@ def create_app(
             max_age=sessions.LOGIN_BINDING_MAX_AGE_SECONDS,
             **sessions.LOGIN_BINDING_COOKIE_FLAGS,
         )
+        if next == "/runtime":  # the only accepted value; anything else is ignored
+            result.set_cookie(
+                sessions.NEXT_COOKIE_NAME,
+                sessions.NEXT_COOKIE_VALUE,
+                max_age=sessions.NEXT_COOKIE_MAX_AGE_SECONDS,
+                **sessions.NEXT_COOKIE_FLAGS,
+            )
         return result
 
     # ---------------------------------------------------------------- callback
@@ -135,6 +145,9 @@ def create_app(
         login_binding: str | None = Cookie(
             default=None, alias=sessions.LOGIN_BINDING_COOKIE_NAME
         ),
+        next_marker: str | None = Cookie(
+            default=None, alias=sessions.NEXT_COOKIE_NAME
+        ),
         store: SessionStore = Depends(get_store),
         client: HomeOAuthClient = Depends(get_client),
     ):
@@ -142,6 +155,7 @@ def create_app(
             """Every callback exit clears the binding cookie, success or failure."""
             failure = JSONResponse({"detail": detail}, status_code=status_code)
             _clear_login_binding_cookie(failure)
+            _clear_next_cookie(failure)
             return failure
 
         if error:
@@ -196,25 +210,36 @@ def create_app(
         # 10+11. Session creation and runtime claim commit together. A failed
         # claim rolls back the token-bearing row before any cookie is issued.
         try:
-            session, binding = store.create_session_and_claim_runtime(
-                home_session_id=home_session_id,
-                access_token=tokens.access_token,
-                refresh_token=tokens.refresh_token,
-                runtime_id=RUNTIME_ID,
-            )
+            if settings.runtime_legacy_binding:
+                session, binding = store.create_session_and_claim_runtime(
+                    home_session_id=home_session_id,
+                    access_token=tokens.access_token,
+                    refresh_token=tokens.refresh_token,
+                    runtime_id=RUNTIME_ID,
+                )
+                # ALREADY_BOUND is still success: the Home Hub session is valid, and
+                # agent binding is orthogonal. `binding` is logged only as its static
+                # enum value, never returned to the browser.
+                logger.info("runtime binding outcome: %s", binding.value)
+            else:
+                # H5: the agent acts only through an explicit runtime grant.
+                session = store.create_session(
+                    home_session_id=home_session_id,
+                    access_token=tokens.access_token,
+                    refresh_token=tokens.refresh_token,
+                )
         except (ValueError, StoreUnavailableError):
             return _failure(503, "runtime binding could not be completed")
 
-        # ALREADY_BOUND is still success: the Home Hub session is valid, and agent
-        # binding is orthogonal. `binding` is logged only as its static enum value,
-        # never returned to the browser.
-        logger.info("runtime binding outcome: %s", binding.value)
-
-        result = Response(status_code=303, headers={"Location": "/app"})
+        destination = (
+            "/runtime" if next_marker == sessions.NEXT_COOKIE_VALUE else "/app"
+        )
+        result = Response(status_code=303, headers={"Location": destination})
         result.headers["Cache-Control"] = "no-store"
         result.headers["Referrer-Policy"] = "no-referrer"
         _set_session_cookie(result, session.session_id)
         _clear_login_binding_cookie(result)
+        _clear_next_cookie(result)
         return result
 
     # ----------------------------------------------------------------- logout
@@ -392,6 +417,16 @@ def _clear_session_cookie(response: Response) -> None:
         secure=sessions.COOKIE_FLAGS["secure"],
         httponly=sessions.COOKIE_FLAGS["httponly"],
         samesite=sessions.COOKIE_FLAGS["samesite"],
+    )
+
+
+def _clear_next_cookie(response: Response) -> None:
+    response.delete_cookie(
+        sessions.NEXT_COOKIE_NAME,
+        path=sessions.NEXT_COOKIE_FLAGS["path"],
+        secure=sessions.NEXT_COOKIE_FLAGS["secure"],
+        httponly=sessions.NEXT_COOKIE_FLAGS["httponly"],
+        samesite=sessions.NEXT_COOKIE_FLAGS["samesite"],
     )
 
 
