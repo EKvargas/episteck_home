@@ -21,6 +21,7 @@ from __future__ import annotations
 import frappe
 
 from episteck_home.identity.actor import (
+    POLICY_AUDIENCES,
     _person_for_user,
     resolve_actor,
     resolve_principals,
@@ -96,7 +97,7 @@ def check_access(subject_person_id: str, domain: str, action: str):
 
     The actor is resolved server-side; a caller cannot name one.
     """
-    actor = resolve_actor()
+    actor = resolve_actor(accept_audiences=POLICY_AUDIENCES)
     return _check_access(actor, subject_person_id, domain, action)
 
 
@@ -143,7 +144,7 @@ def check_access_many(subject_person_id: str, requirements):
     * Nothing is cached. Each requirement is decided against grants loaded now, so a
       grant revoked a moment ago denies here.
     """
-    actor = resolve_actor()
+    actor = resolve_actor(accept_audiences=POLICY_AUDIENCES)
 
     # The pure policy also refuses a blank subject, but this API validates its own
     # input rather than relying on a downstream layer to catch it.
