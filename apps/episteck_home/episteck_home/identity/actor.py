@@ -31,6 +31,11 @@ from dataclasses import dataclass
 
 import frappe
 
+# Delegation audiences. A Nutrition-audience delegation binds only for Nutrition's own
+# machine credential (auth_hook) and is accepted only by the policy entry points.
+CONTROL_PLANE_AUDIENCE = "home-control-plane"
+NUTRITION_AUDIENCE = "svc-nutrition"
+
 
 @dataclass(frozen=True)
 class Principals:

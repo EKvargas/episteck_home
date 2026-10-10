@@ -211,3 +211,75 @@ def test_hook_never_raises_into_the_request_path(hook):
     fake.headers["X-Episteck-Delegation"] = _token()
     module.establish_delegated_context()  # must not raise
     assert fake.local.episteck_delegated_user is None
+
+
+NUTRITION_CALLER = "nutrition@example.invalid"
+
+
+def _configure_nutrition_caller(fake):
+    fake.conf["home_nutrition_machine_user"] = NUTRITION_CALLER
+
+
+def test_nutrition_audience_binds_for_the_configured_nutrition_caller(hook):
+    module, fake = hook
+    _configure_nutrition_caller(fake)
+    fake.session.user = NUTRITION_CALLER
+    fake.headers["X-Episteck-Delegation"] = _token(aud="svc-nutrition", jti="tok-n1")
+    module.establish_delegated_context()
+    assert fake.local.episteck_delegated_user == "person@example.invalid"
+    assert fake.local.episteck_delegation_audience == "svc-nutrition"
+
+
+def test_nutrition_audience_from_another_machine_caller_denies(hook):
+    module, fake = hook
+    _configure_nutrition_caller(fake)  # caller stays home-mcp@example.invalid
+    fake.headers["X-Episteck-Delegation"] = _token(aud="svc-nutrition", jti="tok-n2")
+    module.establish_delegated_context()
+    assert fake.local.episteck_delegated_user is None
+    assert fake.local.episteck_delegation_audience is None
+
+
+def test_nutrition_audience_denies_when_nutrition_caller_is_not_configured(hook):
+    module, fake = hook
+    fake.session.user = NUTRITION_CALLER
+    fake.headers["X-Episteck-Delegation"] = _token(aud="svc-nutrition", jti="tok-n3")
+    module.establish_delegated_context()
+    assert fake.local.episteck_delegated_user is None
+
+
+def test_rejected_nutrition_token_does_not_burn_its_id(hook):
+    module, fake = hook
+    _configure_nutrition_caller(fake)
+    fake.headers["X-Episteck-Delegation"] = _token(aud="svc-nutrition", jti="tok-n4")
+    module.establish_delegated_context()  # presented by home-mcp: rejected
+    assert fake.local.episteck_delegated_user is None
+    fake.session.user = NUTRITION_CALLER
+    module.establish_delegated_context()  # same token, right caller: still first use
+    assert fake.local.episteck_delegated_user == "person@example.invalid"
+
+
+def test_expired_nutrition_token_denies(hook):
+    module, fake = hook
+    _configure_nutrition_caller(fake)
+    fake.session.user = NUTRITION_CALLER
+    fake.headers["X-Episteck-Delegation"] = _token(
+        aud="svc-nutrition", jti="tok-n5", iat=NOW - 600, exp=NOW - 1
+    )
+    module.establish_delegated_context()
+    assert fake.local.episteck_delegated_user is None
+
+
+def test_control_plane_binding_records_its_audience(hook):
+    module, fake = hook
+    fake.headers["X-Episteck-Delegation"] = _token(jti="tok-c1")
+    module.establish_delegated_context()
+    assert fake.local.episteck_delegation_audience == "home-control-plane"
+
+
+def test_recorded_audience_is_reset_on_every_request(hook):
+    module, fake = hook
+    fake.headers["X-Episteck-Delegation"] = _token(jti="tok-c2")
+    module.establish_delegated_context()
+    fake.headers.clear()
+    module.establish_delegated_context()
+    assert fake.local.episteck_delegation_audience is None
