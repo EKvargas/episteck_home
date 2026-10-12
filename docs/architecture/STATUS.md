@@ -77,6 +77,14 @@ Full runtime, provenance, network, rollback, and trust-boundary evidence is in
 
 Design: `adr/0010-agent-runtime-grant.md`.
 
+## Olin Finance I1 (in progress)
+
+| Item | State |
+| --- | --- |
+| Architecture proposal (PR #74) and ADR-0011 | 📝 proposed |
+| `services/finance` (store, read model, API/MCP, connectors) | 🚧 in review, Phase A; **not deployed**, no real data touched |
+| Home changes H1–H4 (audience, `authorize_batch`, Feature Activation, mint-by-audience + gateway route) | ⏳ Phase B (H5 runtime grant is merged and deployed) |
+
 ## G2 blockers
 
 1. Complete the **Knowledge Technology Gate** before G2 implementation.
