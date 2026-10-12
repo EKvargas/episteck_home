@@ -354,6 +354,14 @@ def delegation_diagnostics():
     }
 
 
+@frappe.whitelist()
+def get_runtime_grant_status():
+    """Expiry of the agent runtime grant in use (H5). See identity.session."""
+    from episteck_home.identity.session import get_runtime_grant_status as _status
+
+    return _status()
+
+
 #: Bound on §12 CP-12: a business operation reading more than this many circles or
 #: care rows is not a single bootstrap read — fail closed rather than return a
 #: partial or unbounded response.

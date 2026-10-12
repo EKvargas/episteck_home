@@ -50,13 +50,13 @@ Official docs, fetched today. Anything marked UNVERIFIED must be proven in the l
 
 | PR | Branch | Contains | Tasks |
 | --- | --- | --- | --- |
-| A1 | `feature/finance-i1-overview` | ADR-0010, DATA_OWNERSHIP/ARCHITECTURE/STATUS, package skeleton, money, domain, SQLite store, idempotency | 1-5 |
+| A1 | `feature/finance-i1-overview` | ADR-0011, DATA_OWNERSHIP/ARCHITECTURE/STATUS, package skeleton, money, domain, SQLite store, idempotency | 1-5 |
 | A2 | `feature/finance-i1-read-model` | `Authorizer` port + fake, overview read model, REST API, MCP, session seam | 6-9 |
 | A3 | `feature/finance-i1-connectors` | `Connector` interface, SimpleFIN, ECB, sync engine, admin CLI | 10-14 |
 | A4 | `feature/finance-i1-enable-banking` | EB JWT, authorize/callback/session flow, accounts, balances, transactions, budget | 15-18 |
 | A5 | `feature/finance-i1-deploy` | Dockerfile, Quadlet units + timer, backup doc, operator runbook | 19-21 |
 
-The ADR/DATA_OWNERSHIP/ARCHITECTURE/STATUS update ships in A1, the PR that introduces the service (Architecture Change Rule). ADR number 0010 is the next free one on `origin/main`; if the H5 session lands an ADR first, renumber at merge.
+The ADR/DATA_OWNERSHIP/ARCHITECTURE/STATUS update ships in A1, the PR that introduces the service (Architecture Change Rule). The Finance ADR is 0011 (H5 took 0010 while this was in review).
 
 ## File map (all under `services/finance/` unless noted)
 
@@ -81,7 +81,7 @@ app/sync.py               # SyncEngine + __main__ entrypoint
 app/admin.py              # operator CLI: init workspace, add connection, link account
 tests/ conftest.py support.py (FakeAuthorizer, FakeConnector, clock, synthetic fixtures)
 deploy/finance/           # finance-api.container finance-mcp.container finance-sync.container finance-sync.timer README.md tests/
-docs/architecture/adr/0010-svc-finance-domain-service.md
+docs/architecture/adr/0011-svc-finance-domain-service.md
 docs/runbooks/finance-i1-nuremberg-bringup.md
 ```
 
@@ -95,7 +95,7 @@ uv run --no-project --python 3.13 --with "fastapi>=0.140" --with uvicorn --with 
 # PR A1: docs, skeleton, money, domain, store
 
 ### Task 1: ADR and architecture docs
-**Files:** create `docs/architecture/adr/0010-svc-finance-domain-service.md`; modify `DATA_OWNERSHIP.md` (Finance row: balances, movements, classification, case data owned by `svc-finance`; Home owns Person/consent/activation; bank is the source for balances), `ARCHITECTURE.md` (component map + `svc-finance` ports 9935/9936), `STATUS.md` (Finance: "I1 code in review, not deployed").
+**Files:** create `docs/architecture/adr/0011-svc-finance-domain-service.md`; modify `DATA_OWNERSHIP.md` (Finance row: balances, movements, classification, case data owned by `svc-finance`; Home owns Person/consent/activation; bank is the source for balances), `ARCHITECTURE.md` (component map + `svc-finance` ports 9935/9936), `STATUS.md` (Finance: "I1 code in review, not deployed").
 - [ ] ADR sections per `docs.md`: Context, Decision (own service; bank-first; connectors behind one interface; read-only, no payments; workspace partitioning; authorization via H2-shaped port), Consequences, Alternatives (Firefly III/ERPNext rejected, per proposal D1).
 - [ ] Verify: `grep -n "svc-finance" docs/architecture/*.md docs/architecture/adr/0010*.md` shows all four files.
 
@@ -307,7 +307,7 @@ B1 H1 `svc-finance` audience + machine user; B2 H2 `authorize_batch` in Home and
 
 ## Deviations from this plan (recorded 2026-10-12, as built)
 
-1. **More, smaller PRs.** Ten PRs instead of five: A1, A1b (store), A2a (port + read model), A2b (service), A2c (API/MCP), A3a (connectors), A3b (sync + admin), A4 (Enable Banking), A5 (deploy). A3b (~980 lines) and A4 (~1200 lines) exceed the 800-line guideline; they were split by task, not by line count.
+1. **More, smaller PRs.** Nine PRs instead of five: A1, A1b (store), A2a (port + read model), A2b (service), A2c (API/MCP), A3a (connectors), A3b (sync + admin), A4 (Enable Banking), A5 (deploy). A3b (~980 lines) and A4 (~1200 lines) exceed the 800-line guideline; they were split by task, not by line count.
 2. **One metadata read before Home answers.** `workspace_scope` returns owner ids and a status so the service can build the requirements. Tests assert no data-bearing method runs on any refusal path. The plan's "repo never touched" is true for data, not for that one structural read.
 3. **Workspace comes from configuration** (`FINANCE_WORKSPACE_ID`), not from the actor's membership: resolving it from the actor would need a second Home call. Multi-workspace stays in the schema; choosing a workspace per actor is a later change.
 4. **Outcome vocabulary** is `ANSWERED | SESSION_INVALID | UNAVAILABLE`; individual decisions carry `allow`.
@@ -317,3 +317,4 @@ B1 H1 `svc-finance` audience + machine user; B2 H2 `authorize_batch` in Home and
 8. **`access_log.account_id` holds the provider account reference**, not Finance's account id.
 9. **Added `deploy/finance/bringup.sh`** so each operator action is one verifiable `ssh` command, with a rollback per step and an explicit purge confirmation.
 10. **Two tests are POSIX-only** (secret files readable by others are refused) and were skipped on the Windows development machine. Run them on Linux before merging.
+11. **ADR renumbered to 0011** because H5 merged `0010-agent-runtime-grant.md` first (2026-10-12). `origin/main` was merged into the stack the same day (task B0).

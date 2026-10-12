@@ -97,6 +97,14 @@ CREATE TABLE IF NOT EXISTS runtime_binding (
     bound_at   INTEGER NOT NULL,
     FOREIGN KEY (session_id) REFERENCES bff_session(session_id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS runtime_grant (
+    runtime_id         TEXT PRIMARY KEY,
+    home_session_id    TEXT NOT NULL,
+    allowed_audiences  TEXT NOT NULL,
+    granted_at         INTEGER NOT NULL,
+    expires_at         INTEGER NOT NULL,
+    last_mint_at       INTEGER
+);
 CREATE INDEX IF NOT EXISTS ix_tx_expiry ON oauth_transaction(expires_at);
 CREATE INDEX IF NOT EXISTS ix_session_expiry ON bff_session(expires_at);
 """
@@ -136,6 +144,19 @@ class Session:
     access_token: str
     refresh_token: str | None
     expires_at: int
+    created_at: int = 0
+
+
+@dataclass(frozen=True)
+class RuntimeGrant:
+    """Pointer to a Home runtime grant session. Holds no OAuth token (H5)."""
+
+    runtime_id: str
+    home_session_id: str
+    allowed_audiences: frozenset[str]
+    granted_at: int
+    expires_at: int
+    last_mint_at: int | None
 
 
 def _now() -> int:
@@ -330,6 +351,7 @@ class SessionStore:
             access_token=access_token,
             refresh_token=refresh_token,
             expires_at=expires_at,
+            created_at=now,
         )
 
     def create_session_and_claim_runtime(
@@ -376,6 +398,7 @@ class SessionStore:
                 access_token=access_token,
                 refresh_token=refresh_token,
                 expires_at=expires_at,
+                created_at=now,
             ),
             binding,
         )
@@ -399,6 +422,7 @@ class SessionStore:
             access_token=row["access_token"],
             refresh_token=row["refresh_token"],
             expires_at=row["expires_at"],
+            created_at=row["created_at"],
         )
 
     def delete_session(self, session_id: str | None) -> bool:
@@ -485,6 +509,89 @@ class SessionStore:
             )
         return cursor.rowcount > 0
 
+    def clear_runtime_binding(self, runtime_id: str) -> bool:
+        """Release the legacy browser binding of a runtime (H5 revoke must reach it)."""
+        with self._mutation() as db:
+            cursor = db.execute(
+                "DELETE FROM runtime_binding WHERE runtime_id = ?", (runtime_id,)
+            )
+        return cursor.rowcount > 0
+
+    # ------------------------------------------------------------- runtime grant
+
+    def put_runtime_grant(
+        self,
+        runtime_id: str,
+        home_session_id: str,
+        allowed_audiences: frozenset[str] | set[str],
+        *,
+        ttl_seconds: int,
+    ) -> RuntimeGrant:
+        """Record (or replace) the grant pointer. No OAuth token is accepted or stored."""
+        now = _now()
+        grant = RuntimeGrant(
+            runtime_id=runtime_id,
+            home_session_id=home_session_id,
+            allowed_audiences=frozenset(allowed_audiences),
+            granted_at=now,
+            expires_at=now + ttl_seconds,
+            last_mint_at=None,
+        )
+        with self._mutation() as db:
+            db.execute(
+                "INSERT OR REPLACE INTO runtime_grant"
+                " (runtime_id, home_session_id, allowed_audiences, granted_at,"
+                "  expires_at, last_mint_at) VALUES (?,?,?,?,?,NULL)",
+                (
+                    runtime_id,
+                    home_session_id,
+                    ",".join(sorted(grant.allowed_audiences)),
+                    grant.granted_at,
+                    grant.expires_at,
+                ),
+            )
+        return grant
+
+    def resolve_runtime_grant(self, runtime_id: str) -> RuntimeGrant | None:
+        """Return the live grant pointer; an expired one is deleted and denied."""
+        with self._connection() as db:
+            row = db.execute(
+                "SELECT * FROM runtime_grant WHERE runtime_id = ?", (runtime_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        if row["expires_at"] <= _now():
+            self.delete_runtime_grant(runtime_id)
+            return None
+        return RuntimeGrant(
+            runtime_id=row["runtime_id"],
+            home_session_id=row["home_session_id"],
+            allowed_audiences=frozenset(
+                part for part in row["allowed_audiences"].split(",") if part
+            ),
+            granted_at=row["granted_at"],
+            expires_at=row["expires_at"],
+            last_mint_at=row["last_mint_at"],
+        )
+
+    def delete_runtime_grant(self, runtime_id: str) -> bool:
+        with self._mutation() as db:
+            cursor = db.execute(
+                "DELETE FROM runtime_grant WHERE runtime_id = ?", (runtime_id,)
+            )
+        return cursor.rowcount > 0
+
+    def touch_runtime_grant(self, runtime_id: str) -> None:
+        """Record "last used" at minute granularity: at most one write per minute."""
+        now = _now()
+        minute = now - now % 60
+        with self._mutation() as db:
+            db.execute(
+                "UPDATE runtime_grant SET last_mint_at = ?"
+                " WHERE runtime_id = ? AND (last_mint_at IS NULL OR last_mint_at < ?)",
+                (minute, runtime_id, minute),
+            )
+
     # ------------------------------------------------------------------- upkeep
 
     def purge_expired(self) -> int:
@@ -514,4 +621,5 @@ def _session_from_row(row: sqlite3.Row) -> Session:
         access_token=row["access_token"],
         refresh_token=row["refresh_token"],
         expires_at=row["expires_at"],
+        created_at=row["created_at"],
     )
