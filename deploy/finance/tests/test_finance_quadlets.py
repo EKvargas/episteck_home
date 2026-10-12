@@ -74,6 +74,19 @@ def test_request_serving_units_see_only_the_pepper_never_provider_secrets(name):
     assert not any(e.startswith("FINANCE_SECRETS_DIR") for e in values(name, "Container", "Environment"))
 
 
+HOME_AUTH = "-/srv/episteck/services/finance/secrets/home-auth.env"
+
+
+@pytest.mark.parametrize("name", ["finance-api.container", "finance-mcp.container"])
+def test_request_serving_units_load_the_home_credential_as_an_optional_env_file(name):
+    # The leading "-" keeps the unit startable before the credential exists (fail closed 503).
+    assert HOME_AUTH in values(name, "Container", "EnvironmentFile")
+
+
+def test_sync_unit_never_loads_the_home_credential():
+    assert HOME_AUTH not in values("finance-sync.container", "Container", "EnvironmentFile")
+
+
 def test_sync_unit_gets_the_secrets_directory_read_only_and_data_read_write():
     mounts = values("finance-sync.container", "Container", "Volume")
     secrets = [m for m in mounts if m.split(":")[0].rstrip("/").endswith("/secrets")]
@@ -175,3 +188,24 @@ def test_runbook_marks_secret_steps_as_own_terminal_and_has_rollbacks():
     assert "OWN TERMINAL" in text and "never through the chat" in text.lower()
     assert text.count("Rollback") >= 4
     assert "9935" in text and "9936" in text
+
+
+PROVISION = DEPLOY / "provision-home-credentials.sh"
+
+
+def test_provision_script_is_syntactically_valid():
+    import subprocess
+    import shutil
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash not available")
+    subprocess.run([bash, "-n", str(PROVISION)], check=True)
+
+
+def test_provision_script_never_prints_the_credential():
+    text = PROVISION.read_text(encoding="utf-8")
+    assert "set -euo pipefail" in text
+    # The secret and key only ever travel through the ssh pipe into the 600 file.
+    assert not re.search(r"echo[^\n]*(secret|\$key)", text)
+    assert "| $NODE_SSH" in text and "umask 077" in text
+    assert "--rotate" in text and "refusing" in text
