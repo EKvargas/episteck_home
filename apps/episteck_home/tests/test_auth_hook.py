@@ -269,6 +269,69 @@ def test_expired_nutrition_token_denies(hook):
     assert fake.local.episteck_delegated_user is None
 
 
+FINANCE_CALLER = "finance@example.invalid"
+
+
+def _configure_finance_caller(fake):
+    fake.conf["home_finance_machine_user"] = FINANCE_CALLER
+
+
+def test_finance_audience_binds_for_the_configured_finance_caller(hook):
+    module, fake = hook
+    _configure_finance_caller(fake)
+    fake.session.user = FINANCE_CALLER
+    fake.headers["X-Episteck-Delegation"] = _token(aud="svc-finance", jti="tok-f1")
+    module.establish_delegated_context()
+    assert fake.local.episteck_delegated_user == "person@example.invalid"
+    assert fake.local.episteck_delegation_audience == "svc-finance"
+
+
+def test_finance_audience_denies_for_any_other_machine_caller(hook):
+    module, fake = hook
+    _configure_finance_caller(fake)  # caller stays home-mcp@example.invalid
+    fake.headers["X-Episteck-Delegation"] = _token(aud="svc-finance", jti="tok-f2")
+    module.establish_delegated_context()
+    assert fake.local.episteck_delegated_user is None
+    assert fake.local.episteck_delegation_audience is None
+
+
+def test_finance_audience_denies_when_finance_caller_is_not_configured(hook):
+    module, fake = hook
+    fake.session.user = FINANCE_CALLER
+    fake.headers["X-Episteck-Delegation"] = _token(aud="svc-finance", jti="tok-f3")
+    module.establish_delegated_context()
+    assert fake.local.episteck_delegated_user is None
+
+
+def test_finance_caller_cannot_present_a_nutrition_audience(hook):
+    module, fake = hook
+    _configure_finance_caller(fake)
+    _configure_nutrition_caller(fake)
+    fake.session.user = FINANCE_CALLER
+    fake.headers["X-Episteck-Delegation"] = _token(aud="svc-nutrition", jti="tok-f4")
+    module.establish_delegated_context()
+    assert fake.local.episteck_delegated_user is None
+
+
+def test_nutrition_caller_cannot_present_a_finance_audience(hook):
+    module, fake = hook
+    _configure_finance_caller(fake)
+    _configure_nutrition_caller(fake)
+    fake.session.user = NUTRITION_CALLER
+    fake.headers["X-Episteck-Delegation"] = _token(aud="svc-finance", jti="tok-f5")
+    module.establish_delegated_context()
+    assert fake.local.episteck_delegated_user is None
+
+
+def test_finance_caller_may_still_present_control_plane_audience(hook):
+    module, fake = hook
+    _configure_finance_caller(fake)
+    fake.session.user = FINANCE_CALLER
+    fake.headers["X-Episteck-Delegation"] = _token(jti="tok-f6")
+    module.establish_delegated_context()
+    assert fake.local.episteck_delegation_audience == "home-control-plane"
+
+
 def test_control_plane_binding_records_its_audience(hook):
     module, fake = hook
     fake.headers["X-Episteck-Delegation"] = _token(jti="tok-c1")

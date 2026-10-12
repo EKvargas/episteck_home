@@ -84,6 +84,7 @@ Design: `adr/0010-agent-runtime-grant.md`.
 | Architecture proposal (PR #74) and ADR-0011 | 📝 proposed |
 | `services/finance` (store, read model, API/MCP, connectors) | 🚧 in review, Phase A; **not deployed**, no real data touched |
 | Home changes H1–H4 (audience, `authorize_batch`, Feature Activation, mint-by-audience + gateway route) | ⏳ Phase B (H5 runtime grant is merged and deployed) |
+| Home accepts `svc-finance` (B1; extends ADR-0009 pattern) | 🔀 PR pending; no deploy beyond normal `main` → `episteck-deploy`. Owner must set site config `home_finance_machine_user` before Finance can call Home (at B6/B4, not now) |
 
 ## G2 blockers
 
