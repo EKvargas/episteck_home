@@ -61,6 +61,8 @@ STEP build "$SHA"
 
 The workspace id is an opaque label, not a secret.
 
+Optional: add `FINANCE_EB_ACCESS_CAP=<1-12>` to the same file to change the per-account unattended data requests allowed per rolling 24 h (default 4, counting every call). Lower it if a bank refuses earlier; raise it only with evidence from the live measurement.
+
 ```bash
 $SSH "sudo -n -u svc-finance bash -c 'umask 077; echo FINANCE_WORKSPACE_ID=ws-home-erick > /srv/episteck/services/finance/config/finance.env'"
 ```
