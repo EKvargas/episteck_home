@@ -191,7 +191,8 @@ def main() -> int:
     if not settings.secrets_dir:
         raise SystemExit("FINANCE_SECRETS_DIR is required")
     repo = FinanceRepository(settings.db_path, pepper=settings.pepper)
-    engine = SyncEngine(repo, build_connectors(repo, settings.workspace_id, settings.secrets_dir),
+    engine = SyncEngine(repo, build_connectors(repo, settings.workspace_id, settings.secrets_dir,
+                                           eb_access_cap=settings.eb_access_cap),
                         ecb=_default_ecb())
     report = engine.run(settings.workspace_id)
     for result in report.results:  # statuses only: no ids of people, no amounts
