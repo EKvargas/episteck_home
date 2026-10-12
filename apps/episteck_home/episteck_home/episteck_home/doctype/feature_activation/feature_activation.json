@@ -1,0 +1,67 @@
+{
+ "doctype": "DocType",
+ "name": "Feature Activation",
+ "module": "Episteck Home",
+ "autoname": "format:FA-{#####}",
+ "naming_rule": "Expression",
+ "engine": "InnoDB",
+ "description": "Whether a feature is ACTIVE or PAUSED for a Person or a Circle. Read by the Hub bootstrap and get_feature_state. Not an authorization: access still goes through can_access.",
+ "fields": [
+  {
+   "fieldname": "feature",
+   "fieldtype": "Data",
+   "label": "Feature",
+   "reqd": 1,
+   "description": "stable feature key, e.g. finance"
+  },
+  {
+   "fieldname": "scope_type",
+   "fieldtype": "Select",
+   "label": "Scope Type",
+   "options": "Person\nCircle",
+   "reqd": 1
+  },
+  {
+   "fieldname": "scope",
+   "fieldtype": "Dynamic Link",
+   "label": "Scope",
+   "options": "scope_type",
+   "reqd": 1
+  },
+  {
+   "fieldname": "state",
+   "fieldtype": "Select",
+   "label": "State",
+   "options": "ACTIVE\nPAUSED",
+   "default": "PAUSED",
+   "reqd": 1
+  },
+  {
+   "fieldname": "activated_by",
+   "fieldtype": "Link",
+   "label": "Activated By",
+   "options": "Person"
+  },
+  {
+   "fieldname": "activated_at",
+   "fieldtype": "Datetime",
+   "label": "Activated At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "deactivated_at",
+   "fieldtype": "Datetime",
+   "label": "Deactivated At",
+   "read_only": 1
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  }
+ ]
+}
