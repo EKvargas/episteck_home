@@ -28,6 +28,10 @@ ISSUER = "episteck-home-bff"
 # Delegations live for a single agent turn, not a session (proposal §18 Q2).
 DELEGATION_TTL_SECONDS = 120
 
+# A runtime grant needs a login at most this old (H5): a stolen session cookie alone
+# cannot hand the agent a 90-day permission.
+RECENT_LOGIN_SECONDS = 600
+
 # Cookie policy for the browser-facing session reference.
 #
 # ``samesite=lax`` is REQUIRED here, not a weakening of ``strict``: the cookie is set
@@ -56,6 +60,14 @@ LOGIN_BINDING_COOKIE_FLAGS = {
     "samesite": "lax",
     "path": "/",
 }
+
+# Carries "go to /runtime after login" across the OAuth round trip (H5). Only the
+# literal marker "runtime" is ever written or honoured, so it can never redirect
+# anywhere else.
+NEXT_COOKIE_NAME = "__Host-episteck_home_next"
+NEXT_COOKIE_VALUE = "runtime"
+NEXT_COOKIE_MAX_AGE_SECONDS = 600
+NEXT_COOKIE_FLAGS = LOGIN_BINDING_COOKIE_FLAGS
 
 
 def new_login_binding() -> str:
