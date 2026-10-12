@@ -81,3 +81,47 @@ def test_an_expired_session_builds_no_connector(env):
     repo.activate_eb_session("ws-1", "bank-1", "s-1", now - timedelta(days=1),
                              now - timedelta(days=90), {"hash-A1": "uid-1"})
     assert build_connectors(repo, "ws-1", env["FINANCE_SECRETS_DIR"]) == {}
+
+
+# --- the unattended-access cap is configuration ---------------------------------------------
+from app.config import Settings
+
+
+def test_access_cap_defaults_to_four_and_reads_the_environment(env):
+    assert Settings.from_env(env).eb_access_cap == 4
+    assert Settings.from_env({**env, "FINANCE_EB_ACCESS_CAP": "2"}).eb_access_cap == 2
+
+
+@pytest.mark.parametrize("bad", ["0", "-1", "abc", "", "13", "2.5"])
+def test_an_unusable_access_cap_fails_fast(env, bad):
+    with pytest.raises(ValueError):
+        Settings.from_env({**env, "FINANCE_EB_ACCESS_CAP": bad})
+
+
+def test_the_cap_reaches_the_connector_budget(env):
+    repo = _bootstrap(env)
+    now = datetime.now(timezone.utc)
+    repo.activate_eb_session("ws-1", "bank-1", "s-1", now + timedelta(days=30), now,
+                             {"hash-A1": "uid-1"})
+    connector = build_connectors(repo, "ws-1", env["FINANCE_SECRETS_DIR"], eb_access_cap=2)["bank-1"]
+    assert connector._budget._cap == 2  # noqa: SLF001 - white-box on purpose
+    default = build_connectors(repo, "ws-1", env["FINANCE_SECRETS_DIR"])["bank-1"]
+    assert default._budget._cap == 4  # noqa: SLF001
+
+
+def test_the_timer_entrypoint_passes_the_configured_cap(env, monkeypatch):
+    import app.wiring as wiring
+    seen = {}
+
+    def fake_build(repo, workspace_id, secrets_dir, **kwargs):
+        seen.update(kwargs)
+        return {}
+
+    admin.run(["init-workspace", "--name", "Home", "--owner", "PSN-1"], env)
+    for key, value in {**env, "FINANCE_EB_ACCESS_CAP": "3"}.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr(wiring, "build_connectors", fake_build)
+    monkeypatch.setattr("app.sync._default_ecb", lambda: None)
+    from app.sync import main
+    assert main() == 0
+    assert seen == {"eb_access_cap": 3}
