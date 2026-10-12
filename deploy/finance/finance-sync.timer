@@ -1,0 +1,14 @@
+# Twice a day. Each sync spends two data requests per account (balances + transactions),
+# so two syncs use the whole conservative PSD2 budget of four. Do not add more times
+# without first measuring how the banks count (see the I1 plan, Task 18).
+[Unit]
+Description=Episteck Finance sync schedule
+
+[Timer]
+OnCalendar=*-*-* 06:20,18:20
+Persistent=true
+RandomizedDelaySec=300
+Unit=finance-sync.service
+
+[Install]
+WantedBy=timers.target
