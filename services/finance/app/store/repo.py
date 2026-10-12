@@ -6,7 +6,7 @@ import hashlib
 import json
 import sqlite3
 from collections.abc import Callable, Iterator, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from contextlib import contextmanager
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -62,11 +62,13 @@ class FinanceRepository:
         return hmac.new(self._pepper, normalised, hashlib.sha256).hexdigest()
 
     # --- workspace ---------------------------------------------------------------
+    def create_workspace_in_tx(self, conn: sqlite3.Connection, ws: domain.Workspace) -> None:
+        conn.execute("INSERT INTO workspace(id,name,kind,status) VALUES(?,?,?,?)",
+                     (ws.id, ws.name, ws.kind, ws.status.value))
+
     def create_workspace(self, ws: domain.Workspace) -> None:
         with self.connection() as conn, db.write_tx(conn):
-            conn.execute(
-                "INSERT INTO workspace(id,name,kind,status) VALUES(?,?,?,?)",
-                (ws.id, ws.name, ws.kind, ws.status.value))
+            self.create_workspace_in_tx(conn, ws)
 
     def get_workspace(self, workspace_id: str) -> domain.Workspace | None:
         with self.connection() as conn:
@@ -76,11 +78,14 @@ class FinanceRepository:
         return domain.Workspace(row["id"], row["name"], row["kind"],
                                 domain.WorkspaceStatus(row["status"]))
 
+    def add_member_in_tx(self, conn: sqlite3.Connection, workspace_id: str, person_id: str,
+                         role: str) -> None:
+        conn.execute("INSERT INTO workspace_member(workspace_id,person_id,role) VALUES(?,?,?)",
+                     (workspace_id, person_id, role))
+
     def add_member(self, workspace_id: str, person_id: str, role: str) -> None:
         with self.connection() as conn, db.write_tx(conn):
-            conn.execute(
-                "INSERT INTO workspace_member(workspace_id,person_id,role) VALUES(?,?,?)",
-                (workspace_id, person_id, role))
+            self.add_member_in_tx(conn, workspace_id, person_id, role)
 
     def is_member(self, workspace_id: str, person_id: str) -> bool:
         with self.connection() as conn:
@@ -90,30 +95,36 @@ class FinanceRepository:
         return row is not None
 
     # --- connections -------------------------------------------------------------
+    def add_connection_in_tx(self, conn: sqlite3.Connection, c: domain.Connection) -> None:
+        conn.execute(
+            "INSERT INTO connection(id,workspace_id,provider,owner_person_id,status,"
+            "consent_expires_at,last_success_at) VALUES(?,?,?,?,?,?,?)",
+            (c.id, c.workspace_id, c.provider.value, c.owner_person_id, c.status.value,
+             _ts(c.consent_expires_at), _ts(c.last_success_at)))
+
     def add_connection(self, c: domain.Connection) -> None:
         with self.connection() as conn, db.write_tx(conn):
-            conn.execute(
-                "INSERT INTO connection(id,workspace_id,provider,owner_person_id,status,"
-                "consent_expires_at,last_success_at) VALUES(?,?,?,?,?,?,?)",
-                (c.id, c.workspace_id, c.provider.value, c.owner_person_id, c.status.value,
-                 _ts(c.consent_expires_at), _ts(c.last_success_at)))
+            self.add_connection_in_tx(conn, c)
 
     # --- accounts ----------------------------------------------------------------
+    def add_account_in_tx(self, conn: sqlite3.Connection, a: domain.Account) -> None:
+        conn.execute(
+            "INSERT INTO account(id,workspace_id,institution,type,currency,liquidity,"
+            "balance_authority,movement_authority,preferred_balance_kind,"
+            "freshness_sla_hours,connection_id,provider_account_ref) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            (a.id, a.workspace_id, a.institution, a.type.value, a.currency,
+             a.liquidity.value, a.balance_authority.value, a.movement_authority.value,
+             a.preferred_balance_kind.value, a.freshness_sla_hours, a.connection_id,
+             a.provider_account_ref))
+        for position, person in enumerate(a.owner_person_ids):
+            conn.execute(
+                "INSERT INTO account_owner(account_id,workspace_id,person_id,position) "
+                "VALUES(?,?,?,?)", (a.id, a.workspace_id, person, position))
+
     def add_account(self, a: domain.Account) -> None:
         with self.connection() as conn, db.write_tx(conn):
-            conn.execute(
-                "INSERT INTO account(id,workspace_id,institution,type,currency,liquidity,"
-                "balance_authority,movement_authority,preferred_balance_kind,"
-                "freshness_sla_hours,connection_id,provider_account_ref) "
-                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-                (a.id, a.workspace_id, a.institution, a.type.value, a.currency,
-                 a.liquidity.value, a.balance_authority.value, a.movement_authority.value,
-                 a.preferred_balance_kind.value, a.freshness_sla_hours, a.connection_id,
-                 a.provider_account_ref))
-            for position, person in enumerate(a.owner_person_ids):
-                conn.execute(
-                    "INSERT INTO account_owner(account_id,workspace_id,person_id,position) "
-                    "VALUES(?,?,?,?)", (a.id, a.workspace_id, person, position))
+            self.add_account_in_tx(conn, a)
 
     def list_accounts(self, workspace_id: str) -> list[domain.Account]:
         with self.connection() as conn:
@@ -168,20 +179,102 @@ class FinanceRepository:
             r["source_ref"])
 
     # --- movements (immutable facts) ---------------------------------------------
+    def insert_movement_in_tx(self, conn: sqlite3.Connection, m: domain.Movement) -> bool:
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO movement(id,workspace_id,account_id,provider_tx_id,"
+            "fingerprint,status,booking_date,value_date,amount_minor,currency,"
+            "counterparty_name,counterparty_iban_hash,remittance,supersedes_id) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (m.id, m.workspace_id, m.account_id, m.provider_tx_id, m.fingerprint,
+             m.status.value, m.booking_date.isoformat() if m.booking_date else None,
+             m.value_date.isoformat() if m.value_date else None, m.amount_minor,
+             m.currency, m.counterparty_name, m.counterparty_iban_hash, m.remittance,
+             m.supersedes_id))
+        return cur.rowcount == 1
+
     def insert_movement(self, m: domain.Movement) -> bool:
         """Insert a movement fact. Returns False when it is a duplicate (no effect)."""
         with self.connection() as conn, db.write_tx(conn):
-            cur = conn.execute(
-                "INSERT OR IGNORE INTO movement(id,workspace_id,account_id,provider_tx_id,"
-                "fingerprint,status,booking_date,value_date,amount_minor,currency,"
-                "counterparty_name,counterparty_iban_hash,remittance,supersedes_id) "
-                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (m.id, m.workspace_id, m.account_id, m.provider_tx_id, m.fingerprint,
-                 m.status.value, m.booking_date.isoformat() if m.booking_date else None,
-                 m.value_date.isoformat() if m.value_date else None, m.amount_minor,
-                 m.currency, m.counterparty_name, m.counterparty_iban_hash, m.remittance,
-                 m.supersedes_id))
-            return cur.rowcount == 1
+            return self.insert_movement_in_tx(conn, m)
+
+    def ingest_balances(self, balances: list[domain.BalanceObservation]) -> int:
+        """Insert balance facts in ONE transaction; returns how many were new."""
+        with self.connection() as conn, db.write_tx(conn):
+            new = 0
+            for o in balances:
+                new += conn.execute(
+                    "INSERT OR IGNORE INTO balance_observation(id,workspace_id,account_id,"
+                    "amount_minor,currency,kind,as_of,observed_at,source_ref) "
+                    "VALUES(?,?,?,?,?,?,?,?,?)",
+                    (o.id, o.workspace_id, o.account_id, o.amount_minor, o.currency,
+                     o.kind.value, _ts(o.as_of), _ts(o.observed_at), o.source_ref)).rowcount
+            return new
+
+    def ingest_movements(self, workspace_id: str, account_id: str,
+                         movements: list[domain.Movement]) -> int:
+        """Insert movements in ONE transaction, linking BOOKED rows to their PENDING row.
+
+        A BOOKED movement supersedes (a) the PENDING row with the same provider id, else
+        (b) the single current PENDING row with the same amount and currency. More than
+        one candidate links nothing: the service never guesses.
+        """
+        with self.connection() as conn, db.write_tx(conn):
+            new = 0
+            for m in movements:
+                if m.provider_tx_id and conn.execute(
+                    "SELECT 1 FROM movement WHERE account_id=? AND provider_tx_id=? AND status=?",
+                    (account_id, m.provider_tx_id, m.status.value)).fetchone():
+                    continue
+                if m.status is domain.MovementStatus.BOOKED and m.supersedes_id is None:
+                    target = self._pending_to_supersede(conn, account_id, m)
+                    if target:
+                        m = replace(m, supersedes_id=target)
+                new += self.insert_movement_in_tx(conn, m)
+            return new
+
+    @staticmethod
+    def _pending_to_supersede(conn: sqlite3.Connection, account_id: str,
+                              m: domain.Movement) -> str | None:
+        open_pending = (
+            "SELECT id FROM movement WHERE account_id=? AND status='PENDING' AND id NOT IN "
+            "(SELECT supersedes_id FROM movement WHERE supersedes_id IS NOT NULL)")
+        if m.provider_tx_id:
+            row = conn.execute(open_pending + " AND provider_tx_id=?",
+                               (account_id, m.provider_tx_id)).fetchone()
+            if row:
+                return row["id"]
+        rows = conn.execute(open_pending + " AND amount_minor=? AND currency=?",
+                            (account_id, m.amount_minor, m.currency)).fetchall()
+        return rows[0]["id"] if len(rows) == 1 else None
+
+    # --- connection state and sync audit -----------------------------------------
+    def set_connection_status(self, workspace_id: str, connection_id: str,
+                              status: domain.ConnectionStatus,
+                              last_success_at: datetime | None = None) -> None:
+        with self.connection() as conn, db.write_tx(conn):
+            if last_success_at is not None:
+                conn.execute(
+                    "UPDATE connection SET status=?, last_success_at=? "
+                    "WHERE id=? AND workspace_id=?",
+                    (status.value, _ts(last_success_at), connection_id, workspace_id))
+            else:
+                conn.execute("UPDATE connection SET status=? WHERE id=? AND workspace_id=?",
+                             (status.value, connection_id, workspace_id))
+
+    def start_sync_run(self, run_id: str, workspace_id: str, connection_id: str,
+                       started_at: datetime, machine_caller: str, channel: str) -> None:
+        with self.connection() as conn, db.write_tx(conn):
+            conn.execute(
+                "INSERT INTO sync_run(id,workspace_id,connection_id,started_at,status,"
+                "machine_caller,channel) VALUES(?,?,?,?,?,?,?)",
+                (run_id, workspace_id, connection_id, _ts(started_at), "RUNNING",
+                 machine_caller, channel))
+
+    def finish_sync_run(self, run_id: str, finished_at: datetime, status: str,
+                        detail: str = "") -> None:
+        with self.connection() as conn, db.write_tx(conn):
+            conn.execute("UPDATE sync_run SET finished_at=?, status=?, detail=? WHERE id=?",
+                         (_ts(finished_at), status, detail, run_id))
 
     def current_movements(self, workspace_id: str, account_id: str) -> list[domain.Movement]:
         """Movements not superseded by a later fact (a BOOKED row hides its PENDING)."""

@@ -103,6 +103,44 @@ def seeded_service(tmp_path, authorizer=None):
     return FinanceService(repo, authz, "ws-1", clock=lambda: now), authz
 
 
+class FakeConnector:
+    """Scripted provider. A value may be a list (returned) or an Exception (raised)."""
+
+    def __init__(self, provider=domain.Provider.SIMPLEFIN, balances=None, movements=None):
+        self.provider = provider
+        self.balances = balances or {}
+        self.movements = movements or {}
+        self.calls: list[tuple] = []
+
+    def list_accounts(self):
+        return []
+
+    def fetch_balances(self, ref):
+        self.calls.append(("balances", ref))
+        value = self.balances[ref]
+        if isinstance(value, Exception):
+            raise value
+        return list(value)
+
+    def fetch_movements(self, ref, since):
+        self.calls.append(("movements", ref))
+        value = self.movements.get(ref, [])
+        if isinstance(value, Exception):
+            raise value
+        return list(value)
+
+
+def raw_balance(amount=100000, currency="EUR", kind=domain.BalanceKind.BOOKED, as_of=T0):
+    from app.connectors.base import RawBalance
+    return RawBalance(kind, amount, currency, as_of)
+
+
+def raw_move(tx="t1", amount=-1250, status=domain.MovementStatus.BOOKED, day=date(2026, 10, 9),
+             remittance="card payment", currency="EUR", counterparty=""):
+    from app.connectors.base import RawMovement
+    return RawMovement(tx, status, day, day, amount, currency, counterparty, None, remittance)
+
+
 class FakeAuthorizer:
     """Scripted Home. Builds its answer through the real ``validate_batch``."""
 

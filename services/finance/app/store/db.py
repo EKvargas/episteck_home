@@ -65,8 +65,9 @@ CREATE TABLE IF NOT EXISTS movement(
     counterparty_iban_hash TEXT, remittance TEXT NOT NULL,
     supersedes_id TEXT REFERENCES movement(id),
     FOREIGN KEY(account_id, workspace_id) REFERENCES account(id, workspace_id));
+-- Same provider id may exist once as PENDING and once as BOOKED (the later supersedes).
 CREATE UNIQUE INDEX IF NOT EXISTS ux_movement_provider
-    ON movement(account_id, provider_tx_id) WHERE provider_tx_id IS NOT NULL;
+    ON movement(account_id, provider_tx_id, status) WHERE provider_tx_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_movement_fingerprint
     ON movement(account_id, fingerprint) WHERE provider_tx_id IS NULL;
 
@@ -84,7 +85,8 @@ CREATE TABLE IF NOT EXISTS fx_rate(
 
 CREATE TABLE IF NOT EXISTS sync_run(
     id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, connection_id TEXT,
-    started_at TEXT NOT NULL, finished_at TEXT, status TEXT NOT NULL, detail TEXT);
+    started_at TEXT NOT NULL, finished_at TEXT, status TEXT NOT NULL, detail TEXT,
+    machine_caller TEXT NOT NULL, channel TEXT NOT NULL);
 
 CREATE TABLE IF NOT EXISTS access_log(
     id INTEGER PRIMARY KEY AUTOINCREMENT, workspace_id TEXT NOT NULL,
