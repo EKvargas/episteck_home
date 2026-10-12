@@ -239,6 +239,7 @@ def home_api(monkeypatch):
 WHITELISTED = [
     "check_access",
     "check_access_many",
+    "authorize_batch",
     "get_person",
     "list_my_circles",
     "list_circle_members",

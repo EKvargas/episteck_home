@@ -198,6 +198,74 @@ def check_access_many(subject_person_id: str, requirements):
     }
 
 
+#: The one reason a denied authorize_batch decision carries. Internal policy reasons
+#: (missing subject, absent grant, wrong action) differ, and any difference would let a
+#: caller probe which Persons exist. The decision stays honest; the reason is uniform.
+_BATCH_DENY_REASON = "not permitted (fail closed)"
+_BATCH_KEYS = frozenset({"subject", "domain", "action"})
+
+
+def _refuse_batch() -> None:
+    """Malformed input is refused whole: no decisions are fabricated or partially returned."""
+    frappe.throw("invalid requirements", frappe.ValidationError)
+
+
+@frappe.whitelist()
+def authorize_batch(requirements):
+    """Decide 1..8 FINANCE requirements in ONE delegated request, positionally.
+
+    Each requirement is ``{subject: "SELF" | "PSN-...", domain: "FINANCE", action}``.
+    ``SELF`` is resolved here to the delegated actor's Person; callers never name the
+    actor. Decision i answers requirement i, subject echoed exactly as sent. The
+    delegation is claimed once (``resolve_actor``), so replay protection is unchanged.
+    A denied decision for a missing Person is indistinguishable from one for a Person
+    the actor simply may not access.
+    """
+    actor = resolve_actor(accept_audiences=POLICY_AUDIENCES)
+
+    if isinstance(requirements, str):
+        try:
+            requirements = frappe.parse_json(requirements)
+        except Exception:
+            _refuse_batch()
+    if (
+        not isinstance(requirements, (list, tuple))
+        or not 1 <= len(requirements) <= MAX_REQUIREMENTS
+    ):
+        _refuse_batch()
+
+    validated = []
+    for item in requirements:
+        if not isinstance(item, dict) or set(item) != _BATCH_KEYS:
+            _refuse_batch()
+        subject, domain, action = item["subject"], item["domain"], item["action"]
+        if (
+            not isinstance(subject, str)
+            or not (subject == "SELF" or subject.startswith("PSN-"))
+            or domain != "FINANCE"
+            or not isinstance(action, str)
+            or action not in ACTIONS
+        ):
+            _refuse_batch()
+        validated.append((subject, domain, action))
+
+    decisions = []
+    for subject, domain, action in validated:
+        person = actor if subject == "SELF" else subject
+        decision = _check_access(actor, person, domain, action)
+        allow = decision.get("allow") is True
+        decisions.append(
+            {
+                "subject": subject,
+                "domain": domain,
+                "action": action,
+                "allow": allow,
+                "reason": decision["reason"] if allow else _BATCH_DENY_REASON,
+            }
+        )
+    return {"actor_person_id": actor, "decisions": decisions}
+
+
 @frappe.whitelist()
 def get_person(person_id: str):
     actor = resolve_actor()

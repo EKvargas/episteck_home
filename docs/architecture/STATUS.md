@@ -86,6 +86,7 @@ Design: `adr/0010-agent-runtime-grant.md`.
 | Feature Activation DocType + `get_feature_state` (B3, ADR-0012) | 🚧 in review; **not deployed**. Needs `bench migrate` after merge (no post-deploy hook on Home). Finance I1 does not consult it |
 | Home changes H1–H4 (audience, `authorize_batch`, Feature Activation, mint-by-audience + gateway route) | ⏳ Phase B (H5 runtime grant is merged and deployed) |
 | Home accepts `svc-finance` (B1; extends ADR-0009 pattern) | 🔀 PR pending; no deploy beyond normal `main` → `episteck-deploy`. Owner must set site config `home_finance_machine_user` before Finance can call Home (at B6/B4, not now) |
+| Home `authorize_batch` (B2 PR A; extends ADR-0010/0011, no new ADR) | 🔀 PR pending; positional, FINANCE-only, uniform denial reason (no existence oracle); no schema change, no migrate. Finance-side `HomeAuthorizer` (B2 PR B) is blocked until the Finance service stack (`authz.py`/`deps.py`) is on `main` |
 
 ## G2 blockers
 
