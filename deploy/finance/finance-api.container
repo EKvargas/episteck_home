@@ -20,6 +20,9 @@ Volume=/srv/episteck/services/finance/secrets/pepper:/run/secrets/pepper:ro,z
 Environment=FINANCE_DB=/data/finance.sqlite
 Environment=FINANCE_PEPPER_FILE=/run/secrets/pepper
 EnvironmentFile=/srv/episteck/services/finance/config/finance.env
+# Home machine credential (HOME_CONTROL_PLANE_URL / HOME_API_KEY / HOME_API_SECRET).
+# Optional on purpose: without it the service starts and refuses every request (503).
+EnvironmentFile=-/srv/episteck/services/finance/secrets/home-auth.env
 NoNewPrivileges=true
 DropCapability=ALL
 ReadOnly=true

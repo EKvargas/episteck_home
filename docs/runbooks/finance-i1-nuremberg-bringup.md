@@ -1,8 +1,8 @@
 # Runbook: bring up svc-finance (I1) on Nuremberg
 
-**Status:** prepared, not executed. Nothing here has been run on a node.
+**Status:** prepared. Phase A and the Phase B code (H1 to H4) are merged in `main`; the BFF mint, gateway route and nft rule are already live on Nuremberg (2026-10-12). Finance itself is not installed yet.
 **Node:** `episteck-node1` (Nuremberg). **Date written:** 2026-10-12.
-**Prerequisite:** PRs A1–A5 merged to `main`; `SHA` is the merged commit.
+**Prerequisite:** `SHA` is a `main` commit that contains `services/finance/app/home_control/` (PR #97 or later).
 
 One-sentence summary: create the `svc-finance` user and directories, build one image from the merged commit, start the API and MCP on loopback, place secrets yourself, then enable the sync timer and add the backup block.
 
@@ -67,6 +67,19 @@ Optional: add `FINANCE_EB_ACCESS_CAP=<1-12>` to the same file to change the per-
 $SSH "sudo -n -u svc-finance bash -c 'umask 077; echo FINANCE_WORKSPACE_ID=ws-home-erick > /srv/episteck/services/finance/config/finance.env'"
 ```
 
+## 4b. Home machine credential `[OWN TERMINAL]`
+
+Finance calls Home with its own Frappe API user. This script creates `finance-service@episteck.invalid` on Home (idempotent), generates its key and secret on the Home host, streams them into `secrets/home-auth.env` (mode `600`) on the node without printing them, and sets site config `home_finance_machine_user`. Run it from the repo root:
+
+```bash
+bash deploy/finance/provision-home-credentials.sh
+```
+
+It refuses to overwrite an existing `home-auth.env` (a new key rotates the secret); use `--rotate` on purpose. The API and MCP units read the file as an optional `EnvironmentFile`, so you can install them before this step: they start and answer `503`.
+
+**Verify:** the script prints `600 svc-finance .../home-auth.env`. After step 6, restart the units so they read the file.
+**Rollback:** `ssh ... "sudo -n rm -f /srv/episteck/services/finance/secrets/home-auth.env"` (Finance goes back to `503`), then on Home `bench --site home.episteck.com set-config home_finance_machine_user ""` and disable the user.
+
 ## 5. The pepper `[OWN TERMINAL]`
 
 The pepper keys the IBAN hashes. It is generated **on the node** and never leaves it.
@@ -96,7 +109,7 @@ STEP verify
 | Listeners | `127.0.0.1:9935` and `127.0.0.1:9936` only |
 | `/health` | `{"status":"ok"}` |
 | `/overview` without a session | `401` |
-| `/overview` with any session | `503` (fail closed: Home's `authorize_batch` is Phase B) |
+| `/overview` with any session | `503` while `home-auth.env` is absent (fail closed); after step 4b and a unit restart, an invalid session is `401` |
 | Containers | `finance-api` and `finance-mcp` running |
 
 A `503` for an authenticated request is **correct** at this stage. It proves the service refuses everything until Home can answer.
