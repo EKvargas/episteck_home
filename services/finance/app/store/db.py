@@ -88,6 +88,17 @@ CREATE TABLE IF NOT EXISTS sync_run(
     started_at TEXT NOT NULL, finished_at TEXT, status TEXT NOT NULL, detail TEXT,
     machine_caller TEXT NOT NULL, channel TEXT NOT NULL);
 
+CREATE TABLE IF NOT EXISTS oauth_state(
+    state_hash TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, connection_id TEXT NOT NULL,
+    owner_person_id TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT);
+
+CREATE TABLE IF NOT EXISTS eb_session(
+    connection_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, session_id TEXT NOT NULL,
+    valid_until TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS eb_session_account(
+    connection_id TEXT NOT NULL, workspace_id TEXT NOT NULL, ref TEXT NOT NULL,
+    uid TEXT NOT NULL, PRIMARY KEY(connection_id, ref));
+
 CREATE TABLE IF NOT EXISTS access_log(
     id INTEGER PRIMARY KEY AUTOINCREMENT, workspace_id TEXT NOT NULL,
     account_id TEXT NOT NULL, requested_at TEXT NOT NULL, kind TEXT NOT NULL);
