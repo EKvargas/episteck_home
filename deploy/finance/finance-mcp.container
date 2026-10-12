@@ -1,0 +1,32 @@
+# Quadlet unit: svc-finance MCP (finance_overview). NOT DEPLOYED.
+# Install to: /home/svc-finance/.config/containers/systemd/finance-mcp.container
+#
+# Loopback only. Reached by Hermes through the delegation gateway in Phase B (H4); until
+# then nothing can authorise a call, so every request is refused (fail closed).
+[Unit]
+Description=Episteck Finance MCP
+After=network-online.target
+
+[Container]
+Image=localhost/episteck-finance:REPLACE_WITH_COMMIT_SHA
+ContainerName=finance-mcp
+PublishPort=127.0.0.1:9936:9936
+Exec=python -m app.mcp.server
+Volume=/srv/episteck/services/finance/data:/data:z
+Volume=/srv/episteck/services/finance/secrets/pepper:/run/secrets/pepper:ro,z
+Environment=FINANCE_DB=/data/finance.sqlite
+Environment=FINANCE_PEPPER_FILE=/run/secrets/pepper
+Environment=MCP_PORT=9936
+EnvironmentFile=/srv/episteck/services/finance/config/finance.env
+NoNewPrivileges=true
+DropCapability=ALL
+ReadOnly=true
+Tmpfs=/tmp
+PodmanArgs=--memory=192m --memory-swap=192m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

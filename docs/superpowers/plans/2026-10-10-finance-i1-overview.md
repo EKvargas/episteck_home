@@ -304,3 +304,16 @@ response: {actor_person_id, decisions: [ {subject, domain, action, allow, reason
 ## Phase B (blocked until H5 merges; I will ask before starting)
 
 B1 H1 `svc-finance` audience + machine user; B2 H2 `authorize_batch` in Home and the real `HomeAuthorizer` client; B3 H3 Feature Activation (manual `bench migrate` on home); B4 H4 `/gateway/finance/` route, per-audience mint, nft rule; B5 narrow PSD2 callback route on the BFF vhost; B6 Telegram on `home-agent` (new bot, `TELEGRAM_ALLOWED_USERS` = Erick only, groups off, `stt.language: es`); B7 `openai-codex` login (operator) with Kimi fallback; B8 "Olin Finance" skill (figures only from tools, no amounts in memory); B9 live verification Telegram to Hermes to gateway to Finance to Home on Nuremberg with real data.
+
+## Deviations from this plan (recorded 2026-10-12, as built)
+
+1. **More, smaller PRs.** Ten PRs instead of five: A1, A1b (store), A2a (port + read model), A2b (service), A2c (API/MCP), A3a (connectors), A3b (sync + admin), A4 (Enable Banking), A5 (deploy). A3b (~980 lines) and A4 (~1200 lines) exceed the 800-line guideline; they were split by task, not by line count.
+2. **One metadata read before Home answers.** `workspace_scope` returns owner ids and a status so the service can build the requirements. Tests assert no data-bearing method runs on any refusal path. The plan's "repo never touched" is true for data, not for that one structural read.
+3. **Workspace comes from configuration** (`FINANCE_WORKSPACE_ID`), not from the actor's membership: resolving it from the actor would need a second Home call. Multi-workspace stays in the schema; choosing a workspace per actor is a later change.
+4. **Outcome vocabulary** is `ANSWERED | SESSION_INVALID | UNAVAILABLE`; individual decisions carry `allow`.
+5. **Sync ingests balances and movements in separate atomic transactions** per account, so a movements failure does not discard a valid balance.
+6. **Account reference is Enable Banking's `identification_hash`**, because `uid` is session-scoped (verified in the current reference). A hash-to-uid map is stored per session and replaced on reauthorization.
+7. **`fx_rate` has no `workspace_id`**: ECB reference data is global by nature.
+8. **`access_log.account_id` holds the provider account reference**, not Finance's account id.
+9. **Added `deploy/finance/bringup.sh`** so each operator action is one verifiable `ssh` command, with a rollback per step and an explicit purge confirmation.
+10. **Two tests are POSIX-only** (secret files readable by others are refused) and were skipped on the Windows development machine. Run them on Linux before merging.

@@ -1,0 +1,34 @@
+# Quadlet unit: svc-finance API (read-only overview). NOT DEPLOYED. See
+# docs/runbooks/finance-i1-nuremberg-bringup.md for the operator procedure.
+#
+# Install to: /home/svc-finance/.config/containers/systemd/finance-api.container
+# Owner:      svc-finance (unprivileged, rootless podman, no sudo)
+#
+# Loopback only. This unit mounts the IBAN-hash pepper and NOTHING else from secrets/:
+# provider credentials are visible only to the sync job.
+[Unit]
+Description=Episteck Finance API
+After=network-online.target
+
+[Container]
+Image=localhost/episteck-finance:REPLACE_WITH_COMMIT_SHA
+ContainerName=finance-api
+PublishPort=127.0.0.1:9935:9935
+Exec=uvicorn app.main:app --host 0.0.0.0 --port 9935
+Volume=/srv/episteck/services/finance/data:/data:z
+Volume=/srv/episteck/services/finance/secrets/pepper:/run/secrets/pepper:ro,z
+Environment=FINANCE_DB=/data/finance.sqlite
+Environment=FINANCE_PEPPER_FILE=/run/secrets/pepper
+EnvironmentFile=/srv/episteck/services/finance/config/finance.env
+NoNewPrivileges=true
+DropCapability=ALL
+ReadOnly=true
+Tmpfs=/tmp
+PodmanArgs=--memory=192m --memory-swap=192m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

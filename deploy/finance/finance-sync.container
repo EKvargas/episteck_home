@@ -1,0 +1,29 @@
+# Quadlet unit: svc-finance sync job (one pass, then exit). NOT DEPLOYED.
+# Install to: /home/svc-finance/.config/containers/systemd/finance-sync.container
+#
+# No [Install] section: finance-sync.timer starts this service. It is the only unit that
+# sees provider credentials, and only read-only. Exit code 1 means a connection failed.
+[Unit]
+Description=Episteck Finance sync (balances and movements)
+After=network-online.target
+
+[Container]
+Image=localhost/episteck-finance:REPLACE_WITH_COMMIT_SHA
+ContainerName=finance-sync
+Exec=python -m app.sync
+Volume=/srv/episteck/services/finance/data:/data:z
+Volume=/srv/episteck/services/finance/secrets:/secrets:ro,z
+Environment=FINANCE_DB=/data/finance.sqlite
+Environment=FINANCE_SECRETS_DIR=/secrets
+Environment=FINANCE_PEPPER_FILE=/secrets/pepper
+EnvironmentFile=/srv/episteck/services/finance/config/finance.env
+NoNewPrivileges=true
+DropCapability=ALL
+ReadOnly=true
+Tmpfs=/tmp
+PodmanArgs=--memory=256m --memory-swap=256m
+
+[Service]
+Type=oneshot
+Restart=no
+TimeoutStartSec=600
