@@ -10,4 +10,4 @@ COPY services/nutrition/pyproject.toml ./pyproject.toml
 COPY services/nutrition/app ./app
 RUN pip install .
 EXPOSE 9930
-CMD ["uvicorn","app.main:app","--host","0.0.0.0","--port","9930"]
+CMD ["uvicorn","app.main:app","--host","0.0.0.0","--port","9930","--no-access-log"]
