@@ -129,8 +129,8 @@ Control Plane.
 ## 4. Key decisions (see ADRs)
 
 1. **home.episteck + episteck_home Frappe = the Home Control Plane** for Person,
-   Circle, CircleMembership, CareRelationship, ConsentGrant, CareJourney. **No
-   `svc-home-core`.** → `adr/0001-home-control-plane-is-frappe.md`
+   Circle, CircleMembership, CareRelationship, ConsentGrant, CareJourney,
+   FeatureActivation. **No `svc-home-core`.** → `adr/0001-home-control-plane-is-frappe.md`
 2. **Domain services stay independent** — each owns its truth; no universal DB. →
    `adr/0002-independent-domain-services.md`
 3. **Two independent Hermes agents** — `infra-agent` (privileged) and `home-agent`
