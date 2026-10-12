@@ -3,6 +3,7 @@ import { validateEnvironmentMode, type EnvironmentMode } from '../state/Environm
 export interface HomeHubServerConfiguration {
   mode: EnvironmentMode;
   bffBaseUrl?: string;
+  nutritionBaseUrl?: string;
   publicOrigin: string;
 }
 
@@ -44,6 +45,9 @@ export function getHomeHubServerConfiguration(
   const bffBaseUrl = mode === 'LIVE'
     ? configuredOrigin(env.HOME_HUB_BFF_BASE_URL, 'HOME_HUB_BFF_BASE_URL', production, true, true)
     : undefined;
+  const nutritionBaseUrl = mode === 'LIVE'
+    ? configuredOrigin(env.HOME_HUB_NUTRITION_BASE_URL, 'HOME_HUB_NUTRITION_BASE_URL', production, true, true)
+    : undefined;
   const publicOrigin = env.HOME_HUB_PUBLIC_ORIGIN
     ? configuredOrigin(env.HOME_HUB_PUBLIC_ORIGIN, 'HOME_HUB_PUBLIC_ORIGIN', production, true, false)
     : production
@@ -54,5 +58,5 @@ export function getHomeHubServerConfiguration(
     throw new Error('FATAL: HOME_HUB_DATA_MODE must be LIVE in production environment.');
   }
 
-  return { mode, bffBaseUrl, publicOrigin };
+  return { mode, bffBaseUrl, nutritionBaseUrl, publicOrigin };
 }

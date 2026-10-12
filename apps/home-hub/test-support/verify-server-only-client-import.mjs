@@ -11,6 +11,7 @@ const env = {
   NODE_ENV: 'production',
   HOME_HUB_DATA_MODE: 'LIVE',
   HOME_HUB_BFF_BASE_URL: 'http://127.0.0.1:9933',
+  HOME_HUB_NUTRITION_BASE_URL: 'http://127.0.0.1:9930',
   HOME_HUB_PUBLIC_ORIGIN: 'http://127.0.0.1:3322',
 };
 

@@ -45,6 +45,8 @@ def test_home_hub_dockerfile_builds_standalone_with_build_dependencies_only():
     assert '/.next/static ./.next/static' in dockerfile
     assert 'USER node' in dockerfile
     assert 'CMD ["node", "--experimental-strip-types", "prelisten.mjs"]' in dockerfile
+    assert 'ARG HOME_HUB_NUTRITION_BASE_URL=http://127.0.0.1:9930' in dockerfile
+    assert 'HOME_HUB_NUTRITION_BASE_URL=${HOME_HUB_NUTRITION_BASE_URL}' in dockerfile
     assert 'TOKEN=' not in dockerfile
     assert 'SECRET=' not in dockerfile
 

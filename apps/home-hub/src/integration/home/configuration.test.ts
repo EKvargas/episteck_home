@@ -25,6 +25,7 @@ test('production configuration import fails before server startup without valid 
     NODE_ENV: 'production',
     HOME_HUB_DATA_MODE: 'LIVE',
     HOME_HUB_BFF_BASE_URL: 'http://127.0.0.1:9933',
+    HOME_HUB_NUTRITION_BASE_URL: 'http://127.0.0.1:9930',
     HOME_HUB_PUBLIC_ORIGIN: 'https://home.example.test',
   };
   for (const [env, error] of [
@@ -43,6 +44,7 @@ test('production LIVE requires a valid local BFF origin and public origin', () =
   const base: NodeJS.ProcessEnv = {
     NODE_ENV: 'production',
     HOME_HUB_DATA_MODE: 'LIVE',
+    HOME_HUB_NUTRITION_BASE_URL: 'http://127.0.0.1:9930',
     HOME_HUB_PUBLIC_ORIGIN: 'https://home.example.test',
   };
 
@@ -66,6 +68,45 @@ test('production LIVE requires a valid local BFF origin and public origin', () =
 test('development MOCK remains available without production-only config', () => {
   assert.deepEqual(
     getHomeHubServerConfiguration({ NODE_ENV: 'development', HOME_HUB_DATA_MODE: 'MOCK' }),
-    { mode: 'MOCK', bffBaseUrl: undefined, publicOrigin: 'http://127.0.0.1:3000' },
+    { mode: 'MOCK', bffBaseUrl: undefined, nutritionBaseUrl: undefined, publicOrigin: 'http://127.0.0.1:3000' },
   );
+});
+
+const liveDev = {
+  NODE_ENV: 'development',
+  HOME_HUB_DATA_MODE: 'LIVE',
+  HOME_HUB_BFF_BASE_URL: 'http://127.0.0.1:9933',
+} as NodeJS.ProcessEnv;
+
+test('LIVE configuration requires the Nutrition origin', () => {
+  assert.throws(
+    () => getHomeHubServerConfiguration(liveDev),
+    /HOME_HUB_NUTRITION_BASE_URL is required/,
+  );
+});
+
+test('LIVE configuration exposes the validated Nutrition origin', () => {
+  const config = getHomeHubServerConfiguration({
+    ...liveDev,
+    HOME_HUB_NUTRITION_BASE_URL: 'http://127.0.0.1:9930',
+  } as NodeJS.ProcessEnv);
+  assert.equal(config.nutritionBaseUrl, 'http://127.0.0.1:9930');
+});
+
+test('production Nutrition origin must be loopback', () => {
+  assert.throws(
+    () => getHomeHubServerConfiguration({
+      NODE_ENV: 'production',
+      HOME_HUB_DATA_MODE: 'LIVE',
+      HOME_HUB_BFF_BASE_URL: 'http://127.0.0.1:9933',
+      HOME_HUB_PUBLIC_ORIGIN: 'https://bff.home.episteck.com',
+      HOME_HUB_NUTRITION_BASE_URL: 'https://nutrition.example.com',
+    } as NodeJS.ProcessEnv),
+    /HOME_HUB_NUTRITION_BASE_URL must be a trusted HTTP origin/,
+  );
+});
+
+test('MOCK configuration has no Nutrition origin', () => {
+  const config = getHomeHubServerConfiguration({ NODE_ENV: 'development', HOME_HUB_DATA_MODE: 'MOCK' } as NodeJS.ProcessEnv);
+  assert.equal(config.nutritionBaseUrl, undefined);
 });
