@@ -65,13 +65,14 @@ def test_public_app_structurally_lacks_internal_mint(tmp_path):
     assert all(route.path != "/internal/mint" for route in app.routes)
 
 
-def test_internal_openapi_contains_only_mint_and_no_browser_routes(mint_ctx):
+def test_internal_openapi_contains_only_mint_routes_and_no_browser_routes(mint_ctx):
     _, _, app = mint_ctx
 
     paths = app.openapi()["paths"]
 
-    assert set(paths) == {"/internal/mint"}
+    assert set(paths) == {"/internal/mint", "/internal/mint_finance"}
     assert set(paths["/internal/mint"]) == {"post"}
+    assert set(paths["/internal/mint_finance"]) == {"post"}
     for browser_path in {
         "/login",
         "/callback",
