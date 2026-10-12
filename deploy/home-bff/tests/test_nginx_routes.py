@@ -122,3 +122,25 @@ def test_catch_all_falls_through_to_404():
 def test_no_domain_attribute_rewriting_is_introduced():
     assert "proxy_cookie_domain" not in CONF
     assert "Domain=" not in CONF
+
+
+def test_runtime_grant_routes_are_explicit_exact_locations():
+    for route in ("/runtime", "/runtime/grant", "/runtime/revoke", "/logout/all"):
+        assert f"location = {route} " in CONF, f"{route} must be an exact location"
+
+
+def test_runtime_routes_are_never_prefix_locations():
+    assert not re.search(r"location\s+(\^~\s+)?/runtime", CONF)
+    assert not re.search(r"location\s+~", CONF), "no regex locations in the allowlist"
+
+
+def test_internal_mint_is_not_reachable_through_nginx():
+    assert "/internal" not in CONF
+    assert "mint.sock" not in CONF
+
+
+def test_runtime_locations_proxy_only_to_the_bff_port():
+    for route in ("/runtime", "/runtime/grant", "/runtime/revoke", "/logout/all"):
+        block = CONF.split(f"location = {route} {{")[1].split("}")[0]
+        assert "proxy_pass http://127.0.0.1:9933;" in block
+        assert "9940" not in block
