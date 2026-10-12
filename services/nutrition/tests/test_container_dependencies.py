@@ -39,3 +39,13 @@ def test_container_installs_the_nutrition_project_instead_of_direct_fastmcp():
         and re.search(r"(?<![\w-])fastmcp(?![\w-])", instruction, re.IGNORECASE)
     ]
     assert direct_fastmcp_installs == []
+
+
+def test_container_does_not_write_an_access_log():
+    # The access log records every request line, including /profile/<person id>.
+    cmd = next(
+        line.strip()
+        for line in (SERVICE_ROOT / "Dockerfile").read_text(encoding="utf-8").splitlines()
+        if line.strip().startswith("CMD")
+    )
+    assert '"--no-access-log"' in cmd

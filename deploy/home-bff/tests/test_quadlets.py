@@ -44,3 +44,9 @@ def test_mint_quadlet_has_no_tcp_publication_and_uses_internal_entrypoint():
 def test_tmpfiles_creates_setgid_group_gated_socket_directory():
     assert "d /run/episteck 0755 root root -" in TMPFILES
     assert "d /run/episteck/home-bff-mint 2770 svc-home-bff episteck-gw -" in TMPFILES
+
+
+def test_both_units_carry_the_same_runtime_legacy_binding_flag():
+    # The public app (callback) and the mint app must agree during the H5 transition.
+    assert "Environment=RUNTIME_LEGACY_BINDING=on" in PUBLIC
+    assert "Environment=RUNTIME_LEGACY_BINDING=on" in MINT
