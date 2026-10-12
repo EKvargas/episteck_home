@@ -35,9 +35,12 @@ import frappe
 # machine credential (auth_hook) and is accepted only by the policy entry points.
 CONTROL_PLANE_AUDIENCE = "home-control-plane"
 NUTRITION_AUDIENCE = "svc-nutrition"
+FINANCE_AUDIENCE = "svc-finance"
 
 DEFAULT_AUDIENCES = frozenset({CONTROL_PLANE_AUDIENCE})
-POLICY_AUDIENCES = frozenset({CONTROL_PLANE_AUDIENCE, NUTRITION_AUDIENCE})
+POLICY_AUDIENCES = frozenset(
+    {CONTROL_PLANE_AUDIENCE, NUTRITION_AUDIENCE, FINANCE_AUDIENCE}
+)
 
 
 @dataclass(frozen=True)

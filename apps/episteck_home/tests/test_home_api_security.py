@@ -843,6 +843,38 @@ def test_nutrition_audience_actor_is_accepted_by_check_access_many(home_api):
     assert len(result["decisions"]) == 1
 
 
+@pytest.mark.parametrize("name", sorted(NON_POLICY_CALLS))
+def test_finance_audience_actor_is_refused_outside_policy_entry_points(home_api, name):
+    api, fake = home_api
+    fake.local.episteck_delegation_audience = "svc-finance"
+    with pytest.raises(FakePermissionError):
+        NON_POLICY_CALLS[name](api)
+
+
+def test_finance_audience_actor_is_accepted_by_check_access(home_api):
+    api, fake = home_api
+    fake.local.episteck_delegation_audience = "svc-finance"
+    assert api.check_access("PSN-SUBJECT", "FINANCE", "VIEW") == {
+        "allow": False,
+        "reason": "no grant",
+    }
+
+
+def test_finance_audience_actor_is_accepted_by_check_access_many(home_api):
+    api, fake = home_api
+    fake.local.episteck_delegation_audience = "svc-finance"
+    result = api.check_access_many("PSN-SUBJECT", [{"domain": "FINANCE", "action": "VIEW"}])
+    assert result["allow"] is False
+    assert len(result["decisions"]) == 1
+
+
+def test_unknown_audience_is_refused_by_policy_entry_points(home_api):
+    api, fake = home_api
+    fake.local.episteck_delegation_audience = "svc-other"
+    with pytest.raises(FakePermissionError):
+        api.check_access("PSN-SUBJECT", "NUTRITION", "VIEW")
+
+
 def test_bound_delegated_user_without_recorded_audience_is_refused(home_api):
     api, fake = home_api
     del fake.local.episteck_delegation_audience

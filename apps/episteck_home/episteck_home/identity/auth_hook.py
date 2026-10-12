@@ -40,7 +40,7 @@ import time
 import frappe
 
 from . import replay
-from .actor import CONTROL_PLANE_AUDIENCE, NUTRITION_AUDIENCE
+from .actor import CONTROL_PLANE_AUDIENCE, FINANCE_AUDIENCE, NUTRITION_AUDIENCE
 from .delegation import verify
 
 DELEGATION_HEADER = "X-Episteck-Delegation"
@@ -80,12 +80,16 @@ def _accepted_audiences(machine_user: str) -> frozenset[str]:
 
     Any machine caller may present a Control Plane delegation (unchanged G1.6). A
     Nutrition delegation binds only when presented by Nutrition's OWN machine user,
-    named in site config; if that key is unset, it never binds.
+    named in site config; if that key is unset, it never binds. A Finance delegation
+    binds the same way, only for `home_finance_machine_user`.
     """
     audiences = {CONTROL_PLANE_AUDIENCE}
     nutrition_user = _config("home_nutrition_machine_user")
     if nutrition_user and machine_user == nutrition_user:
         audiences.add(NUTRITION_AUDIENCE)
+    finance_user = _config("home_finance_machine_user")
+    if finance_user and machine_user == finance_user:
+        audiences.add(FINANCE_AUDIENCE)
     return frozenset(audiences)
 
 
