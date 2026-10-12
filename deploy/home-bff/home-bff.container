@@ -19,6 +19,8 @@ EnvironmentFile=/srv/episteck/services/home-bff/secrets/oauth.env
 Environment=BFF_STORE_PATH=/data/bff.sqlite
 Environment=BFF_MINT_SOCKET_PATH=/run/episteck/home-bff-mint/mint.sock
 Environment=BFF_PORT=9933
+# H5 transition flag. Public app and mint app MUST carry the same value.
+Environment=RUNTIME_LEGACY_BINDING=on
 # The Control Plane is reached over the Tailscale mesh, not the public Internet.
 AddHost=home.episteck.com:100.71.79.33
 PodmanArgs=--memory=384m --memory-swap=384m

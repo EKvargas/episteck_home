@@ -25,6 +25,8 @@ AUTHORIZE_PATH = "/api/method/frappe.integrations.oauth2.authorize"
 
 OPEN_SESSION_PATH = "/api/method/episteck_home.identity.session.open_session"
 CLOSE_SESSION_PATH = "/api/method/episteck_home.identity.session.close_session"
+OPEN_RUNTIME_GRANT_PATH = "/api/method/episteck_home.identity.session.open_runtime_grant"
+CLOSE_RUNTIME_GRANT_PATH = "/api/method/episteck_home.identity.session.close_runtime_grant"
 WHOAMI_PATH = "/api/method/episteck_home.api.whoami"
 GET_HOME_BOOTSTRAP_PATH = "/api/method/episteck_home.api.get_home_bootstrap"
 
@@ -35,6 +37,18 @@ class TokenExchangeError(RuntimeError):
 
 class SessionOpenError(RuntimeError):
     """The Control Plane refused to open a delegated session (e.g. no Person)."""
+
+
+class AccessRefused(SessionOpenError):
+    """HTTP 401/403 from the Control Plane: the token or the user is not accepted.
+
+    This is NOT an ownership answer. Home answers "not yours" with a 200 and
+    ``closed: false``; a 401/403 usually means the stored access token expired.
+    """
+
+
+class ControlPlaneUnreachable(SessionOpenError):
+    """Network failure or a 5xx from the Control Plane (not a refusal)."""
 
 
 class UpstreamRefused(RuntimeError):
@@ -145,6 +159,35 @@ class HomeOAuthClient:
             return False
         return bool((payload or {}).get("closed"))
 
+    def open_runtime_grant(
+        self, access_token: str, runtime_id: str, ttl_days: int
+    ) -> str:
+        """Open an agent runtime grant AS the authenticated human. No user is sent."""
+        payload = self._as_user(
+            access_token,
+            OPEN_RUNTIME_GRANT_PATH,
+            {"runtime_id": runtime_id, "ttl_days": str(ttl_days)},
+        )
+        session_id = (payload or {}).get("session_id")
+        if not session_id:
+            raise SessionOpenError("Control Plane returned no grant session id")
+        return session_id
+
+    def close_runtime_grant(self, access_token: str, home_session_id: str) -> bool | None:
+        """True = revoked, False = Home answered closed:false (not yours / gone),
+        None = Home unreachable. Raises AccessRefused when the token is rejected."""
+        try:
+            payload = self._as_user(
+                access_token, CLOSE_RUNTIME_GRANT_PATH, {"session_id": home_session_id}
+            )
+        except ControlPlaneUnreachable:
+            return None
+        except AccessRefused:
+            raise
+        except SessionOpenError:
+            return False
+        return bool((payload or {}).get("closed"))
+
     def whoami(self, access_token: str) -> dict:
         """Resolve the trusted actor for this human session. Used for evidence."""
         return self._as_user(access_token, WHOAMI_PATH, None, method="GET") or {}
@@ -219,8 +262,16 @@ class HomeOAuthClient:
             else:
                 response = self._client.post(path, data=data or {}, headers=headers)
         except httpx.HTTPError as error:
-            raise SessionOpenError("Control Plane unreachable") from error
+            raise ControlPlaneUnreachable("Control Plane unreachable") from error
 
+        if response.status_code >= 500:
+            raise ControlPlaneUnreachable(
+                f"Control Plane unavailable (HTTP {response.status_code})"
+            )
+        if response.status_code in (401, 403):
+            raise AccessRefused(
+                f"Control Plane refused the session (HTTP {response.status_code})"
+            )
         if response.status_code != 200:
             # 403 here is the expected, correct outcome when the User has no linked
             # Person, or has two. Fail closed and say nothing more.

@@ -67,13 +67,23 @@ approval. No G1.7 stage is created.
 Full runtime, provenance, network, rollback, and trust-boundary evidence is in
 `G1_6_VALIDATION.md`.
 
+## H5 — agent runtime grant (IN REVIEW, not deployed)
+
+| Item | State |
+| --- | --- |
+| Home: `open_runtime_grant`, `close_runtime_grant`, `get_runtime_grant_status` | PR1 in review |
+| BFF: grant table, `/runtime`, mint precedence, `RUNTIME_LEGACY_BINDING` | PR2 in review |
+| Live verification | not run |
+
+Design: `adr/0010-agent-runtime-grant.md`.
+
 ## Olin Finance I1 (in progress)
 
 | Item | State |
 | --- | --- |
-| Architecture proposal (PR #74) and ADR-0010 | 📝 proposed |
+| Architecture proposal (PR #74) and ADR-0011 | 📝 proposed |
 | `services/finance` (store, read model, API/MCP, connectors) | 🚧 in review, Phase A; **not deployed**, no real data touched |
-| Home changes H1–H5 (audience, `authorize_batch`, Feature Activation, route, runtime grant) | ⏳ Phase B, after H5 merges |
+| Home changes H1–H4 (audience, `authorize_batch`, Feature Activation, mint-by-audience + gateway route) | ⏳ Phase B (H5 runtime grant is merged and deployed) |
 
 ## G2 blockers
 
