@@ -6,8 +6,8 @@ runs the master and workers as `svc-home-gateway` with supplementary group
 `episteck-gw`; public nginx remains `www-data` and is not a member of that group.
 
 The listener is loopback-only on `127.0.0.1:9934`. Home MCP is reached at
-`/gateway/home/` and Nutrition at `/gateway/nutrition/`; both upstreams receive
-`/mcp`. Every request performs an `auth_request` mint through the BFF Unix socket.
+`/gateway/home/`, Nutrition at `/gateway/nutrition/` and Finance at `/gateway/finance/`
+(`127.0.0.1:9936`); every upstream receives `/mcp`. Every request performs an `auth_request` mint through the BFF Unix socket.
 The mint subrequest sends no inbound headers or body, and only its fresh
 `X-Episteck-Delegation` response header is copied to the upstream request.
 
@@ -65,8 +65,8 @@ sudo nft --check -f /tmp/episteck-gateway-rendered.nft
 ```
 
 The rendered policy allows uid `1003` (`home-agent`) to `127.0.0.1:9934`, and
-allows only the rendered numeric `svc-home-gateway` UID to direct ports `9931`
-and `9932`. All other local sender UIDs are dropped for those destinations.
+allows only the rendered numeric `svc-home-gateway` UID to direct ports `9931`,
+`9932` and `9936`. All other local sender UIDs are dropped for those destinations.
 There is no admin, health, root, shared-group, or `www-data` exception.
 
 After the coordinated runtime cutover, apply only this table and run the real
@@ -105,3 +105,93 @@ a BFF session and does not help.
 
 Verification: `gateway/home/` requests in the Home Agent's `agent.log` change from
 `401 Unauthorized` to `200 OK`.
+
+## B4: svc-finance route (Olin Finance I1)
+
+**Nothing here is deployed by the B4 PR.** Merging only changes the repo. The OWNER
+runs the steps below, in this order: BFF image first, then gateway conf + nft.
+`/gateway/finance/` returns **502** until the Finance service (B6) listens on
+`127.0.0.1:9936`; 502 (not 401) after the steps proves the mint worked.
+
+What changes: `/internal/mint` accepts an optional `?audience=` limited to the fixed
+list (`home-control-plane`, `svc-nutrition`, `svc-finance`), which must also be in the
+runtime grant's `allowed_audiences`. The default (no parameter) is unchanged. The
+gateway gets an internal `/__mint_finance` seam that always requests
+`audience=svc-finance`, used only by `/gateway/finance/`. The client can never choose
+the audience. Home and Nutrition still use `/__mint` (default audience).
+
+Replace `<SHA>` with the merged `main` commit. All commands run from the owner shell.
+
+### 1. BFF mint image (only `home-bff-mint` needs it)
+
+```text
+! ssh -F C:/Users/D064974/.ssh/config episteck-node1 'cd / && sudo -n -u svc-home-bff env XDG_RUNTIME_DIR=/run/user/$(id -u svc-home-bff) podman build -f services/home-bff/Dockerfile -t localhost/episteck-home-bff:<SHA> /srv/episteck/build/episteck_home'
+```
+
+Prepare `/srv/episteck/build/episteck_home` at `<SHA>` first (clean `git archive`, see
+`deploy/home-bff/README.md` section 2). Then back up and switch the mint Quadlet:
+
+```text
+! ssh -F C:/Users/D064974/.ssh/config episteck-node1 'cd / && Q=/home/svc-home-bff/.config/containers/systemd/home-bff-mint.container && sudo -n cp -p $Q $Q.pre-b4 && sudo -n sed -i "s#^Image=.*#Image=localhost/episteck-home-bff:<SHA>#" $Q && sudo -n diff $Q.pre-b4 $Q; sudo -n -u svc-home-bff env XDG_RUNTIME_DIR=/run/user/$(id -u svc-home-bff) systemctl --user daemon-reload && sudo -n -u svc-home-bff env XDG_RUNTIME_DIR=/run/user/$(id -u svc-home-bff) systemctl --user restart home-bff-mint'
+```
+
+Rollback (byte-for-byte restore, then restart):
+
+```text
+! ssh -F C:/Users/D064974/.ssh/config episteck-node1 'cd / && Q=/home/svc-home-bff/.config/containers/systemd/home-bff-mint.container && sudo -n cp -p $Q.pre-b4 $Q && sudo -n -u svc-home-bff env XDG_RUNTIME_DIR=/run/user/$(id -u svc-home-bff) systemctl --user daemon-reload && sudo -n -u svc-home-bff env XDG_RUNTIME_DIR=/run/user/$(id -u svc-home-bff) systemctl --user restart home-bff-mint'
+```
+
+Verify (read-only): unit active, socket still `svc-home-bff:episteck-gw 0660`.
+
+```text
+! ssh -F C:/Users/D064974/.ssh/config episteck-node1 'cd / && sudo -n -u svc-home-bff env XDG_RUNTIME_DIR=/run/user/$(id -u svc-home-bff) systemctl --user is-active home-bff-mint; stat -c "%U:%G %a" /run/episteck/home-bff-mint/mint.sock'
+```
+
+### 2. Gateway conf (with `nginx -t` before reload)
+
+```text
+! ssh -F C:/Users/D064974/.ssh/config episteck-node1 'cd / && C=/etc/episteck/mcp-gateway/nginx-mcp-gateway.conf && sudo -n cp -p $C $C.pre-b4 && curl -fsS https://raw.githubusercontent.com/EKvargas/episteck-delivery-workspace/<SHA>/deploy/gateway/nginx-mcp-gateway.conf | sudo -n tee $C.new >/dev/null && sudo -n nginx -t -c $C.new -p /etc/episteck/mcp-gateway/ && sudo -n install -m 0644 $C.new $C && sudo -n systemctl reload episteck-mcp-gateway'
+```
+
+If the repo is private, copy the file from a clean `git archive` of `<SHA>` instead of
+`curl`. If `nginx -t` fails nothing is installed (`&&` chain); the live file is untouched.
+
+Rollback:
+
+```text
+! ssh -F C:/Users/D064974/.ssh/config episteck-node1 'cd / && C=/etc/episteck/mcp-gateway/nginx-mcp-gateway.conf && sudo -n cp -p $C.pre-b4 $C && sudo -n nginx -t -c $C -p /etc/episteck/mcp-gateway/ && sudo -n systemctl reload episteck-mcp-gateway'
+```
+
+### 3. nft (dedicated table only; never flush the global ruleset)
+
+```text
+! ssh -F C:/Users/D064974/.ssh/config episteck-node1 'cd / && sudo -n nft list table inet episteck_gateway > /tmp/episteck-gateway.pre-b4.nft && curl -fsS https://raw.githubusercontent.com/EKvargas/episteck-delivery-workspace/<SHA>/deploy/gateway/episteck-gateway.nft -o /tmp/episteck-gateway.tpl && sh -c "sed s/__SVC_HOME_GATEWAY_UID__/$(id -u svc-home-gateway)/ /tmp/episteck-gateway.tpl > /tmp/episteck-gateway.rendered.nft" && sudo -n nft --check -f /tmp/episteck-gateway.rendered.nft && sudo -n nft delete table inet episteck_gateway && sudo -n nft -f /tmp/episteck-gateway.rendered.nft'
+```
+
+Rollback: `nft delete table inet episteck_gateway`, then load the previous ruleset
+(`/tmp/episteck-gateway.pre-b4.nft` is a `nft list` dump and loads as-is; the previous
+`main` template rendered with `render-nft.sh` is equivalent).
+
+```text
+! ssh -F C:/Users/D064974/.ssh/config episteck-node1 'cd / && sudo -n nft delete table inet episteck_gateway && sudo -n nft -f /tmp/episteck-gateway.pre-b4.nft'
+```
+
+Verify (read-only): 9936 appears in the table and only the gateway UID is accepted.
+
+```text
+! ssh -F C:/Users/D064974/.ssh/config episteck-node1 'cd / && sudo -n nft list table inet episteck_gateway | grep -E "9931|9936"; id -u svc-home-gateway'
+```
+
+### 4. End-to-end (read-only)
+
+The mint seam works if `/gateway/finance/` returns 502 (grant ok, upstream not up yet),
+not 401. Run as the Hermes user (`home-agent`, the only uid allowed to reach 9934):
+
+```text
+! ssh -F C:/Users/D064974/.ssh/config episteck-node1 'cd / && for p in home nutrition finance; do printf "%s " $p; sudo -n -u home-agent curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://127.0.0.1:9934/gateway/$p/; echo; done'
+```
+
+Expected after B4 and before B6: home/nutrition unchanged from before (MCP error codes,
+not 401), finance `502`. A `401` on finance means the runtime grant lacks `svc-finance`
+in `allowed_audiences` (re-issue the grant via the Home runtime-grant procedure) or the
+BFF image is not the B4 one. A `404` means the new conf is not loaded.

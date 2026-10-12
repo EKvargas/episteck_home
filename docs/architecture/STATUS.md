@@ -86,6 +86,7 @@ Design: `adr/0010-agent-runtime-grant.md`.
 | Feature Activation DocType + `get_feature_state` (B3, ADR-0012) | 🚧 in review; **not deployed**. Needs `bench migrate` after merge (no post-deploy hook on Home). Finance I1 does not consult it |
 | Home changes H1–H4 (audience, `authorize_batch`, Feature Activation, mint-by-audience + gateway route) | ⏳ Phase B (H5 runtime grant is merged and deployed) |
 | Home accepts `svc-finance` (B1; extends ADR-0009 pattern) | 🔀 PR pending; no deploy beyond normal `main` → `episteck-deploy`. Owner must set site config `home_finance_machine_user` before Finance can call Home (at B6/B4, not now) |
+| BFF mints `svc-finance` + gateway `/gateway/finance/` -> :9936 + nft (B4) | 🔀 PR pending; **not deployed**. Owner steps (image, then gateway conf + nft, each with rollback): `deploy/gateway/README.md` section B4. Route returns 502 until the Finance service (B6) listens on 9936 |
 
 ## G2 blockers
 
