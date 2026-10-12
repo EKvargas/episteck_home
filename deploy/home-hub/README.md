@@ -19,8 +19,8 @@ loopback only through explicit pasta `-T` forwards:
   2026-09-27.
 - F3b: adds `-T,9930` (Nutrition), giving `Network=pasta:-T,9933,-T,9930`, and
   sets `HOME_HUB_NUTRITION_BASE_URL=http://127.0.0.1:9930` beside
-  `HOME_HUB_BFF_BASE_URL`. This spelling is UNCONFIRMED and its probes are
-  UN-RUN until executed on Nuremberg.
+  `HOME_HUB_BFF_BASE_URL`. This spelling was confirmed by the pre-merge probe
+  on Nuremberg on 2026-10-12 (see "F3b pre-merge probe record" below).
 
 If any probe fails, stop and return the evidence; do not try another topology.
 A reviewed spelling change is allowed only if it forwards exactly 9933 and 9930.
@@ -31,8 +31,8 @@ same probes before merge.
 ## Pre-rollout VERIFY LIVE gate
 
 The F2b variants of these commands were run during the coordinated rollout
-recorded below. The F3b variants (`-T,9933,-T,9930`) are un-run and must pass
-before merge. Retain the stop condition: if pasta/Podman versions, BFF or
+recorded below. The F3b variants (`-T,9933,-T,9930`) passed the pre-merge probe
+on 2026-10-12 and must be repeated with the new image at rollout. Retain the stop condition: if pasta/Podman versions, BFF or
 Nutrition reachability, or isolation differ from the reviewed design, stop and
 return the evidence without trying another network topology.
 
@@ -71,6 +71,23 @@ and 9934 refuse or time out; `ss` shows 9930, 9933, and 9940 listening only on
 `127.0.0.1`; nginx's exact `/app` and `/app/` locations proxy to the loopback
 Hub listener; the external direct-port probes (`HOST_PUBLIC_IP:9930` and
 `:9940`) cannot connect. The coordinated rollout outcomes are recorded below.
+
+## F3b pre-merge probe record (2026-10-12)
+
+Rollout gate R3 step 1, run read-only on Nuremberg as `svc-home-hub` in throwaway
+`--rm` containers from the live F3a image
+`localhost/episteck-home-hub:b1a3d5f7cc58b58968a3250b752a1dab37d0fa8b`
+(image ID `9b0f64701e86`) with `--network pasta:-T,9933,-T,9930`. Podman 5.7.0,
+network backend netavark, pasta `0.0~git20260120.386b5f5-1`.
+
+- BFF `127.0.0.1:9933/health`: 200.
+- Nutrition `127.0.0.1:9930/health`: 200.
+- 9931, 9932, 9934: `ECONNREFUSED`.
+- No throwaway containers left; host listeners 9930-9934 and 9940 unchanged,
+  all on `127.0.0.1`; the live Hub was untouched (up 7 days).
+
+The Quadlet was not changed. The new-image probe (R3 step 3) and the live checks
+(steps 4-6) remain to be run at rollout.
 
 ## Live rollout record (2026-09-27)
 
