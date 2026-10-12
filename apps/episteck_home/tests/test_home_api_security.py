@@ -122,6 +122,8 @@ def _make_fake_frappe():
             "expires_at": None,
         },
     }
+    # Feature Activation rows (B3). Empty by default: no feature is activated.
+    fake.feature_activations = []
     fake.loaded_person_ids = []
     fake.get_all_calls = []
     fake.db = FakeDatabase(fake)
@@ -188,6 +190,12 @@ def _make_fake_frappe():
             return [{"user": row["user"], "expires_at": row["expires_at"]}]
         if doctype == "Consent Grant":
             return []
+        if doctype == "Feature Activation":
+            return [
+                {field: row.get(field) for field in fields}
+                for row in fake.feature_activations
+                if _matches(row, filters)
+            ]
         raise AssertionError(f"unexpected get_all query: {doctype} {filters}")
 
     def parse_json(value):
@@ -240,6 +248,7 @@ WHITELISTED = [
     "whoami",
     "get_home_bootstrap",
     "get_runtime_grant_status",
+    "get_feature_state",
 ]
 
 
@@ -503,6 +512,7 @@ def test_own_active_session_returns_viewer_circles_and_care(bootstrap_direct_ses
                 "relationship_type": "CAREGIVER",
             }
         ],
+        "features": [],
     }
 
 
@@ -647,7 +657,7 @@ def test_response_excludes_sensitive_fields(bootstrap_direct_session):
     """CP-11: no external_ref, User.name/email, principals, or validity dates."""
     api, _ = bootstrap_direct_session
     result = api.get_home_bootstrap("sess-actor")
-    assert set(result) == {"viewer", "circles", "care"}
+    assert set(result) == {"viewer", "circles", "care", "features"}
     assert set(result["viewer"]) == {"person_id", "display_name"}
     for circle in result["circles"]:
         assert set(circle) == {"circle_id", "display_name"}
