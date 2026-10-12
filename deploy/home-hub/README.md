@@ -12,23 +12,29 @@ podman build -f apps/home-hub/Dockerfile \
 ```
 
 Replace `COMMIT_SHA` in the image tag and Quadlet with the reviewed commit SHA.
-The Hub publishes host port 9940 only on `127.0.0.1`; the container reaches the
-host BFF through the approved `pasta:-T,9933` forward. Do not change this network
-topology in response to a failed proof; stop and return the evidence for review.
+The Hub publishes host port 9940 only on `127.0.0.1`. The container reaches host
+loopback only through explicit pasta `-T` forwards:
 
-F3b adds `-T,9930` to that forward (`Network=pasta:-T,9933,-T,9930`) and sets
-`HOME_HUB_NUTRITION_BASE_URL=http://127.0.0.1:9930` beside `HOME_HUB_BFF_BASE_URL`
-so the Hub server can reach the host Nutrition service. This spelling is
-UNCONFIRMED until the probes below are run on Nuremberg; if a different spelling
-is required, update the Quadlet, the tests, and this runbook together.
+- F2b: `-T,9933` (BFF). Its probes ran during the coordinated rollout on
+  2026-09-27.
+- F3b: adds `-T,9930` (Nutrition), giving `Network=pasta:-T,9933,-T,9930`, and
+  sets `HOME_HUB_NUTRITION_BASE_URL=http://127.0.0.1:9930` beside
+  `HOME_HUB_BFF_BASE_URL`. This spelling is UNCONFIRMED and its probes are
+  UN-RUN until executed on Nuremberg.
 
-## Pre-rollout VERIFY LIVE gate (historical procedure)
+If any probe fails, stop and return the evidence; do not try another topology.
+A reviewed spelling change is allowed only if it forwards exactly 9933 and 9930.
+Never use `auto`, port ranges, `Network=host`, `--map-gw`, or an extra
+`PublishPort`. Update the Quadlet, tests, and this runbook together, and pass the
+same probes before merge.
 
-These commands were not run as part of F2b implementation. They were subsequently
-run during the coordinated rollout recorded below. The F3b variants below
-(`-T,9933,-T,9930`) are un-run and must pass before merge. Retain the stop condition: if
-pasta/Podman versions, BFF reachability, or isolation differ from the reviewed
-design, stop and return the evidence without trying another network topology.
+## Pre-rollout VERIFY LIVE gate
+
+The F2b variants of these commands were run during the coordinated rollout
+recorded below. The F3b variants (`-T,9933,-T,9930`) are un-run and must pass
+before merge. Retain the stop condition: if pasta/Podman versions, BFF or
+Nutrition reachability, or isolation differ from the reviewed design, stop and
+return the evidence without trying another network topology.
 
 ```bash
 # Record installed versions and rootless network backend.
@@ -52,7 +58,7 @@ sudo -u svc-home-hub podman run --rm --network pasta:-T,9933,-T,9930 \
   -e 'const net=require("node:net"); const ports=[9931,9932,9934]; let failed=false; Promise.all(ports.map(port => new Promise(resolve => { const socket=net.createConnection({host:"127.0.0.1",port,timeout:1500}); socket.once("connect",()=>{console.error(`UNEXPECTED reachable port ${port}`); failed=true; socket.destroy(); resolve()}); socket.once("error",resolve); socket.once("timeout",()=>{socket.destroy();resolve()}) }))).then(()=>process.exit(failed?1:0))'
 
 # On the host, verify the Hub bind is loopback-only and nginx proxies /app to it.
-sudo ss -ltnp | grep ':9940'
+sudo ss -ltnp | grep -E ':(9930|9933|9940)'
 sudo nginx -T 2>/dev/null | grep -A8 -E 'location = /app|location \^~ /app/'
 
 # From a separate external machine, direct access to the host port must fail.
@@ -61,9 +67,10 @@ curl --connect-timeout 3 -v http://HOST_PUBLIC_IP:9930/health
 ```
 
 Expected at review time: BFF and Nutrition health return 200; ports 9931, 9932,
-and 9934 refuse or time out; `ss` shows only `127.0.0.1:9940`; nginx's exact `/app` and `/app/`
-locations proxy to that loopback listener; the external direct-port probes (`HOST_PUBLIC_IP:9930` and `:9940`) cannot
-connect. The coordinated rollout outcomes are recorded below.
+and 9934 refuse or time out; `ss` shows 9930, 9933, and 9940 listening only on
+`127.0.0.1`; nginx's exact `/app` and `/app/` locations proxy to the loopback
+Hub listener; the external direct-port probes (`HOST_PUBLIC_IP:9930` and
+`:9940`) cannot connect. The coordinated rollout outcomes are recorded below.
 
 ## Live rollout record (2026-09-27)
 

@@ -31,6 +31,8 @@ test('production configuration import fails before server startup without valid 
   for (const [env, error] of [
     [{ ...valid, HOME_HUB_BFF_BASE_URL: undefined }, /HOME_HUB_BFF_BASE_URL/],
     [{ ...valid, HOME_HUB_BFF_BASE_URL: 'https://remote.example.test' }, /HOME_HUB_BFF_BASE_URL/],
+    [{ ...valid, HOME_HUB_NUTRITION_BASE_URL: undefined }, /HOME_HUB_NUTRITION_BASE_URL/],
+    [{ ...valid, HOME_HUB_NUTRITION_BASE_URL: 'https://remote.example.test' }, /HOME_HUB_NUTRITION_BASE_URL/],
     [{ ...valid, HOME_HUB_PUBLIC_ORIGIN: undefined }, /HOME_HUB_PUBLIC_ORIGIN/],
     [{ ...valid, HOME_HUB_PUBLIC_ORIGIN: 'http://remote.example.test' }, /HOME_HUB_PUBLIC_ORIGIN/],
   ] as const) {

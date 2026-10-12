@@ -107,6 +107,8 @@ try {
     ['MOCK mode', { HOME_HUB_DATA_MODE: 'MOCK' }],
     ['missing BFF URL', { HOME_HUB_BFF_BASE_URL: undefined }],
     ['untrusted BFF URL', { HOME_HUB_BFF_BASE_URL: 'https://remote.example.test' }],
+    ['missing Nutrition URL', { HOME_HUB_NUTRITION_BASE_URL: undefined }],
+    ['untrusted Nutrition URL', { HOME_HUB_NUTRITION_BASE_URL: 'https://remote.example.test' }],
     ['missing public origin', { HOME_HUB_PUBLIC_ORIGIN: undefined }],
     ['untrusted public origin', { HOME_HUB_PUBLIC_ORIGIN: 'http://remote.example.test' }],
     ['malformed public origin', { HOME_HUB_PUBLIC_ORIGIN: 'not a URL' }],
