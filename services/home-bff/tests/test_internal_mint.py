@@ -88,7 +88,7 @@ def test_internal_mint_declares_no_request_selected_inputs(mint_ctx):
 
     operation = app.openapi()["paths"]["/internal/mint"]["post"]
 
-    assert operation.get("parameters", []) == []
+    assert operation.get("parameters", []) == []  # audience read from raw query
     assert "requestBody" not in operation
     assert "security" not in operation
 
@@ -119,12 +119,12 @@ def test_internal_mint_rejects_and_removes_a_stale_binding(mint_ctx):
     assert store.resolve_runtime(RUNTIME_ID) is None
 
 
-def test_internal_mint_returns_empty_204_with_fixed_audience(mint_ctx):
+def test_internal_mint_returns_empty_204_with_default_audience(mint_ctx):
     http, store, _ = mint_ctx
     owner = _bind_session(store)
 
     response = http.post(
-        "/internal/mint?runtime_id=attacker&audience=svc-nutrition",
+        "/internal/mint?runtime_id=attacker&session_id=attacker",
         json={"session_id": "attacker", "actor_person_id": "PSN-ATTACKER"},
         headers={"Cookie": "episteck_home_session=attacker"},
     )

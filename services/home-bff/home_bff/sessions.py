@@ -21,7 +21,10 @@ from dataclasses import dataclass
 # Audiences a delegation may be minted for. A token is valid at exactly one of them.
 AUDIENCE_CONTROL_PLANE = "home-control-plane"
 AUDIENCE_NUTRITION = "svc-nutrition"
-KNOWN_AUDIENCES = frozenset({AUDIENCE_CONTROL_PLANE, AUDIENCE_NUTRITION})
+AUDIENCE_FINANCE = "svc-finance"
+KNOWN_AUDIENCES = frozenset(
+    {AUDIENCE_CONTROL_PLANE, AUDIENCE_NUTRITION, AUDIENCE_FINANCE}
+)
 
 ISSUER = "episteck-home-bff"
 

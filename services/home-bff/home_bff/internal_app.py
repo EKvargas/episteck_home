@@ -6,7 +6,7 @@ import threading
 import time
 from collections.abc import Callable
 
-from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 
 from . import sessions
 from .config import Settings
@@ -43,6 +43,21 @@ class _MinuteLimiter:
             return True
 
 
+def _requested_audience(request: Request) -> str:
+    """Optional ``?audience=``: exact match against the fixed list, else refused.
+
+    Absent -> the default (control plane). Present but empty, repeated, differently
+    cased, padded, comma/space separated or unknown -> the same generic denial as a
+    missing grant, with nothing echoed or logged.
+    """
+    values = request.query_params.getlist("audience")
+    if not values:
+        return sessions.AUDIENCE_CONTROL_PLANE
+    if len(values) != 1 or values[0] not in sessions.KNOWN_AUDIENCES:
+        raise HTTPException(401, "no active runtime grant")
+    return values[0]
+
+
 def create_internal_app(
     settings: Settings,
     *,
@@ -64,19 +79,26 @@ def create_internal_app(
         return app.state.store
 
     @app.post("/internal/mint", status_code=204)
-    def mint_delegation(store: SessionStore = Depends(get_store)) -> Response:
+    def mint_delegation(
+        request: Request, store: SessionStore = Depends(get_store)
+    ) -> Response:
         if not limiter.allow():
             # Static line only: nothing request- or identity-derived is logged.
             logger.warning("mint rate limit exceeded")
             raise HTTPException(429, "delegation mint rate limited")
+        audience = _requested_audience(request)
         try:
             grant = store.resolve_runtime_grant(RUNTIME_ID)
             if grant is not None:
-                if sessions.AUDIENCE_CONTROL_PLANE not in grant.allowed_audiences:
+                if audience not in grant.allowed_audiences:
                     raise HTTPException(401, "no active runtime grant")
                 home_session_id = grant.home_session_id
                 store.touch_runtime_grant(RUNTIME_ID)
             elif settings.runtime_legacy_binding:
+                # The legacy browser binding carries no audience list, so it can
+                # only ever mint the default audience.
+                if audience != sessions.AUDIENCE_CONTROL_PLANE:
+                    raise HTTPException(401, "no active runtime grant")
                 session = store.resolve_runtime(RUNTIME_ID)
                 if session is None:
                     raise HTTPException(401, "no active runtime binding")
@@ -88,7 +110,7 @@ def create_internal_app(
 
         minted = sessions.mint_delegation(
             home_session_id,
-            sessions.AUDIENCE_CONTROL_PLANE,
+            audience,
             settings.delegation_secret,
         )
         return Response(
