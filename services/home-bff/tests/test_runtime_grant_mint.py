@@ -144,3 +144,54 @@ def test_mint_records_last_use_once_per_minute(tmp_path, clock):
     clock.now += 61
     http.post("/internal/mint")
     assert store.resolve_runtime_grant(RUNTIME_ID).last_mint_at == first + 60
+
+
+# ---- /internal/mint_finance (H4): its own location, its own audience ----------------
+
+
+def test_mint_finance_requires_svc_finance_in_allowed_audiences(tmp_path, clock):
+    http, store = build(tmp_path, clock, runtime_legacy_binding=False)
+    store.put_runtime_grant(
+        RUNTIME_ID, "HDS-GRANT", frozenset({"home-control-plane"}), ttl_seconds=DAY
+    )
+    assert http.post("/internal/mint_finance").status_code == 401
+
+
+def test_mint_finance_succeeds_and_carries_only_svc_finance_audience(tmp_path, clock):
+    http, store = build(tmp_path, clock, runtime_legacy_binding=False)
+    store.put_runtime_grant(RUNTIME_ID, "HDS-GRANT", AUDIENCES, ttl_seconds=DAY)
+    response = http.post("/internal/mint_finance")
+    assert response.status_code == 204
+    assert response.headers["Cache-Control"] == "no-store"
+    sid, claims = _sid(response)
+    assert sid == "HDS-GRANT"
+    assert claims["aud"] == sessions.AUDIENCE_FINANCE == "svc-finance"
+    assert set(claims) == {"iss", "aud", "iat", "exp", "jti", "sid"}
+
+
+def test_mint_finance_denies_when_grant_absent(tmp_path, clock):
+    http, _ = build(tmp_path, clock, runtime_legacy_binding=False)
+    assert http.post("/internal/mint_finance").status_code == 401
+
+
+def test_mint_finance_never_falls_back_to_the_legacy_browser_binding(tmp_path, clock):
+    """A browser binding carries no audience scope, so it cannot authorize Finance."""
+    http, store = build(tmp_path, clock, runtime_legacy_binding=True)
+    _browser_binding(store)
+    assert http.post("/internal/mint_finance").status_code == 401
+
+
+def test_mint_finance_after_revoke_is_401(tmp_path, clock):
+    http, store = build(tmp_path, clock, runtime_legacy_binding=False)
+    store.put_runtime_grant(RUNTIME_ID, "HDS-GRANT", AUDIENCES, ttl_seconds=DAY)
+    assert http.post("/internal/mint_finance").status_code == 204
+    store.delete_runtime_grant(RUNTIME_ID)
+    assert http.post("/internal/mint_finance").status_code == 401
+
+
+def test_mint_finance_shares_the_rate_limit_with_mint(tmp_path, clock):
+    http, store = build(tmp_path, clock, runtime_legacy_binding=False)
+    store.put_runtime_grant(RUNTIME_ID, "HDS-GRANT", AUDIENCES, ttl_seconds=DAY)
+    codes = [http.post("/internal/mint").status_code for _ in range(600)]
+    assert set(codes) == {204}
+    assert http.post("/internal/mint_finance").status_code == 429

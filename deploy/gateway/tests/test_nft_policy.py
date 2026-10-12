@@ -12,7 +12,7 @@ def test_policy_uses_numeric_sender_uid_controls_in_output():
     assert "meta skuid $HERMES_UID accept" in POLICY
     assert "meta skuid $GATEWAY_UID accept" in POLICY
     assert "tcp dport 9934 drop" in POLICY
-    assert "tcp dport { 9931, 9932 } drop" in POLICY
+    assert "tcp dport { 9931, 9932, 9936 } drop" in POLICY
     assert "flush ruleset" not in POLICY
 
 
@@ -27,3 +27,9 @@ def test_policy_mutation_would_remove_the_required_deny():
     mutated = POLICY.replace("tcp dport 9934 drop", "", 1)
     assert "tcp dport 9934 drop" in POLICY
     assert "tcp dport 9934 drop" not in mutated
+
+
+def test_finance_mcp_port_is_reachable_only_by_the_gateway_uid():
+    accept = "ip daddr 127.0.0.1 tcp dport { 9931, 9932, 9936 } meta skuid $GATEWAY_UID accept"
+    drop = "ip daddr 127.0.0.1 tcp dport { 9931, 9932, 9936 } drop"
+    assert POLICY.index(accept) < POLICY.index(drop)

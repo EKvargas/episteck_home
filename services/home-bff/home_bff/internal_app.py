@@ -99,4 +99,34 @@ def create_internal_app(
             },
         )
 
+    @app.post("/internal/mint_finance", status_code=204)
+    def mint_finance_delegation(store: SessionStore = Depends(get_store)) -> Response:
+        # Finance is a separate audience on a separate gateway location. It is minted
+        # ONLY from a runtime grant that names svc-finance: the legacy browser binding
+        # carries no audience scope, so it never authorizes Finance.
+        if not limiter.allow():
+            logger.warning("mint rate limit exceeded")
+            raise HTTPException(429, "delegation mint rate limited")
+        try:
+            grant = store.resolve_runtime_grant(RUNTIME_ID)
+            if grant is None or sessions.AUDIENCE_FINANCE not in grant.allowed_audiences:
+                raise HTTPException(401, "no active runtime grant")
+            home_session_id = grant.home_session_id
+            store.touch_runtime_grant(RUNTIME_ID)
+        except StoreUnavailableError:
+            raise HTTPException(503, "delegation mint unavailable") from None
+
+        minted = sessions.mint_delegation(
+            home_session_id,
+            sessions.AUDIENCE_FINANCE,
+            settings.delegation_secret,
+        )
+        return Response(
+            status_code=204,
+            headers={
+                DELEGATION_HEADER: minted.token,
+                "Cache-Control": "no-store",
+            },
+        )
+
     return app

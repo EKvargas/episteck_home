@@ -42,12 +42,14 @@ def test_standalone_gateway_identity_and_listener():
     assert "listen 0.0.0.0:9934;" not in CONFIG
 
 
-def test_both_paths_require_mint_and_use_the_fixed_audience_mint_seam():
+def test_all_paths_require_mint_and_use_the_fixed_audience_mint_seam():
     assert CONFIG.count("auth_request /__mint;") == 2
-    assert CONFIG.count("auth_request_set $mint_delegation") == 2
-    assert CONFIG.count("proxy_set_header X-Episteck-Delegation $mint_delegation;") == 2
-    assert CONFIG.count("proxy_hide_header X-Episteck-Delegation;") == 2
+    assert CONFIG.count("auth_request /__mint_finance;") == 1
+    assert CONFIG.count("auth_request_set $mint_delegation") == 3
+    assert CONFIG.count("proxy_set_header X-Episteck-Delegation $mint_delegation;") == 3
+    assert CONFIG.count("proxy_hide_header X-Episteck-Delegation;") == 3
     assert "svc-nutrition" not in CONFIG
+    assert "svc-finance" not in CONFIG
     for directive in REQUIRED:
         assert directive in CONFIG, directive
 
@@ -72,9 +74,9 @@ def test_mint_subrequest_cannot_receive_client_credentials_or_body():
 
 
 def test_security_controls_have_negative_mutation_proof():
-    assert CONFIG.count("proxy_next_upstream off;") == 2
+    assert CONFIG.count("proxy_next_upstream off;") == 3
     mutated = CONFIG.replace("proxy_next_upstream off;", "", 1)
-    assert mutated.count("proxy_next_upstream off;") == 1
+    assert mutated.count("proxy_next_upstream off;") == 2
     assert CONFIG.count("proxy_next_upstream off;") > mutated.count(
         "proxy_next_upstream off;"
     )
@@ -84,3 +86,29 @@ def test_config_never_mentions_json_rpc_body_parsing_or_query_logging():
     assert "jsonrpc" not in CONFIG.lower()
     assert '"$request_method $uri $server_protocol"' in CONFIG
     assert "$request " not in CONFIG
+
+
+def test_finance_route_uses_only_the_finance_mint_and_finance_upstream():
+    block = CONFIG.split("location /gateway/finance/ {", 1)[1].split(chr(10) + "        }", 1)[0]
+    assert "auth_request /__mint_finance;" in block
+    assert "auth_request /__mint;" not in block
+    assert "proxy_pass http://127.0.0.1:9936/mcp;" in block
+    assert "proxy_hide_header X-Episteck-Delegation;" in block
+    assert 'proxy_set_header Authorization "";' in block
+    assert 'proxy_set_header Cookie "";' in block
+
+
+def test_other_routes_never_use_the_finance_mint():
+    for route in ("/gateway/home/", "/gateway/nutrition/"):
+        block = CONFIG.split(f"location {route} {{", 1)[1].split(chr(10) + "        }", 1)[0]
+        assert "__mint_finance" not in block
+
+
+def test_finance_mint_subrequest_cannot_receive_client_credentials_or_body():
+    block = CONFIG.split("location = /__mint_finance {", 1)[1].split("}", 1)[0]
+    assert "internal;" in block
+    assert "proxy_pass http://unix:/run/episteck/home-bff-mint/mint.sock:/internal/mint_finance;" in block
+    assert "proxy_pass_request_headers off;" in block
+    assert "proxy_pass_request_body off;" in block
+    for header in ("Authorization", "Cookie", "X-Episteck-Delegation", "X-Actor-ID", "X-Runtime-ID"):
+        assert f'proxy_set_header {header} "";' in block
