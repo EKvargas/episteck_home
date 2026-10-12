@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-10",
+  "base_sha": "0c8c0006ec115b9084e1393df572b5a753771bcc",
+  "scope": "disconnected local synthetic PERSON foundation",
+  "mariadb": {
+    "real_local_tests_passed": 18,
+    "real_local_tests_failed": 0,
+    "elapsed_seconds": 221.91,
+    "serving_direct_dml_denied": true,
+    "uncertain_allow_denied_after_connection_or_lock_loss": true,
+    "physical_older_home_and_witness_restored": true,
+    "matching_older_heads_verified": true,
+    "first_authorization_after_restore_denied": true,
+    "fresh_incarnation_quarantined_old_activations": true,
+    "selected_authenticated_reauthorization_restored_access": true
+  },
+  "frappe": {
+    "version": "15.99.0",
+    "marked_disposable_site": true,
+    "assertions_passed": 9,
+    "site_removed": true,
+    "private_home_database_stopped": true,
+    "private_witness_database_stopped": true,
+    "private_redis_stopped": true
+  },
+  "local_tool_cleanup": {
+    "disposable_bench_removed": true,
+    "test_venv_removed": true,
+    "local_yarn_install_removed": true
+  },
+  "live_verification": false
+}
