@@ -1,4 +1,4 @@
-# ADR-0010: svc-finance is the Finance source of truth, bank-first and read-only
+# ADR-0011: svc-finance is the Finance source of truth, bank-first and read-only
 
 ## Status
 Proposed (2026-10-10). Accepted when the PR that introduces the service merges.
