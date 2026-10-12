@@ -34,6 +34,20 @@ class WorkspaceScope:
     owner_person_ids: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class OauthState:
+    workspace_id: str
+    connection_id: str
+    owner_person_id: str
+
+
+@dataclass(frozen=True)
+class StoredEbSession:
+    session_id: str
+    valid_until: datetime
+    accounts: Mapping[str, str]  # stable identification_hash -> session-scoped uid
+
+
 class IdempotencyConflict(Exception):
     """The idempotency key was already used with different content."""
 
@@ -345,6 +359,67 @@ class FinanceRepository:
                                 (newest,)).fetchall()
         return FxRates(date.fromisoformat(newest),
                        {r["currency"]: Decimal(r["rate"]) for r in rows})
+
+    # --- Enable Banking authorization state and session ---------------------------
+    def create_oauth_state(self, state_hash: str, workspace_id: str, connection_id: str,
+                           owner_person_id: str, expires_at: datetime) -> None:
+        with self.connection() as conn, db.write_tx(conn):
+            conn.execute("INSERT INTO oauth_state(state_hash,workspace_id,connection_id,"
+                         "owner_person_id,expires_at) VALUES(?,?,?,?,?)",
+                         (state_hash, workspace_id, connection_id, owner_person_id,
+                          _ts(expires_at)))
+
+    def consume_oauth_state(self, state_hash: str, now: datetime) -> OauthState | None:
+        """Single-use: unknown, expired and already-used states are indistinguishable."""
+        with self.connection() as conn, db.write_tx(conn):
+            claimed = conn.execute(
+                "UPDATE oauth_state SET used_at=? WHERE state_hash=? AND used_at IS NULL "
+                "AND expires_at>?", (_ts(now), state_hash, _ts(now))).rowcount
+            if claimed != 1:
+                return None
+            row = conn.execute("SELECT * FROM oauth_state WHERE state_hash=?",
+                               (state_hash,)).fetchone()
+        return OauthState(row["workspace_id"], row["connection_id"], row["owner_person_id"])
+
+    def activate_eb_session(self, workspace_id: str, connection_id: str, session_id: str,
+                            valid_until: datetime, created_at: datetime,
+                            accounts: Mapping[str, str]) -> None:
+        """Replace the session map and reopen the connection in ONE transaction."""
+        with self.connection() as conn, db.write_tx(conn):
+            conn.execute("DELETE FROM eb_session_account WHERE connection_id=?", (connection_id,))
+            conn.execute(
+                "INSERT OR REPLACE INTO eb_session(connection_id,workspace_id,session_id,"
+                "valid_until,created_at) VALUES(?,?,?,?,?)",
+                (connection_id, workspace_id, session_id, _ts(valid_until), _ts(created_at)))
+            for ref, uid in accounts.items():
+                conn.execute("INSERT INTO eb_session_account(connection_id,workspace_id,ref,uid) "
+                             "VALUES(?,?,?,?)", (connection_id, workspace_id, ref, uid))
+            conn.execute("UPDATE connection SET status='OK', consent_expires_at=? "
+                         "WHERE id=? AND workspace_id=?",
+                         (_ts(valid_until), connection_id, workspace_id))
+
+    def load_eb_session(self, connection_id: str) -> StoredEbSession | None:
+        with self.connection() as conn:
+            row = conn.execute("SELECT * FROM eb_session WHERE connection_id=?",
+                               (connection_id,)).fetchone()
+            if row is None:
+                return None
+            accounts = {r["ref"]: r["uid"] for r in conn.execute(
+                "SELECT ref, uid FROM eb_session_account WHERE connection_id=?", (connection_id,))}
+        return StoredEbSession(row["session_id"], _dt(row["valid_until"]), accounts)
+
+    # --- PSD2 unattended-access log ----------------------------------------------
+    def record_access(self, workspace_id: str, ref: str, at: datetime, kind: str) -> None:
+        """``ref`` is the provider account reference (stable hash), not our account id."""
+        with self.connection() as conn, db.write_tx(conn):
+            conn.execute("INSERT INTO access_log(workspace_id,account_id,requested_at,kind) "
+                         "VALUES(?,?,?,?)", (workspace_id, ref, _ts(at), kind))
+
+    def count_accesses(self, ref: str, since: datetime, kind: str) -> int:
+        with self.connection() as conn:
+            return conn.execute(
+                "SELECT COUNT(*) FROM access_log WHERE account_id=? AND kind=? "
+                "AND requested_at>?", (ref, kind, _ts(since))).fetchone()[0]
 
     # --- idempotent commands -----------------------------------------------------
     def run_command(self, workspace_id: str, key: str, command_type: str, payload: dict,

@@ -25,7 +25,7 @@ from .config import SecretFileError, Settings, read_secret_file
 from .connectors.base import ConnectorError
 from .connectors.simplefin import TokenAlreadyClaimed, claim
 from .store.repo import FinanceRepository, IdempotencyConflict
-from .wiring import secret_path
+from .wiring import load_eb_credentials, secret_path
 
 MACHINE_CALLER = "svc-finance-admin"
 CHANNEL = "admin"
@@ -95,10 +95,13 @@ def _init_workspace(repo, settings, args) -> None:
 
 def _add_connection(repo, settings, args) -> None:
     provider = _PROVIDERS[args.provider]
-    if provider is domain.Provider.SIMPLEFIN:
-        if not settings.secrets_dir:
-            raise AdminError("FINANCE_SECRETS_DIR is required")
-        read_secret_file(secret_path(settings.secrets_dir, args.id, provider))  # exists, 600, non-empty
+    if not settings.secrets_dir:
+        raise AdminError("FINANCE_SECRETS_DIR is required")
+    path = secret_path(settings.secrets_dir, args.id, provider)
+    if provider is domain.Provider.ENABLE_BANKING:
+        load_eb_credentials(path)  # exists, mode 600, valid JSON with an RSA-looking key field
+    else:
+        read_secret_file(path)  # exists, mode 600, non-empty
     connection = domain.Connection(args.id, settings.workspace_id, provider, args.owner,
                                    domain.ConnectionStatus.OK)
 
