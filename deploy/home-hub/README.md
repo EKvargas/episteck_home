@@ -12,16 +12,29 @@ podman build -f apps/home-hub/Dockerfile \
 ```
 
 Replace `COMMIT_SHA` in the image tag and Quadlet with the reviewed commit SHA.
-The Hub publishes host port 9940 only on `127.0.0.1`; the container reaches the
-host BFF through the approved `pasta:-T,9933` forward. Do not change this network
-topology in response to a failed proof; stop and return the evidence for review.
+The Hub publishes host port 9940 only on `127.0.0.1`. The container reaches host
+loopback only through explicit pasta `-T` forwards:
 
-## Pre-rollout VERIFY LIVE gate (historical procedure)
+- F2b: `-T,9933` (BFF). Its probes ran during the coordinated rollout on
+  2026-09-27.
+- F3b: adds `-T,9930` (Nutrition), giving `Network=pasta:-T,9933,-T,9930`, and
+  sets `HOME_HUB_NUTRITION_BASE_URL=http://127.0.0.1:9930` beside
+  `HOME_HUB_BFF_BASE_URL`. This spelling was confirmed by the pre-merge probe
+  on Nuremberg on 2026-10-12 (see "F3b pre-merge probe record" below).
 
-These commands were not run as part of F2b implementation. They were subsequently
-run during the coordinated rollout recorded below. Retain the stop condition: if
-pasta/Podman versions, BFF reachability, or isolation differ from the reviewed
-design, stop and return the evidence without trying another network topology.
+If any probe fails, stop and return the evidence; do not try another topology.
+A reviewed spelling change is allowed only if it forwards exactly 9933 and 9930.
+Never use `auto`, port ranges, `Network=host`, `--map-gw`, or an extra
+`PublishPort`. Update the Quadlet, tests, and this runbook together, and pass the
+same probes before merge.
+
+## Pre-rollout VERIFY LIVE gate
+
+The F2b variants of these commands were run during the coordinated rollout
+recorded below. The F3b variants (`-T,9933,-T,9930`) passed the pre-merge probe
+on 2026-10-12 and must be repeated with the new image at rollout. Retain the stop condition: if pasta/Podman versions, BFF or
+Nutrition reachability, or isolation differ from the reviewed design, stop and
+return the evidence without trying another network topology.
 
 ```bash
 # Record installed versions and rootless network backend.
@@ -30,27 +43,51 @@ sudo -u svc-home-hub podman info --format '{{.Host.NetworkBackend}}'
 pasta --version
 
 # The BFF health endpoint must be reachable from the isolated Hub container.
-sudo -u svc-home-hub podman run --rm --network pasta:-T,9933 \
+sudo -u svc-home-hub podman run --rm --network pasta:-T,9933,-T,9930 \
   --entrypoint node localhost/episteck-home-hub:COMMIT_SHA \
   -e 'fetch("http://127.0.0.1:9933/health").then(r => { console.log(r.status); process.exit(r.status === 200 ? 0 : 1) }).catch(() => process.exit(1))'
 
-# No other tested host-loopback service may be reachable through this network.
-sudo -u svc-home-hub podman run --rm --network pasta:-T,9933 \
+# The Nutrition health endpoint must also be reachable from the isolated Hub container.
+sudo -u svc-home-hub podman run --rm --network pasta:-T,9933,-T,9930 \
   --entrypoint node localhost/episteck-home-hub:COMMIT_SHA \
-  -e 'const net=require("node:net"); const ports=[9930,9931,9932,9934]; let failed=false; Promise.all(ports.map(port => new Promise(resolve => { const socket=net.createConnection({host:"127.0.0.1",port,timeout:1500}); socket.once("connect",()=>{console.error(`UNEXPECTED reachable port ${port}`); failed=true; socket.destroy(); resolve()}); socket.once("error",resolve); socket.once("timeout",()=>{socket.destroy();resolve()}) }))).then(()=>process.exit(failed?1:0))'
+  -e 'fetch("http://127.0.0.1:9930/health").then(r => { console.log(r.status); process.exit(r.status === 200 ? 0 : 1) }).catch(() => process.exit(1))'
+
+# No other tested host-loopback service may be reachable through this network.
+sudo -u svc-home-hub podman run --rm --network pasta:-T,9933,-T,9930 \
+  --entrypoint node localhost/episteck-home-hub:COMMIT_SHA \
+  -e 'const net=require("node:net"); const ports=[9931,9932,9934]; let failed=false; Promise.all(ports.map(port => new Promise(resolve => { const socket=net.createConnection({host:"127.0.0.1",port,timeout:1500}); socket.once("connect",()=>{console.error(`UNEXPECTED reachable port ${port}`); failed=true; socket.destroy(); resolve()}); socket.once("error",resolve); socket.once("timeout",()=>{socket.destroy();resolve()}) }))).then(()=>process.exit(failed?1:0))'
 
 # On the host, verify the Hub bind is loopback-only and nginx proxies /app to it.
-sudo ss -ltnp | grep ':9940'
+sudo ss -ltnp | grep -E ':(9930|9933|9940)'
 sudo nginx -T 2>/dev/null | grep -A8 -E 'location = /app|location \^~ /app/'
 
 # From a separate external machine, direct access to the host port must fail.
 curl --connect-timeout 3 -v http://HOST_PUBLIC_IP:9940/app
+curl --connect-timeout 3 -v http://HOST_PUBLIC_IP:9930/health
 ```
 
-Expected at review time: BFF health returns 200; the other listed ports refuse or
-time out; `ss` shows only `127.0.0.1:9940`; nginx's exact `/app` and `/app/`
-locations proxy to that loopback listener; the external direct-port probe cannot
-connect. The coordinated rollout outcomes are recorded below.
+Expected at review time: BFF and Nutrition health return 200; ports 9931, 9932,
+and 9934 refuse or time out; `ss` shows 9930, 9933, and 9940 listening only on
+`127.0.0.1`; nginx's exact `/app` and `/app/` locations proxy to the loopback
+Hub listener; the external direct-port probes (`HOST_PUBLIC_IP:9930` and
+`:9940`) cannot connect. The coordinated rollout outcomes are recorded below.
+
+## F3b pre-merge probe record (2026-10-12)
+
+Rollout gate R3 step 1, run read-only on Nuremberg as `svc-home-hub` in throwaway
+`--rm` containers from the live F3a image
+`localhost/episteck-home-hub:b1a3d5f7cc58b58968a3250b752a1dab37d0fa8b`
+(image ID `9b0f64701e86`) with `--network pasta:-T,9933,-T,9930`. Podman 5.7.0,
+network backend netavark, pasta `0.0~git20260120.386b5f5-1`.
+
+- BFF `127.0.0.1:9933/health`: 200.
+- Nutrition `127.0.0.1:9930/health`: 200.
+- 9931, 9932, 9934: `ECONNREFUSED`.
+- No throwaway containers left; host listeners 9930-9934 and 9940 unchanged,
+  all on `127.0.0.1`; the live Hub was untouched (up 7 days).
+
+The Quadlet was not changed. The new-image probe (R3 step 3) and the live checks
+(steps 4-6) remain to be run at rollout.
 
 ## Live rollout record (2026-09-27)
 

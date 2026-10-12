@@ -4,11 +4,13 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 The Hub is mounted at `/app`. In local development, `HOME_HUB_DATA_MODE` defaults
 to `MOCK`; mock mode never calls `fetch`. Production requires `LIVE`, a loopback
-`HOME_HUB_BFF_BASE_URL` such as `http://127.0.0.1:9933`, and a trusted
+`HOME_HUB_BFF_BASE_URL` such as `http://127.0.0.1:9933`, a loopback
+`HOME_HUB_NUTRITION_BASE_URL` such as `http://127.0.0.1:9930`, and a trusted
 `HOME_HUB_PUBLIC_ORIGIN` such as `https://bff.home.episteck.com`. Configuration
-is checked during build and server initialization. Neither origin is sent to
-browser code. The server forwards only the `episteck_home_session` cookie to the
-BFF `/bootstrap` endpoint.
+is checked during build and server initialization. None of these origins is sent
+to browser code. The server forwards only the `episteck_home_session` cookie to
+the BFF `/bootstrap` endpoint; the cookie goes only to the BFF, and Nutrition
+receives only a one-time delegation.
 
 The current prototype still renders existing mock domain panels. Nutrition
 screens are explicitly labeled DEMO · MOCK DATA and do not represent the
