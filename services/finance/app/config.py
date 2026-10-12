@@ -30,6 +30,7 @@ class Settings:
     db_path: str
     workspace_id: str
     pepper: bytes = field(repr=False)
+    secrets_dir: str | None = None
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -38,4 +39,5 @@ class Settings:
             db_path=env["FINANCE_DB"],
             workspace_id=env["FINANCE_WORKSPACE_ID"],
             pepper=read_secret_file(env["FINANCE_PEPPER_FILE"]),
+            secrets_dir=env.get("FINANCE_SECRETS_DIR"),
         )
