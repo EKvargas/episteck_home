@@ -16,6 +16,9 @@
 | Nutrition MCP | svc-nutrition (1005) | 127.0.0.1:9931 | FastMCP, home-agent connects |
 | Home MCP | svc-home-mcp (1006) | 127.0.0.1:9932 | thin business adapter; no Home data store |
 | Home BFF `[G1.6]` | svc-home-bff (uid 1007) | 127.0.0.1:9933 + public 443 via nginx | confidential OAuth client + session boundary; holds client secret and user tokens server-side. FastAPI/uvicorn, rootless Quadlet. Runbook: `deploy/home-bff/README.md` |
+| Finance API `[I1, not deployed]` | svc-finance (uid assigned at creation) | 127.0.0.1:9935 | FastAPI, read-only overview; mounts only the pepper from `secrets/` |
+| Finance MCP `[I1, not deployed]` | svc-finance | 127.0.0.1:9936 | FastMCP `finance_overview`; reachable by Hermes only through the gateway (Phase B) |
+| Finance sync `[I1, not deployed]` | svc-finance | none | `finance-sync.timer` twice a day runs `python -m app.sync`; only unit that reads provider credentials |
 | infra-agent gateway | infra-agent (1002) | none public | system-scope systemd |
 | home-agent gateway | home-agent (1003) | none public | user-scope systemd |
 
@@ -95,5 +98,5 @@ Measured live latency and the full runtime matrix are in `G1_5_VALIDATION.md`.
 ## Off-box backup
 restic 0.18.1 → Hetzner Storage Box (u670254, EU, SFTP key-based). Daily systemd
 timer, keep 7d/4w/3m, client-side encrypted. Backs up Nutrition SQLite (consistent
-`.backup`) + Mealie native zip. Restore validated. Secrets in `/etc/episteck/backup`
+`.backup`) + Mealie native zip. Finance (`finance.sqlite`, when deployed): the same consistent `.backup` snapshot, then `PRAGMA integrity_check` on the snapshot; the `secrets/` directory is EXCLUDED (re-obtainable from the providers, same rule as other services). Exact job diff: `docs/runbooks/finance-i1-nuremberg-bringup.md`. Restore validated. Secrets in `/etc/episteck/backup`
 (root-only). Hermes state = separate future job.
