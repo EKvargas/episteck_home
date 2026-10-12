@@ -87,3 +87,62 @@ def column_names(repo, table: str) -> list[str]:
 
 def count_rows(repo, table: str) -> int:
     return _raw(repo, f"SELECT COUNT(*) FROM {table}")[0][0]
+
+
+def seeded_service(tmp_path, authorizer=None):
+    """A FinanceService over one workspace with one fresh EUR account (1234.56)."""
+    from app.service import FinanceService
+
+    repo = make_repo(tmp_path)
+    seed_workspace(repo)
+    seed_connection(repo)
+    repo.add_account(make_account(aid="acc-1"))
+    repo.record_balance(make_balance("o1", aid="acc-1", amount=123456, as_of=T0, observed_at=T0))
+    authz = authorizer or FakeAuthorizer()
+    now = T0.replace(hour=10)
+    return FinanceService(repo, authz, "ws-1", clock=lambda: now), authz
+
+
+class FakeAuthorizer:
+    """Scripted Home. Builds its answer through the real ``validate_batch``."""
+
+    def __init__(self, actor="PSN-1", allow=None, mode="answer"):
+        self.actor = actor
+        self.allow = {"SELF": True} if allow is None else allow
+        self.mode = mode
+        self.calls: list = []
+
+    def authorize(self, delegation, requirements):
+        from app.authz import SESSION_INVALID, UNAVAILABLE, BatchDecision, validate_batch
+        self.calls.append((delegation, tuple(requirements)))
+        if self.mode == "raise":
+            raise RuntimeError("home exploded")
+        if self.mode == "session_invalid":
+            return BatchDecision(SESSION_INVALID)
+        if self.mode == "unavailable":
+            return BatchDecision(UNAVAILABLE)
+        decisions = [
+            {"subject": r.subject, "domain": r.domain, "action": r.action,
+             "allow": self.allow.get(r.subject, False), "reason": "scripted"}
+            for r in requirements
+        ]
+        if self.mode == "malformed":
+            decisions = decisions[:-1]
+        return validate_batch(requirements, {"actor_person_id": self.actor, "decisions": decisions})
+
+
+class SpyRepo:
+    """Records every repository method the service touches."""
+
+    def __init__(self, repo):
+        self._repo = repo
+        self.calls: list[str] = []
+
+    def __getattr__(self, name):
+        attr = getattr(self._repo, name)
+        if callable(attr):
+            def wrapper(*args, **kwargs):
+                self.calls.append(name)
+                return attr(*args, **kwargs)
+            return wrapper
+        return attr
