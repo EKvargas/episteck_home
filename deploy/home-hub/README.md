@@ -89,6 +89,39 @@ network backend netavark, pasta `0.0~git20260120.386b5f5-1`.
 The Quadlet was not changed. The new-image probe (R3 step 3) and the live checks
 (steps 4-6) remain to be run at rollout.
 
+## F3b live rollout (2026-10-12)
+
+PR #91 (merge `89e055075bd375815328a8a9a39bb2bbc4494d02`) deployed to Nuremberg by
+the operator. Rollout gate R3: **PASS. Rollback was not used.**
+
+- **Baseline (step 2):** live image `localhost/episteck-home-hub:b1a3d5f7…` (ID
+  `9b0f64701e86`), up 7 days, `NRestarts=0`; Quadlet SHA-256
+  `f75178fc6299e557308e90444f7cd1fd044913f72a0cfc45fd7d77159edeb0b2`.
+- **Build (step 3):** `localhost/episteck-home-hub:89e055075bd375815328a8a9a39bb2bbc4494d02`
+  (ID `0dd830e61384`), rootless as `svc-home-hub` from a `git archive` of
+  `apps/home-hub` at the merge SHA (not a host git checkout), context
+  `apps/home-hub`. Throwaway probe with `--network pasta:-T,9933,-T,9930`: 9933 and
+  9930 `/health` 200; 9931, 9932, 9934 `ECONNREFUSED`.
+- **Apply (step 4):** Quadlet backed up to `/var/backups/episteck/home-f3b3-89e0550/`
+  (SHA-256 identical to the live file). Diff against the backup was exactly
+  `Image=` -> the new tag, `Network=pasta:-T,9933` -> `pasta:-T,9933,-T,9930`, and one
+  added `Environment=HOME_HUB_NUTRITION_BASE_URL=http://127.0.0.1:9930`.
+- **Verify (step 5), from the running Hub container:** 9933 and 9930 `/health` 200;
+  9931, 9932, 9934 `ECONNREFUSED`. Host `ss`: 9930, 9933, 9940 on `127.0.0.1` only.
+  Internal `/app` 307 to `https://bff.home.episteck.com/login`; public `/app` 307
+  to `/login`. From an external client, direct `91.98.132.9:9930` and `:9940` timed
+  out (curl exit 28).
+- **Restart verification (step 6):** second `systemctl --user restart svc-home-hub`;
+  the same container probes and `/app` check passed; `NRestarts=0`; container logs
+  contained no `PSN-`, bearer, cookie, JWT-shaped, or delegation matches.
+- **Not run:** the logged-in spot check (self default, stale -> self), and any
+  end-to-end profile read. No page calls the adapter yet; F3c makes the first live
+  read.
+- **Rollback (not used):** restore the saved Quadlet byte for byte, reload, restart;
+  9930 is then blocked from the Hub again. The previous image stays on the host.
+- **Runbook fix:** the apply script originally read the root-only (`0700`) backup
+  directory as an unprivileged user; it failed before any change and was corrected.
+
 ## Live rollout record (2026-09-27)
 
 Target: `ubuntu-4gb-nbg1-1` in Nuremberg. The deployed repository baseline was
