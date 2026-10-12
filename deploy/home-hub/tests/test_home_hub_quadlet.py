@@ -5,10 +5,11 @@ ROOT = Path(__file__).resolve().parents[1]
 QUADLET = (ROOT / 'svc-home-hub.container').read_text(encoding='utf-8')
 
 
-def test_hub_quadlet_publishes_only_loopback_and_uses_single_port_pasta():
+def test_hub_quadlet_publishes_only_loopback_and_uses_narrow_pasta_forwards():
     assert QUADLET.count('PublishPort=') == 1
     assert 'PublishPort=127.0.0.1:9940:3000' in QUADLET
-    assert 'Network=pasta:-T,9933' in QUADLET
+    assert 'Network=pasta:-T,9933,-T,9930' in QUADLET
+    assert QUADLET.count('Network=') == 1
     assert 'Network=host' not in QUADLET
     assert '--map-gw' not in QUADLET
 
@@ -16,6 +17,7 @@ def test_hub_quadlet_publishes_only_loopback_and_uses_single_port_pasta():
 def test_hub_quadlet_is_live_and_does_not_embed_upstream_secrets():
     assert 'HOME_HUB_DATA_MODE=LIVE' in QUADLET
     assert 'HOME_HUB_BFF_BASE_URL=http://127.0.0.1:9933' in QUADLET
+    assert 'HOME_HUB_NUTRITION_BASE_URL=http://127.0.0.1:9930' in QUADLET
     assert 'HOME_HUB_PUBLIC_ORIGIN=https://bff.home.episteck.com' in QUADLET
     assert 'TOKEN=' not in QUADLET
     assert 'SECRET=' not in QUADLET
@@ -29,8 +31,9 @@ def test_hub_quadlet_definition_is_not_activated_by_repo_files():
 def test_deployment_runbook_contains_unrun_live_isolation_proofs():
     runbook = (ROOT / 'README.md').read_text(encoding='utf-8')
     assert 'VERIFY LIVE gate' in runbook
-    assert '--network pasta:-T,9933' in runbook
-    assert '9930,9931,9932,9934' in runbook
+    assert '--network pasta:-T,9933,-T,9930' in runbook
+    assert '[9931,9932,9934]' in runbook
+    assert '127.0.0.1:9930/health' in runbook
     assert 'HOST_PUBLIC_IP:9940' in runbook
 
 
