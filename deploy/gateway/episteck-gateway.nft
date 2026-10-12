@@ -13,7 +13,7 @@ table inet episteck_gateway {
         ip daddr 127.0.0.1 tcp dport 9934 drop
 
         # Only the dedicated nginx gateway may call the direct MCP services.
-        ip daddr 127.0.0.1 tcp dport { 9931, 9932 } meta skuid $GATEWAY_UID accept
-        ip daddr 127.0.0.1 tcp dport { 9931, 9932 } drop
+        ip daddr 127.0.0.1 tcp dport { 9931, 9932, 9936 } meta skuid $GATEWAY_UID accept
+        ip daddr 127.0.0.1 tcp dport { 9931, 9932, 9936 } drop
     }
 }
