@@ -418,6 +418,8 @@ def get_home_bootstrap(session_id: str):
     if len(circles) > MAX_BOOTSTRAP_ROWS or len(care) > MAX_BOOTSTRAP_ROWS:
         frappe.throw("too many circles or care rows", frappe.ValidationError)
 
+    features = _active_features_for(actor, circles)
+
     subject_ids = [row["person_id"] for row in care]
     names = _display_names([actor, *subject_ids])
 
@@ -442,7 +444,82 @@ def get_home_bootstrap(session_id: str):
             }
             for row in care
         ],
+        "features": features,
     }
+
+
+FEATURE_SCOPE_TYPES = frozenset({"Person", "Circle"})
+_FEATURE_FIELDS = ["feature", "scope_type", "scope", "state"]
+
+
+def _active_features_for(actor: str, circles: list[dict]) -> list[dict]:
+    """ACTIVE Feature Activations scoped to the actor or the actor's circles.
+
+    Minimal fields only. Bounded like the rest of the bootstrap: more than
+    ``MAX_BOOTSTRAP_ROWS`` rows fails closed rather than truncating silently.
+    """
+    rows = frappe.get_all(
+        "Feature Activation",
+        filters={"state": "ACTIVE", "scope_type": "Person", "scope": actor},
+        fields=_FEATURE_FIELDS,
+        limit_page_length=MAX_BOOTSTRAP_ROWS + 1,
+    )
+    circle_ids = [circle["circle_id"] for circle in circles]
+    if circle_ids:
+        rows += frappe.get_all(
+            "Feature Activation",
+            filters={
+                "state": "ACTIVE",
+                "scope_type": "Circle",
+                "scope": ["in", circle_ids],
+            },
+            fields=_FEATURE_FIELDS,
+            limit_page_length=MAX_BOOTSTRAP_ROWS + 1,
+        )
+    if len(rows) > MAX_BOOTSTRAP_ROWS:
+        frappe.throw("too many feature rows", frappe.ValidationError)
+    return [{field: row[field] for field in _FEATURE_FIELDS} for row in rows]
+
+
+@frappe.whitelist()
+def get_feature_state(feature: str, scope_type: str, scope: str):
+    """Return whether ``feature`` is ACTIVE or PAUSED for a scope the actor may ask about.
+
+    The actor is resolved server-side (``POLICY_AUDIENCES``, so a machine holding a
+    delegation can ask on a person's behalf). They may ask only about their own
+    Person or a Circle they belong to; any other scope, and any malformed input,
+    raises the same ``PermissionError`` (no oracle for which Persons or Circles
+    exist). A permitted scope with no record reports ``PAUSED``, never an error.
+    This is a feature switch, not an authorization (ADR-0012).
+    """
+    actor = resolve_actor(accept_audiences=POLICY_AUDIENCES)
+    if (
+        not isinstance(feature, str)
+        or not feature.strip()
+        or not isinstance(scope_type, str)
+        or scope_type not in FEATURE_SCOPE_TYPES
+        or not isinstance(scope, str)
+        or not scope
+        or not _may_ask_about_scope(actor, scope_type, scope)
+    ):
+        frappe.throw("feature scope not found", frappe.PermissionError)
+
+    rows = frappe.get_all(
+        "Feature Activation",
+        filters={"feature": feature.strip(), "scope_type": scope_type, "scope": scope},
+        fields=["state"],
+        limit_page_length=1,
+    )
+    state = "ACTIVE" if rows and rows[0]["state"] == "ACTIVE" else "PAUSED"
+    return {"state": state, "scope_type": scope_type, "scope": scope}
+
+
+def _may_ask_about_scope(actor: str, scope_type: str, scope: str) -> bool:
+    if scope_type == "Person":
+        return scope == actor
+    return bool(
+        frappe.db.exists("Circle Membership", {"circle": scope, "person": actor})
+    )
 
 
 def _display_names(person_ids: list[str]) -> dict[str, str]:
