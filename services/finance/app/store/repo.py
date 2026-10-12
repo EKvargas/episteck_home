@@ -5,11 +5,14 @@ import hmac
 import hashlib
 import json
 import sqlite3
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
+from dataclasses import dataclass
 from contextlib import contextmanager
 from datetime import date, datetime, timezone
+from decimal import Decimal
 
 from .. import domain
+from ..overview import FxRates
 from . import db
 
 
@@ -23,6 +26,12 @@ def _dt(value: str | None) -> datetime | None:
 
 def _d(value: str | None) -> date | None:
     return date.fromisoformat(value) if value else None
+
+
+@dataclass(frozen=True)
+class WorkspaceScope:
+    status: domain.WorkspaceStatus
+    owner_person_ids: tuple[str, ...]
 
 
 class IdempotencyConflict(Exception):
@@ -190,6 +199,59 @@ class FinanceRepository:
                 r["supersedes_id"])
             for r in rows
         ]
+
+    # --- scope, connections, reference rates -------------------------------------
+    def workspace_scope(self, workspace_id: str) -> WorkspaceScope | None:
+        """Status and distinct owner ids only: no balances, no names, no movements.
+
+        This is the one read the service may do BEFORE Home authorizes, because it needs
+        the owner ids to ask Home about them.
+        """
+        with self.connection() as conn:
+            ws = conn.execute("SELECT status FROM workspace WHERE id=?",
+                              (workspace_id,)).fetchone()
+            if ws is None:
+                return None
+            owners = conn.execute(
+                "SELECT DISTINCT person_id FROM account_owner WHERE workspace_id=? "
+                "ORDER BY person_id", (workspace_id,)).fetchall()
+        return WorkspaceScope(domain.WorkspaceStatus(ws["status"]),
+                              tuple(o["person_id"] for o in owners))
+
+    def list_connections(self, workspace_id: str) -> list[domain.Connection]:
+        with self.connection() as conn:
+            rows = conn.execute("SELECT * FROM connection WHERE workspace_id=? ORDER BY id",
+                                (workspace_id,)).fetchall()
+        return [
+            domain.Connection(
+                r["id"], r["workspace_id"], domain.Provider(r["provider"]),
+                r["owner_person_id"], domain.ConnectionStatus(r["status"]),
+                _dt(r["consent_expires_at"]), _dt(r["last_success_at"]))
+            for r in rows
+        ]
+
+    def store_fx_rates(self, day: date, per_eur: Mapping[str, Decimal]) -> None:
+        """Store one day of ECB rates. Same value again is a no-op; a different one fails."""
+        with self.connection() as conn, db.write_tx(conn):
+            for currency, rate in per_eur.items():
+                existing = conn.execute(
+                    "SELECT rate FROM fx_rate WHERE date=? AND currency=?",
+                    (day.isoformat(), currency)).fetchone()
+                if existing is None:
+                    conn.execute("INSERT INTO fx_rate(date,currency,rate) VALUES(?,?,?)",
+                                 (day.isoformat(), currency, str(rate)))
+                elif Decimal(existing["rate"]) != rate:
+                    raise ValueError(f"conflicting {currency} rate for {day}")
+
+    def latest_fx_rates(self) -> FxRates | None:
+        with self.connection() as conn:
+            newest = conn.execute("SELECT MAX(date) AS d FROM fx_rate").fetchone()["d"]
+            if newest is None:
+                return None
+            rows = conn.execute("SELECT currency, rate FROM fx_rate WHERE date=?",
+                                (newest,)).fetchall()
+        return FxRates(date.fromisoformat(newest),
+                       {r["currency"]: Decimal(r["rate"]) for r in rows})
 
     # --- idempotent commands -----------------------------------------------------
     def run_command(self, workspace_id: str, key: str, command_type: str, payload: dict,
