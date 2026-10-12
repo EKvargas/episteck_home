@@ -198,6 +198,72 @@ def check_access_many(subject_person_id: str, requirements):
     }
 
 
+#: Requirement subject that means "the authenticated actor", resolved server-side.
+SELF_SUBJECT = "SELF"
+
+
+def _batch_refused(reason: str) -> dict:
+    """A malformed batch is refused as a whole. No actor is disclosed on refusal."""
+    return {"actor_person_id": None, "decisions": [], "reason": reason}
+
+
+@frappe.whitelist()
+def authorize_batch(requirements):
+    """Resolve the actor AND decide several (subject, domain, action) requirements.
+
+    Delegations are single-use, so a service that must learn who the actor is and
+    what they may do needs both answers from ONE request. ``subject`` may be the
+    literal ``"SELF"``, resolved here to the actor and echoed back as ``"SELF"`` so
+    callers match decisions by position. Every other subject is a Person id and is
+    decided by the same ``check_access`` path as everywhere else.
+
+    The actor is resolved server-side; there is no actor parameter. A malformed list
+    (empty, over ``MAX_REQUIREMENTS``, unknown domain/action) refuses the WHOLE call.
+    """
+    actor = resolve_actor(accept_audiences=POLICY_AUDIENCES)
+
+    if isinstance(requirements, str):
+        try:
+            requirements = frappe.parse_json(requirements)
+        except Exception:
+            return _batch_refused("malformed requirements (fail closed)")
+
+    if not isinstance(requirements, (list, tuple)) or not requirements:
+        return _batch_refused("no requirements supplied (fail closed)")
+    if len(requirements) > MAX_REQUIREMENTS:
+        return _batch_refused(
+            f"too many requirements, maximum {MAX_REQUIREMENTS} (fail closed)"
+        )
+
+    validated = []
+    for requirement in requirements:
+        if not isinstance(requirement, dict):
+            return _batch_refused("malformed requirement (fail closed)")
+        subject = requirement.get("subject")
+        domain = requirement.get("domain")
+        action = requirement.get("action")
+        if not subject or not isinstance(subject, str):
+            return _batch_refused("invalid subject (fail closed)")
+        if domain not in DOMAINS or action not in ACTIONS:
+            return _batch_refused("unknown domain or action (fail closed)")
+        validated.append((subject, domain, action))
+
+    decisions = []
+    for subject, domain, action in validated:
+        target = actor if subject == SELF_SUBJECT else subject
+        decision = _check_access(actor, target, domain, action)
+        decisions.append(
+            {
+                "subject": subject,
+                "domain": domain,
+                "action": action,
+                "allow": bool(decision["allow"]),
+                "reason": decision["reason"],
+            }
+        )
+    return {"actor_person_id": actor, "decisions": decisions}
+
+
 @frappe.whitelist()
 def get_person(person_id: str):
     actor = resolve_actor()
