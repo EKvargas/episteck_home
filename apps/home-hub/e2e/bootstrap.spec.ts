@@ -32,7 +32,10 @@ test('prototype routes label domain content and make no consent or live-source c
   const demoNote = page.getByRole('note', { name: 'Demo mock data' });
   // In LIVE, /app/nutrition renders the real panel (the fake answers "no profile"): no demo note, same claims rule.
   async function settled(path: string, subject: string) {
-    if (path === '/app/nutrition') await expect(page.getByTestId('profile-panel')).toContainText(`No nutrition profile for ${subject}`);
+    if (path === '/app/nutrition') {
+      await expect(page.getByTestId('profile-panel')).toContainText(`No nutrition profile for ${subject}`);
+      await expect(page.getByText('svc-nutrition', { exact: true })).toHaveCount(0);
+    }
     else await expect(demoNote).toBeVisible();
   }
   for (const path of [
@@ -49,6 +52,11 @@ test('prototype routes label domain content and make no consent or live-source c
     await settled(path, 'Synthetic Care Context');
     expect(await page.locator('body').innerText(), `${path} care context`).not.toMatch(forbiddenClaims);
   }
+  // The pregnancy page keeps its demo banner in LIVE; the mock dashboard renders only in care context.
+  await page.goto('/app/nutrition/pregnancy?person=PSN-00007');
+  await expect(demoNote).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Micronutrient Coverage' })).toBeVisible();
+  expect(await page.locator('body').innerText(), 'pregnancy care context').not.toMatch(forbiddenClaims);
 });
 
 test('mock assistant actions do not claim live device or domain writes', async ({ page }) => {
