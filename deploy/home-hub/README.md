@@ -138,6 +138,9 @@ created. A live Erick page load is the only authenticated proof.
 
 ### Prerequisites
 
+- PR-B is stacked on PR-A. If PR-A is squash-merged, rebase PR-B
+  `--onto origin/main feature/home-f3c-hardening` before merging PR-B so the R4
+  merge SHA has clean history (or merge PR-A with a merge commit).
 - Merge SHA of PR-B (`<SHA>` below; use the full 40-character SHA in the image tag).
 - Operator access as `svc-home-hub` and root on Nuremberg.
 - The command forms under "Pre-rollout VERIFY LIVE gate" and the method in
@@ -150,13 +153,17 @@ created. A live Erick page load is the only authenticated proof.
      `localhost/episteck-home-hub:89e055075bd375815328a8a9a39bb2bbc4494d02`
      (`89e0550…`, ID `0dd830e61384`).
    - `NRestarts=0`.
-   - Quadlet SHA-256 is
-     `f75178fc6299e557308e90444f7cd1fd044913f72a0cfc45fd7d77159edeb0b2`
-     (`f75178fc…`, unchanged since R3).
-   - The Quadlet still has `Network=pasta:-T,9933,-T,9930` and
+   - Compute the live Quadlet SHA-256 (read-only `sha256sum` of
+     `/home/svc-home-hub/.config/containers/systemd/svc-home-hub.container`) and
+     record it as the **new baseline for this rollout**. The post-R3 hash was never
+     recorded; `f75178fc…` is the pre-R3 baseline, so do not compare against it.
+   - The live Quadlet contains all three R3 lines:
+     `Image=localhost/episteck-home-hub:89e055075bd375815328a8a9a39bb2bbc4494d02`,
+     `Network=pasta:-T,9933,-T,9930`, and
      `Environment=HOME_HUB_NUTRITION_BASE_URL=http://127.0.0.1:9930`.
 
-   If any value differs, stop and reconcile before building.
+   If any value differs, stop and reconcile before building. Never restore from
+   `/var/backups/episteck/home-f3b3-89e0550/`; it holds the pre-F3b Quadlet.
 
 2. **Build and probe.** As `svc-home-hub`, build rootless from a `git archive` of
    `apps/home-hub` at the merge SHA (not a host git checkout), the same method as
@@ -195,7 +202,7 @@ created. A live Erick page load is the only authenticated proof.
 3. **Apply (operator).** Back up the Quadlet
    (`/home/svc-home-hub/.config/containers/systemd/svc-home-hub.container`) to
    `/var/backups/episteck/home-f3c-<SHA>/` and confirm the backup SHA-256 matches
-   the live file. The backup directory is root-only (`0700`), so run the backup,
+   the live file and the baseline recorded in step 1. The backup directory is root-only (`0700`), so run the backup,
    the compare, and any restore as root; an unprivileged read fails (see the
    runbook fix in "F3b live rollout (2026-10-12)"). Change only the `Image=` line to the new tag. The diff against
    the backup must be exactly that one line; `Network=` and `Environment=` are
@@ -203,14 +210,15 @@ created. A live Erick page load is the only authenticated proof.
    (`daemon-reload`, then `restart svc-home-hub.service`, as `svc-home-hub` with
    `XDG_RUNTIME_DIR` and `DBUS_SESSION_BUS_ADDRESS` set).
 
-4. **Verify (read-only).** From the running Hub container:
+4. **Verify (read-only probes; the restart is operator-run).** From the running Hub container:
    - 9933 and 9930 `/health` return 200; 9931, 9932, 9934 are refused
      or time out.
    - Host `ss`: 9930, 9933, 9940 listen on `127.0.0.1` only.
    - Anonymous `/app/nutrition` returns 307 to `/login`.
-   - Restart a second time with the exact restart form from step 3 (`daemon-reload`
-     if needed, then `restart svc-home-hub.service` as `svc-home-hub` with
-     `XDG_RUNTIME_DIR` and `DBUS_SESSION_BUS_ADDRESS` set), repeat the probes and
+   - **Operator-run (agents never run it):** restart a second time with the exact
+     restart form from step 3 (`daemon-reload` if needed, then
+     `restart svc-home-hub.service` as `svc-home-hub` with `XDG_RUNTIME_DIR` and
+     `DBUS_SESSION_BUS_ADDRESS` set). Then Claude repeats the probes and
      the anonymous check, and confirm `NRestarts=0`.
 
 5. **Authenticated read-only proof (Erick self, `PSN-00013`).** The operator loads
@@ -222,7 +230,10 @@ created. A live Erick page load is the only authenticated proof.
    - **Read count:** the Hub journal over the window shows exactly one
      `nutrition.profile outcome=` line per page load (`ABSENT` or `PRESENT`).
      The stale `?person=` check shows `outcome=STALE_SKIPPED` followed by one read
-     line for the self redirect. The R3 record ("F3b live rollout (2026-10-12)",
+     line for the self redirect. Keep the step-4 anonymous `/app/nutrition` probes
+     out of this proof window: anonymous or expired-session loads can log
+     `nutrition.profile outcome=BOOTSTRAP_SESSION` and would inflate the
+     one-line-per-load count. The R3 record ("F3b live rollout (2026-10-12)",
      step 6) says only that "container logs" had no matches; it does not capture
      the journal or container-log command, and no literal command is recorded
      here. Read the Hub log source the same way R3 did: container logs
@@ -253,8 +264,9 @@ evidence under "F3c live rollout (date)" in this file in a follow-up docs PR.
 
 ### Rollback
 
-Restore the saved Quadlet byte for byte from
-`/var/backups/episteck/home-f3c-<SHA>/` (root-only `0700`; run as root),
+Restore the Quadlet backed up in this rollout (step 3) byte for byte from
+`/var/backups/episteck/home-f3c-<SHA>/` (root-only `0700`; run as root; never the
+F3b backup),
 `daemon-reload`, restart, then repeat step 4. The F3b image `89e0550…` stays on the host.
 
 ## Live rollout record (2026-09-27)
