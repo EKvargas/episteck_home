@@ -74,13 +74,15 @@ def test_request_serving_units_see_only_the_pepper_never_provider_secrets(name):
     assert not any(e.startswith("FINANCE_SECRETS_DIR") for e in values(name, "Container", "Environment"))
 
 
-HOME_AUTH = "-/srv/episteck/services/finance/secrets/home-auth.env"
+HOME_AUTH = "/srv/episteck/services/finance/secrets/home-auth.env"
 
 
 @pytest.mark.parametrize("name", ["finance-api.container", "finance-mcp.container"])
-def test_request_serving_units_load_the_home_credential_as_an_optional_env_file(name):
-    # The leading "-" keeps the unit startable before the credential exists (fail closed 503).
+def test_request_serving_units_load_the_home_credential_as_a_plain_env_file(name):
+    # Quadlet hands EnvironmentFile to `podman --env-file`, which has no optional "-" prefix:
+    # "-/srv/..." is read as a relative path and the container never starts.
     assert HOME_AUTH in values(name, "Container", "EnvironmentFile")
+    assert not any(v.startswith("-") for v in values(name, "Container", "EnvironmentFile"))
 
 
 def test_sync_unit_never_loads_the_home_credential():
