@@ -75,10 +75,10 @@ Finance calls Home with its own Frappe API user. This script creates `finance-se
 bash deploy/finance/provision-home-credentials.sh
 ```
 
-It refuses to overwrite an existing `home-auth.env` (a new key rotates the secret); use `--rotate` on purpose. The API and MCP units read the file as an optional `EnvironmentFile`, so you can install them before this step: they start and answer `503`.
+It refuses to overwrite an existing `home-auth.env` (a new key rotates the secret); use `--rotate` on purpose. The API and MCP units require this file (`EnvironmentFile` has no optional form in Quadlet), so run this step **before** step 6 or the units fail to start.
 
-**Verify:** the script prints `600 svc-finance .../home-auth.env`. After step 6, restart the units so they read the file.
-**Rollback:** `ssh ... "sudo -n rm -f /srv/episteck/services/finance/secrets/home-auth.env"` (Finance goes back to `503`), then on Home `bench --site home.episteck.com set-config home_finance_machine_user ""` and disable the user.
+**Verify:** the script prints `600 svc-finance .../home-auth.env`. Step 6 then starts the units with the credential loaded.
+**Rollback:** `ssh ... "sudo -n rm -f /srv/episteck/services/finance/secrets/home-auth.env"` (the units will then fail to start until it is recreated), then on Home `bench --site home.episteck.com set-config home_finance_machine_user ""` and disable the user.
 
 ## 5. The pepper `[OWN TERMINAL]`
 
@@ -109,7 +109,7 @@ STEP verify
 | Listeners | `127.0.0.1:9935` and `127.0.0.1:9936` only |
 | `/health` | `{"status":"ok"}` |
 | `/overview` without a session | `401` |
-| `/overview` with any session | `503` while `home-auth.env` is absent (fail closed); after step 4b and a unit restart, an invalid session is `401` |
+| `/overview` with any session | `401` for an invalid session (Home rejects it). `503` means Home is unreachable or the credential is wrong |
 | Containers | `finance-api` and `finance-mcp` running |
 
 A `503` for an authenticated request is **correct** at this stage. It proves the service refuses everything until Home can answer.

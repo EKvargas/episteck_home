@@ -19,8 +19,9 @@ Environment=FINANCE_PEPPER_FILE=/run/secrets/pepper
 Environment=MCP_PORT=9936
 EnvironmentFile=/srv/episteck/services/finance/config/finance.env
 # Home machine credential (HOME_CONTROL_PLANE_URL / HOME_API_KEY / HOME_API_SECRET).
-# Optional on purpose: without it the service starts and refuses every request (503).
-EnvironmentFile=-/srv/episteck/services/finance/secrets/home-auth.env
+# REQUIRED: Quadlet passes this to `podman --env-file`, which has no optional "-" prefix
+# (it would be read as a relative path). Create it first: runbook step 4b.
+EnvironmentFile=/srv/episteck/services/finance/secrets/home-auth.env
 NoNewPrivileges=true
 DropCapability=ALL
 ReadOnly=true
