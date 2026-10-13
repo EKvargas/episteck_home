@@ -161,7 +161,7 @@ created. A live Erick page load is the only authenticated proof.
 2. **Build and probe.** As `svc-home-hub`, build rootless from a `git archive` of
    `apps/home-hub` at the merge SHA (not a host git checkout), the same method as
    "F3b live rollout (2026-10-12)", step 3. Build with the command form from the
-   top of this file, run in the archived `apps/home-hub` tree
+   top of this file, run from the root of the extracted archive
    (the literal `git archive` invocation was not recorded in the F3b record):
 
    ```bash
@@ -195,7 +195,9 @@ created. A live Erick page load is the only authenticated proof.
 3. **Apply (operator).** Back up the Quadlet
    (`/home/svc-home-hub/.config/containers/systemd/svc-home-hub.container`) to
    `/var/backups/episteck/home-f3c-<SHA>/` and confirm the backup SHA-256 matches
-   the live file. Change only the `Image=` line to the new tag. The diff against
+   the live file. The backup directory is root-only (`0700`), so run the backup,
+   the compare, and any restore as root; an unprivileged read fails (see the
+   runbook fix in "F3b live rollout (2026-10-12)"). Change only the `Image=` line to the new tag. The diff against
    the backup must be exactly that one line; `Network=` and `Environment=` are
    already correct from R3. Reload and restart as in the F3a rollback form
    (`daemon-reload`, then `restart svc-home-hub.service`, as `svc-home-hub` with
@@ -203,11 +205,13 @@ created. A live Erick page load is the only authenticated proof.
 
 4. **Verify (read-only).** From the running Hub container:
    - 9933 and 9930 `/health` return 200; 9931, 9932, 9934 are refused
-     (`ECONNREFUSED`).
+     or time out.
    - Host `ss`: 9930, 9933, 9940 listen on `127.0.0.1` only.
    - Anonymous `/app/nutrition` returns 307 to `/login`.
-   - Run `systemctl --user restart svc-home-hub` a second time, repeat the probes
-     and the anonymous check, and confirm `NRestarts=0`.
+   - Restart a second time with the exact restart form from step 3 (`daemon-reload`
+     if needed, then `restart svc-home-hub.service` as `svc-home-hub` with
+     `XDG_RUNTIME_DIR` and `DBUS_SESSION_BUS_ADDRESS` set), repeat the probes and
+     the anonymous check, and confirm `NRestarts=0`.
 
 5. **Authenticated read-only proof (Erick self, `PSN-00013`).** The operator loads
    `/app/nutrition` while logged in as Erick. Record, over a noted proof window:
@@ -218,8 +222,16 @@ created. A live Erick page load is the only authenticated proof.
    - **Read count:** the Hub journal over the window shows exactly one
      `nutrition.profile outcome=` line per page load (`ABSENT` or `PRESENT`).
      The stale `?person=` check shows `outcome=STALE_SKIPPED` followed by one read
-     line for the self redirect. Read the journal with the same access as the R3
-     log-hygiene check ("F3b live rollout (2026-10-12)", step 6).
+     line for the self redirect. The R3 record ("F3b live rollout (2026-10-12)",
+     step 6) says only that "container logs" had no matches; it does not capture
+     the journal or container-log command, and no literal command is recorded
+     here. Read the Hub log source the same way R3 did: container logs
+     (`podman logs` as `svc-home-hub`) or `journalctl --user -u svc-home-hub`,
+     whichever shows it. First confirm the `nutrition.profile outcome=` line
+     appears in the source you chose, then count over the window. The Nutrition
+     and BFF logs come from their own services (`svc-nutrition`, `svc-home-bff`),
+     read through the same kind of source; record which source and command you
+     used in the evidence.
    - **Log hygiene:** grep the Hub, BFF, and Nutrition logs over the window for
      `PSN-`, cookie, bearer, JWT-shaped, and delegation values. Expect no matches.
    - **Wording rule:** record an ABSENT result as "authorized no-profile response".
@@ -242,8 +254,8 @@ evidence under "F3c live rollout (date)" in this file in a follow-up docs PR.
 ### Rollback
 
 Restore the saved Quadlet byte for byte from
-`/var/backups/episteck/home-f3c-<SHA>/`, `daemon-reload`, restart, then repeat
-step 4. The F3b image `89e0550…` stays on the host.
+`/var/backups/episteck/home-f3c-<SHA>/` (root-only `0700`; run as root),
+`daemon-reload`, restart, then repeat step 4. The F3b image `89e0550…` stays on the host.
 
 ## Live rollout record (2026-09-27)
 
