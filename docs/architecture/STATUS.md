@@ -67,13 +67,14 @@ approval. No G1.7 stage is created.
 Full runtime, provenance, network, rollback, and trust-boundary evidence is in
 `G1_6_VALIDATION.md`.
 
-## H5 — agent runtime grant (IN REVIEW, not deployed)
+## H5 — agent runtime grant (LIVE, legacy binding off)
 
 | Item | State |
 | --- | --- |
-| Home: `open_runtime_grant`, `close_runtime_grant`, `get_runtime_grant_status` | PR1 in review |
-| BFF: grant table, `/runtime`, mint precedence, `RUNTIME_LEGACY_BINDING` | PR2 in review |
-| Live verification | not run |
+| Home: `open_runtime_grant`, `close_runtime_grant`, `get_runtime_grant_status` | ✅ merged (PR #75), deployed |
+| BFF: grant table, `/runtime`, mint precedence, `RUNTIME_LEGACY_BINDING` | ✅ merged (PRs #76, #77), deployed |
+| Live verification | ✅ 2026-10-13: grant carries Hermes with no browser session; Revoke stops it; re-grant restores it |
+| `RUNTIME_LEGACY_BINDING` | `off` in both units (grant only) |
 
 Design: `adr/0010-agent-runtime-grant.md`.
 
