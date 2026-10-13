@@ -207,10 +207,22 @@ grantee: the BFF keeps one grant per runtime.
 
 ### Transition flag
 
-`RUNTIME_LEGACY_BINDING` is set to `on` in both Quadlet units (public app and mint
-must carry the same value). While `on`, a browser login still claims the runtime and
-the mint falls back to that binding. After the live verification, change both units to
-`off` (grant only) and restart `home-bff-mint` first, then `home-bff`.
+`RUNTIME_LEGACY_BINDING` is `off` in both Quadlet units (public app and mint must
+carry the same value). Only an explicit runtime grant lets the agent act; a browser
+login no longer claims the runtime. Live since 2026-10-13 (see the verification
+record below). To return to the transition behavior, set both units to `on` and
+restart `home-bff-mint` first, then `home-bff`.
+
+### Live verification (2026-10-13)
+
+H5 live test **PASS**. Hermes answered "who am I" with no browser session
+(`bff_session` = 0) and `last_mint_at` moved. After **Revoke** on `/runtime` the next
+Hermes call had no identity. Both units were then set to
+`RUNTIME_LEGACY_BINDING=off` (backup `/var/backups/episteck/h5-legacy-off-20261013T162114Z`,
+diff exactly one line per unit, `NRestarts=0`, `/health` 200, flag `off` inside both
+running containers). After a new **Conceder**, Hermes identified the user again and
+`last_mint_at` moved after `granted_at`, so the grant alone carries the agent.
+Not checked: that Home closed the revoked grant (only the BFF side was observed).
 
 ### Rollback
 
