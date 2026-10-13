@@ -3,19 +3,19 @@ import React, { createContext, useContext, useEffect, useRef, useState, type Rea
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { Viewer, ContextOption } from '@/domain/types';
 import type { BootstrapContext } from '@/integration/home/Viewer';
-import type { F3ActiveContext, PersonNavigation } from '@/integration/home/active-context';
+import type { PersonContextView, PersonNavigation } from '@/integration/home/active-context';
 import { ServiceUnavailableBoundary } from '@/integration/components/boundaries/ServiceUnavailableBoundary';
 
 interface AppContextState {
   viewer: Viewer;
-  activeContext: F3ActiveContext;
+  activeContext: PersonContextView;
   presentationContext: ContextOption;
   setContext: (personId: string) => void;
   availableContexts: ContextOption[];
   bootstrap: BootstrapContext;
 }
 
-type ValidatedNavigation = PersonNavigation & { bootstrap: BootstrapContext; environment: 'MOCK' | 'LIVE' };
+type ValidatedNavigation = Omit<PersonNavigation, 'activeContext'> & { activeContext: PersonContextView; bootstrap: BootstrapContext; environment: 'MOCK' | 'LIVE' };
 type NavigationState = { requestKey: string; value: ValidatedNavigation };
 
 const AppContext = createContext<AppContextState | undefined>(undefined);

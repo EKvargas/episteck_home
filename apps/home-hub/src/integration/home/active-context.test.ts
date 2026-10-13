@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { BootstrapContext } from './Viewer.ts';
-import { resolveRequestedPerson } from './active-context.ts';
+import { assertIssuedContext, isIssuedContext, resolveRequestedPerson } from './active-context.ts';
 
 const bootstrap: BootstrapContext = {
   viewer: { personId: 'PSN-00001', displayName: 'Viewer' },
@@ -50,4 +50,28 @@ test('each URL resolves independently; query noise cannot nominate an actor', ()
   assert.equal(resolve('person=PSN-00001').activeContext.personId, 'PSN-00001');
   assert.equal(resolve('person=PSN-00002').activeContext.personId, 'PSN-00002');
   assert.deepEqual(resolve('person=PSN-00002&actorPersonId=PSN-00999'), resolve('person=PSN-00002'));
+});
+
+test('contexts issued by resolveRequestedPerson are accepted and frozen', () => {
+  for (const query of ['', 'person=PSN-00001', 'person=PSN-00002', 'person=PSN-00999']) {
+    const { activeContext } = resolve(query);
+    assert.equal(isIssuedContext(activeContext), true, query);
+    assert.doesNotThrow(() => assertIssuedContext(activeContext));
+    assert.equal(Object.isFrozen(activeContext), true);
+  }
+});
+
+test('a hand-built literal, a spread copy, and a JSON round-trip are rejected', () => {
+  const { activeContext } = resolve('person=PSN-00002');
+  const forged = { kind: 'PERSON', personId: 'PSN-00002' };
+  const spread = { ...activeContext };
+  const roundTrip = JSON.parse(JSON.stringify(activeContext));
+  for (const candidate of [forged, spread, roundTrip, null, undefined, 'PSN-00002', 7]) {
+    assert.equal(isIssuedContext(candidate), false);
+    assert.throws(() => assertIssuedContext(candidate), TypeError);
+  }
+});
+
+test('the same inputs issue distinct objects (no shared mutable context)', () => {
+  assert.notEqual(resolve('').activeContext, resolve('').activeContext);
 });
