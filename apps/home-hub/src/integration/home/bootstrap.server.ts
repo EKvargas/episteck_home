@@ -1,9 +1,14 @@
 import 'server-only';
+import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { loadBootstrap } from './bootstrap-loader';
 import { SERVER_CONFIGURATION } from '../state/Environment.server';
 
-export async function getBootstrapForRequest() {
+/**
+ * One bootstrap read per server render: the root layout and the Nutrition panel share it.
+ * React cache() is request-scoped; nothing is kept across requests or sessions.
+ */
+export const getBootstrapForRequest = cache(async () => {
   if (SERVER_CONFIGURATION.mode === 'MOCK') {
     return loadBootstrap({
       mode: 'MOCK',
@@ -21,4 +26,4 @@ export async function getBootstrapForRequest() {
     bffBaseUrl: SERVER_CONFIGURATION.bffBaseUrl,
     fetcher: fetch,
   });
-}
+});

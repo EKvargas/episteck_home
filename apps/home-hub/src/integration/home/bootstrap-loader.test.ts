@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { loadBootstrap } from './bootstrap-loader.ts';
+import { FETCH_TIMEOUT_MS } from '../state/fetch-timeout.ts';
 
 const fixture = {
   version: 1,
@@ -109,4 +110,72 @@ test('server adapter has a server-only guard and is not imported by client modul
     'src/components/layout/AppShell.tsx',
   ].map((path) => readFile(resolve(path), 'utf8')));
   assert.equal(clientSources.some((source) => /bootstrap\.server/.test(source)), false);
+});
+
+const liveBootstrap = { mode: 'LIVE' as const, cookieValue: 'opaque-session', bffBaseUrl: 'http://127.0.0.1:9933' };
+
+test('the LIVE bootstrap fetch carries an abort signal with the shared budget', async () => {
+  let init: RequestInit | undefined;
+  await loadBootstrap({ ...liveBootstrap, fetcher: async (_input, requestInit) => { init = requestInit; return response(200); } });
+  assert.ok(init?.signal instanceof AbortSignal);
+  assert.equal(FETCH_TIMEOUT_MS, 4000);
+});
+
+test('a hung BFF bootstrap times out as SERVICE_UNAVAILABLE', async () => {
+  // AbortSignal.timeout timers are unref'd; keep the loop alive while we wait.
+  const keepAlive = setTimeout(() => {}, 2000);
+  try {
+    const started = Date.now();
+    const result = await loadBootstrap({
+      ...liveBootstrap,
+      timeoutMs: 25,
+      fetcher: ((_input: RequestInfo | URL, init?: RequestInit) => new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+      })) as typeof fetch,
+    });
+    assert.equal(result.errorCode, 'SERVICE_UNAVAILABLE');
+    assert.ok(Date.now() - started < 1500);
+  } finally {
+    clearTimeout(keepAlive);
+  }
+});
+
+test('a bootstrap body that stalls past the budget is SERVICE_UNAVAILABLE, not INVALID_RESPONSE', async () => {
+  const keepAlive = setTimeout(() => {}, 2000);
+  try {
+    const result = await loadBootstrap({
+      ...liveBootstrap,
+      timeoutMs: 25,
+      fetcher: (async (_input: RequestInfo | URL, init?: RequestInit) => new Response(new ReadableStream({
+        start(controller) {
+          init?.signal?.addEventListener('abort', () => controller.error(init.signal?.reason), { once: true });
+        },
+      }), { status: 200 })) as typeof fetch,
+    });
+    assert.equal(result.errorCode, 'SERVICE_UNAVAILABLE');
+  } finally {
+    clearTimeout(keepAlive);
+  }
+});
+
+for (const status of [401, 500, 502, 503]) {
+  test(`bootstrap ${status}: the unread response body is cancelled`, async () => {
+    let cancelled = false;
+    const body = new ReadableStream({
+      start(controller) { controller.enqueue(new TextEncoder().encode('x')); },
+      cancel() { cancelled = true; },
+    });
+    await loadBootstrap({ ...liveBootstrap, fetcher: async () => new Response(body, { status }) });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(cancelled, true);
+  });
+}
+
+test('the server bootstrap is request-scoped through React cache(), never a cross-request cache', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const { resolve } = await import('node:path');
+  const adapter = await readFile(resolve('src/integration/home/bootstrap.server.ts'), 'utf8');
+  assert.match(adapter, /import \{ cache \} from 'react'/);
+  assert.match(adapter, /export const getBootstrapForRequest = cache\(/);
+  assert.doesNotMatch(adapter, /unstable_cache|revalidate|'use cache'/);
 });
