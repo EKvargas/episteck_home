@@ -126,7 +126,7 @@ the operator. Rollout gate R3: **PASS. Rollback was not used.**
 
 Written 2026-10-13. Spec: `docs/superpowers/specs/2026-10-12-home-f3c-nutrition-ui-design.md`
 ("Rollout gate R4"). F3c adds the first live Nutrition profile read (PR-A #104,
-PR-B #<PR-B>). The topology is unchanged from F3b, so the Quadlet diff is the
+PR-B #105). The topology is unchanged from F3b, so the Quadlet diff is the
 `Image=` line only.
 
 ### When to Use
