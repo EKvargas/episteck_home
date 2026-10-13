@@ -122,6 +122,129 @@ the operator. Rollout gate R3: **PASS. Rollback was not used.**
 - **Runbook fix:** the apply script originally read the root-only (`0700`) backup
   directory as an unprivileged user; it failed before any change and was corrected.
 
+## F3c rollout gate R4 (runbook, not yet run)
+
+Written 2026-10-13. Spec: `docs/superpowers/specs/2026-10-12-home-f3c-nutrition-ui-design.md`
+("Rollout gate R4"). F3c adds the first live Nutrition profile read (PR-A #104,
+PR-B #<PR-B>). The topology is unchanged from F3b, so the Quadlet diff is the
+`Image=` line only.
+
+### When to Use
+
+After PR-A and PR-B are merged and the operator gives the go. Claude prepares the
+commands below; the operator runs every production step with `!` ssh; Claude
+verifies read-only. No fixtures, Persons, grants, profiles, or fault drills are
+created. A live Erick page load is the only authenticated proof.
+
+### Prerequisites
+
+- Merge SHA of PR-B (`<SHA>` below; use the full 40-character SHA in the image tag).
+- Operator access as `svc-home-hub` and root on Nuremberg.
+- The command forms under "Pre-rollout VERIFY LIVE gate" and the method in
+  "F3b live rollout (2026-10-12)" (steps 3 to 6).
+
+### Steps
+
+1. **Baseline (read-only).** Confirm all of:
+   - Live image is the F3b image
+     `localhost/episteck-home-hub:89e055075bd375815328a8a9a39bb2bbc4494d02`
+     (`89e0550…`, ID `0dd830e61384`).
+   - `NRestarts=0`.
+   - Quadlet SHA-256 is
+     `f75178fc6299e557308e90444f7cd1fd044913f72a0cfc45fd7d77159edeb0b2`
+     (`f75178fc…`, unchanged since R3).
+   - The Quadlet still has `Network=pasta:-T,9933,-T,9930` and
+     `Environment=HOME_HUB_NUTRITION_BASE_URL=http://127.0.0.1:9930`.
+
+   If any value differs, stop and reconcile before building.
+
+2. **Build and probe.** As `svc-home-hub`, build rootless from a `git archive` of
+   `apps/home-hub` at the merge SHA (not a host git checkout), the same method as
+   "F3b live rollout (2026-10-12)", step 3. Build with the command form from the
+   top of this file, run in the archived `apps/home-hub` tree
+   (the literal `git archive` invocation was not recorded in the F3b record):
+
+   ```bash
+   podman build -f apps/home-hub/Dockerfile \
+     -t localhost/episteck-home-hub:COMMIT_SHA apps/home-hub
+   ```
+
+   Then run the three throwaway probes from "Pre-rollout VERIFY LIVE gate" with
+   `COMMIT_SHA` set to the merge SHA and the unchanged
+   `--network pasta:-T,9933,-T,9930`:
+
+   ```bash
+   # BFF health must be 200.
+   sudo -u svc-home-hub podman run --rm --network pasta:-T,9933,-T,9930 \
+     --entrypoint node localhost/episteck-home-hub:COMMIT_SHA \
+     -e 'fetch("http://127.0.0.1:9933/health").then(r => { console.log(r.status); process.exit(r.status === 200 ? 0 : 1) }).catch(() => process.exit(1))'
+
+   # Nutrition health must be 200.
+   sudo -u svc-home-hub podman run --rm --network pasta:-T,9933,-T,9930 \
+     --entrypoint node localhost/episteck-home-hub:COMMIT_SHA \
+     -e 'fetch("http://127.0.0.1:9930/health").then(r => { console.log(r.status); process.exit(r.status === 200 ? 0 : 1) }).catch(() => process.exit(1))'
+
+   # 9931, 9932, 9934 must be refused.
+   sudo -u svc-home-hub podman run --rm --network pasta:-T,9933,-T,9930 \
+     --entrypoint node localhost/episteck-home-hub:COMMIT_SHA \
+     -e 'const net=require("node:net"); const ports=[9931,9932,9934]; let failed=false; Promise.all(ports.map(port => new Promise(resolve => { const socket=net.createConnection({host:"127.0.0.1",port,timeout:1500}); socket.once("connect",()=>{console.error(`UNEXPECTED reachable port ${port}`); failed=true; socket.destroy(); resolve()}); socket.once("error",resolve); socket.once("timeout",()=>{socket.destroy();resolve()}) }))).then(()=>process.exit(failed?1:0))'
+   ```
+
+   Record the image ID. If a probe fails, stop and return the evidence.
+
+3. **Apply (operator).** Back up the Quadlet
+   (`/home/svc-home-hub/.config/containers/systemd/svc-home-hub.container`) to
+   `/var/backups/episteck/home-f3c-<SHA>/` and confirm the backup SHA-256 matches
+   the live file. Change only the `Image=` line to the new tag. The diff against
+   the backup must be exactly that one line; `Network=` and `Environment=` are
+   already correct from R3. Reload and restart as in the F3a rollback form
+   (`daemon-reload`, then `restart svc-home-hub.service`, as `svc-home-hub` with
+   `XDG_RUNTIME_DIR` and `DBUS_SESSION_BUS_ADDRESS` set).
+
+4. **Verify (read-only).** From the running Hub container:
+   - 9933 and 9930 `/health` return 200; 9931, 9932, 9934 are refused
+     (`ECONNREFUSED`).
+   - Host `ss`: 9930, 9933, 9940 listen on `127.0.0.1` only.
+   - Anonymous `/app/nutrition` returns 307 to `/login`.
+   - Run `systemctl --user restart svc-home-hub` a second time, repeat the probes
+     and the anonymous check, and confirm `NRestarts=0`.
+
+5. **Authenticated read-only proof (Erick self, `PSN-00013`).** The operator loads
+   `/app/nutrition` while logged in as Erick. Record, over a noted proof window:
+   - Document `Cache-Control: no-store`.
+   - HTML contains no delegation, cookie, or other Person ID.
+   - No mock strings; no demo banner on `/nutrition`; banner present on another
+     route.
+   - **Read count:** the Hub journal over the window shows exactly one
+     `nutrition.profile outcome=` line per page load (`ABSENT` or `PRESENT`).
+     The stale `?person=` check shows `outcome=STALE_SKIPPED` followed by one read
+     line for the self redirect. Read the journal with the same access as the R3
+     log-hygiene check ("F3b live rollout (2026-10-12)", step 6).
+   - **Log hygiene:** grep the Hub, BFF, and Nutrition logs over the window for
+     `PSN-`, cookie, bearer, JWT-shaped, and delegation values. Expect no matches.
+   - **Wording rule:** record an ABSENT result as "authorized no-profile response".
+     Never write "populated profile rendered" for it.
+   - **Observed live versus tests only:**
+
+     | Item | Source |
+     | --- | --- |
+     | PRESENT or ABSENT result for Erick (whichever production holds) | Observed live |
+     | One `nutrition.profile outcome=` line per load; `STALE_SKIPPED` then one read for the stale check | Observed live (Hub journal) |
+     | Per-load delegation mint count | Tests only (fake counters) |
+     | Per-load Nutrition call count | Tests only (fake counters) |
+     | Denied, session, unavailable, and malformed states; timeout; subject switch | Tests only |
+
+### Verification
+
+Step 4 passes and step 5 shows one outcome line per load with clean logs. Write the
+evidence under "F3c live rollout (date)" in this file in a follow-up docs PR.
+
+### Rollback
+
+Restore the saved Quadlet byte for byte from
+`/var/backups/episteck/home-f3c-<SHA>/`, `daemon-reload`, restart, then repeat
+step 4. The F3b image `89e0550…` stays on the host.
+
 ## Live rollout record (2026-09-27)
 
 Target: `ubuntu-4gb-nbg1-1` in Nuremberg. The deployed repository baseline was
