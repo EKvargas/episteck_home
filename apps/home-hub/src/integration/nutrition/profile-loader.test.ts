@@ -234,3 +234,11 @@ test('both fetches carry an abort signal', async () => {
   await loadNutritionProfile({ ...live, fetcher });
   for (const call of calls) assert.ok(call.init?.signal instanceof AbortSignal);
 });
+
+test('header isolation holds case-insensitively', async () => {
+  const { calls, fetcher } = scripted(minted(), json(404, { detail: 'no profile' }));
+  await loadNutritionProfile({ ...live, fetcher });
+  const names = (index: number) => Object.keys(calls[index].init?.headers as Record<string, string>).map((n) => n.toLowerCase());
+  assert.deepEqual(names(0).filter((n) => n === 'x-episteck-delegation' || n === 'authorization'), []);
+  assert.deepEqual(names(1).filter((n) => n === 'cookie' || n === 'authorization'), []);
+});
