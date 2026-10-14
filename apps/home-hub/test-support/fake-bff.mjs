@@ -26,6 +26,12 @@ const fixture = {
 
 let lastCookieHeader = null;
 
+const mints = new Map();
+const bootstraps = new Map();
+const runOf = (cookie) => /run([a-z0-9]+)/.exec(cookie)?.[1] ?? 'none';
+const scenarioOf = (cookie) => /nutr-([a-z0-9]+)/.exec(cookie)?.[1] ?? 'absent';
+const bump = (map, run) => map.set(run, (map.get(run) ?? 0) + 1);
+
 createServer((request, response) => {
   if (request.url === '/health') {
     response.writeHead(200).end('ok');
@@ -43,12 +49,39 @@ createServer((request, response) => {
     response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ cookie: lastCookieHeader }));
     return;
   }
+  if (request.url === '/delegation?audience=svc-nutrition' && request.method === 'POST') {
+    const cookie = request.headers.cookie ?? '';
+    if (!cookie.includes('episteck_home_session=authenticated')) {
+      response.writeHead(401, { 'content-type': 'application/json' }).end('{"detail":"no active session"}');
+      return;
+    }
+    const run = runOf(cookie);
+    bump(mints, run);
+    const failure = /mint-(401|503)/.exec(cookie)?.[1];
+    if (failure) {
+      response.writeHead(Number(failure), { 'content-type': 'application/json' }).end('{"detail":"mint failed"}');
+      return;
+    }
+    response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify({
+      delegation: `DELEGATION_SENTINEL.${scenarioOf(cookie)}.${run}`,
+      audience: 'svc-nutrition',
+      expires_at: Math.floor(Date.now() / 1000) + 60,
+    }));
+    return;
+  }
+  if (request.url?.startsWith('/__test/mints/') || request.url?.startsWith('/__test/bootstraps/')) {
+    const run = request.url.split('/').pop();
+    const counts = request.url.startsWith('/__test/mints/') ? mints : bootstraps;
+    response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ count: counts.get(run) ?? 0 }));
+    return;
+  }
   if (request.url !== '/bootstrap' || request.method !== 'GET') {
     response.writeHead(404).end();
     return;
   }
 
   lastCookieHeader = request.headers.cookie ?? null;
+  bump(bootstraps, runOf(request.headers.cookie ?? ''));
   const cookie = request.headers.cookie ?? '';
   if (!cookie.includes('episteck_home_session=authenticated')) {
     response.writeHead(401, { 'content-type': 'application/json' }).end('{"error":"SESSION_INVALID"}');

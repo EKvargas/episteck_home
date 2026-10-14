@@ -5,11 +5,13 @@ import styles from './AppShell.module.css';
 import { Sidebar } from './Sidebar';
 import { BottomNav } from './BottomNav';
 
-export function AppShell({ children, demoContent = false }: { children: React.ReactNode; demoContent?: boolean }) {
+export function AppShell({ children, demoContent = false, liveRoutes = [] }: {
+  children: React.ReactNode; demoContent?: boolean; liveRoutes?: string[];
+}) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
 
-  const demoNotice = demoContent ? (
+  const demoNotice = demoContent && !liveRoutes.includes(pathname) ? (
     <div role="note" aria-label="Demo mock data" className={styles.demoNotice}>
       DEMO / MOCK DATA — domain content is illustrative and is not data or access for the selected person.
     </div>
