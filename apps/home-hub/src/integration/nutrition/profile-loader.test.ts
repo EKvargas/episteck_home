@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadNutritionProfile, type LoadNutritionProfileOptions } from './profile-loader.ts';
+import { createServer } from 'node:http';
+import { FETCH_TIMEOUT_MS } from '../state/fetch-timeout.ts';
 
 type Call = { url: string; init: RequestInit | undefined };
 
@@ -135,3 +137,108 @@ for (const [name, response, code, authorization] of nutritionOutcomes) {
     assert.equal(result.data, undefined);
   });
 }
+
+test('the default per-fetch timeout is 4 seconds', () => {
+  assert.equal(FETCH_TIMEOUT_MS, 4000);
+});
+
+function hangingFetch(): typeof fetch {
+  return ((_input: RequestInfo | URL, init?: RequestInit) => new Promise((_resolve, reject) => {
+    init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+  })) as typeof fetch;
+}
+
+test('a hung BFF mint times out as SERVICE_UNAVAILABLE and never calls Nutrition', async () => {
+  // AbortSignal.timeout timers are unref'd; keep the loop alive while we wait.
+  const keepAlive = setTimeout(() => {}, 2000);
+  try {
+    const started = Date.now();
+    const result = await loadNutritionProfile({ ...live, fetcher: hangingFetch(), timeoutMs: 25 });
+    assert.equal(result.errorCode, 'SERVICE_UNAVAILABLE');
+    assert.ok(Date.now() - started < 1500);
+  } finally {
+    clearTimeout(keepAlive);
+  }
+});
+
+test('a hung Nutrition call times out as SERVICE_UNAVAILABLE after one mint', async () => {
+  const keepAlive = setTimeout(() => {}, 2000);
+  try {
+    let calls = 0;
+    const fetcher = ((input: RequestInfo | URL, init?: RequestInit) => {
+      calls += 1;
+      return calls === 1 ? Promise.resolve(minted()) : hangingFetch()(input, init);
+    }) as typeof fetch;
+    const result = await loadNutritionProfile({ ...live, fetcher, timeoutMs: 25 });
+    assert.equal(calls, 2);
+    assert.equal(result.errorCode, 'SERVICE_UNAVAILABLE');
+  } finally {
+    clearTimeout(keepAlive);
+  }
+});
+
+test('a body that stalls after the headers also times out as SERVICE_UNAVAILABLE (real sockets)', async () => {
+  const server = createServer((request, response) => {
+    if (request.method === 'POST') {
+      response.writeHead(200, { 'content-type': 'application/json' })
+        .end(JSON.stringify({ delegation: 'tok-opaque', audience: 'svc-nutrition', expires_at: 1 }));
+      return;
+    }
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.write('{"context":');
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address() as { port: number };
+    const origin = `http://127.0.0.1:${port}`;
+    const started = Date.now();
+    const result = await loadNutritionProfile({
+      ...live, bffBaseUrl: origin, nutritionBaseUrl: origin, fetcher: fetch, timeoutMs: 150,
+    });
+    assert.equal(result.errorCode, 'SERVICE_UNAVAILABLE');
+    assert.ok(Date.now() - started < 3000);
+  } finally {
+    server.closeAllConnections();
+    server.close();
+  }
+});
+
+function cancellable(status: number) {
+  let cancelled = false;
+  const body = new ReadableStream({
+    start(controller) { controller.enqueue(new TextEncoder().encode('x')); },
+    cancel() { cancelled = true; },
+  });
+  return { response: new Response(body, { status }), wasCancelled: () => cancelled };
+}
+
+const drained: Array<[string, number, boolean]> = [
+  ['mint 401', 401, true],
+  ['mint 500', 500, true],
+  ['Nutrition 403', 403, false],
+  ['Nutrition 503', 503, false],
+  ['Nutrition unexpected 302', 302, false],
+];
+for (const [name, status, isMint] of drained) {
+  test(`${name}: the unread response body is cancelled`, async () => {
+    const unread = cancellable(status);
+    const { fetcher } = isMint ? scripted(unread.response) : scripted(minted(), unread.response);
+    await loadNutritionProfile({ ...live, fetcher });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(unread.wasCancelled(), true);
+  });
+}
+
+test('both fetches carry an abort signal', async () => {
+  const { calls, fetcher } = scripted(minted(), json(404, { detail: 'no profile' }));
+  await loadNutritionProfile({ ...live, fetcher });
+  for (const call of calls) assert.ok(call.init?.signal instanceof AbortSignal);
+});
+
+test('header isolation holds case-insensitively', async () => {
+  const { calls, fetcher } = scripted(minted(), json(404, { detail: 'no profile' }));
+  await loadNutritionProfile({ ...live, fetcher });
+  const names = (index: number) => Object.keys(calls[index].init?.headers as Record<string, string>).map((n) => n.toLowerCase());
+  assert.deepEqual(names(0).filter((n) => n === 'x-episteck-delegation' || n === 'authorization'), []);
+  assert.deepEqual(names(1).filter((n) => n === 'cookie' || n === 'authorization'), []);
+});

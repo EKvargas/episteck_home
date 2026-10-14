@@ -1,5 +1,6 @@
 import type { DataEnvelope } from '../state/DataEnvelope.ts';
 import type { SafeUIErrorCode } from '../state/SafeUIErrorCode.ts';
+import { discardBody, FETCH_TIMEOUT_MS, isAbortError } from '../state/fetch-timeout.ts';
 import { isAbsentProfileBody, parseProfileWire, type ProfileSummary } from './profile-contract.ts';
 
 const NUTRITION_AUDIENCE = 'svc-nutrition';
@@ -13,9 +14,12 @@ export interface LoadNutritionProfileOptions {
   bffBaseUrl: string | undefined;
   nutritionBaseUrl: string | undefined;
   fetcher: typeof fetch;
+  /** Per-fetch timeout in milliseconds. Defaults to FETCH_TIMEOUT_MS. */
+  timeoutMs?: number;
 }
 
 type Envelope = DataEnvelope<ProfileSummary>;
+type JsonRead = { ok: true; body: unknown } | { ok: false; timedOut: boolean };
 
 function ready(data: ProfileSummary, environment: 'MOCK' | 'LIVE'): Envelope {
   return { delivery: 'READY', authorization: 'GRANTED', freshness: 'FRESH', environment, data };
@@ -31,11 +35,11 @@ function failed(errorCode: SafeUIErrorCode): Envelope {
   };
 }
 
-async function readJson(response: Response): Promise<{ ok: true; body: unknown } | { ok: false }> {
+async function readJson(response: Response): Promise<JsonRead> {
   try {
     return { ok: true, body: await response.json() };
-  } catch {
-    return { ok: false };
+  } catch (error) {
+    return { ok: false, timedOut: isAbortError(error) };
   }
 }
 
@@ -51,21 +55,35 @@ async function mintDelegation(
         method: 'POST',
         cache: 'no-store',
         redirect: 'manual',
+        signal: AbortSignal.timeout(options.timeoutMs ?? FETCH_TIMEOUT_MS),
         headers: { Accept: 'application/json', Cookie: `episteck_home_session=${options.cookieValue}` },
       },
     );
   } catch {
     return { error: 'SERVICE_UNAVAILABLE' };
   }
-  if (response.status === 401) return { error: 'SESSION_INVALID' };
-  if (response.status !== 200) return { error: 'SERVICE_UNAVAILABLE' };
+  if (response.status === 401) {
+    discardBody(response);
+    return { error: 'SESSION_INVALID' };
+  }
+  if (response.status !== 200) {
+    discardBody(response);
+    return { error: 'SERVICE_UNAVAILABLE' };
+  }
   const parsed = await readJson(response);
-  if (!parsed.ok || typeof parsed.body !== 'object' || parsed.body === null) return { error: 'INVALID_RESPONSE' };
+  if (!parsed.ok) return { error: parsed.timedOut ? 'SERVICE_UNAVAILABLE' : 'INVALID_RESPONSE' };
+  if (typeof parsed.body !== 'object' || parsed.body === null) return { error: 'INVALID_RESPONSE' };
   const { delegation, audience } = parsed.body as Record<string, unknown>;
   if (typeof delegation !== 'string' || delegation.length === 0 || audience !== NUTRITION_AUDIENCE) {
     return { error: 'INVALID_RESPONSE' };
   }
   return { token: delegation };
+}
+
+/** Cancel the unread body, then fail. */
+function reject(response: Response, errorCode: SafeUIErrorCode): Envelope {
+  discardBody(response);
+  return failed(errorCode);
 }
 
 /**
@@ -94,6 +112,7 @@ export async function loadNutritionProfile(options: LoadNutritionProfileOptions)
         method: 'GET',
         cache: 'no-store',
         redirect: 'manual',
+        signal: AbortSignal.timeout(options.timeoutMs ?? FETCH_TIMEOUT_MS),
         headers: { Accept: 'application/json', [DELEGATION_HEADER]: minted.token },
       },
     );
@@ -101,13 +120,13 @@ export async function loadNutritionProfile(options: LoadNutritionProfileOptions)
     return failed('SERVICE_UNAVAILABLE');
   }
 
-  if (response.status === 403) return failed('ACCESS_DENIED');
-  if (response.status === 401) return failed('SESSION_INVALID');
-  if (response.status >= 500) return failed('SERVICE_UNAVAILABLE');
-  if (response.status !== 200 && response.status !== 404) return failed('INVALID_RESPONSE');
+  if (response.status === 403) return reject(response, 'ACCESS_DENIED');
+  if (response.status === 401) return reject(response, 'SESSION_INVALID');
+  if (response.status >= 500) return reject(response, 'SERVICE_UNAVAILABLE');
+  if (response.status !== 200 && response.status !== 404) return reject(response, 'INVALID_RESPONSE');
 
   const parsed = await readJson(response);
-  if (!parsed.ok) return failed('INVALID_RESPONSE');
+  if (!parsed.ok) return failed(parsed.timedOut ? 'SERVICE_UNAVAILABLE' : 'INVALID_RESPONSE');
   if (response.status === 404) {
     return isAbsentProfileBody(parsed.body) ? ready({ presence: 'ABSENT' }, 'LIVE') : failed('INVALID_RESPONSE');
   }

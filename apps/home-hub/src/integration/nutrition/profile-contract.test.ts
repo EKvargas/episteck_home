@@ -55,3 +55,29 @@ test('recognizes only the exact absent-profile body', () => {
   assert.equal(isAbsentProfileBody({ detail: 'no profile', extra: 1 }), false);
   assert.equal(isAbsentProfileBody(null), false);
 });
+
+test('ProfileContractError carries its own name', () => {
+  try { parseProfileWire(null); assert.fail('expected a throw'); } catch (error) {
+    assert.ok(error instanceof ProfileContractError);
+    assert.equal((error as Error).name, 'ProfileContractError');
+  }
+});
+
+for (const [name, value] of [
+  ['exponent overflow string', '1e999'],
+  ['Infinity string', 'Infinity'],
+  ['hex string', '0x10'],
+  ['NaN string', 'NaN'],
+] as const) {
+  test(`rejects ${name} as a target value`, () => {
+    assert.throws(() => parseProfileWire({ ...general, targets: { a: value } }), ProfileContractError);
+  });
+}
+
+test('a __proto__ key is plain data: no prototype pollution, object values rejected', () => {
+  const base = '{"context":"GENERAL","target_source":"USER_CONFIGURED","targets":';
+  assert.throws(() => parseProfileWire(JSON.parse(`${base}{"__proto__":{"polluted":true}}}`)), ProfileContractError);
+  const summary = parseProfileWire(JSON.parse(`${base}{"__proto__":1}}`));
+  assert.equal(summary.presence === 'PRESENT' && summary.targetCount, 1);
+  assert.equal(({} as Record<string, unknown>).polluted, undefined);
+});

@@ -5,11 +5,22 @@ ROOT = Path(__file__).resolve().parents[1]
 QUADLET = (ROOT / 'svc-home-hub.container').read_text(encoding='utf-8')
 
 
+def _network_value() -> str:
+    lines = [line for line in QUADLET.splitlines() if line.startswith('Network=')]
+    assert len(lines) == 1
+    return lines[0].removeprefix('Network=')
+
+
 def test_hub_quadlet_publishes_only_loopback_and_uses_narrow_pasta_forwards():
     assert QUADLET.count('PublishPort=') == 1
     assert 'PublishPort=127.0.0.1:9940:3000' in QUADLET
-    assert 'Network=pasta:-T,9933,-T,9930' in QUADLET
-    assert QUADLET.count('Network=') == 1
+    network = _network_value()
+    assert network.startswith('pasta:')
+    options = network.removeprefix('pasta:').split(',')
+    forwarded = {options[i + 1] for i, option in enumerate(options) if option == '-T'}
+    assert forwarded == {'9933', '9930'}
+    assert options.count('-T') == len(forwarded)
+    assert len(options) == 2 * len(forwarded)
     assert 'Network=host' not in QUADLET
     assert '--map-gw' not in QUADLET
 

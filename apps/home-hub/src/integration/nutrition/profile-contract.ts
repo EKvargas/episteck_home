@@ -2,7 +2,12 @@ export type ProfileSummary =
   | { presence: 'PRESENT'; context: string; targetSource: string; targetCount: number }
   | { presence: 'ABSENT' };
 
-export class ProfileContractError extends Error {}
+export class ProfileContractError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ProfileContractError';
+  }
+}
 
 const CODE = /^[A-Z_]{1,32}$/;
 const NUMERIC = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?$/;

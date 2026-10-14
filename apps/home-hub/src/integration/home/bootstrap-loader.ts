@@ -2,6 +2,7 @@ import type { BootstrapContext } from './Viewer';
 import type { DataEnvelope } from '../state/DataEnvelope';
 import type { SafeUIErrorCode } from '../state/SafeUIErrorCode';
 import { parseBootstrapWire } from './bootstrap-contract.ts';
+import { discardBody, FETCH_TIMEOUT_MS, isAbortError } from '../state/fetch-timeout.ts';
 
 export type BootstrapLoadResult = DataEnvelope<BootstrapContext>;
 
@@ -23,6 +24,8 @@ interface LoadBootstrapOptions {
   cookieValue: string | undefined;
   bffBaseUrl: string | undefined;
   fetcher: typeof fetch;
+  /** Per-fetch timeout in milliseconds. Defaults to FETCH_TIMEOUT_MS. */
+  timeoutMs?: number;
 }
 
 function trustedBootstrapUrl(baseUrl: string | undefined): string {
@@ -78,18 +81,27 @@ export async function loadBootstrap(options: LoadBootstrapOptions): Promise<Boot
       cache: 'no-store',
       headers,
       redirect: 'manual',
+      signal: AbortSignal.timeout(options.timeoutMs ?? FETCH_TIMEOUT_MS),
     });
   } catch {
     return failed('SERVICE_UNAVAILABLE', 'LIVE');
   }
 
-  if (response.status === 401) return failed('SESSION_INVALID', 'LIVE');
-  if (response.status === 502) return failed('INVALID_RESPONSE', 'LIVE');
-  if (response.status === 503) return failed('SERVICE_UNAVAILABLE', 'LIVE');
-  if (response.status !== 200) return failed('SERVICE_UNAVAILABLE', 'LIVE');
+  if (response.status !== 200) {
+    discardBody(response);
+    if (response.status === 401) return failed('SESSION_INVALID', 'LIVE');
+    if (response.status === 502) return failed('INVALID_RESPONSE', 'LIVE');
+    return failed('SERVICE_UNAVAILABLE', 'LIVE');
+  }
 
+  let body: unknown;
   try {
-    return ready(parseBootstrapWire(await response.json()), 'LIVE');
+    body = await response.json();
+  } catch (error) {
+    return failed(isAbortError(error) ? 'SERVICE_UNAVAILABLE' : 'INVALID_RESPONSE', 'LIVE');
+  }
+  try {
+    return ready(parseBootstrapWire(body), 'LIVE');
   } catch {
     return failed('INVALID_RESPONSE', 'LIVE');
   }
