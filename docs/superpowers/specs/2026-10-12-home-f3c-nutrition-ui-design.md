@@ -1,7 +1,7 @@
 # Home F3c — Nutrition UI wiring: design
 
 **Date:** 2026-10-12
-**Status:** Approved 2026-10-13; revised 2026-10-13. Implemented in PR-A #104 and PR-B #105; gate R4 not yet run. Implementation plan: docs/superpowers/plans/2026-10-13-home-f3c-nutrition-ui.md
+**Status:** Approved 2026-10-13; revised 2026-10-13. Implemented in PR-A #104 and PR-B #105 (on `main` via #106); gate R4 PASSED 2026-10-15, no rollback (record: deploy/home-hub/README.md, "F3c live rollout (2026-10-15)"). Implementation plan: docs/superpowers/plans/2026-10-13-home-f3c-nutrition-ui.md
 **Parent architecture:** `docs/architecture/proposals/HOME_F3_ACTIVE_CONTEXT_DOMAIN_INTEGRATION.md` (Board-approved, PR #48), phase F3c (§10) and acceptance matrix (§11).
 **Predecessor:** `docs/superpowers/specs/2026-10-05-home-f3b-nutrition-adapter-design.md`. F3b is LIVE on Nuremberg (rollout gate R3 PASS, 2026-10-12, PR #91 merge `89e0550`, evidence PR #98 merged).
 **Baseline:** `origin/main` `2096e60`.

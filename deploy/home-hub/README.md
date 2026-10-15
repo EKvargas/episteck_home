@@ -122,9 +122,9 @@ the operator. Rollout gate R3: **PASS. Rollback was not used.**
 - **Runbook fix:** the apply script originally read the root-only (`0700`) backup
   directory as an unprivileged user; it failed before any change and was corrected.
 
-## F3c rollout gate R4 (runbook, not yet run)
+## F3c rollout gate R4 (runbook, run 2026-10-15)
 
-Written 2026-10-13. Spec: `docs/superpowers/specs/2026-10-12-home-f3c-nutrition-ui-design.md`
+Written 2026-10-13; run 2026-10-15 (record: "F3c live rollout (2026-10-15)"). Spec: `docs/superpowers/specs/2026-10-12-home-f3c-nutrition-ui-design.md`
 ("Rollout gate R4"). F3c adds the first live Nutrition profile read (PR-A #104,
 PR-B #105). The topology is unchanged from F3b, so the Quadlet diff is the
 `Image=` line only.
@@ -268,6 +268,69 @@ Restore the Quadlet backed up in this rollout (step 3) byte for byte from
 `/var/backups/episteck/home-f3c-<SHA>/` (root-only `0700`; run as root; never the
 F3b backup),
 `daemon-reload`, restart, then repeat step 4. The F3b image `89e0550…` stays on the host.
+
+## F3c live rollout (2026-10-15)
+
+Rollout gate R4: **PASS. Rollback was not used.** F3c is live on Nuremberg: `/app/nutrition`
+shows the live Nutrition profile panel. PR-A #104 (`2fa4584`) and PR-B #105 were
+merged; #105 landed on the PR-A branch after PR-A was squash-merged, so the UI reached
+`main` through #106. The deployed merge SHA is
+`d91341de2d1a6b8b0a90217e4b32ff241a94f249` (#106). The operator ran every production
+step with `!` ssh; Claude ran the read-only checks.
+
+- **Baseline (step 1):** live image `localhost/episteck-home-hub:89e055075bd375815328a8a9a39bb2bbc4494d02`
+  (ID `0dd830e61384`), `NRestarts=0`, and all three R3 lines present. The Quadlet SHA-256
+  was `2738cfb1bb6d91ba813740162cc6eabb0b7e268a6194c901363dc1e9ec46c07f`; this is the
+  first post-R3 hash recorded.
+- **Build (step 2):** as `svc-home-hub`, from a `git archive` of `apps/home-hub` at the
+  merge SHA extracted to `/home/svc-home-hub/build-f3c-d91341d`, then `podman build`.
+  Image `localhost/episteck-home-hub:d91341de2d1a6b8b0a90217e4b32ff241a94f249`, ID
+  `d3168121a99b34faba493e039485f618d5463ab323c58feb44dc904bbf464b99`. Throwaway probe
+  with `--network pasta:-T,9933,-T,9930`: 9933 and 9930 `/health` 200; 9931, 9932, 9934
+  refused.
+- **Apply (step 3):** Quadlet backed up to `/var/backups/episteck/home-f3c-d91341d/`
+  (SHA-256 identical to the live file and the step 1 baseline). Diff against the backup
+  was exactly the `Image=` line. Reload and restart: `active/running`, `NRestarts=0`.
+- **Verify (step 4), read-only:** from the running Hub container, 9933 and 9930
+  `/health` 200 and 9931, 9932, 9934 refused. Host `ss`: 9930, 9933, 9940 on
+  `127.0.0.1` only. Anonymous `/app/nutrition` 307 to `https://bff.home.episteck.com/login`
+  on loopback and on the public URL. A second restart left `NRestarts=0`, and the same
+  probes and anonymous check passed again.
+- **Authenticated proof (step 5), Erick self (`PSN-00013`):** the result was **ABSENT**,
+  recorded as an authorized no-profile response, not "populated profile rendered". No
+  populated profile exists in production, so PRESENT was not observed live.
+  - **Read count:** one `nutrition.profile outcome=` line per load. In the clean window
+    (after 15:17:40Z) two plain `/app/nutrition` loads logged two `ABSENT` lines, and the
+    stale `?person=PSN-99999` load logged `STALE_SKIPPED` at 15:49:52Z followed by one
+    `ABSENT` at 15:49:53Z. The Hub also logged `BOOTSTRAP_SESSION` lines for loads without
+    a valid session (the anonymous probes in step 4, and the operator's login redirects).
+    Earlier exploratory loads (13:53 to 13:54Z, 15:16 to 15:17Z) are not attributed to a
+    known number of page loads and are not part of the count.
+  - **Log hygiene:** over 13:52:06Z to 15:54:10Z, a case-insensitive grep for `PSN-`,
+    `cookie`, `bearer`, JWT-shaped strings (`eyJ…`), and `delegation` returned no matches
+    in the Hub (11 lines), `home-bff` (74), and `nutrition-mcp` (41) logs. `home-bff-mint`
+    and `nutrition` logged no lines in the window (Nutrition runs with no access log).
+    An earlier first grep queried `svc-home-bff` and `svc-nutrition`, which are account
+    names, not container names, so it covered no log content; it was repeated with the
+    container names `home-bff`, `home-bff-mint`, `nutrition`, and `nutrition-mcp`.
+  - **Browser checks:** the operator reported, as expected, the live panel on
+    `/app/nutrition`, no mock content and no demo banner there, the demo banner still
+    present on another page, and a stale `?person=` falling back to self. These were
+    operator-observed; the document `Cache-Control` header and the HTML contents were not
+    captured independently during this rollout.
+
+| Item | Source |
+| --- | --- |
+| ABSENT result for Erick | Observed live |
+| One `nutrition.profile outcome=` line per load; `STALE_SKIPPED` then one read for the stale check | Observed live (Hub container log) |
+| Log hygiene over Hub, BFF, and Nutrition logs | Observed live (see window above) |
+| No mock content, no demo banner on `/nutrition`, banner elsewhere, stale fallback to self | Operator-observed live |
+| Document `Cache-Control: no-store`; HTML free of delegation, cookie, and other Person IDs | Tests only (e2e) |
+| Per-load delegation mint count; per-load Nutrition call count | Tests only (fake counters) |
+| Denied, session, unavailable, and malformed states; timeout; subject switch | Tests only |
+
+Rollback command and backup stay as in the R4 runbook; the backup
+`/var/backups/episteck/home-f3c-d91341d/` remains on the host.
 
 ## Live rollout record (2026-09-27)
 
