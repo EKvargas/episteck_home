@@ -14,6 +14,12 @@ export default defineConfig({
       timeout: 30_000,
     },
     {
+      command: 'node test-support/fake-nutrition.mjs',
+      url: 'http://127.0.0.1:9930/health',
+      reuseExistingServer: false,
+      timeout: 30_000,
+    },
+    {
       command: 'npm run start -- --hostname 127.0.0.1 --port 3322',
       port: 3322,
       reuseExistingServer: false,

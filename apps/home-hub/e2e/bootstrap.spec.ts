@@ -26,38 +26,37 @@ test('generated internal navigation stays under /app', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Memory' })).toBeVisible();
 });
 
-test('prototype Nutrition content is clearly marked as demo mock data', async ({ page }) => {
-  await setSessionCookie(page, 'authenticated');
-  await page.goto('/app/nutrition');
-  await expect(page.getByText('DEMO · MOCK DATA')).toBeVisible();
-  await expect(page.getByText('svc-nutrition', { exact: true })).toHaveCount(0);
-});
-
 test('prototype routes label domain content and make no consent or live-source claims', async ({ page }) => {
   await setSessionCookie(page, 'authenticated');
   const forbiddenClaims = /Consent Granted|Consent required|Full Clinical Consent|authorized|Active care consent|Care Circle Access|Home Secure|Source: FHIR Gateway|Source: Device Gateway|Provenance: svc-nutrition|Live Status|live data|Active Care Link|Shared with you/i;
+  const demoNote = page.getByRole('note', { name: 'Demo mock data' });
+  // In LIVE, /app/nutrition renders the real panel (the fake answers "no profile"): no demo note, same claims rule.
+  async function settled(path: string, subject: string) {
+    if (path === '/app/nutrition') {
+      await expect(page.getByTestId('profile-panel')).toContainText(`No nutrition profile for ${subject}`);
+      await expect(page.getByText('svc-nutrition', { exact: true })).toHaveCount(0);
+    }
+    else await expect(demoNote).toBeVisible();
+  }
   for (const path of [
     '/app', '/app/health', '/app/nutrition', '/app/nutrition/pregnancy',
     '/app/calendar', '/app/memory', '/app/ask', '/app/kiosk', '/app/settings/privacy',
   ]) {
     await page.goto(path);
-    await expect(page.getByRole('note', { name: 'Demo mock data' })).toBeVisible();
-    const visibleText = await page.locator('body').innerText();
-    expect(visibleText, path).not.toMatch(forbiddenClaims);
+    await settled(path, 'Synthetic Viewer');
+    expect(await page.locator('body').innerText(), path).not.toMatch(forbiddenClaims);
   }
   for (const path of ['/app', '/app/health', '/app/nutrition']) {
     await page.goto(path);
-    const careTab = page.getByRole('tab', { name: 'Synthetic Care Context' });
-    await careTab.click();
-    await expect(page.getByRole('note', { name: 'Demo mock data' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Synthetic Care Context' }).click();
+    await settled(path, 'Synthetic Care Context');
     expect(await page.locator('body').innerText(), `${path} care context`).not.toMatch(forbiddenClaims);
-    if (path === '/app/nutrition') {
-      await page.getByRole('link', { name: 'View Dashboard' }).click();
-      await expect(page).toHaveURL(/\/app\/nutrition\/pregnancy\?person=PSN-00007$/);
-      await expect(page.getByRole('note', { name: 'Demo mock data' })).toBeVisible();
-      expect(await page.locator('body').innerText(), 'pregnancy care context').not.toMatch(forbiddenClaims);
-    }
   }
+  // The pregnancy page keeps its demo banner in LIVE; the mock dashboard renders only in care context.
+  await page.goto('/app/nutrition/pregnancy?person=PSN-00007');
+  await expect(demoNote).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Micronutrient Coverage' })).toBeVisible();
+  expect(await page.locator('body').innerText(), 'pregnancy care context').not.toMatch(forbiddenClaims);
 });
 
 test('mock assistant actions do not claim live device or domain writes', async ({ page }) => {
