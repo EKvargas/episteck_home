@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 
 export const ALLOWED_ADAPTER_IMPORTERS = ['src/app/nutrition/LiveProfilePanel.tsx'];
 const ADAPTER_MODULE = 'src/integration/nutrition/profile.server.ts';
+const LOADER_MODULE = 'src/integration/nutrition/profile-loader.ts';
 const USE_SERVER = /^\s*['"]use server['"]/m;
 const USE_CLIENT = /^\s*['"]use client['"]/m;
 /** Any module specifier that reaches into a nutrition/ directory, by alias or relative path. */
@@ -20,15 +21,20 @@ async function walk(directory) {
   return files;
 }
 
-/** Static proof that readNutritionProfile is reachable only from its one server component. */
+/**
+ * Static proof that readNutritionProfile is reachable only from its one server component,
+ * and that loadNutritionProfile is reachable only through readNutritionProfile's context check.
+ */
 export async function findViolations(root) {
   const violations = [];
+  let sawAdapter = false;
   for (const file of await walk(join(root, 'src'))) {
     const rel = relative(root, file).split(sep).join('/');
     if (/\.test\.(ts|tsx)$/.test(rel)) continue;
     const text = await readFile(file, 'utf8');
 
     if (rel === ADAPTER_MODULE) {
+      sawAdapter = true;
       const guard = text.indexOf('assertIssuedContext(');
       const cookies = text.indexOf('cookies()');
       if (guard === -1 || (cookies !== -1 && cookies < guard)) {
@@ -44,6 +50,9 @@ export async function findViolations(root) {
     if (mentionsAdapter && USE_CLIENT.test(text)) {
       violations.push(`${rel}: a client component must never import profile.server`);
     }
+    if (rel !== LOADER_MODULE && /profile-loader/.test(text)) {
+      violations.push(`${rel}: imports profile-loader; only profile.server may, after assertIssuedContext`);
+    }
     if (USE_SERVER.test(text) && NUTRITION_SPECIFIER.test(text)) {
       violations.push(`${rel}: a 'use server' module must not import the Nutrition integration`);
     }
@@ -51,6 +60,7 @@ export async function findViolations(root) {
       violations.push(`${rel}: a route handler must not import the Nutrition integration`);
     }
   }
+  if (!sawAdapter) violations.push(`${ADAPTER_MODULE}: not found, so there is nothing to verify`);
   return violations;
 }
 
@@ -60,5 +70,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.stderr.write(`${violations.join('\n')}\n`);
     process.exit(1);
   }
-  process.stdout.write('Adapter callers verified: only the allowed server component reaches profile.server.\n');
+  process.stdout.write('Adapter callers verified: only the allowed server component reaches profile.server, and only profile.server reaches profile-loader.\n');
 }
