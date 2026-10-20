@@ -9,15 +9,16 @@ export function AppShell({ children, demoContent = false, liveRoutes = [] }: {
   children: React.ReactNode; demoContent?: boolean; liveRoutes?: string[];
 }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const pathname = usePathname();
+  // skipTrailingSlashRedirect serves /nutrition/ as-is, and the client pathname keeps the slash.
+  const route = usePathname().replace(/\/+$/, '') || '/';
 
-  const demoNotice = demoContent && !liveRoutes.includes(pathname) ? (
+  const demoNotice = demoContent && !liveRoutes.includes(route) ? (
     <div role="note" aria-label="Demo mock data" className={styles.demoNotice}>
       DEMO / MOCK DATA — domain content is illustrative and is not data or access for the selected person.
     </div>
   ) : null;
 
-  if (pathname === '/kiosk') return <>{demoNotice}{children}</>;
+  if (route === '/kiosk') return <>{demoNotice}{children}</>;
 
 
 
