@@ -1,4 +1,4 @@
-"""Local filesystem fixtures for the acquisition script's package checks.
+"""Local fixtures for the acquisition script's package and help checks.
 
 No package download, extraction, wrapper creation or database startup is run.
 """
@@ -70,3 +70,47 @@ def test_missing_plugin_directory_fails(prefix: Path) -> None:
     bootstrap_sql(prefix)
     (prefix / "usr/lib/mysql/plugin").rmdir()
     assert package_checks(prefix).returncode != 0
+
+
+def help_check(tmp_path: Path, output: str, status: int) -> subprocess.CompletedProcess[str]:
+    executable = tmp_path / "mariadb-install-db"
+    executable.write_text(
+        '#!/bin/sh\n[ "$#" -eq 1 ] && [ "$1" = --help ] || exit 99\n'
+        'printf "%s\\n" "$HELP_OUTPUT"\nexit "$HELP_STATUS"\n'
+    )
+    executable.chmod(0o700)
+    script = Path(__file__).with_name("acquire_mariadb.sh").read_text()
+    # Run the actual final check, without downloading packages or running a DB.
+    check = script.split("mariadb-admin --version\n", 1)[1]
+    return subprocess.run(
+        ["sh", "-eu"], input=check, text=True, capture_output=True,
+        env={**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}",
+             "HELP_OUTPUT": output, "HELP_STATUS": str(status)},
+    )
+
+
+VALID_HELP = (
+    "Usage: /private/usr/bin/mariadb-install-db [OPTIONS]\n"
+    "  --auth-root-authentication-method=normal|socket\n"
+    "  --datadir=path  The path to the MariaDB data directory."
+)
+
+
+def test_pinned_help_exit_one_with_usage_passes(tmp_path: Path) -> None:
+    result = help_check(tmp_path, VALID_HELP, 1)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("status", [0, 2, 126, 127])
+def test_unexpected_help_status_fails(tmp_path: Path, status: int) -> None:
+    assert help_check(tmp_path, VALID_HELP, status).returncode != 0
+
+
+@pytest.mark.parametrize("output", ["", "cannot find my_print_defaults",
+                                    "Usage: incomplete",
+                                    "Usage: /private/usr/bin/mariadb-install-db [OPTIONS]",
+                                    "Usage: /private/usr/bin/mariadb-install-db [OPTIONS]\n"
+                                    "--auth-root-authentication-method=normal|socket",
+                                    "--auth-root-authentication-method=normal|socket\n--datadir"])
+def test_exit_one_without_complete_help_fails(tmp_path: Path, output: str) -> None:
+    assert help_check(tmp_path, output, 1).returncode != 0

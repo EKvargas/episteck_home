@@ -31,4 +31,10 @@ if ldd "$prefix/usr/sbin/mariadbd" "$prefix/usr/bin/mariadb" "$prefix/usr/bin/ma
 mariadbd --version
 mariadb --version
 mariadb-admin --version
-mariadb-install-db --help >/dev/null
+# This pinned script's usage() intentionally exits 1; require real help too.
+install_db_help_status=0
+install_db_help=$(mariadb-install-db --help) || install_db_help_status=$?
+test "$install_db_help_status" -eq 1
+printf '%s\n' "$install_db_help" | grep -q '^Usage: .* \[OPTIONS\]$'
+printf '%s\n' "$install_db_help" | grep -q -- '--auth-root-authentication-method=normal|socket'
+printf '%s\n' "$install_db_help" | grep -q -- '--datadir'

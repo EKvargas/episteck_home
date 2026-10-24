@@ -1,6 +1,6 @@
 # Local validation of the two-host package
 
-**Latest continuation:** the 2026-10-12 acquisition correction and fresh local runner validation are recorded below. The 2026-10-10 result is preserved as historical evidence. Neither local run establishes Nuremberg MariaDB 11.8 compatibility or two-host acceptance.
+**Latest continuation:** the [2026-10-24 help-check regression and recovery review](#2026-10-24-help-check-regression-and-recovery-review) follows both stopped remote preparation attempts. The 2026-10-10/12 loopback results below remain historical evidence. No local check establishes Nuremberg MariaDB 11.8 compatibility or two-host acceptance.
 
 **Scope:** one fresh loopback run on 2026-10-10 using WSL Ubuntu, Python 3.12, real disposable MariaDB processes, mTLS and synthetic PERSON authority. This is local integration evidence, **not** the Ashburn–Nuremberg acceptance run. The remote preflight and mandatory disposable Frappe step A9 were unexecuted in this run. The consolidated PR #71 handoff records the earlier local Frappe 15.99.0 result separately.
 
@@ -76,4 +76,26 @@ assert result["matrix"]["request_counts"]["total"] == 269
 assert all(side["complete"] for side in result["cleanup"].values())
 print(json.dumps({"evidence_verified": True, "scope": result["scope"]}))
 PY
+```
+
+## 2026-10-24: help-check regression and recovery review
+
+**Scope:** local shell-fixture tests, help-only characterization, contract/policy unit tests and read-only review. No SSH, remote preparation, MariaDB package acquisition, database integration run, Frappe site, physical restore, matrix or latency measurement was performed. The 2026-10-12 second remote attempt remains A0 failed, matrix unexecuted and 0/400 requests.
+
+Using the existing WSL Python 3.12.3 environment `/home/d064974/kap2-twohost-venv-20261010`, the six existing acquisition filesystem tests first passed. New tests executing the actual help-check tail produced **2 failed, 13 passed** before the shell correction: exit-1 valid help failed, and unexpected exit 0 succeeded. After requiring exit 1 and three recognizable usage markers, and adding two more incomplete-output cases, the complete package suite passed **17 tests in 2.73 s**. `sh -n acquire_mariadb.sh` passed. A direct subprocess execution of the same check against the installed local MariaDB help command returned 0; the help command itself returned 1. This does not test the extracted 11.8.6 bootstrap/runtime.
+
+The contracts/typed-policy/authority unit suite initially failed collection in `test_authorization_plan.py`, `test_context.py` and `test_knowledge.py` because `rfc8785` was absent. The repo declares `rfc8785==0.1.4`; it was installed from the local pip cache into the isolated disk-backed `/home/d064974/kap2-pr71-review-deps-20261024` directory, then the suite passed **51 tests in 1.74 s**. An earlier `/tmp` dependency target did not persist to the next WSL invocation and was not used for the passing run. No repository dependency declaration changed.
+
+One initial local diagnostic was misquoted across PowerShell/WSL and attempted default MariaDB initialization; it failed to write `/var/lib/mysql` due to permissions and was stopped. Subsequent commands passed argument arrays directly. The direct `--help` call returned its expected usage and exit 1 without stderr. This incident produced no successful initialization and is not verification evidence for the candidate; no production host was contacted.
+
+The local second-attempt result SHA-256 matched the public comment: `37f6347ea5ca83fa0c37f9a38f9fa6a1de82000a04e9db89c292c52002fbe14f`. Both committed 2026-10-12 loopback JSONL hashes also matched their structured result, whose 11 executed steps, 269 requests and local cleanup flags were intact. Verification of those records does not rerun or extend their claims. For the second remote attempt, resource absence was recorded but both cleanup verifiers returned `complete=false` because no runner JSONL existed; A11 remains unexecuted.
+
+The [recovery review](../../docs/architecture/reviews/2026-10-24-knowledge-kap2-recovery-review.md) records the independent review and open proof items. The [structured local result](evidence/2026-10-24-local-review/result.json) includes reproduction commands, RED/GREEN counts and explicit scope boundaries.
+
+```sh
+python -m pytest -p no:cacheprovider spike/knowledge-kap2-two-host -q
+sh -n spike/knowledge-kap2-two-host/acquire_mariadb.sh
+PYTHONPATH=/home/d064974/kap2-pr71-review-deps-20261024:apps/episteck_home:packages/home-contracts/src python -m pytest -p no:cacheprovider -q packages/home-contracts/tests apps/episteck_home/tests/test_typed_access_policy.py apps/episteck_home/tests/test_knowledge_authority.py
+python -m json.tool spike/knowledge-kap2-two-host/evidence/2026-10-24-local-review/result.json
+git diff --check
 ```

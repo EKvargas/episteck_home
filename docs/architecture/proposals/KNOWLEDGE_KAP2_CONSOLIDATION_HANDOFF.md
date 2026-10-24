@@ -2,6 +2,12 @@
 
 **State:** draft, disconnected candidate; KAP-1 accepted, KAP-2 open. This branch begins at `origin/main` `45b0958b46aa27b1326fdaba2f4811ebf20a90e0` (2026-10-10). The selected local PERSON implementation source is PR #69 at `dde967d21a6e0452f3ab3c717d15d0c91b3f8c3c`. The exact consolidated implementation commit is `743aec2dc09b9a7229719bac61c8bf2c968d7501`; this handoff commit follows it and its exact SHA is recorded in the draft PR. No Board ratification of the recovery amendment or production activation is recorded.
 
+## Latest continuation — 2026-10-24
+
+The historical inventory and local implementation results below remain intact. The latest remote outcome is the [second stopped preparation attempt](https://github.com/EKvargas/episteck_home/pull/71#issuecomment-6132455875), at `6166594bd91482455440e8e938306769100136bd`: A0 failed because the pinned `mariadb-install-db --help` deliberately exits 1. The earlier SQL-path correction passed. No runner, database initialization or matrix started (**0/400 requests**); MariaDB 11.8 runtime and cross-host latency remain unproved.
+
+The [acquisition review](../../../spike/knowledge-kap2-two-host/ACQUISITION_REVIEW.md#2026-10-24-help-status-correction) records the narrow local status/output correction and its regression tests. The [recovery review](../reviews/2026-10-24-knowledge-kap2-recovery-review.md) separates a reasonable disposable PERSON candidate from missing production admission, rotation, failure-window and source-cutover proofs. No Board decision is inferred. A new two-host attempt requires review and fresh exact-commit authorization; both prior attempt authorizations have been consumed. This continuation performs no SSH, remote experiment, merge or deployment.
+
 ## Inventory and disposition
 
 Exact heads and dispositions were checked against GitHub after fetch. The worktree column names preserved local worktrees; `—` means no corresponding local worktree. All #56–69 PRs remain open, and no old worktree or branch was removed.

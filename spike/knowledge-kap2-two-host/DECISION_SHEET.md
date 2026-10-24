@@ -2,7 +2,7 @@
 
 **Review target:** consolidated PR #71's executable synthetic PERSON package. This sheet requests decisions; it records no Board ratification, operator appointment or remote-run authorization.
 
-**Current gate (2026-10-12):** the authorized attempt at `bd21543a663c7997daa27e1e8f7569a6ba353ed5` stopped at the acquisition prerequisite in A0, before the matrix (**0/400 attempts**). It is closed as an unsuccessful preparation attempt. Review the corrected acquisition script and [review record](ACQUISITION_REVIEW.md), then authorize one **new** finite attempt at the exact new PR head. No remote execution is authorized by this continuation.
+**Current gate (2026-10-24):** both separately authorized attempts are stopped at A0, with no matrix execution (**0/400 attempts** each). The first at `bd21543a663c7997daa27e1e8f7569a6ba353ed5` failed the SQL-path check. The second at `6166594bd91482455440e8e938306769100136bd` passed that correction but failed because the pinned install script's help intentionally exits 1. Review the narrow [help-status correction](ACQUISITION_REVIEW.md#2026-10-24-help-status-correction) and [recovery review](../../docs/architecture/reviews/2026-10-24-knowledge-kap2-recovery-review.md), then authorize one **new** finite attempt at the exact corrected commit. The earlier experiment supervisor/delegate assignment was for that stopped attempt, not a permanent production appointment. This continuation records no new remote authorization.
 
 | Decision | Requested disposition and consequence |
 | --- | --- |

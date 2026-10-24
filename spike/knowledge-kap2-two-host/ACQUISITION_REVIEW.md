@@ -1,6 +1,6 @@
 # Nuremberg acquisition correction for architectural review
 
-**Status (2026-10-12):** prepared locally for PR #71 review; no new remote attempt authorized or executed. The exact corrected head SHA is recorded in the PR body and continuation comment. Historical branches, worktrees and experiment comments are preserved.
+**Current status (2026-10-24):** local help-status correction prepared after the second stopped remote attempt; no new remote execution performed or authorized here. See the [latest section](#2026-10-24-help-status-correction). The sections below that precede it retain the historical 2026-10-12 SQL-path correction and its then-current scope. Historical branches, worktrees and experiment comments are preserved.
 
 ## Evidence and narrow correction
 
@@ -47,3 +47,21 @@ git diff --check
 ```
 
 Fresh local loopback runner evidence is recorded in [LOCAL_VALIDATION.md](LOCAL_VALIDATION.md). Local MariaDB 10.11 cannot establish that Nuremberg's extracted MariaDB 11.8 binaries, bootstrap scripts, plugins or libraries work. That prerequisite remains part of the next separately authorized A0; stop if compatibility requires a further change. The [decision sheet](DECISION_SHEET.md) specifies the fresh exact-SHA authorization required for one new two-host attempt.
+
+## 2026-10-24: help-status correction
+
+The [second authorized attempt](https://github.com/EKvargas/episteck_home/pull/71#issuecomment-6132455875) ran the unchanged `6166594bd91482455440e8e938306769100136bd` acquisition once. All seven pinned archives extracted, the corrected SQL path and private-tool/library checks passed, and three version commands reported 11.8.6. The final `mariadb-install-db --help >/dev/null` returned 1 and stopped `set -eu`, before runner preflight or any database initialization. No matrix requests or latency measurements occurred.
+
+The archived read-only diagnosis identifies the pinned upstream script SHA-256 as `7ce8954169bd124f1f1198ebe94dffb376b1501b5683cb140eebdb1b58bc8eae`: `--help` calls `usage()` at line 173; `usage()` prints `Usage: $0 [OPTIONS]` and exits 1 at line 118. The result archive hash matches the public attempt record (`37f6347ea5ca83fa0c37f9a38f9fa6a1de82000a04e9db89c292c52002fbe14f`). This is evidence of a check assumption, not proof that bootstrap/runtime works.
+
+Only the final help check changes in this continuation. It captures the command's output and status without triggering `set -e`, requires **exactly exit 1**, and independently requires the Usage header, `--auth-root-authentication-method=normal|socket` and `--datadir` text. Empty/error/incomplete output and statuses 0, 2, 126 and 127 reject. There is no `|| true`, retry, alternate package or broader successful-status fallback. These markers verify help recognition, not the whole help document or runtime compatibility.
+
+The pinned versions, package extraction, private prefix, wrappers, SQL/plugin checks, library checks and three version commands are unchanged from `6166594`. All six original package Python runners remain unchanged. Serving/recovery separation, A0–A11, paths, port, capacity gates and request/measurement budgets also remain unchanged.
+
+Local behavioral tests execute the actual final shell section with a local help-command fixture. The initial regression run produced **2 failed, 13 passed** on the old check: valid exit-1 help was rejected, while unexpected exit 0 passed. After the correction and two further incomplete-output cases, **17 passed**. POSIX shell syntax and an actual local installed help-only call also passed. No MariaDB 11.8 package was acquired locally and no remote command was run.
+
+The second attempt's preparation disposal is separate from A11: reviewed paths/listener were recorded absent, Nuremberg's account/home/prefix were removed, and Ashburn's account was intentionally retained without sudo. Both approved cleanup checkers returned `complete=false` because runner JSONL was absent; neither runner started. Preserve that result rather than converting it into a passed A11.
+
+Review the [recovery findings](../../docs/architecture/reviews/2026-10-24-knowledge-kap2-recovery-review.md) and the final corrected commit before a fresh authorization. Production ratification, full admission staging, repeated writer-principal cutover, full Home authority-source coverage and later KAP gates remain open. The new attempt must still stop at any unexpected prerequisite failure.
+
+**Verify:** `python -m pytest spike/knowledge-kap2-two-host -q`; `sh -n spike/knowledge-kap2-two-host/acquire_mariadb.sh`; `git diff --check` (Linux/WSL).
