@@ -1,0 +1,238 @@
+{
+  "baseline_sha": "bd21543a663c7997daa27e1e8f7569a6ba353ed5",
+  "cleanup": {
+    "home": {
+      "checks": {
+        "cert_dir_absent": true,
+        "evidence_present": true,
+        "root_absent": true,
+        "runner_cleanup_recorded": true
+      },
+      "complete": true,
+      "side": "home"
+    },
+    "witness": {
+      "checks": {
+        "cert_dir_absent": true,
+        "evidence_present": true,
+        "listener_absent": true,
+        "root_absent": true,
+        "runner_cleanup_recorded": true
+      },
+      "complete": true,
+      "side": "witness"
+    }
+  },
+  "commands": [
+    [
+      "/home/d064974/kap2-twohost-venv-20261010/bin/python",
+      "/mnt/c/AIProjects/episteck-delivery-workspace/.worktrees/knowledge-kap2-consolidated-delivery/spike/knowledge-kap2-two-host/certs.py",
+      "--out",
+      "/tmp/kap2-pr71-certs-local-review-20261012-01",
+      "--server-ip",
+      "127.0.0.1",
+      "--local"
+    ],
+    [
+      "/home/d064974/kap2-twohost-venv-20261010/bin/python",
+      "/mnt/c/AIProjects/episteck-delivery-workspace/.worktrees/knowledge-kap2-consolidated-delivery/spike/knowledge-kap2-two-host/witness_runner.py",
+      "--root",
+      "/tmp/kap2-pr71-twohost-local-w-review-20261012-01",
+      "--evidence",
+      "/mnt/c/AIProjects/episteck-delivery-workspace/.worktrees/knowledge-kap2-consolidated-delivery/spike/knowledge-kap2-two-host/evidence/2026-10-12-local-review/witness.jsonl",
+      "--bind",
+      "127.0.0.1",
+      "--loopback-only",
+      "--port",
+      "19442",
+      "--ca",
+      "/tmp/kap2-pr71-certs-local-review-20261012-01/ca.crt",
+      "--cert",
+      "/tmp/kap2-pr71-certs-local-review-20261012-01/server.crt",
+      "--key",
+      "/tmp/kap2-pr71-certs-local-review-20261012-01/server.key"
+    ],
+    [
+      "/home/d064974/kap2-twohost-venv-20261010/bin/python",
+      "/mnt/c/AIProjects/episteck-delivery-workspace/.worktrees/knowledge-kap2-consolidated-delivery/spike/knowledge-kap2-two-host/home_runner.py",
+      "--root",
+      "/tmp/kap2-pr71-twohost-local-h-review-20261012-01",
+      "--evidence",
+      "/mnt/c/AIProjects/episteck-delivery-workspace/.worktrees/knowledge-kap2-consolidated-delivery/spike/knowledge-kap2-two-host/evidence/2026-10-12-local-review/home.jsonl",
+      "--witness-host",
+      "127.0.0.1",
+      "--port",
+      "19442",
+      "--ca",
+      "/tmp/kap2-pr71-certs-local-review-20261012-01/ca.crt",
+      "--serving-cert",
+      "/tmp/kap2-pr71-certs-local-review-20261012-01/serving.crt",
+      "--serving-key",
+      "/tmp/kap2-pr71-certs-local-review-20261012-01/serving.key",
+      "--recovery-cert",
+      "/tmp/kap2-pr71-certs-local-review-20261012-01/recovery.crt",
+      "--recovery-key",
+      "/tmp/kap2-pr71-certs-local-review-20261012-01/recovery.key",
+      "--local"
+    ],
+    [
+      "/home/d064974/kap2-twohost-venv-20261010/bin/python",
+      "/mnt/c/AIProjects/episteck-delivery-workspace/.worktrees/knowledge-kap2-consolidated-delivery/spike/knowledge-kap2-two-host/verify_cleanup.py",
+      "--side",
+      "home",
+      "--root",
+      "/tmp/kap2-pr71-twohost-local-h-review-20261012-01",
+      "--cert-dir",
+      "/tmp/kap2-pr71-certs-local-review-20261012-01",
+      "--evidence",
+      "/mnt/c/AIProjects/episteck-delivery-workspace/.worktrees/knowledge-kap2-consolidated-delivery/spike/knowledge-kap2-two-host/evidence/2026-10-12-local-review/home.jsonl",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "19442"
+    ],
+    [
+      "/home/d064974/kap2-twohost-venv-20261010/bin/python",
+      "/mnt/c/AIProjects/episteck-delivery-workspace/.worktrees/knowledge-kap2-consolidated-delivery/spike/knowledge-kap2-two-host/verify_cleanup.py",
+      "--side",
+      "witness",
+      "--root",
+      "/tmp/kap2-pr71-twohost-local-w-review-20261012-01",
+      "--cert-dir",
+      "/tmp/kap2-pr71-certs-local-review-20261012-01",
+      "--evidence",
+      "/mnt/c/AIProjects/episteck-delivery-workspace/.worktrees/knowledge-kap2-consolidated-delivery/spike/knowledge-kap2-two-host/evidence/2026-10-12-local-review/witness.jsonl",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "19442"
+    ],
+    [
+      "mariadbd",
+      "--version"
+    ]
+  ],
+  "historical_remote_status": "A0_FAILED_0_OF_400",
+  "latency": [
+    {
+      "call_p50_ms": 46.671,
+      "call_p95_ms": 49.378,
+      "call_p99_ms": 50.545,
+      "calls": 60,
+      "mode": "warm",
+      "pair_max_ms": 107.238,
+      "pair_p50_ms": 100.863,
+      "pair_p95_ms": 107.049,
+      "pair_p99_ms": 107.238,
+      "pairs": 30,
+      "status": "PROPOSED_BUDGET_NOT_RATIFIED",
+      "step": "latency_distribution"
+    },
+    {
+      "call_p50_ms": 48.646,
+      "call_p95_ms": 50.352,
+      "call_p99_ms": 51.617,
+      "calls": 60,
+      "mode": "cold",
+      "pair_max_ms": 107.137,
+      "pair_p50_ms": 104.63,
+      "pair_p95_ms": 107.015,
+      "pair_p99_ms": 107.137,
+      "pairs": 30,
+      "status": "PROPOSED_BUDGET_NOT_RATIFIED",
+      "step": "latency_distribution"
+    }
+  ],
+  "mariadb": "mariadbd  Ver 10.11.13-MariaDB-0ubuntu0.24.04.1 for debian-linux-gnu on x86_64 (Ubuntu 24.04)",
+  "matrix": {
+    "request_counts": {
+      "by_operation": {
+        "authorize": 161,
+        "commit": 27,
+        "event_outcome": 3,
+        "kill_writer": 1,
+        "prepare": 28,
+        "probe_privileges": 2,
+        "read_current": 21,
+        "recover": 20,
+        "restart_gateway": 1,
+        "restore": 1,
+        "snapshot": 1,
+        "status": 2,
+        "tls_handshake": 1
+      },
+      "by_outcome": {
+        "WitnessTransportError": 2,
+        "ok": 266,
+        "rejected": 1
+      },
+      "by_role": {
+        "anonymous": 1,
+        "recovery": 49,
+        "serving": 219
+      },
+      "cap": 400,
+      "total": 269
+    },
+    "step": "matrix_summary",
+    "steps": {
+      "dependency_issuer_and_expiry_invalidation": "PASS",
+      "dual_physical_restore_first_read_and_selected_reauthorization": "PASS",
+      "gateway_restart_first_read_denial": "PASS",
+      "grant_self_bypass_and_ordinary_write": "PASS",
+      "kap2_policy_witness_latency_and_request_count": "PASS",
+      "reader-first_revocation_order": "PASS",
+      "transport_credential_isolation_and_closed_start": "PASS",
+      "unknown_commit_acknowledgement": "PASS",
+      "unknown_prepare_acknowledgement": "PASS",
+      "writer-first_revocation_order": "PASS",
+      "writer_connection_loss_with_live_reader": "PASS"
+    }
+  },
+  "package_validation": {
+    "command_difference": "one bootstrap SQL file check",
+    "corrected_script_sha256": "2da10d2c704a63d490350e44428e3680d3295b927eccac5b9084e9a7d2912f9b",
+    "diff_check": "PASS",
+    "fixture_after": {
+      "failed": 0,
+      "passed": 6
+    },
+    "fixture_before": {
+      "failed": 2,
+      "passed": 4
+    },
+    "historical_command_comment_id": 6102306877,
+    "historical_command_sha256": "4b8c18c70db90a4c650c6eef7ac2871efc17d6c1efdfdc842f6469af1e7dd61a",
+    "package_suite": {
+      "command": "python -m pytest spike/knowledge-kap2-two-host -q",
+      "failed": 0,
+      "passed": 6
+    },
+    "python_compile": "PASS",
+    "shell_syntax": "PASS"
+  },
+  "python": "3.12.3",
+  "remote_attempts": 0,
+  "runner_source_sha256": {
+    "certs.py": "2d3ded22248c553b188ae3128b045aa1b0b811a4d871612975eff8b0f8d64117",
+    "home_runner.py": "66f1a5de7057456d4c7f10af1e5dbe35554b890f7aab78d96661e54f7114a060",
+    "preflight.py": "2ebde453ccb9fe2840cb7ce3dc2dcaccc61e81e5c8779eae6001b58818cafe8d",
+    "transport.py": "ace2265a3d6676d5e3832af97f8c5e567121ebd8747e70a3b9c40878299f89cf",
+    "verify_cleanup.py": "3e596bdbe18bcfb5d3e7b82a4068043237fc70238297436f6b06bea33425ae05",
+    "witness_runner.py": "baba0517172d207bf3bfab8d409e1b4b1eba62b1d6bd9cf5752db549b5a0606b"
+  },
+  "runner_source_unchanged_from_baseline": true,
+  "scope": "LOCAL_LOOPBACK_ONLY",
+  "sha256": {
+    "home.jsonl": "86a929accab09f846d947cb4212c7b8331ccc8c61f77c9316cd94587d82a8d8b",
+    "witness.jsonl": "0c71703d8cb5224fa37280bc9eaf65dccaf0b0410da4a15dff6f2b30da8c5d19"
+  },
+  "unexecuted": [
+    "A0 remote exact-SHA/transport/bench preflight",
+    "A9 disposable Frappe 15.99.0",
+    "Nuremberg extracted MariaDB 11.8 runtime",
+    "two-host latency",
+    "remote cleanup"
+  ],
+  "witness_requests": 268
+}

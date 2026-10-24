@@ -1,0 +1,32 @@
+{"admission": "CLOSED", "root": "/tmp/kap2-pr71-twohost-transport-1d2a7d9de7f2449aa343fe4b3b659b41", "socket": "private", "step": "witness_started"}
+{"duration_ms": 0.278, "operation": "close_admission", "role": "serving", "status": 403, "step": "witness_request"}
+{"duration_ms": 0.338, "operation": "confirm_home", "role": "serving", "status": 403, "step": "witness_request"}
+{"duration_ms": 0.185, "operation": "open_admission", "role": "serving", "status": 403, "step": "witness_request"}
+{"duration_ms": 0.205, "operation": "status", "role": "recovery", "status": 200, "step": "witness_request"}
+{"duration_ms": 56.115, "operation": "recover", "role": "recovery", "status": 200, "step": "witness_request"}
+{"duration_ms": 0.279, "operation": "status", "role": "recovery", "status": 200, "step": "witness_request"}
+{"duration_ms": 0.198, "operation": "prepare", "role": "serving", "status": 503, "step": "witness_request"}
+{"duration_ms": 0.225, "operation": "close_admission", "role": "recovery", "status": 200, "step": "witness_request"}
+{"duration_ms": 45.262, "operation": "recover", "role": "recovery", "status": 200, "step": "witness_request"}
+{"duration_ms": 0.548, "operation": "read_current", "role": "recovery", "status": 200, "step": "witness_request"}
+{"duration_ms": 1.728, "operation": "confirm_home", "role": "recovery", "status": 200, "step": "witness_request"}
+{"duration_ms": 1.259, "operation": "open_admission", "role": "recovery", "status": 200, "step": "witness_request"}
+{"duration_ms": 0.172, "operation": "status", "role": "recovery", "status": 200, "step": "witness_request"}
+{"duration_ms": 0.825, "operation": "authorize", "role": "serving", "status": 200, "step": "witness_request"}
+{"duration_ms": 3.641, "operation": "prepare", "role": "serving", "status": 200, "step": "witness_request"}
+{"duration_ms": 4.761, "operation": "commit", "role": "serving", "status": 200, "step": "witness_request"}
+{"duration_ms": 0.902, "operation": "authorize", "role": "serving", "status": 200, "step": "witness_request"}
+{"duration_ms": 0.185, "operation": "close_admission", "role": "recovery", "status": 200, "step": "witness_request"}
+{"duration_ms": 0.258, "operation": "authorize", "role": "serving", "status": 200, "step": "witness_request"}
+{"duration_ms": 0.202, "operation": "close_admission", "role": "recovery", "status": 200, "step": "witness_request"}
+{"duration_ms": 47.309, "operation": "recover", "role": "recovery", "status": 200, "step": "witness_request"}
+{"duration_ms": 0.925, "operation": "read_current", "role": "recovery", "status": 200, "step": "witness_request"}
+{"duration_ms": 1.341, "operation": "confirm_home", "role": "recovery", "status": 200, "step": "witness_request"}
+{"duration_ms": 1.001, "operation": "open_admission", "role": "recovery", "status": 200, "step": "witness_request"}
+{"duration_ms": 0.912, "operation": "authorize", "role": "serving", "status": 200, "step": "witness_request"}
+{"duration_ms": 0.166, "operation": "close_admission", "role": "recovery", "status": 200, "step": "witness_request"}
+{"duration_ms": 46.124, "operation": "recover", "role": "recovery", "status": 200, "step": "witness_request"}
+{"duration_ms": 0.608, "operation": "read_current", "role": "recovery", "status": 200, "step": "witness_request"}
+{"duration_ms": 0.2, "operation": "close_admission", "role": "recovery", "status": 200, "step": "witness_request"}
+{"duration_ms": 0.166, "operation": "status", "role": "recovery", "status": 200, "step": "witness_request"}
+{"admission": "CLOSED", "root_absent": true, "step": "witness_cleanup"}

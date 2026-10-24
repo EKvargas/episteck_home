@@ -1,0 +1,33 @@
+{
+  "command": "python -m pytest -p no:cacheprovider -q",
+  "returncode": 1,
+  "result": "23 collection errors; no tests executed",
+  "environment": "Existing WSL KAP-2 venv; PYTHONPATH includes apps/episteck_home and packages/home-contracts/src plus the previously retained rfc8785 target",
+  "causes": ["Missing nutrition_domain, home_mcp, fastmcp and cryptography", "Duplicate tests package/module imports across services"],
+  "collection_errors": [
+    "apps/episteck_home/tests/test_calculator.py",
+    "deploy/gateway/tests/test_fastmcp_protocol.py",
+    "packages/nutrition-domain/tests/test_domain.py",
+    "services/home-bff/tests/test_app.py",
+    "services/home-bff/tests/test_bff.py",
+    "services/home-bff/tests/test_bootstrap_route.py",
+    "services/home-bff/tests/test_bootstrap_validation.py",
+    "services/home-bff/tests/test_frappe_client_bootstrap.py",
+    "services/home-bff/tests/test_internal_mint.py",
+    "services/home-bff/tests/test_login_binding.py",
+    "services/home-bff/tests/test_public_docs_disabled.py",
+    "services/home-bff/tests/test_runtime_binding.py",
+    "services/home-bff/tests/test_security_audit.py",
+    "services/home-bff/tests/test_store.py",
+    "services/home-mcp/tests/test_client.py",
+    "services/home-mcp/tests/test_tool_contract.py",
+    "services/home-mcp/tests/test_transport_binding.py",
+    "services/nutrition/tests",
+    "spike/knowledge-technology-gate/scenarios/test_p12_r13_adversarial.py",
+    "spike/knowledge-technology-gate/scenarios/test_r13_claim_split.py",
+    "spike/knowledge-technology-gate/scenarios/test_r13_production_shape.py",
+    "spike/knowledge-technology-gate/scenarios/test_r13_transport_case2b_closure.py",
+    "spike/knowledge-technology-gate/scenarios/test_r13_transport_identity.py"
+  ],
+  "disposition": "Report separately; do not change unrelated service environments or claim a green repository-wide suite."
+}

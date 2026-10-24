@@ -1,0 +1,25 @@
+{
+  "command": [
+    "/home/d064974/kap2-twohost-venv-20261010/bin/python",
+    "-m",
+    "pytest",
+    "-p",
+    "no:cacheprovider",
+    "-q",
+    "--maxfail=1",
+    "spike/knowledge-kap2-two-host",
+    "packages/home-contracts/tests",
+    "apps/episteck_home/tests/test_typed_access_policy.py",
+    "apps/episteck_home/tests/test_knowledge_authority.py",
+    "spike/knowledge-kap2-transactional-witness/test_gateway.py",
+    "spike/knowledge-kap2-home-authority/test_lane.py",
+    "spike/knowledge-kap2-person-vertical/test_integrated.py"
+  ],
+  "env": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHONPATH": "/home/d064974/kap2-pr71-review-deps-20261024:apps/episteck_home:packages/home-contracts/src"
+  },
+  "returncode": 0,
+  "elapsed_seconds": 433.0,
+  "summary": "121 passed in 431.47s (0:07:11)"
+}

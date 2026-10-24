@@ -1,0 +1,11 @@
+# KAP-2 GCS experiment disposition
+
+**Status:** retained experiment evidence; the request-time GCS Candidate A is rejected. This document is not a runtime dependency or a proposal to repeat the cloud run.
+
+The architect rejected Candidate A after [PR #63](https://github.com/EKvargas/episteck_home/pull/63) at `3f69b0bedb073e9200a8dd7f7669bb25b2f2717c`. [PR #61](https://github.com/EKvargas/episteck_home/pull/61) at `74b92ca0189b0669cf852bc749c4d4f11568558d` and [PR #62](https://github.com/EKvargas/episteck_home/pull/62) at `b941b78613135363ed2c2ad2a99d317556cb8703` preserve the earlier full-history and bounded-head design/probe record. Their scripts, IAM/KMS configuration and GCS reader/publisher are **not** selected for Home serving.
+
+The [sanitized live evidence](https://github.com/EKvargas/episteck_home/blob/3f69b0bedb073e9200a8dd7f7669bb25b2f2717c/spike/knowledge-kap2-bounded-witness/evidence/2026-10-09/LIVE_EVIDENCE.md) reports an Ashburn synthetic run with 3,974 reserved object requests. Candidate witness-only paired p95 was 279 ms warm / 311 ms cold at suffix 0 and 1,335 ms warm / 1,833 ms cold at suffix 8. These timings exclude actual Home RT#1/RT#2, transport, domains and bundling. A real `429` occurred on rapid head replacement; the runner failed closed and later recovered a known orphan slot. The run did not prove production retention, authenticated historical signing trust, full in-flight writer drain or KAP-10 latency.
+
+Measured safety cases included PENDING-deny and matching-COMMIT allow, rejected stale-generation head writes after takeover, and denial after a combined synthetic Home/head rollback with retained successor history. Missing/malformed responses and timeouts denied; some malformed/wrong-incarnation cases were injected locally rather than observed naturally. The isolated project was deletion-requested with billing disabled, while disabled keys and audit/final billing residue could remain until project deletion completes. Those facts support the selected transactional-witness feasibility comparison but do not authorize importing the GCS request path into Home.
+
+**Verify:** `rg -n 'rejected|3,974|1,335|429' docs/architecture/proposals/KNOWLEDGE_KAP2_GCS_EVIDENCE.md`.

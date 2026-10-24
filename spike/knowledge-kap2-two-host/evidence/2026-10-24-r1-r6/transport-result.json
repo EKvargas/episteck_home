@@ -1,0 +1,34 @@
+{
+  "scope": "focused loopback mTLS recovery regression; not the A0-A11 matrix or a remote run",
+  "test": "test_recovery_handshake_and_role_isolation_over_mtls",
+  "witness_http_requests": 30,
+  "operations": {
+    "close_admission": 6,
+    "confirm_home": 3,
+    "open_admission": 3,
+    "status": 4,
+    "recover": 4,
+    "prepare": 2,
+    "read_current": 3,
+    "authorize": 4,
+    "commit": 1
+  },
+  "statuses": {
+    "403": 3,
+    "200": 26,
+    "503": 1
+  },
+  "cleanup": {
+    "admission": "CLOSED",
+    "root_absent": true,
+    "step": "witness_cleanup"
+  },
+  "sha256": {
+    "transport-witness.jsonl": "b407a95a9a056ec070d5a90bcbd916e5150ed273181546deb79e17bcead208b9"
+  },
+  "limits": [
+    "No latency measurement",
+    "No Frappe or separated-host validation",
+    "Client request ceiling asserted by test; not a full matrix count"
+  ]
+}

@@ -1,0 +1,196 @@
+{"status": "LOCAL_ONLY_REMOTE_PREFLIGHT_UNEXECUTED", "step": "preflight"}
+{"duration_ms": 215.157, "result": "PASS", "step": "transport_credential_isolation_and_closed_start", "witness_requests": 5}
+{"duration_ms": 6168.774, "result": "PASS", "step": "grant_self_bypass_and_ordinary_write", "witness_requests": 16}
+{"duration_ms": 23178.129, "result": "PASS", "step": "dependency_issuer_and_expiry_invalidation", "witness_requests": 46}
+{"duration_ms": 5986.051, "result": "PASS", "step": "reader-first_revocation_order", "witness_requests": 54}
+{"duration_ms": 5952.028, "result": "PASS", "step": "writer-first_revocation_order", "witness_requests": 64}
+{"duration_ms": 5902.161, "result": "PASS", "step": "writer_connection_loss_with_live_reader", "witness_requests": 76}
+{"duration_ms": 6249.32, "result": "PASS", "step": "unknown_prepare_acknowledgement", "witness_requests": 90}
+{"duration_ms": 6344.552, "result": "PASS", "step": "unknown_commit_acknowledgement", "witness_requests": 105}
+{"duration_ms": 5784.357, "result": "PASS", "step": "gateway_restart_first_read_denial", "witness_requests": 115}
+{"duration_ms": 12354.249, "result": "PASS", "step": "dual_physical_restore_first_read_and_selected_reauthorization", "witness_requests": 144}
+{"call": 0, "duration_ms": 48.111, "mode": "warm", "pair": 0, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.332, "mode": "warm", "pair": 0, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 103.174, "mode": "warm", "pair": 0, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 45.437, "mode": "warm", "pair": 1, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 44.718, "mode": "warm", "pair": 1, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 97.012, "mode": "warm", "pair": 1, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 46.33, "mode": "warm", "pair": 2, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 45.453, "mode": "warm", "pair": 2, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 98.089, "mode": "warm", "pair": 2, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 44.857, "mode": "warm", "pair": 3, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 49.609, "mode": "warm", "pair": 3, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 100.553, "mode": "warm", "pair": 3, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 49.34, "mode": "warm", "pair": 4, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 47.492, "mode": "warm", "pair": 4, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 107.049, "mode": "warm", "pair": 4, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 46.861, "mode": "warm", "pair": 5, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 44.709, "mode": "warm", "pair": 5, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 98.037, "mode": "warm", "pair": 5, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 46.418, "mode": "warm", "pair": 6, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 44.279, "mode": "warm", "pair": 6, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 97.462, "mode": "warm", "pair": 6, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 45.048, "mode": "warm", "pair": 7, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 45.143, "mode": "warm", "pair": 7, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 95.875, "mode": "warm", "pair": 7, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 46.537, "mode": "warm", "pair": 8, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.688, "mode": "warm", "pair": 8, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 101.976, "mode": "warm", "pair": 8, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 45.468, "mode": "warm", "pair": 9, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.664, "mode": "warm", "pair": 9, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 100.951, "mode": "warm", "pair": 9, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 46.079, "mode": "warm", "pair": 10, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.943, "mode": "warm", "pair": 10, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 102.193, "mode": "warm", "pair": 10, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 49.142, "mode": "warm", "pair": 11, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.918, "mode": "warm", "pair": 11, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 105.173, "mode": "warm", "pair": 11, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 48.603, "mode": "warm", "pair": 12, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 44.816, "mode": "warm", "pair": 12, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 99.656, "mode": "warm", "pair": 12, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 45.721, "mode": "warm", "pair": 13, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 44.353, "mode": "warm", "pair": 13, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 96.645, "mode": "warm", "pair": 13, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 50.545, "mode": "warm", "pair": 14, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.066, "mode": "warm", "pair": 14, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 107.238, "mode": "warm", "pair": 14, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 47.734, "mode": "warm", "pair": 15, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.656, "mode": "warm", "pair": 15, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 103.226, "mode": "warm", "pair": 15, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 45.589, "mode": "warm", "pair": 16, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.785, "mode": "warm", "pair": 16, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 100.73, "mode": "warm", "pair": 16, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 46.281, "mode": "warm", "pair": 17, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 44.859, "mode": "warm", "pair": 17, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 97.734, "mode": "warm", "pair": 17, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 45.248, "mode": "warm", "pair": 18, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 44.839, "mode": "warm", "pair": 18, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 97.454, "mode": "warm", "pair": 18, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 44.556, "mode": "warm", "pair": 19, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 46.599, "mode": "warm", "pair": 19, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 99.817, "mode": "warm", "pair": 19, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 45.182, "mode": "warm", "pair": 20, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.336, "mode": "warm", "pair": 20, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 100.775, "mode": "warm", "pair": 20, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 45.75, "mode": "warm", "pair": 21, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.707, "mode": "warm", "pair": 21, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 100.981, "mode": "warm", "pair": 21, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 45.016, "mode": "warm", "pair": 22, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 45.694, "mode": "warm", "pair": 22, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 97.456, "mode": "warm", "pair": 22, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 49.032, "mode": "warm", "pair": 23, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 44.79, "mode": "warm", "pair": 23, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 101.927, "mode": "warm", "pair": 23, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 50.278, "mode": "warm", "pair": 24, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 47.727, "mode": "warm", "pair": 24, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 105.578, "mode": "warm", "pair": 24, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 49.344, "mode": "warm", "pair": 25, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 44.831, "mode": "warm", "pair": 25, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 100.371, "mode": "warm", "pair": 25, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 46.742, "mode": "warm", "pair": 26, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.867, "mode": "warm", "pair": 26, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 101.968, "mode": "warm", "pair": 26, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 49.378, "mode": "warm", "pair": 27, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 49.259, "mode": "warm", "pair": 27, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 104.736, "mode": "warm", "pair": 27, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 49.289, "mode": "warm", "pair": 28, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 47.781, "mode": "warm", "pair": 28, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 105.423, "mode": "warm", "pair": 28, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 48.595, "mode": "warm", "pair": 29, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 45.72, "mode": "warm", "pair": 29, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 101.228, "mode": "warm", "pair": 29, "step": "latency_pair", "witness_requests": 2}
+{"call_p50_ms": 46.671, "call_p95_ms": 49.378, "call_p99_ms": 50.545, "calls": 60, "mode": "warm", "pair_max_ms": 107.238, "pair_p50_ms": 100.863, "pair_p95_ms": 107.049, "pair_p99_ms": 107.238, "pairs": 30, "status": "PROPOSED_BUDGET_NOT_RATIFIED", "step": "latency_distribution"}
+{"call": 0, "duration_ms": 48.697, "mode": "cold", "pair": 0, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 44.879, "mode": "cold", "pair": 0, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 99.315, "mode": "cold", "pair": 0, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 47.189, "mode": "cold", "pair": 1, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 47.861, "mode": "cold", "pair": 1, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 101.689, "mode": "cold", "pair": 1, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 49.578, "mode": "cold", "pair": 2, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 49.116, "mode": "cold", "pair": 2, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 104.898, "mode": "cold", "pair": 2, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 49.413, "mode": "cold", "pair": 3, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 44.648, "mode": "cold", "pair": 3, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 102.161, "mode": "cold", "pair": 3, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 46.806, "mode": "cold", "pair": 4, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.231, "mode": "cold", "pair": 4, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 102.257, "mode": "cold", "pair": 4, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 50.416, "mode": "cold", "pair": 5, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 47.89, "mode": "cold", "pair": 5, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 104.993, "mode": "cold", "pair": 5, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 45.717, "mode": "cold", "pair": 6, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 45.274, "mode": "cold", "pair": 6, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 98.35, "mode": "cold", "pair": 6, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 47.805, "mode": "cold", "pair": 7, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 44.476, "mode": "cold", "pair": 7, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 98.795, "mode": "cold", "pair": 7, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 50.352, "mode": "cold", "pair": 8, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 47.059, "mode": "cold", "pair": 8, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 104.69, "mode": "cold", "pair": 8, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 46.365, "mode": "cold", "pair": 9, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 47.522, "mode": "cold", "pair": 9, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 100.92, "mode": "cold", "pair": 9, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 46.712, "mode": "cold", "pair": 10, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.673, "mode": "cold", "pair": 10, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 102.19, "mode": "cold", "pair": 10, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 49.154, "mode": "cold", "pair": 11, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.572, "mode": "cold", "pair": 11, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 104.57, "mode": "cold", "pair": 11, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 49.008, "mode": "cold", "pair": 12, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.369, "mode": "cold", "pair": 12, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 104.025, "mode": "cold", "pair": 12, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 49.607, "mode": "cold", "pair": 13, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 47.607, "mode": "cold", "pair": 13, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 104.946, "mode": "cold", "pair": 13, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 49.775, "mode": "cold", "pair": 14, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.055, "mode": "cold", "pair": 14, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 104.921, "mode": "cold", "pair": 14, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 49.685, "mode": "cold", "pair": 15, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.37, "mode": "cold", "pair": 15, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 104.452, "mode": "cold", "pair": 15, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 50.801, "mode": "cold", "pair": 16, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 47.72, "mode": "cold", "pair": 16, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 107.015, "mode": "cold", "pair": 16, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 48.274, "mode": "cold", "pair": 17, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 44.402, "mode": "cold", "pair": 17, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 100.209, "mode": "cold", "pair": 17, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 51.617, "mode": "cold", "pair": 18, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.682, "mode": "cold", "pair": 18, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 107.137, "mode": "cold", "pair": 18, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 48.858, "mode": "cold", "pair": 19, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.913, "mode": "cold", "pair": 19, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 103.922, "mode": "cold", "pair": 19, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 49.342, "mode": "cold", "pair": 20, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.985, "mode": "cold", "pair": 20, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 105.029, "mode": "cold", "pair": 20, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 49.542, "mode": "cold", "pair": 21, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.242, "mode": "cold", "pair": 21, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 105.756, "mode": "cold", "pair": 21, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 48.37, "mode": "cold", "pair": 22, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.619, "mode": "cold", "pair": 22, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 105.137, "mode": "cold", "pair": 22, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 47.055, "mode": "cold", "pair": 23, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 47.977, "mode": "cold", "pair": 23, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 101.927, "mode": "cold", "pair": 23, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 50.195, "mode": "cold", "pair": 24, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.915, "mode": "cold", "pair": 24, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 104.941, "mode": "cold", "pair": 24, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 50.014, "mode": "cold", "pair": 25, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 49.42, "mode": "cold", "pair": 25, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 105.412, "mode": "cold", "pair": 25, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 49.916, "mode": "cold", "pair": 26, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 48.877, "mode": "cold", "pair": 26, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 105.191, "mode": "cold", "pair": 26, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 49.172, "mode": "cold", "pair": 27, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 47.58, "mode": "cold", "pair": 27, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 104.92, "mode": "cold", "pair": 27, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 48.988, "mode": "cold", "pair": 28, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 47.065, "mode": "cold", "pair": 28, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 103.721, "mode": "cold", "pair": 28, "step": "latency_pair", "witness_requests": 2}
+{"call": 0, "duration_ms": 49.34, "mode": "cold", "pair": 29, "step": "latency_sample", "witness_requests": 1}
+{"call": 1, "duration_ms": 49.046, "mode": "cold", "pair": 29, "step": "latency_sample", "witness_requests": 1}
+{"duration_ms": 105.413, "mode": "cold", "pair": 29, "step": "latency_pair", "witness_requests": 2}
+{"call_p50_ms": 48.646, "call_p95_ms": 50.352, "call_p99_ms": 51.617, "calls": 60, "mode": "cold", "pair_max_ms": 107.137, "pair_p50_ms": 104.63, "pair_p95_ms": 107.015, "pair_p99_ms": 107.137, "pairs": 30, "status": "PROPOSED_BUDGET_NOT_RATIFIED", "step": "latency_distribution"}
+{"duration_ms": 11953.585, "result": "PASS", "step": "kap2_policy_witness_latency_and_request_count", "witness_requests": 269}
+{"request_counts": {"by_operation": {"authorize": 161, "commit": 27, "event_outcome": 3, "kill_writer": 1, "prepare": 28, "probe_privileges": 2, "read_current": 21, "recover": 20, "restart_gateway": 1, "restore": 1, "snapshot": 1, "status": 2, "tls_handshake": 1}, "by_outcome": {"WitnessTransportError": 2, "ok": 266, "rejected": 1}, "by_role": {"anonymous": 1, "recovery": 49, "serving": 219}, "cap": 400, "total": 269}, "step": "matrix_summary", "steps": {"dependency_issuer_and_expiry_invalidation": "PASS", "dual_physical_restore_first_read_and_selected_reauthorization": "PASS", "gateway_restart_first_read_denial": "PASS", "grant_self_bypass_and_ordinary_write": "PASS", "kap2_policy_witness_latency_and_request_count": "PASS", "reader-first_revocation_order": "PASS", "transport_credential_isolation_and_closed_start": "PASS", "unknown_commit_acknowledgement": "PASS", "unknown_prepare_acknowledgement": "PASS", "writer-first_revocation_order": "PASS", "writer_connection_loss_with_live_reader": "PASS"}}
+{"request_attempts": 269, "root_absent": true, "step": "home_cleanup"}

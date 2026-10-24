@@ -1,0 +1,87 @@
+{
+  "date": "2026-10-24",
+  "baseline_sha": "6166594bd91482455440e8e938306769100136bd",
+  "scope": "LOCAL_ACQUISITION_CHECK_AND_RECOVERY_REVIEW_ONLY",
+  "disposition": "LOCAL_CORRECTION_VERIFIED_REMOTE_ACCEPTANCE_PENDING",
+  "acquisition_change": {
+    "changed_behavior": "Require install-db help exit 1 plus Usage header, auth-method option and datadir text",
+    "pinned_packages_changed": false,
+    "wrappers_or_prefix_changed": false,
+    "six_original_python_runners_changed": false,
+    "authority_implementation_changed": false,
+    "runtime_compatibility_proved": false
+  },
+  "verification": {
+    "python": "3.12.3",
+    "baseline_package_tests": {"passed": 6},
+    "regression_red": {"failed": 2, "passed": 13},
+    "final_package_tests": {"passed": 17, "failed": 0, "seconds": 2.73},
+    "contracts_policy_authority_unit_tests": {"passed": 51, "failed": 0, "seconds": 1.74},
+    "final_combined_test_run": {"passed": 68, "failed": 0, "seconds": 1.73},
+    "initial_collection_errors": [
+      "test_authorization_plan.py: missing rfc8785",
+      "test_context.py: missing rfc8785",
+      "test_knowledge.py: missing rfc8785"
+    ],
+    "collection_errors_resolved": true,
+    "local_test_dependency": "rfc8785==0.1.4",
+    "dependency_target": "/home/d064974/kap2-pr71-review-deps-20261024",
+    "posix_shell_syntax_passed": true,
+    "actual_local_help_check_exit": 0,
+    "actual_local_install_db_help_exit": 1,
+    "historical_loopback_jsonl_hashes_verified": true,
+    "historical_remote_result_hash_verified": true,
+    "six_original_python_runners_unchanged_verified": true,
+    "authority_and_contract_code_unchanged_verified": true,
+    "git_diff_check_passed": true,
+    "commands": [
+      "python -m pytest -p no:cacheprovider spike/knowledge-kap2-two-host -q",
+      "sh -n spike/knowledge-kap2-two-host/acquire_mariadb.sh",
+      "PYTHONPATH=/home/d064974/kap2-pr71-review-deps-20261024:apps/episteck_home:packages/home-contracts/src python -m pytest -p no:cacheprovider -q packages/home-contracts/tests apps/episteck_home/tests/test_typed_access_policy.py apps/episteck_home/tests/test_knowledge_authority.py"
+    ]
+  },
+  "local_diagnostic_incident": {
+    "cause": "PowerShell/WSL shell quoting in an initial help probe",
+    "outcome": "Default initialization was attempted, failed on filesystem permissions, and was stopped; no successful initialization",
+    "correction": "Subsequent calls pass argument arrays directly",
+    "production_host_contacted": false
+  },
+  "latest_remote_attempt": {
+    "record": "https://github.com/EKvargas/episteck_home/pull/71#issuecomment-6132455875",
+    "approved_sha": "6166594bd91482455440e8e938306769100136bd",
+    "result_sha256": "37f6347ea5ca83fa0c37f9a38f9fa6a1de82000a04e9db89c292c52002fbe14f",
+    "upstream_install_db_sha256": "7ce8954169bd124f1f1198ebe94dffb376b1501b5683cb140eebdb1b58bc8eae",
+    "disposition": "STOPPED_AT_A0",
+    "attempted_requests": 0,
+    "matrix_started": false,
+    "runner_a11_passed": false,
+    "resource_absence_recorded": true,
+    "cleanup_verifiers_complete": {"home": false, "witness": false},
+    "cleanup_verifier_limitation": "Missing runner JSONL because neither runner started"
+  },
+  "recovery_review": {
+    "independent_read_only_reviewer": true,
+    "final_review_disposition": "READY_FOR_LOCAL_COMMIT_AND_REVIEW",
+    "acquisition_blocking_findings": [],
+    "automatic_old_grant_revival_found_in_reviewed_paths": false,
+    "proofs_still_open": [
+      "R1: independent CLOSED/REAUTH_ONLY gate through cross-store recovery proof",
+      "R2: repeated writer/publisher principal and epoch cutover",
+      "R3: remaining acknowledgement-loss windows including uncertain Home COMMIT",
+      "R4: production authority-source cutover, CIRCLE, context invalidation and credential custody",
+      "R5: complete-path latency/timing and later KAP obligations",
+      "R6: reject previously known incarnation collisions beyond the current head"
+    ],
+    "board_ratification_recorded": false,
+    "kap2_complete": false
+  },
+  "this_continuation": {
+    "ssh_performed": false,
+    "remote_preparation_performed": false,
+    "database_integration_or_restore_rerun": false,
+    "matrix_or_latency_run_performed": false,
+    "production_change_performed": false,
+    "merge_performed": false,
+    "fresh_remote_authorization_required": true
+  }
+}

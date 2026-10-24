@@ -1,0 +1,143 @@
+........................................................................ [ 60%]
+...........................F....................                         [100%]
+=================================== FAILURES ===================================
+______ test_home_lane_failure_never_opens_independent_admission[acquire] _______
+
+self = <pymysql.connections.Connection object at 0x7326b2999700>, num_bytes = 4
+
+    def _read_bytes(self, num_bytes):
+        # NOTE: caller should call self._sock.settimeout(self._read_timeout)
+        # before first read.
+        while True:
+            try:
+>               data = self._rfile.read(num_bytes)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/home/d064974/kap2-twohost-venv-20261010/lib/python3.12/site-packages/pymysql/connections.py:818:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <socket.SocketIO object at 0x7326b2999b70>
+b = <memory at 0x7326b2985000>
+
+    def readinto(self, b):
+        """Read up to len(b) bytes into the writable buffer *b* and return
+        the number of bytes read.  If the socket is non-blocking and no bytes
+        are available, None is returned.
+
+        If *b* is non-empty, a 0 return value indicates that the connection
+        was shutdown at the other end.
+        """
+        self._checkClosed()
+        self._checkReadable()
+        if self._timeout_occurred:
+            raise OSError("cannot read from timed out object")
+        while True:
+            try:
+>               return self._sock.recv_into(b)
+                       ^^^^^^^^^^^^^^^^^^^^^^^
+E               TimeoutError: timed out
+
+/usr/lib/python3.12/socket.py:707: TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+services = (<test_gateway.PrivateDB object at 0x7326b29be210>, <test_gateway.PrivateDB object at 0x7326b29be600>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7326b29bcd70>
+failure = 'acquire'
+
+    @pytest.mark.parametrize("failure", ["acquire", "after-confirm", "release"])
+    def test_home_lane_failure_never_opens_independent_admission(services, monkeypatch, failure):
+        from contextlib import contextmanager
+        home, witness_db = services
+        gateway, authority = new_authority(home, witness_db, Binding())
+        opened = []
+        original_open = gateway.open_admission
+        original_lane = authority._lane
+        original_confirm = gateway.confirm_home
+        held_connection = None
+
+        def observed_open(*args):
+            original_open(*args)
+            opened.append(True)
+
+        @contextmanager
+        def faulted_lane(connection, site):
+            with original_lane(connection, site):
+                if failure == "after-confirm":
+                    def lose_lane(*args):
+                        original_confirm(*args)
+                        with connection.cursor() as cursor:
+                            cursor.execute("SELECT RELEASE_LOCK(%s)",
+                                           (authority._lane_name(site.partition),))
+                            assert cursor.fetchone() == (1,)
+                    monkeypatch.setattr(gateway, "confirm_home", lose_lane)
+                yield
+            if failure == "release":
+                raise RuntimeError("injected lane cleanup failure")
+
+        monkeypatch.setattr(gateway, "open_admission", observed_open)
+        monkeypatch.setattr(authority, "_lane", faulted_lane)
+        try:
+            if failure == "acquire":
+                held_connection = pymysql.connect(unix_socket=str(home.socket), user="root")
+                with held_connection.cursor() as cursor:
+                    cursor.execute("SELECT GET_LOCK(%s,0)", (authority._lane_name("p1"),))
+                    assert cursor.fetchone() == (1,)
+            with pytest.raises((RuntimeError, TimeoutError)):
+>               authority.recover(recovery_password="synthetic-home-recover")
+
+spike/knowledge-kap2-person-vertical/test_integrated.py:297:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+apps/episteck_home/episteck_home/knowledge_authority/integrated.py:230: in recover
+    with self._lane(recovery, site):
+/usr/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+spike/knowledge-kap2-person-vertical/test_integrated.py:275: in faulted_lane
+    with original_lane(connection, site):
+/usr/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+apps/episteck_home/episteck_home/knowledge_authority/integrated.py:83: in _lane
+    cursor.execute("SELECT GET_LOCK(%s,5)", (name,))
+/home/d064974/kap2-twohost-venv-20261010/lib/python3.12/site-packages/pymysql/cursors.py:170: in execute
+    result = self._query(query)
+             ^^^^^^^^^^^^^^^^^^
+/home/d064974/kap2-twohost-venv-20261010/lib/python3.12/site-packages/pymysql/cursors.py:335: in _query
+    conn.query(q)
+/home/d064974/kap2-twohost-venv-20261010/lib/python3.12/site-packages/pymysql/connections.py:581: in query
+    self._affected_rows = self._read_query_result(unbuffered=unbuffered)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/home/d064974/kap2-twohost-venv-20261010/lib/python3.12/site-packages/pymysql/connections.py:857: in _read_query_result
+    result.read()
+/home/d064974/kap2-twohost-venv-20261010/lib/python3.12/site-packages/pymysql/connections.py:1290: in read
+    first_packet = self.connection._read_packet()
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/home/d064974/kap2-twohost-venv-20261010/lib/python3.12/site-packages/pymysql/connections.py:779: in _read_packet
+    packet_header = self._read_bytes(4)
+                    ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <pymysql.connections.Connection object at 0x7326b2999700>, num_bytes = 4
+
+    def _read_bytes(self, num_bytes):
+        # NOTE: caller should call self._sock.settimeout(self._read_timeout)
+        # before first read.
+        while True:
+            try:
+                data = self._rfile.read(num_bytes)
+                break
+            except OSError as e:
+                if e.errno == errno.EINTR:
+                    continue
+                self._force_close()
+>               raise err.OperationalError(
+                    CR.CR_SERVER_LOST,
+                    f"Lost connection to MySQL server during query ({e})",
+                )
+E               pymysql.err.OperationalError: (2013, 'Lost connection to MySQL server during query (timed out)')
+
+/home/d064974/kap2-twohost-venv-20261010/lib/python3.12/site-packages/pymysql/connections.py:824: OperationalError
+=========================== short test summary info ============================
+FAILED packages/home-contracts::test_home_lane_failure_never_opens_independent_admission[acquire]
+1 failed, 119 passed in 418.17s (0:06:58)
