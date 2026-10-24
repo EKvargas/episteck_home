@@ -48,5 +48,5 @@ def test_tmpfiles_creates_setgid_group_gated_socket_directory():
 
 def test_both_units_carry_the_same_runtime_legacy_binding_flag():
     # The public app (callback) and the mint app must agree during the H5 transition.
-    assert "Environment=RUNTIME_LEGACY_BINDING=on" in PUBLIC
-    assert "Environment=RUNTIME_LEGACY_BINDING=on" in MINT
+    assert "Environment=RUNTIME_LEGACY_BINDING=off" in PUBLIC
+    assert "Environment=RUNTIME_LEGACY_BINDING=off" in MINT
