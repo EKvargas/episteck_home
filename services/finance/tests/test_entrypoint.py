@@ -23,4 +23,7 @@ def test_entrypoint_fails_closed_without_a_home_client(tmp_path, monkeypatch):
     response = client.get("/overview", headers={"X-Episteck-Delegation": "tok"})
     assert response.status_code == 503
     assert response.json() == {"detail": "SERVICE_UNAVAILABLE"}
+    # The PSD2 callback is wired to the same database: an unknown state is refused, not 404.
+    callback = client.get("/connect/callback", params={"state": "U" * 43, "code": "c"})
+    assert callback.status_code == 400
     sys.modules.pop("app.main", None)

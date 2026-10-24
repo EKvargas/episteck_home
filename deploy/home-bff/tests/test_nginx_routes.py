@@ -144,3 +144,29 @@ def test_runtime_locations_proxy_only_to_the_bff_port():
         block = CONF.split(f"location = {route} {{")[1].split("}")[0]
         assert "proxy_pass http://127.0.0.1:9933;" in block
         assert "9940" not in block
+
+
+FINANCE_CALLBACK = "location = /finance/connect/callback {"
+
+
+def _finance_callback_block():
+    start = CONF.index(FINANCE_CALLBACK) + len(FINANCE_CALLBACK)
+    depth, offset = 1, start
+    while depth:
+        depth += {"{": 1, "}": -1}.get(CONF[offset], 0)
+        offset += 1
+    return CONF[start:offset - 1]
+
+
+def test_finance_psd2_callback_is_one_exact_get_only_location():
+    """ADR-0013: the only Finance route on the Internet, and only for GET."""
+    assert CONF.count(FINANCE_CALLBACK) == 1
+    block = _finance_callback_block()
+    assert re.search(r"limit_except GET \{\s*deny all;\s*\}", block)
+    assert "proxy_pass http://127.0.0.1:9935/connect/callback;" in block
+    assert not re.search(r"location\s+(\^~\s+)?/finance(?!/connect/callback \{)", CONF)
+
+
+def test_no_other_route_reaches_the_finance_ports():
+    outside = CONF.replace(_finance_callback_block(), "")
+    assert "9935" not in outside and "9936" not in outside

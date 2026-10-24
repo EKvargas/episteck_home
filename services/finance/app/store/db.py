@@ -91,6 +91,11 @@ CREATE TABLE IF NOT EXISTS sync_run(
 CREATE TABLE IF NOT EXISTS oauth_state(
     state_hash TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, connection_id TEXT NOT NULL,
     owner_person_id TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT);
+-- Hand-over from the public callback to the operator's command. code is NULL when the
+-- bank or the owner refused. A row lives only until the command takes it (or 15 min).
+CREATE TABLE IF NOT EXISTS oauth_callback(
+    state_hash TEXT PRIMARY KEY REFERENCES oauth_state(state_hash),
+    workspace_id TEXT NOT NULL, code TEXT, received_at TEXT NOT NULL);
 
 CREATE TABLE IF NOT EXISTS eb_session(
     connection_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, session_id TEXT NOT NULL,

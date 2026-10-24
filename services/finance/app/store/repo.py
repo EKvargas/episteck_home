@@ -6,7 +6,7 @@ import hashlib
 import json
 import sqlite3
 from collections.abc import Callable, Iterator, Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from contextlib import contextmanager
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -35,10 +35,11 @@ class WorkspaceScope:
 
 
 @dataclass(frozen=True)
-class OauthState:
+class ReceivedCallback:
     workspace_id: str
     connection_id: str
     owner_person_id: str
+    code: str | None = field(repr=False)  # None: the bank or the owner refused
 
 
 @dataclass(frozen=True)
@@ -369,17 +370,40 @@ class FinanceRepository:
                          (state_hash, workspace_id, connection_id, owner_person_id,
                           _ts(expires_at)))
 
-    def consume_oauth_state(self, state_hash: str, now: datetime) -> OauthState | None:
-        """Single-use: unknown, expired and already-used states are indistinguishable."""
+    def record_callback(self, state_hash: str, code: str | None, now: datetime) -> bool:
+        """Consume the state and keep the code for the operator's command, in ONE transaction.
+
+        Single-use: unknown, expired and already-used states are indistinguishable.
+        """
         with self.connection() as conn, db.write_tx(conn):
             claimed = conn.execute(
                 "UPDATE oauth_state SET used_at=? WHERE state_hash=? AND used_at IS NULL "
                 "AND expires_at>?", (_ts(now), state_hash, _ts(now))).rowcount
             if claimed != 1:
+                return False
+            conn.execute("INSERT INTO oauth_callback(state_hash,workspace_id,code,received_at) "
+                         "SELECT state_hash, workspace_id, ?, ? FROM oauth_state "
+                         "WHERE state_hash=?", (code, _ts(now), state_hash))
+        return True
+
+    def take_callback(self, state_hash: str) -> ReceivedCallback | None:
+        """Hand the received code over once, deleting it in the same transaction."""
+        with self.connection() as conn, db.write_tx(conn):
+            row = conn.execute(
+                "SELECT s.workspace_id, s.connection_id, s.owner_person_id, c.code "
+                "FROM oauth_callback c JOIN oauth_state s ON s.state_hash=c.state_hash "
+                "WHERE c.state_hash=?", (state_hash,)).fetchone()
+            if row is None:
                 return None
-            row = conn.execute("SELECT * FROM oauth_state WHERE state_hash=?",
-                               (state_hash,)).fetchone()
-        return OauthState(row["workspace_id"], row["connection_id"], row["owner_person_id"])
+            conn.execute("DELETE FROM oauth_callback WHERE state_hash=?", (state_hash,))
+        return ReceivedCallback(row["workspace_id"], row["connection_id"],
+                                row["owner_person_id"], row["code"])
+
+    def purge_callbacks(self, received_before: datetime) -> None:
+        """Codes nobody collected are useless after a few minutes; do not keep them."""
+        with self.connection() as conn, db.write_tx(conn):
+            conn.execute("DELETE FROM oauth_callback WHERE received_at<?",
+                         (_ts(received_before),))
 
     def activate_eb_session(self, workspace_id: str, connection_id: str, session_id: str,
                             valid_until: datetime, created_at: datetime,

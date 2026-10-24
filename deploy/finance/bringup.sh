@@ -84,7 +84,7 @@ case "$step" in
     cp "$src/finance-sync.timer" "$home/.config/systemd/user/finance-sync.timer"
     chown -R "$SVC:$SVC" "$home/.config"
     as_svc systemctl --user daemon-reload
-    as_svc systemctl --user start finance-api finance-mcp
+    as_svc systemctl --user restart finance-api finance-mcp  # start is a no-op when running
     as_svc systemctl --user --no-pager --lines=0 status finance-api finance-mcp || true
     ;;
 
