@@ -1,10 +1,10 @@
 # Knowledge KAP-2 consolidation handoff
 
-**State:** draft, disconnected candidate; KAP-1 accepted, KAP-2 open. This branch begins at `origin/main` `45b0958b46aa27b1326fdaba2f4811ebf20a90e0` (2026-10-10). The selected local PERSON implementation source is PR #69 at `dde967d21a6e0452f3ab3c717d15d0c91b3f8c3c`. The exact consolidated implementation commit is `743aec2dc09b9a7229719bac61c8bf2c968d7501`; this handoff commit follows it and its exact SHA is recorded in the draft PR. No Board ratification of the recovery amendment or production activation is recorded.
+**State:** draft, disconnected candidate; KAP-1 accepted, KAP-2 open. This branch begins at `origin/main` `45b0958b46aa27b1326fdaba2f4811ebf20a90e0` (2026-10-10). The selected local PERSON implementation source is PR #69 at `dde967d21a6e0452f3ab3c717d15d0c91b3f8c3c`. The exact consolidated implementation commit is `743aec2dc09b9a7229719bac61c8bf2c968d7501`; this handoff commit follows it and its exact SHA is recorded in the draft PR. No Board ratification of the recovery amendment or production activation is recorded. **Merged:** the owner merged PR #71 into `main` on 2026-10-24 (`8232fa2`); see [Merge outcome](#merge-outcome-2026-10-24).
 
 ## Latest continuation — 2026-10-24
 
-**Subsequent local R1/R6 work — complete locally, 121 affected tests passed:** see [correction and validation](../reviews/2026-10-24-knowledge-kap2-r1-r6-validation.md). Witness recovery stays CLOSED until exact Home/witness default-deny confirmation and staged opening; retained incarnation history rejects known reuse. The disposable transport now carries separate recovery-only close/confirm/open calls, so old runner hashes/request counts do not describe this candidate. This is local work only; R2–R5, complete production recovery proof, Board ratification and a newly authorized exact-SHA two-host attempt remain open. Retain the draft/unmerged hold.
+**Subsequent local R1/R6 work — complete locally, 121 affected tests passed:** see [correction and validation](../reviews/2026-10-24-knowledge-kap2-r1-r6-validation.md). Witness recovery stays CLOSED until exact Home/witness default-deny confirmation and staged opening; retained incarnation history rejects known reuse. The disposable transport now carries separate recovery-only close/confirm/open calls, so old runner hashes/request counts do not describe this candidate. This is local work only; R2–R5, complete production recovery proof, Board ratification and a newly authorized exact-SHA two-host attempt remain open. The draft/unmerged hold ended with the owner's merge of PR #71; production activation still requires Board ratification.
 
 The historical inventory and local implementation results below remain intact. The latest remote outcome is the [second stopped preparation attempt](https://github.com/EKvargas/episteck_home/pull/71#issuecomment-6132455875), at `6166594bd91482455440e8e938306769100136bd`: A0 failed because the pinned `mariadb-install-db --help` deliberately exits 1. The earlier SQL-path correction passed. No runner, database initialization or matrix started (**0/400 requests**); MariaDB 11.8 runtime and cross-host latency remain unproved.
 
@@ -56,6 +56,14 @@ Only the local selected code and local synthetic probes were transferred. [GCS f
 ## Merge implications and hold
 
 The workspace deployment standard (`shared/standards/deployment-and-change-flow.md` in the parent delivery workspace) says the `episteck-deploy` timer compares each configured repository's `origin/main` roughly every five minutes, clones changed main, `rsync --delete`s the mapped app source into the bench, clears cache and restarts Frappe web/workers. Its optional post-deploy hook can migrate where configured; the standard says Episteck has no such hook. The proposed branch adds importable `episteck_home` Python files. **Merging would therefore copy candidate code to the live bench and restart it even while the candidate is disconnected.** This PR must stay draft and unmerged while the production installation/activation gate is open. No schema file is registered as a production migration, and no gateway service startup is configured.
+
+### Merge outcome (2026-10-24)
+
+The owner merged PR #71 (`8232fa2`, 17:18 UTC). `episteck-deploy` logged `Done: deployed 8232fa2` at 17:22 UTC after the rsync and a web/worker restart; `home.episteck.com` answered `200` afterwards. The candidate is present on the Home bench but inert: no other Home module imports `knowledge_authority` or `policy.typed_access`, `hooks.py` does not name them, they expose no whitelisted method, and no DocType or patch was added. `apps/episteck_home/tests/test_knowledge_disconnected.py` enforces those three conditions; connecting the candidate must change that test in the same PR, after Board ratification.
+
+Never run `knowledge_authority/frappe_probe.py` or `integrated_frappe_probe.py` against the production site (for example with `bench execute`): they create Users, Persons and Consent Grants and commit. They belong to disposable benches only.
+
+The superseded PRs #56 and #58–#69 were closed after the merge; their branches and worktrees are kept, so every head SHA in the inventory below stays reachable.
 
 ## Local verification and remaining gate
 

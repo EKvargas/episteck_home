@@ -9,6 +9,11 @@ implementation and all open PR/worktree dispositions are in the
 [KAP-2 consolidation handoff](proposals/KNOWLEDGE_KAP2_CONSOLIDATION_HANDOFF.md).
 No Knowledge endpoint, witness service or production schema is activated.
 
+**2026-10-24:** PR #71 merged the disconnected candidate into `main`, so it is
+deployed to the Home bench as inert code (no import, hook, whitelisted method or
+schema reaches it; `tests/test_knowledge_disconnected.py` enforces this). KAP-2
+stays open: R2–R5, Board ratification and a newly authorized two-host attempt.
+
 **Updated:** 2026-09-19
 
 ## Live now
