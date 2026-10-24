@@ -11,11 +11,12 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 
 from app import domain
 from app.connectors.eb_auth import (
-    AuthorizationError, complete_authorization, start_authorization,
+    AuthorizationError, OfferedAccount, complete_authorization, receive_callback,
+    start_authorization,
 )
 from app.connectors.eb_jwt import JwtSigner
 from app.connectors.enable_banking import EbClient
-from tests.support import make_account, make_repo, raw_execute, seed_workspace
+from tests.support import count_rows, make_account, make_repo, raw_execute, seed_workspace
 
 NOW = datetime(2026, 10, 10, 12, 0, tzinfo=timezone.utc)
 MAX_VALIDITY = 15552000  # 180 days, as in the documented example
@@ -32,9 +33,9 @@ class Bank:
         self.requests = []
         self.accounts = accounts if accounts is not None else [
             {"identification_hash": "hash-A1", "uid": UID_A, "currency": "EUR",
-             "cash_account_type": "CACC"},
+             "cash_account_type": "CACC", "product": "Giro"},
             {"identification_hash": "hash-NEW", "uid": UID_NEW, "currency": "EUR",
-             "cash_account_type": "CACC"}]
+             "cash_account_type": "SVGS", "product": "Tagesgeld"}]
         self.session_status = session_status
         self.valid_until = valid_until or (NOW + timedelta(days=90)).isoformat()
 
@@ -75,12 +76,26 @@ def setup(tmp_path):
     return repo, bank, client
 
 
+REDIRECT = "https://bff.example.test/finance/connect/callback"
+
+
 def _start(setup, days=365, now=NOW, name="Sparkasse Example"):
     repo, bank, client = setup
-    url = start_authorization(client, repo, "ws-1", "conn-1", aspsp_name=name, country="DE",
-                              redirect_url="https://bff.example.test/finance/connect/callback",
-                              requested_days=days, now=now)
-    return url, bank.body("/auth")["state"]
+    started = start_authorization(client, repo, "ws-1", "conn-1", aspsp_name=name, country="DE",
+                                  redirect_url=REDIRECT, requested_days=days, now=now)
+    return started, bank.body("/auth")["state"]
+
+
+def _complete(setup, code="code-xyz", now=NOW + timedelta(minutes=2)):
+    """Start, the browser returns with a code, the operator's command exchanges it."""
+    repo, _, client = setup
+    started, state = _start(setup)
+    assert receive_callback(repo, state, code=code, error=None, now=now)
+    return complete_authorization(client, repo, repo.take_callback(started.state_hash), now=now)
+
+
+def _status(repo):
+    return repo.list_connections("ws-1")[0].status
 
 
 def test_consent_is_capped_at_the_banks_maximum_validity(setup):
@@ -96,11 +111,12 @@ def test_a_shorter_request_is_kept_as_asked(setup):
 
 
 def test_authorization_request_shape_and_returned_url(setup):
-    url, state = _start(setup)
+    started, state = _start(setup)
     body = setup[1].body("/auth")
-    assert url == "https://bank.example.test/authorize?x=1"
+    assert started.url == "https://bank.example.test/authorize?x=1"
+    assert state not in started.state_hash
     assert body["aspsp"] == {"name": "Sparkasse Example", "country": "DE"}
-    assert body["redirect_url"] == "https://bff.example.test/finance/connect/callback"
+    assert body["redirect_url"] == REDIRECT
     assert body["psu_type"] == "personal"
     assert len(state) >= 32
     assert _start(setup)[1] != state
@@ -118,10 +134,9 @@ def test_unknown_bank_is_refused_and_leaves_no_state(setup):
     assert raw_execute(setup[0], "SELECT COUNT(*) FROM oauth_state")[0][0] == 0
 
 
-def test_completing_stores_the_session_map_consent_expiry_and_reopens_the_connection(setup):
-    repo, bank, client = setup
-    _, state = _start(setup)
-    result = complete_authorization(client, repo, state, "code-xyz", now=NOW + timedelta(minutes=2))
+def test_completing_maps_every_returned_account_but_links_none_silently(setup):
+    repo, bank, _ = setup
+    result = _complete(setup)
     assert bank.body("/sessions") == {"code": "code-xyz"}
     assert (result.linked, result.unexpected, result.missing) == (1, 1, 0)
     connection = repo.list_connections("ws-1")[0]
@@ -129,65 +144,111 @@ def test_completing_stores_the_session_map_consent_expiry_and_reopens_the_connec
     assert connection.consent_expires_at == NOW + timedelta(days=90)  # from the response
     session = repo.load_eb_session("conn-1")
     assert session.session_id == "session-1"
-    assert dict(session.accounts) == {"hash-A1": UID_A}  # the unexpected account is NOT linked
+    # Every uid is kept, so an account linked after the first consent needs no second SCA;
+    # linking itself stays the owner's step: no account row appears for hash-NEW.
+    assert dict(session.accounts) == {"hash-A1": UID_A, "hash-NEW": UID_NEW}
+    assert [a.provider_account_ref for a in repo.list_accounts("ws-1")] == ["hash-A1"]
+
+
+def test_the_result_lists_the_offered_accounts_for_the_operator(setup):
+    assert _complete(setup).accounts == (
+        OfferedAccount("hash-A1", "Giro", "EUR", linked=True),
+        OfferedAccount("hash-NEW", "Tagesgeld", "EUR", linked=False))
 
 
 def test_an_expected_account_missing_from_the_session_is_reported(setup):
-    repo, bank, client = setup
-    bank.accounts = [{"identification_hash": "hash-OTHER", "uid": UID_NEW, "currency": "EUR",
-                      "cash_account_type": "CACC"}]
-    _, state = _start(setup)
-    result = complete_authorization(client, repo, state, "c", now=NOW)
+    setup[1].accounts = [{"identification_hash": "hash-OTHER", "uid": UID_NEW,
+                          "currency": "EUR", "cash_account_type": "CACC"}]
+    result = _complete(setup, code="c")
     assert (result.linked, result.unexpected, result.missing) == (0, 1, 1)
+    assert result.accounts == (OfferedAccount("hash-OTHER", "CACC", "EUR", linked=False),)
 
 
 @pytest.mark.parametrize("scenario", ["replay", "expired", "unknown"])
-def test_bad_state_fails_identically_and_never_calls_the_bank(setup, scenario):
-    repo, bank, client = setup
+def test_a_bad_state_is_refused_identically_and_stores_nothing(setup, scenario):
+    repo, bank, _ = setup
     _, state = _start(setup)
-    before = len(bank.requests)
     now = NOW + timedelta(minutes=1)
     if scenario == "replay":
-        complete_authorization(client, repo, state, "c", now=now)
-        before = len(bank.requests)
+        assert receive_callback(repo, state, code="c", error=None, now=now)
     elif scenario == "expired":
         now = NOW + timedelta(minutes=16)
     else:
         state = "x" * 43
-    with pytest.raises(AuthorizationError) as raised:
-        complete_authorization(client, repo, state, "c", now=now)
-    assert str(raised.value) == "authorization could not be completed"
-    assert len(bank.requests) == before
+    stored, requests = count_rows(repo, "oauth_callback"), len(bank.requests)
+    assert receive_callback(repo, state, code="c2", error=None, now=now) is False
+    assert count_rows(repo, "oauth_callback") == stored
+    assert len(bank.requests) == requests
 
 
-def test_state_is_consumed_even_if_the_code_exchange_fails(setup):
+@pytest.mark.parametrize("code,error", [
+    (None, None), ("c", "access_denied"), ("", None), ("c\nx", None), ("c" * 2049, None)])
+def test_a_malformed_callback_is_refused_without_consuming_the_state(setup, code, error):
+    repo, _, _ = setup
+    _, state = _start(setup)
+    assert receive_callback(repo, state, code=code, error=error, now=NOW) is False
+    assert receive_callback(repo, "s" * 129, code="c", error=None, now=NOW) is False
+    assert receive_callback(repo, state, code="ok", error=None, now=NOW) is True
+
+
+def test_a_refusal_at_the_bank_consumes_the_state_and_never_calls_sessions(setup):
+    repo, bank, client = setup
+    started, state = _start(setup)
+    assert receive_callback(repo, state, code=None, error="access_denied", now=NOW)
+    received = repo.take_callback(started.state_hash)
+    assert received.code is None
+    requests = len(bank.requests)
+    with pytest.raises(AuthorizationError):
+        complete_authorization(client, repo, received, now=NOW)
+    assert len(bank.requests) == requests
+    assert receive_callback(repo, state, code="c", error=None, now=NOW) is False
+    assert _status(repo) is domain.ConnectionStatus.REAUTH_REQUIRED
+
+
+def test_a_received_code_is_handed_over_once_and_then_deleted(setup):
+    repo, _, _ = setup
+    started, state = _start(setup)
+    receive_callback(repo, state, code="SECRET-CODE-123", error=None, now=NOW)
+    assert repo.take_callback("0" * 64) is None
+    received = repo.take_callback(started.state_hash)
+    assert (received.connection_id, received.code) == ("conn-1", "SECRET-CODE-123")
+    assert repo.take_callback(started.state_hash) is None
+    assert count_rows(repo, "oauth_callback") == 0
+
+
+def test_a_code_nobody_collected_is_purged_when_the_next_authorization_starts(setup):
+    repo, _, _ = setup
+    _, state = _start(setup)
+    receive_callback(repo, state, code="ABANDONED", error=None, now=NOW)
+    _start(setup, now=NOW + timedelta(minutes=16))
+    assert count_rows(repo, "oauth_callback") == 0
+
+
+def test_a_failed_code_exchange_keeps_the_connection_closed_and_the_code_gone(setup):
     repo, bank, client = setup
     bank.session_status = 403
-    _, state = _start(setup)
+    started, state = _start(setup)
+    receive_callback(repo, state, code="c", error=None, now=NOW)
     with pytest.raises(AuthorizationError):
-        complete_authorization(client, repo, state, "c", now=NOW)
-    bank.session_status = 200
-    with pytest.raises(AuthorizationError):
-        complete_authorization(client, repo, state, "c", now=NOW)
-    assert repo.list_connections("ws-1")[0].status is domain.ConnectionStatus.REAUTH_REQUIRED
+        complete_authorization(client, repo, repo.take_callback(started.state_hash), now=NOW)
+    assert repo.take_callback(started.state_hash) is None
+    assert _status(repo) is domain.ConnectionStatus.REAUTH_REQUIRED
 
 
 def test_reauthorization_replaces_the_previous_session_map(setup):
-    repo, bank, client = setup
-    _, state = _start(setup)
-    complete_authorization(client, repo, state, "c1", now=NOW)
+    repo, bank, _ = setup
+    _complete(setup, code="c1")
     bank.accounts = [{"identification_hash": "hash-A1", "uid": UID_NEW, "currency": "EUR",
                       "cash_account_type": "CACC"}]
-    _, state2 = _start(setup)
-    complete_authorization(client, repo, state2, "c2", now=NOW)
+    _complete(setup, code="c2")
     assert dict(repo.load_eb_session("conn-1").accounts) == {"hash-A1": UID_NEW}
 
 
 def test_logs_never_contain_the_state_or_the_code(setup, caplog):
     caplog.set_level(logging.DEBUG)
-    repo, bank, client = setup
-    _, state = _start(setup)
-    complete_authorization(client, repo, state, "SECRET-CODE-123", now=NOW)
-    with pytest.raises(AuthorizationError):
-        complete_authorization(client, repo, state, "SECRET-CODE-123", now=NOW)
+    repo, _, client = setup
+    started, state = _start(setup)
+    receive_callback(repo, state, code="SECRET-CODE-123", error=None, now=NOW)
+    receive_callback(repo, state, code="SECRET-CODE-123", error=None, now=NOW)  # replay
+    complete_authorization(client, repo, repo.take_callback(started.state_hash), now=NOW)
     assert state not in caplog.text and "SECRET-CODE-123" not in caplog.text

@@ -59,7 +59,7 @@ def test_api_and_mcp_publish_loopback_only_on_their_ports():
 
 def test_exec_commands():
     assert values("finance-api.container", "Container", "Exec") == [
-        "uvicorn app.main:app --host 0.0.0.0 --port 9935"]
+        "uvicorn app.main:app --host 0.0.0.0 --port 9935 --no-access-log"]
     assert values("finance-mcp.container", "Container", "Exec") == ["python -m app.mcp.server"]
     assert values("finance-sync.container", "Container", "Exec") == ["python -m app.sync"]
 
@@ -171,6 +171,13 @@ def test_bringup_script_is_strict_and_has_every_step_and_a_rollback():
     for step in ("preflight", "create-user", "create-dirs", "build", "install", "enable-timer",
                  "verify", "apply-backup", "rollback-units", "rollback-backup", "purge"):
         assert re.search(rf"^\s*{step}\)", text, re.M), step
+
+
+def test_install_restarts_the_services_so_a_new_image_takes_effect():
+    # `start` is a no-op for a running unit: an upgrade would keep serving the old image.
+    text = BRINGUP.read_text(encoding="utf-8")
+    assert "systemctl --user restart finance-api finance-mcp" in text
+    assert "systemctl --user start finance-api" not in text
 
 
 def test_bringup_script_never_prints_or_pipes_secrets():

@@ -155,17 +155,46 @@ Only after steps 1–7 pass. These steps read or write credentials. Do them from
 
 ### 8b. Enable Banking (Sparkasse, Trade Republic cash)
 
-1. In the Enable Banking Control Panel (restricted mode) register the application and a redirect URL. The redirect URL is a **Phase B** route; until it exists, authorization cannot complete, so this step is prepared but not finishable yet.
+Needs the PSD2 callback (B5, ADR-0013) live first: section 8c.
+
+1. In the Enable Banking Control Panel (restricted mode) register the application with the redirect URL **exactly** `https://bff.home.episteck.com/finance/connect/callback`.
 2. Copy the application's private key to the node and wrap it with the application id:
    ```bash
    scp -F C:/Users/D064974/.ssh/config <local-key.pem> episteck-node1:/home/episteck/eb.pem
    ssh -F C:/Users/D064974/.ssh/config episteck-node1 \
      "sudo -n bash -c 'umask 077; python3 -c \"import json,sys; print(json.dumps({\\\"application_id\\\": sys.argv[1], \\\"private_key_pem\\\": open(sys.argv[2]).read()}))\" <APPLICATION_ID> /home/episteck/eb.pem > /srv/episteck/services/finance/secrets/sparkasse.enable_banking && chown svc-finance:svc-finance /srv/episteck/services/finance/secrets/sparkasse.enable_banking && shred -u /home/episteck/eb.pem'"
    ```
-3. `add-connection --id sparkasse --provider enable_banking --owner <ERICK_PSN>` (it validates the file), then `link-account` with `--provider-ref` set to the account's **`identification_hash`** (stable across sessions; the per-session `uid` is mapped automatically).
-4. The first consent is created from `start_authorization` once the callback route exists (Phase B).
+3. `add-connection --id sparkasse --provider enable_banking --owner <ERICK_PSN>` (it validates the file).
+4. Find the bank's exact name (one call to `/aspsps`, no account data): `... python -m app.connect banks --connection sparkasse --country DE --match sparkasse` (same `podman run` as step 7).
+5. Give consent. Use `ssh -t` so the command can wait while you approve:
+   ```bash
+   ssh -t -F C:/Users/D064974/.ssh/config episteck-node1 "cd /; U=\$(id -u svc-finance); sudo -n -u svc-finance env XDG_RUNTIME_DIR=/run/user/\$U podman run --rm \
+     -v /srv/episteck/services/finance/data:/data:z -v /srv/episteck/services/finance/secrets:/secrets:ro,z \
+     --env-file /srv/episteck/services/finance/config/finance.env \
+     -e FINANCE_DB=/data/finance.sqlite -e FINANCE_SECRETS_DIR=/secrets -e FINANCE_PEPPER_FILE=/secrets/pepper \
+     localhost/episteck-finance:$SHA python -m app.connect authorize --connection sparkasse --aspsp '<name from step 4>' --country DE"
+   ```
+   It prints the bank's consent link. Open it, approve with S-pushTAN, and the browser lands on `.../finance/connect/callback` ("return to the terminal"). Within seconds the terminal prints `authorized sparkasse until <date>` and one line per account: `reference | product | currency | linked/not linked`. The link and the wait last 15 minutes; on a timeout or a refusal nothing changes.
+6. `link-account` each account you want, with `--provider-ref` set to its reference (the stable **`identification_hash`**), `--type CURRENT`, `--liquidity AVAILABLE`, `--currency EUR`. No second consent is needed: the session already maps every returned account, but only linked accounts are ever read.
+7. **Trade Republic cash:** copy the same application JSON to `secrets/traderepublic.enable_banking` (mode 600, owner `svc-finance`) and repeat steps 3–6 with `--id traderepublic` and its bank name.
 
-**Rollback:** `rm` the `.enable_banking` file; revoke the application's key in the Control Panel if it was exposed.
+**Rollback:** `rm` the `.enable_banking` file; revoke the application's key in the Control Panel if it was exposed. Revoking the consent at the bank stops all reads; the connection then shows `REAUTH_REQUIRED`.
+
+### 8c. Ship the PSD2 callback (B5) `[! OK]`
+
+Once, after the B5 PR merges. Nothing here touches a secret.
+
+1. New image and units: steps 3 and 6 with the new `SHA` (`STEP build "$SHA"`, then `STEP install "$SHA"`, which now restarts the API and MCP on the new image). The API unit now runs without uvicorn's access log, because the callback query carries the code and state.
+2. nginx on the BFF vhost (the live file equals `deploy/home-bff/nginx-home-bff.conf` before B5):
+   ```bash
+   $SSH "sudo -n cp -a /etc/nginx/sites-available/home-bff.conf /etc/nginx/sites-available/home-bff.conf.pre-b5"
+   scp -F C:/Users/D064974/.ssh/config deploy/home-bff/nginx-home-bff.conf episteck-node1:/home/episteck/home-bff.conf.b5
+   $SSH "sudo -n install -m 644 -o root -g root /home/episteck/home-bff.conf.b5 /etc/nginx/sites-available/home-bff.conf && rm /home/episteck/home-bff.conf.b5 && sudo -n diff /etc/nginx/sites-available/home-bff.conf.pre-b5 /etc/nginx/sites-available/home-bff.conf; sudo -n nginx -t && sudo -n systemctl reload nginx"
+   ```
+   The diff must show only the new `location = /finance/connect/callback` block.
+
+**Verify (`[CLAUDE]`):** `GET https://bff.home.episteck.com/finance/connect/callback?state=x` returns `400` (Finance answered), a `POST` returns `403`, `/finance/overview` returns `404`, and `journalctl --user -u finance-api` shows no request lines.
+**Rollback:** `$SSH "sudo -n cp -a /etc/nginx/sites-available/home-bff.conf.pre-b5 /etc/nginx/sites-available/home-bff.conf && sudo -n nginx -t && sudo -n systemctl reload nginx"`, then `STEP install <previous SHA>`.
 
 ## 9. Backup block `[! OK]`
 
