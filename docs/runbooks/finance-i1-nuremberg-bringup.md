@@ -149,7 +149,10 @@ Only after steps 1–7 pass. These steps read or write credentials. Do them from
 3. Claim it. The Access URL is written to a `600` file and never printed; the setup token is burned by the claim:
    `... python -m app.admin claim-simplefin --setup-token-file /secrets/simplefin-setup-token --out /secrets/bofa.simplefin` (same `podman run` as step 7 but with `/secrets` mounted `rw`).
 4. `shred -u` the setup token file on the node.
-5. `add-connection --id bofa --provider simplefin --owner <ERICK_PSN>`, then `link-account` for each BofA account (checking, savings).
+5. `add-connection --id bofa --provider simplefin --owner <ERICK_PSN>`.
+6. `provider-accounts --connection bofa` prints one line per account the bridge offers: `reference | name | currency | institution`. It never prints a balance or the Access URL, but account names can carry the last digits of the account number, so run it in your own terminal. It uses one of SimpleFIN's daily requests.
+7. `link-account` once per account you want (checking, savings), with `--provider-ref` set to the first column, for example:
+   `link-account --id bofa-checking --connection bofa --provider-ref <reference> --institution "Bank of America" --type CURRENT --liquidity AVAILABLE --currency USD --owner <ERICK_PSN>` (use `--type SAVINGS` for savings). An account you do not link is never read.
 
 **Rollback:** `rm` the `bofa.simplefin` file and the connection stays `PAUSED`/unused; revoke the token in SimpleFIN Bridge.
 
