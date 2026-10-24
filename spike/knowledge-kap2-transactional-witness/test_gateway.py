@@ -102,6 +102,102 @@ def new_gateway(db: PrivateDB) -> Gateway:
                    recovery_password="synthetic-recover")
 
 
+@pytest.mark.parametrize("history", ["events", "empty", "initial", "event-only"])
+def test_recovery_rejects_retained_incarnation_collision(db, monkeypatch, history):
+    candidate = "a" * 64
+    with new_gateway(db) as gateway:
+        monkeypatch.setattr("gateway.secrets.token_hex", lambda _: candidate)
+        if history == "initial":
+            db.sql(f"UPDATE witness.head SET incarnation='{candidate}'")
+        elif history == "event-only":
+            db.sql(f"INSERT INTO witness.events VALUES "
+                   f"('p1','{candidate}','retained',0,1,'OLD_ALLOW','COMMITTED')")
+        else:
+            assert gateway.recover("p1") == candidate
+            if history == "events":
+                with db.connect("gw_writer2", "synthetic-two") as writer:
+                    Gateway._call(writer, "prepare_e2", ("p1", candidate, "e1", 0, "ALLOW_A"))
+                    Gateway._call(writer, "commit_e2", ("p1", candidate, "e1", "ALLOW_A"))
+        monkeypatch.setattr("gateway.secrets.token_hex", lambda _: "b" * 64)
+        gateway.recover("p1")
+        before = db.sql("SELECT * FROM witness.head")
+        monkeypatch.setattr("gateway.secrets.token_hex", lambda _: candidate)
+        with pytest.raises(pymysql.MySQLError, match="reused incarnation"):
+            gateway.recover("p1")
+        assert gateway.closed
+        assert db.sql("SELECT * FROM witness.head") == before
+
+
+def test_witness_recovery_alone_cannot_admit_serving_mutation(db):
+    with new_gateway(db) as gateway:
+        incarnation = gateway.recover("p1")
+        assert gateway.closed
+        with pytest.raises(GatewayClosed):
+            gateway.prepare("p1", incarnation, "premature", 0, "ALLOW_A")
+
+
+@pytest.mark.parametrize("proof", ["wrong-partition", "wrong-head", "stale", "no-confirmation"])
+def test_recovery_rejects_invalid_home_confirmation(db, proof):
+    with new_gateway(db) as gateway:
+        incarnation = gateway.recover("p1")
+        with pytest.raises(GatewayClosed):
+            if proof == "wrong-partition":
+                gateway.confirm_home("p2", incarnation, (incarnation, 0, "DENY_ALL"))
+            elif proof == "wrong-head":
+                gateway.confirm_home("p1", incarnation, (incarnation, 1, "ALLOW_A"))
+            elif proof == "stale":
+                gateway.recover("p1")
+                gateway.confirm_home("p1", incarnation, (incarnation, 0, "DENY_ALL"))
+            else:
+                gateway.open_admission("p1", incarnation)
+        assert gateway.closed
+
+
+@pytest.mark.parametrize("change", ["none", "head", "writer", "lock"])
+def test_reauth_only_denies_and_opening_rechecks_witness(db, change):
+    with new_gateway(db) as gateway:
+        incarnation = gateway.recover("p1")
+        gateway.confirm_home("p1", incarnation, (incarnation, 0, "DENY_ALL"))
+        assert gateway.closed
+        assert not gateway.authorize("p1", incarnation, 0, "DENY_ALL")
+        with pytest.raises(GatewayClosed):
+            gateway.prepare("p1", incarnation, "early", 0, "ALLOW_A")
+        if change == "head":
+            db.sql("UPDATE witness.head SET digest='CHANGED'")
+        elif change == "writer":
+            db.sql(f"KILL CONNECTION {gateway._writer.thread_id()}")
+        elif change == "lock":
+            fcntl.flock(gateway._lock_fd, fcntl.LOCK_UN)
+        if change != "none":
+            with pytest.raises(GatewayClosed):
+                gateway.open_admission("p1", incarnation)
+            assert gateway.closed
+        else:
+            gateway.open_admission("p1", incarnation)
+            gateway.prepare("p1", incarnation, "fresh", 0, "ALLOW_A")
+            gateway.commit("p1", incarnation, "fresh", "ALLOW_A")
+            assert gateway.authorize("p1", incarnation, 1, "ALLOW_A")
+
+
+def test_recovery_rejects_known_collision_in_another_partition(db, monkeypatch):
+    candidate = "c" * 64
+    db.sql(f"INSERT INTO witness.events VALUES "
+           f"('p2','{candidate}','retained',0,1,'OLD_ALLOW','COMMITTED')")
+    with new_gateway(db) as gateway:
+        monkeypatch.setattr("gateway.secrets.token_hex", lambda _: candidate)
+        with pytest.raises(pymysql.MySQLError, match="reused incarnation"):
+            gateway.recover("p1")
+        assert gateway.closed
+
+
+def recover_and_admit(gateway):
+    """Synthetic coordinator proof for standalone gateway tests only."""
+    incarnation = gateway.recover("p1")
+    gateway.confirm_home("p1", incarnation, (incarnation, 0, "DENY_ALL"))
+    gateway.open_admission("p1", incarnation)
+    return incarnation
+
+
 def test_closed_first_read_and_competing_instance(db: PrivateDB) -> None:
     with new_gateway(db) as gateway:
         assert gateway.authorize("p1", "old-incarnation", 0, "OLD_ALLOW") is False
@@ -120,7 +216,7 @@ def test_closed_first_read_and_competing_instance(db: PrivateDB) -> None:
             capture_output=True, text=True,
         )
         assert contender.returncode == 0, contender.stderr
-        incarnation = gateway.recover("p1")
+        incarnation = recover_and_admit(gateway)
         assert incarnation != "old-incarnation"
         assert len(incarnation) == 64
         assert gateway.authorize("p1", incarnation, 0, "DENY_ALL") is False
@@ -129,7 +225,7 @@ def test_closed_first_read_and_competing_instance(db: PrivateDB) -> None:
 
 def test_pending_commit_idempotency_and_unknown_ack_readback(db: PrivateDB) -> None:
     with new_gateway(db) as gateway:
-        incarnation = gateway.recover("p1")
+        incarnation = recover_and_admit(gateway)
         # Model an application-level lost acknowledgement after DB commit: the
         # gateway receives no return value and must read back the exact event.
         with db.connect("gw_writer2", "synthetic-two") as writer:
@@ -154,7 +250,7 @@ def test_pending_commit_idempotency_and_unknown_ack_readback(db: PrivateDB) -> N
 
 def test_database_principals_and_old_epoch_are_enforced(db: PrivateDB) -> None:
     with new_gateway(db) as gateway:
-        incarnation = gateway.recover("p1")
+        incarnation = recover_and_admit(gateway)
         with db.connect("gw_writer1", "synthetic-one") as old:
             with old.cursor() as cursor:
                 with pytest.raises(pymysql.MySQLError):
@@ -183,13 +279,13 @@ def test_database_principals_and_old_epoch_are_enforced(db: PrivateDB) -> None:
 
 def test_gateway_and_database_restart_deny_before_recovery(db: PrivateDB) -> None:
     with new_gateway(db) as first:
-        incarnation = first.recover("p1")
+        incarnation = recover_and_admit(first)
         first.prepare("p1", incarnation, "grant-1", 0, "ALLOW_A")
         first.commit("p1", incarnation, "grant-1", "ALLOW_A")
         assert first.authorize("p1", incarnation, 1, "ALLOW_A") is True
     with new_gateway(db) as restarted:
         assert restarted.authorize("p1", incarnation, 1, "ALLOW_A") is False
-        new_incarnation = restarted.recover("p1")
+        new_incarnation = recover_and_admit(restarted)
         assert restarted.authorize("p1", incarnation, 1, "ALLOW_A") is False
         restarted.prepare("p1", new_incarnation, "grant-2", 0, "ALLOW_B")
         restarted.commit("p1", new_incarnation, "grant-2", "ALLOW_B")
@@ -204,7 +300,7 @@ def test_gateway_and_database_restart_deny_before_recovery(db: PrivateDB) -> Non
 
 def test_lost_process_lock_closes_admission(db: PrivateDB) -> None:
     with new_gateway(db) as gateway:
-        incarnation = gateway.recover("p1")
+        incarnation = recover_and_admit(gateway)
         gateway.prepare("p1", incarnation, "grant-1", 0, "ALLOW_A")
         gateway.commit("p1", incarnation, "grant-1", "ALLOW_A")
         assert gateway.authorize("p1", incarnation, 1, "ALLOW_A") is True
@@ -216,7 +312,7 @@ def test_lost_process_lock_closes_admission(db: PrivateDB) -> None:
 
 def test_released_flock_with_open_descriptor_closes_admission(db: PrivateDB) -> None:
     with new_gateway(db) as gateway:
-        incarnation = gateway.recover("p1")
+        incarnation = recover_and_admit(gateway)
         gateway.prepare("p1", incarnation, "grant-1", 0, "ALLOW_A")
         gateway.commit("p1", incarnation, "grant-1", "ALLOW_A")
         assert gateway.authorize("p1", incarnation, 1, "ALLOW_A") is True
@@ -250,7 +346,7 @@ def test_released_flock_with_open_descriptor_closes_admission(db: PrivateDB) -> 
 
 def test_replaced_lock_path_closes_admission(db: PrivateDB) -> None:
     with new_gateway(db) as gateway:
-        incarnation = gateway.recover("p1")
+        incarnation = recover_and_admit(gateway)
         lock_path = db.root / "gateway.lock"
         lock_path.rename(db.root / "replaced.lock")
         lock_path.touch()
@@ -262,7 +358,7 @@ def test_replaced_lock_path_closes_admission(db: PrivateDB) -> None:
 
 def test_writer_connection_loss_closes_admission_with_usable_reader(db: PrivateDB) -> None:
     with new_gateway(db) as gateway:
-        incarnation = gateway.recover("p1")
+        incarnation = recover_and_admit(gateway)
         gateway.prepare("p1", incarnation, "grant-1", 0, "ALLOW_A")
         gateway.commit("p1", incarnation, "grant-1", "ALLOW_A")
         assert gateway.authorize("p1", incarnation, 1, "ALLOW_A") is True
@@ -273,7 +369,7 @@ def test_writer_connection_loss_closes_admission_with_usable_reader(db: PrivateD
         assert gateway.closed is True
         with pytest.raises(GatewayClosed):
             gateway.prepare("p1", incarnation, "grant-2", 1, "ALLOW_B")
-        new_incarnation = gateway.recover("p1")
+        new_incarnation = recover_and_admit(gateway)
         assert new_incarnation != incarnation
         assert gateway.authorize("p1", incarnation, 1, "ALLOW_A") is False
 
@@ -284,7 +380,7 @@ def test_restored_committed_ready_rows_cannot_open_gate(db: PrivateDB) -> None:
     shutil.copytree(db.data, snapshot)
     db.start()
     with new_gateway(db) as gateway:
-        incarnation = gateway.recover("p1")
+        incarnation = recover_and_admit(gateway)
         gateway.prepare("p1", incarnation, "revoke-1", 0, "DENY_ALL")
         gateway.commit("p1", incarnation, "revoke-1", "DENY_ALL")
     db.stop()
@@ -295,7 +391,7 @@ def test_restored_committed_ready_rows_cannot_open_gate(db: PrivateDB) -> None:
         "COMMITTED\t1\tOLD_ALLOW")
     with new_gateway(db) as restored:
         assert restored.authorize("p1", "old-incarnation", 0, "OLD_ALLOW") is False
-        fresh = restored.recover("p1")
+        fresh = recover_and_admit(restored)
         assert fresh != "old-incarnation"
         assert restored.authorize("p1", "old-incarnation", 0, "OLD_ALLOW") is False
         assert restored.authorize("p1", fresh, 0, "DENY_ALL") is False

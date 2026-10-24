@@ -127,6 +127,19 @@ class RemoteWitness:
             raise WitnessTransportError("invalid incarnation response")
         return value
 
+    def close_admission(self) -> None:
+        if self.recovery.call("close_admission") is not None:
+            raise WitnessTransportError("invalid close response")
+
+    def confirm_home(self, partition: str, incarnation: str,
+                     home_head: tuple[str, int, str]) -> None:
+        if self.recovery.call("confirm_home", partition, incarnation, home_head) is not None:
+            raise WitnessTransportError("invalid Home confirmation response")
+
+    def open_admission(self, partition: str, incarnation: str) -> None:
+        if self.recovery.call("open_admission", partition, incarnation) is not None:
+            raise WitnessTransportError("invalid admission response")
+
     def _read_current(self, partition: str) -> tuple[Any, ...] | None:
         value = self.recovery.call("read_current", partition)
         return tuple(value) if type(value) is list else None

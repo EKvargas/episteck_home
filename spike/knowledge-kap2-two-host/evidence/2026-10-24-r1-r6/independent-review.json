@@ -1,0 +1,31 @@
+{
+  "reviewer": "/root/r1_r6_review",
+  "mode": "fresh-context read-only independent review",
+  "base": "f5b163c30258291f865abf231374bd51448616a3",
+  "reviewed": "working diff before final fix pass",
+  "disposition": "changes_requested",
+  "findings": [
+    {
+      "severity": "P2",
+      "file": "apps/episteck_home/episteck_home/knowledge_authority/integrated.py",
+      "reviewed_line": 251,
+      "title": "Recheck Home lane ownership after confirmation before opening admission",
+      "effect": "Losing the Home lane during confirmation could reach OPEN before cleanup closed the gateway. This demonstrates premature admission during failed recovery, not automatic revival of old permission.",
+      "fix": "Home checks lane ownership immediately before and after open_admission.",
+      "regression": "test_home_lane_failure_never_opens_independent_admission[after-confirm]",
+      "red": "1 failed, 25 deselected: failed lane proof reached OPEN",
+      "final_verification": "pytest-result.json",
+      "second_review": false
+    }
+  ],
+  "r6_assessment": "No material defect found in retained-head/event checks and the globally unique transactional registry.",
+  "declined_to_judge": [
+    "R2-R5 completion",
+    "Production source coverage, context invalidation, credential custody and Board approval",
+    "Production readiness or separated-host recovery guarantees"
+  ],
+  "limits": [
+    "Reviewer executed no tests and changed no files, index, HEAD or remote resources.",
+    "Final regression and suite checks are the implementer's verification of the fix pass."
+  ]
+}

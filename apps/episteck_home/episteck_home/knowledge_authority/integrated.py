@@ -220,6 +220,7 @@ class PersonAuthority:
 
     def recover(self, *, recovery_password: str) -> str:
         self.open = False
+        self.witness.close_admission()
         recovery = pymysql.connect(
             unix_socket=self.home_socket, user="ha_recovery",
             password=recovery_password, database="home_auth", autocommit=True,
@@ -245,8 +246,20 @@ class PersonAuthority:
                     incarnation, 0, 2, 2, "COMMITTED", None, "DENY_ALL"
                 ):
                     raise RuntimeError("fresh default-deny Home/witness readback failed")
+                self._assert_lane(recovery, self._lane_name(site.partition))
+                self.witness.confirm_home(site.partition, incarnation, home)
+                self._assert_lane(recovery, self._lane_name(site.partition))
+                self.witness.open_admission(site.partition, incarnation)
+                self._assert_lane(recovery, self._lane_name(site.partition))
+        except Exception:
+            self.witness.close_admission()
+            raise
         finally:
-            recovery.close()
+            try:
+                recovery.close()
+            except Exception:
+                self.witness.close_admission()
+                raise
         self.open = True
         return incarnation
 

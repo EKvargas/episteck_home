@@ -1,0 +1,103 @@
+{
+  "status": "completed_locally",
+  "base_commit": "f5b163c30258291f865abf231374bd51448616a3",
+  "scope": "Local R1/R6 correction for disconnected disposable PERSON candidate",
+  "changes": {
+    "R1": "CLOSED recovery, exact Home proof, REAUTH_ONLY, rechecked OPEN; close on Home recovery failure",
+    "R6": "Transactional globally unique incarnation registry plus retained head/event collision rejection"
+  },
+  "local_environment": {
+    "python": "3.12.3",
+    "mariadb": "10.11.13-MariaDB-0ubuntu0.24.04.1",
+    "venv": "/home/d064974/kap2-twohost-venv-20261010",
+    "dependency_target": "/home/d064974/kap2-pr71-review-deps-20261024",
+    "new_installs": false
+  },
+  "verification": {
+    "affected_suite": "pytest-result.json",
+    "initial_suite": "pytest-initial-result.json",
+    "root_suite": "root-suite-limitations.json",
+    "focused_mtls": "transport-result.json",
+    "independent_review": "independent-review.json",
+    "affected_suite_result": "121 passed in 431.47s (0:07:11)",
+    "diff_check": "PASS"
+  },
+  "initial_failures": [
+    {
+      "case": "R6 retained history collision",
+      "result": "4 failed: events, empty incarnation, initial head and retained event-only history were accepted"
+    },
+    {
+      "case": "R1 early opening",
+      "result": "4 failed: witness-only, failed Home reset, failed Home readback, competing reader pause all observed an open gateway"
+    },
+    {
+      "case": "R6 cross-partition collision",
+      "result": "1 failed before widening retained history rejection across partitions"
+    },
+    {
+      "case": "Home recovery connection cleanup",
+      "result": "1 failed, 3 passed before closing on cleanup error"
+    },
+    {
+      "case": "Independent review finding: lane loss after confirmation",
+      "result": "1 failed because OPEN was reached; Home now rechecks lane before and after opening"
+    },
+    {
+      "case": "Initial database suite",
+      "result": "46 passed, 1 bootstrap setup error during overlapping local runs; install-db reported Unknown table mysql.tmp_user_sys. Exact cause not established; final suite run serially."
+    },
+    {
+      "case": "First serial suite",
+      "result": "119 passed, 1 failed: lock-acquisition test expected server timeout but pinned client read timeout raised OperationalError first; expected exception corrected without increasing timeouts"
+    }
+  ],
+  "pull_request": {
+    "number": 71,
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "remote_head": "6166594bd91482455440e8e938306769100136bd",
+    "read_only_check": true
+  },
+  "actions": {
+    "pushed": false,
+    "remote_experiment": false,
+    "ssh": false,
+    "production_changes": false,
+    "board_ratification": false
+  },
+  "open_items": [
+    "R2-R5",
+    "Full independent production gate proof including Home lane loss during in-flight open RPC and lost close acknowledgement",
+    "All Home authority sources and CIRCLE",
+    "RT#2 context invalidation and private human reauthorization interface",
+    "Credential custody, repeated epoch/principal retirement and unknown Home commit windows",
+    "Board ratification and new exact-SHA remote authorization",
+    "No full A0-A11 matrix, Frappe control, MariaDB 11.8 validation or latency screen rerun",
+    "Legacy Task-2 Frappe probe caller adapted to staged recovery; parsed locally but full disposable Frappe run not executed"
+  ],
+  "production_guarantees": false,
+  "sha256": {
+    "apps/episteck_home/episteck_home/knowledge_authority/integrated.py": "093daec127e60ac6f5b206ed2d2cbc40cd91adb25734daa182f02cae2e59227c",
+    "spike/knowledge-kap2-transactional-witness/gateway.py": "078849e4eb45d3f1e8c8c360ca37a2d6ca60d2c902ea3d8b79809ec2f74e8298",
+    "spike/knowledge-kap2-transactional-witness/gateway_schema.sql": "2dfeb5aedfb590bdab39d97b63e94d8adbef5dd839209b4c66890e3581763e6f",
+    "spike/knowledge-kap2-two-host/transport.py": "8c5be44c55e213d55c5028e19d6f4284cd4a2348298f1cfdf3341d2e666477b2",
+    "spike/knowledge-kap2-two-host/witness_runner.py": "fe472a29a8d3e184de347d73b3fa9528ba05430cb6defb041fc5cf5e380ba753",
+    "spike/knowledge-kap2-two-host/home_runner.py": "1e427c9a8b997fe4494ed98738f9a078f44e99f0021b4c271b7965f5e9bf5a5f",
+    "spike/knowledge-kap2-transactional-witness/test_gateway.py": "446bf498d3b0455d64e367b542c3a141f29e2c6ffd0903df64d7de46ea831f0e",
+    "spike/knowledge-kap2-person-vertical/test_integrated.py": "b4616ab92a49242ec223d1a7fc49faeb93941e95be6825926fbaa4dc9fdcc931",
+    "spike/knowledge-kap2-home-authority/test_lane.py": "15f20f9bc6731245c77d8dc7184856c72a389372f902d36c29817836fbdd5c7b",
+    "spike/knowledge-kap2-two-host/test_recovery_transport.py": "7f99f9d8778c4cde3d4950dab717faca2fa0260de5fde7cf1a344c0e1f37058c",
+    "apps/episteck_home/episteck_home/knowledge_authority/frappe_probe.py": "62b812115738b7d8aa9245d8e5523ab4e8a3887cfe11463a5ebd41614c22dbbd"
+  },
+  "review_finding_status": "P2 post-confirm lane finding fixed; regression RED then GREEN in final suite; no second review",
+  "completion_handoff": {
+    "task_complete": true,
+    "next_action": "Review this saved local delivery before any separately authorized push or remote attempt. Do not restart R1/R6 implementation.",
+    "rerun_policy": "No further test run needed unless implementation changes, a new failure appears or a later gate requires it.",
+    "retain_worktree": true,
+    "push_authorized": false,
+    "remote_or_production_authorized": false
+  }
+}

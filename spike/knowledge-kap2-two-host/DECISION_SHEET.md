@@ -1,5 +1,7 @@
 # KAP-2 two-host gate: decisions before execution
 
+**Local R1/R6 follow-up:** the [validation record](../../docs/architecture/reviews/2026-10-24-knowledge-kap2-r1-r6-validation.md) describes the changed recovery handshake and retained-history check. Review the final new commit, including added recovery control calls, before deciding on any remote attempt. Prior exact-SHA authorizations do not cover it. Full production recovery proof and R2–R5 remain open.
+
 **Review target:** consolidated PR #71's executable synthetic PERSON package. This sheet requests decisions; it records no Board ratification, operator appointment or remote-run authorization.
 
 **Current gate (2026-10-24):** both separately authorized attempts are stopped at A0, with no matrix execution (**0/400 attempts** each). The first at `bd21543a663c7997daa27e1e8f7569a6ba353ed5` failed the SQL-path check. The second at `6166594bd91482455440e8e938306769100136bd` passed that correction but failed because the pinned install script's help intentionally exits 1. Review the narrow [help-status correction](ACQUISITION_REVIEW.md#2026-10-24-help-status-correction) and [recovery review](../../docs/architecture/reviews/2026-10-24-knowledge-kap2-recovery-review.md), then authorize one **new** finite attempt at the exact corrected commit. The earlier experiment supervisor/delegate assignment was for that stopped attempt, not a permanent production appointment. This continuation records no new remote authorization.

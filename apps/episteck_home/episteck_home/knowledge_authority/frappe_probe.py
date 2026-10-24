@@ -141,6 +141,8 @@ def run() -> dict:
                                    ("p1", incarnation))
             store = HomeAuthorityStore(socket, "synthetic-home-write", "synthetic-home-read")
             try:
+                real_witness.confirm_home("p1", incarnation, store.current("p1"))
+                real_witness.open_admission("p1", incarnation)
                 lane = KnowledgeMutationLane(real_witness, store, authenticated_person,
                                              lambda request: current_person_grant(request, "p1"))
                 actual_grant = replace(req, incarnation=incarnation, event_id="actual-grant")

@@ -9,6 +9,8 @@ from __future__ import annotations
 import fcntl
 import os
 import secrets
+import threading
+from functools import wraps
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +25,15 @@ class GatewayClosed(RuntimeError):
     """Admission or the pinned witness connection is uncertain."""
 
 
+def serialized(method):
+    """Keep recovery transitions and serving DB sessions in one process order."""
+    @wraps(method)
+    def call(self, *args, **kwargs):
+        with self._admission_lock:
+            return method(self, *args, **kwargs)
+    return call
+
+
 class Gateway:
     def __init__(self, *, socket: str, lock_path: str, reader_password: str,
                  writer_password: str, recovery_password: str) -> None:
@@ -33,6 +44,9 @@ class Gateway:
         self._reader: pymysql.Connection | None = None
         self._writer: pymysql.Connection | None = None
         self._incarnation: str | None = None
+        self._partition: str | None = None
+        self._recovery_phase = "CLOSED"
+        self._admission_lock = threading.RLock()
         self.closed = True
         self._lock_fd = os.open(self.lock_path, os.O_CREAT | os.O_RDWR, 0o600)
         try:
@@ -108,10 +122,17 @@ class Gateway:
         self._check_lock()
         self._check_connections()
 
-    def recover(self, partition: str) -> str:
-        """Install a fresh default-deny incarnation; never trust a restored READY row."""
+    @serialized
+    def close_admission(self) -> None:
         self.closed = True
+        self._recovery_phase = "CLOSED"
         self._incarnation = None
+        self._partition = None
+
+    @serialized
+    def recover(self, partition: str) -> str:
+        """Install default-deny, keeping serving closed until Home confirms it."""
+        self.close_admission()
         self._check_lock()
         candidate = secrets.token_hex(32)
         recovery = self._connect("gw_recovery", self._passwords[2])
@@ -130,9 +151,47 @@ class Gateway:
         if row != (candidate, 0, 2, 2, "COMMITTED", None, "DENY_ALL"):
             raise GatewayClosed("fresh default-deny recovery readback failed")
         self._incarnation = candidate
-        self.closed = False
+        self._partition = partition
         return candidate
 
+    def _verify_recovery(self, partition: str, incarnation: str, phase: str) -> None:
+        if (not self.closed or self._recovery_phase != phase
+                or partition != self._partition or incarnation != self._incarnation
+                or self._incarnation is None):
+            raise GatewayClosed("recovery generation is not awaiting this transition")
+        self._check_lock()
+        self._check_connections()
+        if self._read_current(partition) != (
+            incarnation, 0, 2, 2, "COMMITTED", None, "DENY_ALL"
+        ):
+            raise GatewayClosed("default-deny recovery readback changed")
+
+    @serialized
+    def confirm_home(self, partition: str, incarnation: str,
+                     home_head: tuple[str, int, str]) -> None:
+        """Accept exact readback from the trusted Home recovery coordinator."""
+        try:
+            self._verify_recovery(partition, incarnation, "CLOSED")
+            if (type(home_head) is not tuple or len(home_head) != 3
+                    or type(home_head[1]) is not int
+                    or home_head != (incarnation, 0, "DENY_ALL")):
+                raise GatewayClosed("Home default-deny readback mismatch")
+            self._recovery_phase = "REAUTH_ONLY"
+        except Exception:
+            self.close_admission()
+            raise
+
+    @serialized
+    def open_admission(self, partition: str, incarnation: str) -> None:
+        try:
+            self._verify_recovery(partition, incarnation, "REAUTH_ONLY")
+            self._recovery_phase = "OPEN"
+            self.closed = False
+        except Exception:
+            self.close_admission()
+            raise
+
+    @serialized
     def authorize(self, partition: str, incarnation: str, revision: int,
                   digest: str) -> bool:
         if self.closed or incarnation != self._incarnation:
@@ -148,6 +207,7 @@ class Gateway:
                     and row[4] == "COMMITTED" and row[6] == digest
                     and digest != "DENY_ALL")
 
+    @serialized
     def prepare(self, partition: str, incarnation: str, event: str,
                 expected_revision: int, digest: str) -> None:
         self._require_open(incarnation)
@@ -161,6 +221,7 @@ class Gateway:
                 self.closed = True
             raise
 
+    @serialized
     def commit(self, partition: str, incarnation: str, event: str,
                digest: str) -> None:
         self._require_open(incarnation)
@@ -174,6 +235,7 @@ class Gateway:
                 self.closed = True
             raise
 
+    @serialized
     def event_outcome(self, partition: str, incarnation: str,
                       event: str) -> tuple[str, int, str] | None:
         self._require_open(incarnation)
@@ -187,9 +249,9 @@ class Gateway:
             raise
         return row
 
+    @serialized
     def close(self) -> None:
-        self.closed = True
-        self._incarnation = None
+        self.close_admission()
         for connection in (self._reader, self._writer):
             if connection is not None:
                 try:

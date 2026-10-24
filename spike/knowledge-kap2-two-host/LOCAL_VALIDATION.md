@@ -1,5 +1,7 @@
 # Local validation of the two-host package
 
+**Subsequent R1/R6 correction (2026-10-24):** see the [local validation record](../../docs/architecture/reviews/2026-10-24-knowledge-kap2-r1-r6-validation.md) and [structured evidence](evidence/2026-10-24-r1-r6/result.json). These changes stage admission through exact Home confirmation and retain known incarnation history. The new focused loopback mTLS regression exercises the recovery handshake and role isolation against two private MariaDB instances; its archived witness trace has 30 requests, three expected role denials, one expected CLOSED prepare denial and a CLOSED cleanup event. It is not another full A0–A11 run, Frappe control or latency screen. The previous evidence and measurements below are unchanged historical records.
+
 **Latest continuation:** the [2026-10-24 help-check regression and recovery review](#2026-10-24-help-check-regression-and-recovery-review) follows both stopped remote preparation attempts. The 2026-10-10/12 loopback results below remain historical evidence. No local check establishes Nuremberg MariaDB 11.8 compatibility or two-host acceptance.
 
 **Scope:** one fresh loopback run on 2026-10-10 using WSL Ubuntu, Python 3.12, real disposable MariaDB processes, mTLS and synthetic PERSON authority. This is local integration evidence, **not** the Ashburn–Nuremberg acceptance run. The remote preflight and mandatory disposable Frappe step A9 were unexecuted in this run. The consolidated PR #71 handoff records the earlier local Frappe 15.99.0 result separately.

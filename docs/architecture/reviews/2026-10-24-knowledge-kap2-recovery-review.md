@@ -2,6 +2,8 @@
 
 **Disposition:** complete the narrow local acquisition correction; retain the recovery mechanism as a disconnected disposable PERSON candidate. This review establishes no KAP-2 completion, Board ratification, remote authorization or production readiness.
 
+**Follow-up:** [R1/R6 local correction and validation](2026-10-24-knowledge-kap2-r1-r6-validation.md) records the subsequent authorized local work. The R1/R6 observations below describe the reviewed baseline; the follow-up fixes witness-only early opening and retained known-incarnation reuse, while retaining the wider production proof gates.
+
 **Reviewed baseline:** `6166594bd91482455440e8e938306769100136bd`, plus this continuation's acquisition check/tests and documentation. The governing inputs are [runtime contract §17/§19](../proposals/KNOWLEDGE_AUTHORIZATION_PLAN_RUNTIME_CONTRACT.md), [ADR-0010](../adr/0010-knowledge-authorization-recovery-incarnation.md), the [incarnation amendment](../proposals/KNOWLEDGE_KAP2_INCARNATION_ADMISSION_AMENDMENT.md) and the [fixed two-host matrix](../../../spike/knowledge-kap2-two-host/README.md). An independent read-only reviewer inspected the recovery code and narrow acquisition diff; no blocking defect was found in the acquisition correction. Findings below distinguish missing proofs from demonstrated authorization failures.
 
 ## Recovery decision and tradeoff

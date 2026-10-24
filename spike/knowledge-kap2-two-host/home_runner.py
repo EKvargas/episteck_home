@@ -201,6 +201,10 @@ class Matrix:
         def verify() -> None:
             for client, operation, values in (
                 (self.serving, "recover", ("p1",)),
+                (self.serving, "close_admission", ()),
+                (self.serving, "confirm_home", ("p1", "old-incarnation",
+                                                 ["old-incarnation", 0, "DENY_ALL"])),
+                (self.serving, "open_admission", ("p1", "old-incarnation")),
                 (self.recovery, "authorize", ("p1", "old-incarnation", 0, "OLD_ALLOW")),
             ):
                 try:

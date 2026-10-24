@@ -11,6 +11,13 @@ CREATE TABLE witness.head (
     ready_hint TINYINT NOT NULL DEFAULT 0
 ) ENGINE=InnoDB;
 
+-- Recovery history includes incarnations that never published an event.
+CREATE TABLE witness.incarnations (
+    partition_id VARCHAR(64) NOT NULL,
+    incarnation VARCHAR(64) NOT NULL,
+    PRIMARY KEY (incarnation)
+) ENGINE=InnoDB;
+
 CREATE TABLE witness.events (
     partition_id VARCHAR(64) NOT NULL,
     incarnation VARCHAR(64) NOT NULL,
@@ -141,15 +148,25 @@ CREATE PROCEDURE witness.recover_e2(
 BEGIN
     DECLARE v_old VARCHAR(64);
     DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
-    IF p_new_incarnation NOT REGEXP '^[0-9a-f]{64}$' THEN
+    IF p_new_incarnation IS NULL OR p_new_incarnation NOT REGEXP '^[0-9a-f]{64}$' THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='invalid incarnation';
     END IF;
     START TRANSACTION;
     SELECT incarnation INTO v_old FROM witness.head
       WHERE partition_id=p_partition FOR UPDATE;
-    IF v_old IS NULL OR v_old=p_new_incarnation THEN
+    IF v_old IS NULL OR v_old=p_new_incarnation OR EXISTS (
+        SELECT 1 FROM witness.incarnations
+          WHERE incarnation=p_new_incarnation
+    ) OR EXISTS (
+        SELECT 1 FROM witness.events
+          WHERE incarnation=p_new_incarnation
+    ) OR EXISTS (
+        SELECT 1 FROM witness.head WHERE incarnation=p_new_incarnation
+    ) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='missing partition or reused incarnation';
     END IF;
+    INSERT IGNORE INTO witness.incarnations VALUES (p_partition,v_old);
+    INSERT INTO witness.incarnations VALUES (p_partition,p_new_incarnation);
     UPDATE witness.head SET incarnation=p_new_incarnation,revision=0,
       writer_epoch=2,publisher_epoch=2,state='COMMITTED',event_id=NULL,
       digest='DENY_ALL',ready_hint=0 WHERE partition_id=p_partition;

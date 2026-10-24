@@ -160,6 +160,153 @@ def person_requirement(person: str):
     return (AccessRequirement("PERSON", person, "KNOWLEDGE", "VIEW"),)
 
 
+@pytest.mark.parametrize("failure", ["connect", "reset", "readback", "close"])
+def test_failed_home_recovery_closes_independent_gateway(services, monkeypatch, failure):
+    home, witness_db = services
+    gateway, authority = new_authority(home, witness_db, Binding())
+    try:
+        authority.recover(recovery_password="synthetic-home-recover")
+        authority.activate_self("KNOWLEDGE", "VIEW", "old-self")
+        assert authority.authorize(person_requirement("owner")).allow
+        if failure in {"connect", "close"}:
+            connect = pymysql.connect
+
+            def home_connection(**kwargs):
+                if kwargs.get("user") == "ha_recovery" and failure == "connect":
+                    raise pymysql.OperationalError("injected Home connection failure")
+                connection = connect(**kwargs)
+                if kwargs.get("user") == "ha_recovery":
+                    close = connection.close
+
+                    def failed_close():
+                        close()
+                        raise RuntimeError("injected Home connection cleanup failure")
+                    connection.close = failed_close
+                return connection
+
+            monkeypatch.setattr(pymysql, "connect", home_connection)
+        elif failure == "reset":
+            home.sql("DROP PROCEDURE home_auth.reset_person_incarnation")
+        else:
+            monkeypatch.setattr(authority, "_head", lambda *_: ("wrong", 0, "DENY_ALL"))
+        with pytest.raises((RuntimeError, pymysql.MySQLError)):
+            authority.recover(recovery_password="synthetic-home-recover")
+        assert not authority.open
+        assert gateway.closed
+        assert not authority.authorize(person_requirement("owner")).allow
+    finally:
+        authority.close()
+        gateway.close()
+
+
+def test_competing_reader_cannot_use_gateway_during_home_reset(services, monkeypatch):
+    home, witness_db = services
+    gateway, authority = new_authority(home, witness_db, Binding())
+    authority.recover(recovery_password="synthetic-home-recover")
+    authority.activate_self("KNOWLEDGE", "VIEW", "before-recovery")
+    competitor = PersonAuthority(
+        home_socket=str(home.socket), witness=gateway, binding=Binding(),
+        reader_password="synthetic-reader", mutator_password="synthetic-mutator")
+    # A second worker retains a previously admitted local flag.
+    competitor.open = True
+    assert competitor.authorize(person_requirement("owner")).allow
+    entered, release = threading.Event(), threading.Event()
+    errors = []
+    reader_results = []
+    original_head = authority._head
+
+    def paused_head(*args):
+        entered.set()
+        assert release.wait(5)
+        return original_head(*args)
+
+    def recover():
+        try:
+            authority.recover(recovery_password="synthetic-home-recover")
+        except BaseException as exc:
+            errors.append(exc)
+
+    monkeypatch.setattr(authority, "_head", paused_head)
+    thread = threading.Thread(target=recover)
+    reader = threading.Thread(target=lambda: reader_results.append(
+        competitor.authorize(person_requirement("owner")).allow))
+    thread.start()
+    try:
+        assert entered.wait(5)
+        incarnation = witness_db.sql("SELECT incarnation FROM witness.head")
+        assert gateway.closed
+        reader.start()
+        time.sleep(0.1)
+        assert reader.is_alive(), "competing Home reader must wait for the recovery lane"
+        assert not authority.authorize(person_requirement("owner")).allow
+        assert not gateway.authorize("p1", incarnation, 0, "DENY_ALL")
+        from gateway import GatewayClosed
+        with pytest.raises(GatewayClosed):
+            gateway.prepare("p1", incarnation, "premature", 0, "ALLOW_A")
+    finally:
+        release.set()
+        thread.join(6)
+        if reader.ident is not None:
+            reader.join(6)
+        competitor.close()
+        authority.close()
+        gateway.close()
+    assert not thread.is_alive() and not errors
+    assert not reader.is_alive() and reader_results == [False]
+
+
+@pytest.mark.parametrize("failure", ["acquire", "after-confirm", "release"])
+def test_home_lane_failure_never_opens_independent_admission(services, monkeypatch, failure):
+    from contextlib import contextmanager
+    home, witness_db = services
+    gateway, authority = new_authority(home, witness_db, Binding())
+    opened = []
+    original_open = gateway.open_admission
+    original_lane = authority._lane
+    original_confirm = gateway.confirm_home
+    held_connection = None
+
+    def observed_open(*args):
+        original_open(*args)
+        opened.append(True)
+
+    @contextmanager
+    def faulted_lane(connection, site):
+        with original_lane(connection, site):
+            if failure == "after-confirm":
+                def lose_lane(*args):
+                    original_confirm(*args)
+                    with connection.cursor() as cursor:
+                        cursor.execute("SELECT RELEASE_LOCK(%s)",
+                                       (authority._lane_name(site.partition),))
+                        assert cursor.fetchone() == (1,)
+                monkeypatch.setattr(gateway, "confirm_home", lose_lane)
+            yield
+        if failure == "release":
+            raise RuntimeError("injected lane cleanup failure")
+
+    monkeypatch.setattr(gateway, "open_admission", observed_open)
+    monkeypatch.setattr(authority, "_lane", faulted_lane)
+    try:
+        if failure == "acquire":
+            held_connection = pymysql.connect(unix_socket=str(home.socket), user="root")
+            with held_connection.cursor() as cursor:
+                cursor.execute("SELECT GET_LOCK(%s,0)", (authority._lane_name("p1"),))
+                assert cursor.fetchone() == (1,)
+        # GET_LOCK's server wait can outlive the pinned connection's stricter
+        # read timeout. Either failure must close admission.
+        with pytest.raises((RuntimeError, TimeoutError, pymysql.MySQLError)):
+            authority.recover(recovery_password="synthetic-home-recover")
+        assert gateway.closed and not authority.open
+        if failure != "release":
+            assert not opened, "failed lane proof must never reach OPEN"
+    finally:
+        if held_connection is not None:
+            held_connection.close()
+        authority.close()
+        gateway.close()
+
+
 def test_trusted_binding_recovery_grant_and_self(services):
     home, witness_db = services
     binding = Binding()

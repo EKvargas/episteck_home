@@ -57,6 +57,8 @@ def test_witness_pending_gap_exact_retry_and_guarded_revision(authority_db):
     with new_gateway(authority_db) as witness:
         inc = witness.recover("p1")
         authority_db.sql(f"INSERT INTO home_auth.head VALUES ('p1','{inc}',0,'DENY_ALL')")
+        witness.confirm_home("p1", inc, (inc, 0, "DENY_ALL"))
+        witness.open_admission("p1", inc)
         store = HomeAuthorityStore(str(authority_db.socket), "synthetic-home-write",
                                    "synthetic-home-read")
         try:
@@ -99,6 +101,8 @@ def test_principals_direct_dml_and_old_incarnation_denied(authority_db):
                                            ("p1", inc, "forged", 0, "FORGED", "a" * 64,
                                             "GRANT", "actor", "PERSON", "subject",
                                             "KNOWLEDGE", "VIEW", "source", "subject", 2))
+        witness.confirm_home("p1", inc, (inc, 0, "DENY_ALL"))
+        witness.open_admission("p1", inc)
         store = HomeAuthorityStore(str(authority_db.socket), "synthetic-home-write",
                                    "synthetic-home-read")
         try:
@@ -112,6 +116,8 @@ def test_authenticated_issuer_dependency_and_person_self_activation(authority_db
     with new_gateway(authority_db) as witness:
         inc = witness.recover("p1")
         authority_db.sql(f"INSERT INTO home_auth.head VALUES ('p1','{inc}',0,'DENY_ALL')")
+        witness.confirm_home("p1", inc, (inc, 0, "DENY_ALL"))
+        witness.open_admission("p1", inc)
         store = HomeAuthorityStore(str(authority_db.socket), "synthetic-home-write",
                                    "synthetic-home-read")
         try:

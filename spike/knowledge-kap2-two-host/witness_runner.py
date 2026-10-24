@@ -31,7 +31,8 @@ from preflight import verify as verify_preflight  # noqa: E402
 
 MARKER = "KAP2_PR71_DISPOSABLE_WITNESS"
 SERVING_OPS = frozenset({"authorize", "prepare", "commit", "event_outcome"})
-RECOVERY_OPS = frozenset({"recover", "restart_gateway", "snapshot", "restore",
+RECOVERY_OPS = frozenset({"recover", "close_admission", "confirm_home", "open_admission",
+                          "restart_gateway", "snapshot", "restore",
                           "kill_writer", "probe_privileges", "status", "read_current"})
 
 
@@ -165,9 +166,12 @@ class WitnessFixture:
             signatures = {
                 "recover": 1, "authorize": 4, "prepare": 5, "commit": 4,
                 "event_outcome": 3, "read_current": 1,
+                "close_admission": 0, "confirm_home": 3, "open_admission": 2,
             }
             if operation not in signatures or len(args) != signatures[operation]:
                 raise ValueError("invalid operation arguments")
+            if operation == "confirm_home" and type(args[2]) is list:
+                args = [args[0], args[1], tuple(args[2])]
             method = getattr(self.gateway, "_read_current" if operation == "read_current" else operation)
             return method(*args)
 
