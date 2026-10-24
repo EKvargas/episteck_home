@@ -5,7 +5,9 @@
 # Owner:      svc-finance (unprivileged, rootless podman, no sudo)
 #
 # Loopback only. This unit mounts the IBAN-hash pepper and NOTHING else from secrets/:
-# provider credentials are visible only to the sync job.
+# provider credentials are visible only to the sync job and the operator's commands.
+# nginx forwards exactly one public path here, /finance/connect/callback (ADR-0013). Its
+# query carries the PSD2 code and state, so uvicorn's access log is off.
 [Unit]
 Description=Episteck Finance API
 After=network-online.target
@@ -14,7 +16,7 @@ After=network-online.target
 Image=localhost/episteck-finance:REPLACE_WITH_COMMIT_SHA
 ContainerName=finance-api
 PublishPort=127.0.0.1:9935:9935
-Exec=uvicorn app.main:app --host 0.0.0.0 --port 9935
+Exec=uvicorn app.main:app --host 0.0.0.0 --port 9935 --no-access-log
 Volume=/srv/episteck/services/finance/data:/data:z
 Volume=/srv/episteck/services/finance/secrets/pepper:/run/secrets/pepper:ro,z
 Environment=FINANCE_DB=/data/finance.sqlite

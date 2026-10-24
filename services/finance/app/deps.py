@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from datetime import datetime, timezone
 
 from .authz import UNAVAILABLE, BatchDecision, Requirement
 from .config import Settings
+from .connectors.eb_auth import receive_callback
 from .home_control.client import HomeAuthorizer
 from .service import FinanceService
 from .store.repo import FinanceRepository
@@ -47,3 +49,15 @@ def build_service(settings: Settings | None = None) -> FinanceService:
     settings = settings or Settings.from_env()
     repo = FinanceRepository(settings.db_path, pepper=settings.pepper)
     return FinanceService(repo, _build_authorizer(), settings.workspace_id)
+
+
+def build_callback(settings: Settings | None = None) -> Callable[..., bool]:
+    """The PSD2 redirect handler. It needs the database only: no Home, no provider secret."""
+    settings = settings or Settings.from_env()
+    repo = FinanceRepository(settings.db_path, pepper=settings.pepper)
+
+    def handle(state: str | None, code: str | None, error: str | None) -> bool:
+        return receive_callback(repo, state, code=code, error=error,
+                                now=datetime.now(timezone.utc))
+
+    return handle

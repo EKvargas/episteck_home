@@ -100,6 +100,7 @@ Design: `adr/0010-agent-runtime-grant.md`.
 | Feature Activation DocType + `get_feature_state` (B3, ADR-0012) | 🚧 in review; **not deployed**. Needs `bench migrate` after merge (no post-deploy hook on Home). Finance I1 does not consult it |
 | Home changes H1–H4 (audience, `authorize_batch`, Feature Activation, mint-by-audience + gateway route) | ⏳ Phase B (H5 runtime grant is merged and deployed) |
 | Home accepts `svc-finance` (B1; extends ADR-0009 pattern) | 🔀 PR pending; no deploy beyond normal `main` → `episteck-deploy`. Owner must set site config `home_finance_machine_user` before Finance can call Home (at B6/B4, not now) |
+| PSD2 callback `/finance/connect/callback` + `app.connect authorize` (B5, ADR-0013) | 🚧 in review; **not deployed**. Needs a Finance image rebuild + unit reinstall and the nginx vhost update (owner) |
 
 ## G2 blockers
 

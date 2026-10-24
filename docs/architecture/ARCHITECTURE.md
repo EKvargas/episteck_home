@@ -158,6 +158,10 @@ Control Plane.
 11. **svc-finance is the Finance source of truth** — bank-first connectors, immutable
     facts, one balance authority per account, workspace-partitioned, authorization
     delegated to Home, read-only in v1. → `adr/0011-svc-finance-domain-service.md`
+12. **Finance has exactly one public route, the PSD2 callback** —
+    `bff.home.episteck.com/finance/connect/callback` (GET) to the Finance API. The
+    single-use state is its authority; it stores the code and the operator's command
+    exchanges it, so the API never holds a provider key. → `adr/0013-finance-psd2-callback.md`
 
 ## 5. Cross-cutting rules
 
