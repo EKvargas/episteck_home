@@ -133,6 +133,53 @@ def test_list_shows_structure_but_no_secrets_or_balances(env, capsys):
     assert "demo-pass" not in text and "bridge.example.test" not in text
 
 
+def _bridge(request):
+    """A SimpleFIN bridge answering /accounts with one account and its balance."""
+    return httpx.Response(200, json={
+        "errlist": [], "connections": [{"conn_id": "CON-1", "name": "Bank of America"}],
+        "accounts": [{"id": "ACT-1", "conn_id": "CON-1", "name": "Adv Plus Banking",
+                      "currency": "USD", "balance": "4321.09", "available-balance": "4300.00",
+                      "balance-date": 1760000000}]})
+
+
+def test_provider_accounts_lists_references_without_balances_or_secrets(env, capsys):
+    _bootstrap(env)
+    capsys.readouterr()
+    assert _cmd(env, "provider-accounts", "--connection", "conn-1",
+                transport=httpx.MockTransport(_bridge)) == 0
+    captured = capsys.readouterr()
+    assert captured.out.splitlines() == ["ACT-1 | Adv Plus Banking | USD | Bank of America"]
+    text = captured.out + captured.err
+    assert "4321" not in text and "4300" not in text
+    assert "demo-pass" not in text and "bridge.example.test" not in text
+
+
+def test_provider_accounts_for_an_unknown_connection_fails(env, capsys):
+    _bootstrap(env)
+    assert _cmd(env, "provider-accounts", "--connection", "nope",
+                transport=httpx.MockTransport(_bridge)) != 0
+    assert "unknown connection" in capsys.readouterr().err
+
+
+def test_provider_accounts_reports_a_provider_failure_by_kind_only(env, capsys):
+    _bootstrap(env)
+    capsys.readouterr()
+    denied = httpx.MockTransport(lambda r: httpx.Response(403, text="detail demo-pass"))
+    assert _cmd(env, "provider-accounts", "--connection", "conn-1", transport=denied) != 0
+    captured = capsys.readouterr()
+    assert captured.err.strip() == "error: ConnectorError: AUTH_REQUIRED"
+    assert "demo-pass" not in captured.out + captured.err
+
+
+def test_provider_accounts_for_enable_banking_points_to_the_authorization_step(env, capsys):
+    _cmd(env, "init-workspace", "--name", "Home", "--owner", "PSN-1")
+    _repo(env).add_connection(domain.Connection(
+        "eb-1", "ws-1", domain.Provider.ENABLE_BANKING, "PSN-1",
+        domain.ConnectionStatus.REAUTH_REQUIRED))
+    assert _cmd(env, "provider-accounts", "--connection", "eb-1") != 0
+    assert "authoriz" in capsys.readouterr().err
+
+
 def test_admin_commands_are_audited_as_the_admin_channel(env):
     _bootstrap(env)
     rows = raw_execute(_repo(env), "SELECT DISTINCT channel FROM command_log")

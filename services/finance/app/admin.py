@@ -7,6 +7,7 @@ Secrets are only ever read from, or written to, mode-600 files; nothing secret i
     python -m app.admin init-workspace --name Home --owner PSN-...
     python -m app.admin claim-simplefin --setup-token-file T --out SECRETS/conn-1.simplefin
     python -m app.admin add-connection --id conn-1 --provider simplefin --owner PSN-...
+    python -m app.admin provider-accounts --connection conn-1
     python -m app.admin link-account --id acc-1 --connection conn-1 --provider-ref ... ...
     python -m app.admin list
 """
@@ -23,7 +24,7 @@ import httpx
 from . import domain
 from .config import SecretFileError, Settings, read_secret_file
 from .connectors.base import ConnectorError
-from .connectors.simplefin import TokenAlreadyClaimed, claim
+from .connectors.simplefin import SimpleFinConnector, TokenAlreadyClaimed, claim
 from .store.repo import FinanceRepository, IdempotencyConflict
 from .wiring import load_eb_credentials, secret_path
 
@@ -72,6 +73,9 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--sla-hours", type=int, default=36)
 
     sub.add_parser("list")
+
+    p = sub.add_parser("provider-accounts")
+    p.add_argument("--connection", required=True)
     return parser
 
 
@@ -113,11 +117,16 @@ def _add_connection(repo, settings, args) -> None:
              {"provider": args.provider, "owner": args.owner}, effect)
 
 
-def _link_account(repo, settings, args) -> None:
+def _connection(repo, settings, connection_id: str) -> domain.Connection:
     connection = next((c for c in repo.list_connections(settings.workspace_id)
-                       if c.id == args.connection), None)
+                       if c.id == connection_id), None)
     if connection is None:
         raise AdminError("unknown connection")
+    return connection
+
+
+def _link_account(repo, settings, args) -> None:
+    connection = _connection(repo, settings, args.connection)
     account = domain.Account(
         id=args.id, workspace_id=settings.workspace_id, owner_person_ids=tuple(args.owner),
         institution=args.institution, type=domain.AccountType(args.type),
@@ -166,6 +175,22 @@ def _list(repo, settings, out) -> None:
             f"liquidity={a.liquidity.value} owners={len(a.owner_person_ids)}")
 
 
+def _provider_accounts(repo, settings, args, transport, out) -> None:
+    """The references a provider offers, so the operator can ``link-account`` by them.
+
+    Reference, name, currency and institution only: never a balance, never a secret.
+    """
+    connection = _connection(repo, settings, args.connection)
+    if connection.provider is not domain.Provider.SIMPLEFIN:
+        # Enable Banking returns its accounts once, when the owner authorizes the consent.
+        raise AdminError("enable banking accounts are listed by the authorization step")
+    if not settings.secrets_dir:
+        raise AdminError("FINANCE_SECRETS_DIR is required")
+    url = read_secret_file(secret_path(settings.secrets_dir, connection.id, connection.provider))
+    for account in SimpleFinConnector(url.decode(), transport=transport).list_accounts():
+        out(f"{account.ref} | {account.name} | {account.currency} | {account.institution}")
+
+
 def run(argv: Sequence[str], env: Mapping[str, str] | None = None, *,
         transport: httpx.BaseTransport | None = None, out=print) -> int:
     try:
@@ -183,12 +208,16 @@ def run(argv: Sequence[str], env: Mapping[str, str] | None = None, *,
             _add_connection(repo, settings, args)
         elif args.command == "link-account":
             _link_account(repo, settings, args)
+        elif args.command == "provider-accounts":
+            _provider_accounts(repo, settings, args, transport, out)
         else:
             _list(repo, settings, out)
     except (AdminError, SecretFileError, TokenAlreadyClaimed, ConnectorError, ValueError,
             KeyError, IdempotencyConflict, sqlite3.IntegrityError) as error:
-        # Static, secret-free text only; the exception type is enough for the operator.
-        print(f"error: {type(error).__name__}", file=sys.stderr)
+        # Static, secret-free text only. AdminError messages are written in this file and a
+        # ConnectorError's message is its kind; every other type prints its name alone.
+        detail = f": {error}" if isinstance(error, (AdminError, ConnectorError)) else ""
+        print(f"error: {type(error).__name__}{detail}", file=sys.stderr)
         return 1
     return 0
 
