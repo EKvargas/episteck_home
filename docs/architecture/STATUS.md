@@ -14,7 +14,7 @@ deployed to the Home bench as inert code (no import, hook, whitelisted method or
 schema reaches it; `tests/test_knowledge_disconnected.py` enforces this). KAP-2
 stays open: R2–R5, Board ratification and a newly authorized two-host attempt.
 
-**Updated:** 2026-09-19
+**Updated:** 2026-10-25
 
 ## Live now
 | Component | State |
@@ -28,7 +28,9 @@ stays open: R2–R5, Board ratification and a newly authorized two-host attempt.
 | episteck_home app on home.episteck.com | ✅ actor-aware Control Plane API live |
 | Home MCP | ✅ live behind dedicated gateway; direct loopback `:9932` blocked from callers |
 | Home BFF (confidential OAuth client, EU node) | ✅ live; public session app + socket-only mint process |
-| Hermes delegation gateway | ✅ live on `127.0.0.1:9934`; Home and Nutrition paths |
+| Hermes delegation gateway | ✅ live on `127.0.0.1:9934`; Home, Nutrition and Finance paths |
+| Home Hub (`svc-home-hub`, Nuremberg) | ✅ live; `/app/nutrition` shows the live Nutrition profile panel (F3c, image `d91341d`). Follow-ups #108/#109 merged; image `3b9a3dc` built and probed, rollout pending (owner) |
+| Olin Finance (`svc-finance`: API `:9935`, MCP `:9936`) | ✅ live since 2026-10-13 (image `9256f8c`). First real data 2026-10-25: Bank of America via SimpleFIN, 2 accounts, first sync OK. Backup block and sync timer not applied yet |
 
 ## G1.5 final state — PASS
 | Item | State |
@@ -45,7 +47,7 @@ stays open: R2–R5, Board ratification and a newly authorized two-host attempt.
 ## Deliberately NOT done
 Real family/health data (G2, blocked on approval). Knowledge tech install
 (Mem0/Graphiti/RAGFlow/pgvector/Docling). FHIR, Device Gateway, Mind, Calendar,
-Finance, public UI, voice. `svc-home-core` (explicitly rejected — Frappe is the plane).
+public UI, voice. (Finance I1 is in progress with the owner's own real data, decision P1.) `svc-home-core` (explicitly rejected — Frappe is the plane).
 
 ## Stage completion
 
@@ -95,12 +97,15 @@ Design: `adr/0010-agent-runtime-grant.md`.
 
 | Item | State |
 | --- | --- |
-| Architecture proposal (PR #74) and ADR-0011 | 📝 proposed |
-| `services/finance` (store, read model, API/MCP, connectors) | 🚧 in review, Phase A; **not deployed**, no real data touched |
-| Feature Activation DocType + `get_feature_state` (B3, ADR-0012) | 🚧 in review; **not deployed**. Needs `bench migrate` after merge (no post-deploy hook on Home). Finance I1 does not consult it |
-| Home changes H1–H4 (audience, `authorize_batch`, Feature Activation, mint-by-audience + gateway route) | ⏳ Phase B (H5 runtime grant is merged and deployed) |
-| Home accepts `svc-finance` (B1; extends ADR-0009 pattern) | 🔀 PR pending; no deploy beyond normal `main` → `episteck-deploy`. Owner must set site config `home_finance_machine_user` before Finance can call Home (at B6/B4, not now) |
-| PSD2 callback `/finance/connect/callback` + `app.connect authorize` (B5, ADR-0013) | 🚧 in review; **not deployed**. Needs a Finance image rebuild + unit reinstall and the nginx vhost update (owner) |
+| Architecture proposal (PR #74) and ADR-0011 | ✅ merged |
+| `services/finance` (store, read model, API/MCP, connectors) | ✅ live on Nuremberg since 2026-10-13 (#96, #97, #99, #102). Bank of America connected 2026-10-25 via SimpleFIN (runbook 8a); first sync OK |
+| Feature Activation DocType + `get_feature_state` (B3, ADR-0012) | ✅ merged (#90) and migrated on home.episteck.com. Finance I1 does not consult it |
+| Home changes H1–H4 (audience, `authorize_batch`, Feature Activation, mint + gateway route) | ✅ merged and deployed (#89, #90, #92, #93); `/gateway/finance/` live |
+| Home accepts `svc-finance` (B1; extends ADR-0009 pattern) | ✅ merged (#89); `home_finance_machine_user` set (2026-10-13) |
+| PSD2 callback `/finance/connect/callback` + `app.connect authorize` (B5, ADR-0013) | 🔀 merged (#111, #112); image `03970d5` built on the node, **not installed**; nginx route not applied. Owner ships it with runbook 8c |
+| Sparkasse and Trade Republic cash via Enable Banking (runbook 8b) | ⏳ after B5 ships; owner places the application key and approves in the bank app |
+| Finance backup block and sync timer (runbook 9–10) | ⏳ prepared, owner applies |
+| Telegram (B7), `openai-codex` login (B8), Olin Finance skill (B9), live verification (B11) | ⏳ open |
 
 ## G2 blockers
 
