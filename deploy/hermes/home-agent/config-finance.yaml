@@ -1,0 +1,12 @@
+# Olin Finance (B9): the two keys added to /home/home-agent/.hermes/config.yaml.
+# Reference only. install-olin-finance.sh applies them with `hermes config set`, which
+# keeps the rest of the file untouched. No credential belongs here: the gateway on 9934
+# mints the svc-finance delegation server-side.
+mcp_servers:
+  finance:
+    url: http://127.0.0.1:9934/gateway/finance/
+    enabled: true
+skills:
+  # Externally owned skills: Hermes curation never edits them, and the directory is
+  # root-owned, so home-agent cannot rewrite the Finance rules either.
+  external_dirs: /etc/episteck/hermes/skills
