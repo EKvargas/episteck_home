@@ -223,6 +223,30 @@ Runs `finance-sync` at about 06:20 and 18:20 (±5 min). Two syncs use the whole 
 **Verify (`[CLAUDE]`):** `list-timers`, the first run's `journalctl` (statuses only, no amounts), and `python -m app.admin list`.
 **Rollback:** `STEP rollback-units`.
 
+## 11. Olin Finance skill and MCP entry on `home-agent` (B9) `[! OK]`
+
+After step 8c, with the 90-day runtime grant at `/runtime` listing `svc-finance` (B10). Telegram (B7) and the `openai-codex` login (B8) are not needed to install; they are needed for the live check (B11). No secret is involved.
+
+What changes: a root-owned skill at `/etc/episteck/hermes/skills/olin-finance/SKILL.md` (Hermes treats `skills.external_dirs` as externally owned, and `home-agent` cannot write the file), the counts-only scanner `/etc/episteck/hermes/memory_hygiene.py`, two keys in `/home/home-agent/.hermes/config.yaml` set with `hermes config set` (`mcp_servers.finance`, `skills.external_dirs`), and a restart of the `home-agent` user-scope `hermes-gateway.service`.
+
+```bash
+HSTEP() { $SSH "sudo -n bash -s -- $*" < deploy/hermes/install-olin-finance.sh; }   # from the repo root
+git archive "$SHA" deploy/hermes \
+  | $SSH "cd /; sudo -n install -d -m 700 /var/lib/episteck/hermes-b9 && sudo -n tar -x -C /var/lib/episteck/hermes-b9"
+HSTEP preflight   # Hermes version, finance route status as home-agent, current finance keys
+HSTEP install     # backs up config.yaml to /var/backups/episteck/hermes-b9-<UTC>, then skill, keys, restart
+```
+
+The install output must end its key report with `only the finance keys changed`.
+
+**Verify (`[CLAUDE]`):** `HSTEP verify` shows the skill `644 root`, `home-agent cannot write the skill (expected)`, `mcp_servers.finance` at `http://127.0.0.1:9934/gateway/finance/`, the gateway `active`, and `hermes mcp test finance` listing `finance_overview` (401 or 502 there means the runtime grant lacks `svc-finance`). After B7/B8, ask "¿cuánto tenemos y dónde?": the reply cites source and date per account, and the Finance logs show one overview call.
+
+**Memory hygiene (monthly, and after B11):** `HSTEP memory-scan` prints, per file in `~/.hermes/memories`, counts of amount-like, IBAN-like and long-number strings, never the text. `findings=0` passes. On any finding, review and remove the entry yourself `[OWN TERMINAL]`. A harder stop is `memory.write_approval: true` (every memory write waits for approval, or is staged under `/memory pending`); it applies to all memories, so it stays off unless you choose it.
+
+Known gap: the live `episteck-home-agent` skill still describes the G1.5 actor model (an explicit `actor_person_id` and a `check_access` call before domain tools). The Olin Finance skill overrides it for Finance; refreshing the general skill is separate work.
+
+**Rollback:** `HSTEP rollback /var/backups/episteck/hermes-b9-<UTC>` restores `config.yaml` byte for byte, removes the skill and the scanner, and restarts the gateway.
+
 ## Purge (destructive) `[OWN TERMINAL]`
 
 Deletes `svc-finance`, its database and its secrets. restic snapshots are untouched.
