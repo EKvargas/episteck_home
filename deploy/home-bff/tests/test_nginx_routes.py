@@ -170,3 +170,31 @@ def test_finance_psd2_callback_is_one_exact_get_only_location():
 def test_no_other_route_reaches_the_finance_ports():
     outside = CONF.replace(_finance_callback_block(), "")
     assert "9935" not in outside and "9936" not in outside
+
+
+RATE_LIMIT_PATH = ROOT / "episteck-rate-limit.conf"
+
+
+def _active(text):
+    return "\n".join(line.split("#", 1)[0] for line in text.splitlines())
+
+
+def test_rate_limit_zone_is_http_level_and_keyed_on_the_client_address():
+    """limit_req_zone is only valid in http{}, so it ships as a conf.d file."""
+    zone_conf = _active(RATE_LIMIT_PATH.read_text(encoding="utf-8"))
+    zones = re.findall(r"\blimit_req_zone\s+[^;]*;", zone_conf)
+    assert zones == ["limit_req_zone $binary_remote_addr zone=finance_callback:1m rate=10r/m;"]
+    assert not re.search(r"\b(server|location)\b", zone_conf)
+    assert "limit_req_zone" not in _active(CONF), "a zone in the vhost would be server-level"
+
+
+def test_finance_callback_is_rate_limited_per_client():
+    block = _active(_finance_callback_block())
+    assert re.findall(r"\blimit_req\s+[^;]*;", block) == [
+        "limit_req zone=finance_callback burst=5 nodelay;"]
+    assert re.findall(r"\blimit_req_status\s+[^;]*;", block) == ["limit_req_status 429;"]
+
+
+def test_rate_limit_applies_to_no_other_route():
+    outside = _active(CONF.replace(_finance_callback_block(), ""))
+    assert "limit_req" not in outside

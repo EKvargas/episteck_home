@@ -43,6 +43,12 @@ come back once, in the `POST /sessions` answer.
    account linked after the first consent needs no second SCA. Only `link-account`
    (an owner step) creates the account row that sync reads. The command prints each
    returned account as `reference | product | currency | linked/not linked`.
+6. **Rate limit (amendment, 2026-10-25).** nginx applies `limit_req` to the callback
+   location only: zone `finance_callback` keyed on `$binary_remote_addr` (DNS points
+   straight at the node, no proxy in front), 10 requests per minute, burst 5, `nodelay`,
+   status `429`. The zone lives in `conf.d/episteck-rate-limit.conf` because
+   `limit_req_zone` is http-level. Limited requests never reach Finance. `limit_req` runs
+   before `limit_except`, so a client that is already limited gets `429` even for a POST.
 
 ## Consequences
 - Positive: Sparkasse and Trade Republic cash can be connected. The Internet-facing
@@ -54,8 +60,10 @@ come back once, in the `POST /sessions` answer.
   Reconnecting from chat or the Hub needs a later decision (see Open questions).
 - Negative: the code sits in the Finance database for seconds (until the command
   takes it). It is useless without the application key, and the row is deleted on use.
-- Negative: no nginx rate limit on the route. Each request is one indexed lookup of a
-  hash; add `limit_req` if logs show abuse.
+- Positive (amended 2026-10-25): the route is rate limited per client address (see
+  decision 6), so a scan costs Finance at most a handful of hash lookups per minute.
+- Negative: a client that exceeds the limit gets `429` for a few seconds. One consent
+  needs one request, so the owner only meets it after repeated reloads of the result page.
 
 ## Alternatives considered
 - **Mount the EB key into the API and exchange in the callback:** one step fewer for
