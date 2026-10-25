@@ -121,6 +121,7 @@ socket-directory mount and its ASGI process has no internal mint route.
 ```bash
 sudo apt install -y nginx certbot python3-certbot-nginx
 sudo cp episteck-log-format.conf /etc/nginx/conf.d/episteck-log-format.conf
+sudo cp episteck-rate-limit.conf /etc/nginx/conf.d/episteck-rate-limit.conf
 sudo cp nginx-home-bff.conf /etc/nginx/sites-available/home-bff.conf
 sudo ln -sf /etc/nginx/sites-available/home-bff.conf /etc/nginx/sites-enabled/
 sudo ufw allow 80/tcp comment 'HTTP (ACME + redirect)'

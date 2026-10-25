@@ -199,6 +199,31 @@ Once, after the B5 PR merges. Nothing here touches a secret.
 **Verify (`[CLAUDE]`):** `GET https://bff.home.episteck.com/finance/connect/callback?state=x` returns `400` (Finance answered), a `POST` returns `403`, `/finance/overview` returns `404`, and `journalctl --user -u finance-api` shows no request lines.
 **Rollback:** `$SSH "sudo -n cp -a /etc/nginx/sites-available/home-bff.conf.pre-b5 /etc/nginx/sites-available/home-bff.conf && sudo -n nginx -t && sudo -n systemctl reload nginx"`, then `STEP install <previous SHA>`.
 
+### 8d. Rate limit the callback `[! OK]`
+
+Once, after 8c is live and the rate-limit PR merges (ADR-0013 decision 6). No secret is involved. Run from the repo root at the merged commit.
+
+1. Compare the live vhost with this commit **first**. The diff must show only the three rate-limit lines in the callback block (`limit_req`, `limit_req_status`) and their two-line comment. If it also shows the whole `/finance/connect/callback` block, 8c is not live yet: do 8c first. If it shows anything else, stop and reconcile server to git.
+   ```bash
+   $SSH "sudo -n cat /etc/nginx/sites-available/home-bff.conf" | diff - deploy/home-bff/nginx-home-bff.conf
+   $SSH "ls /etc/nginx/conf.d/"   # must not list episteck-rate-limit.conf yet
+   ```
+2. Back up, install both files, test, reload. If `nginx -t` fails, the same command restores the backup and removes the zone file, and nothing is reloaded:
+   ```bash
+   $SSH "sudo -n test ! -e /etc/nginx/sites-available/home-bff.conf.pre-ratelimit && sudo -n cp -a /etc/nginx/sites-available/home-bff.conf /etc/nginx/sites-available/home-bff.conf.pre-ratelimit && echo backup OK"
+   scp -F C:/Users/D064974/.ssh/config deploy/home-bff/episteck-rate-limit.conf deploy/home-bff/nginx-home-bff.conf episteck-node1:/home/episteck/
+   $SSH "sudo -n install -m 644 -o root -g root /home/episteck/episteck-rate-limit.conf /etc/nginx/conf.d/episteck-rate-limit.conf && sudo -n install -m 644 -o root -g root /home/episteck/nginx-home-bff.conf /etc/nginx/sites-available/home-bff.conf && rm /home/episteck/episteck-rate-limit.conf /home/episteck/nginx-home-bff.conf; sudo -n diff /etc/nginx/sites-available/home-bff.conf.pre-ratelimit /etc/nginx/sites-available/home-bff.conf; if sudo -n nginx -t; then sudo -n systemctl reload nginx && echo reloaded; else sudo -n cp -a /etc/nginx/sites-available/home-bff.conf.pre-ratelimit /etc/nginx/sites-available/home-bff.conf && sudo -n rm -f /etc/nginx/conf.d/episteck-rate-limit.conf && echo 'nginx -t FAILED: restored, not reloaded'; fi"
+   ```
+   The zone file must be installed with the vhost: without it nginx refuses the vhost (`zero size shared memory zone "finance_callback"`).
+
+**Verify (`[CLAUDE]`), in this order** (a POST sent after the burst gets `429`, because `limit_req` runs before `limit_except`):
+- `POST https://bff.home.episteck.com/finance/connect/callback` returns `403`.
+- `GET …/finance/connect/callback?state=x` returns `400` (Finance answered).
+- Ten GETs in a row: at most six `400`, then `429`. `/health` stays `200`.
+- The access log shows the `429` lines with the path only, no query string.
+
+**Rollback:** `$SSH "sudo -n cp -a /etc/nginx/sites-available/home-bff.conf.pre-ratelimit /etc/nginx/sites-available/home-bff.conf && sudo -n rm -f /etc/nginx/conf.d/episteck-rate-limit.conf && sudo -n nginx -t && sudo -n systemctl reload nginx"`
+
 ## 9. Backup block `[! OK]`
 
 The existing job is `/etc/episteck/backup/episteck-backup.sh`, run as root. The change adds a consistent `.backup` of `finance.sqlite` plus `PRAGMA integrity_check`, and the `finance` tag. The existing `--exclude "/srv/episteck/services/*/secrets"` already keeps secrets out.
