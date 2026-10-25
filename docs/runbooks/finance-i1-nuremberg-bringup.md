@@ -54,6 +54,8 @@ git archive "$SHA" services/finance deploy/finance \
 STEP build "$SHA"
 ```
 
+The build installs only `services/finance/requirements.lock` (exact versions with SHA-256 hashes) and fails on any hash mismatch or `pip check` error; refreshing that lock is a reviewed PR (command in the Dockerfile header), never a side effect of a rebuild.
+
 **Verify:** the last line lists `localhost/episteck-finance:<SHA>`.
 **Rollback:** `$SSH "sudo -n -u svc-finance rm -rf /srv/episteck/services/finance/build/$SHA"` and remove the image with `podman rmi` as `svc-finance`.
 
