@@ -332,6 +332,31 @@ step with `!` ssh; Claude ran the read-only checks.
 Rollback command and backup stay as in the R4 runbook; the backup
 `/var/backups/episteck/home-f3c-d91341d/` remains on the host.
 
+## F3c follow-ups rollout (2026-11-07)
+
+The F3c review follow-ups #108 (`5d50781`, test tooling only) and #109 (`3b9a3dc`) are
+live. #109 fixes the demo banner that showed on `/app/nutrition/` after hydration
+(`AppShell.tsx`). With the owner's authorization, Claude ran
+`sudo bash ~/ops-2026-10-25/olin-ops.sh hub` on episteck-node1. That step calls
+`hub-rollout.sh apply` and then `verify`.
+
+- **Image:** `localhost/episteck-home-hub:3b9a3dc10f18737244642a86fd2879f636eefc23`
+  (ID `cd31af47de03`), built and probed on 2026-10-24 from a `git archive` of
+  `apps/home-hub` at the merge SHA.
+- **Apply:** the Quadlet was backed up to `/var/backups/episteck/home-f3cfu-3b9a3dc`.
+  The diff against the backup was exactly the `Image=` line (`d91341d` to `3b9a3dc`).
+  After reload and restart the unit was `active/running` with `NRestarts=0`.
+- **Verify, read-only:** from the running Hub container, 9933 and 9930 `/health`
+  returned 200, and 9931, 9932 and 9934 were refused. Host `ss` showed 9930, 9933 and
+  9940 on `127.0.0.1` only. Anonymous `/app/nutrition` returned 307 to
+  `https://bff.home.episteck.com/login`.
+- **Not yet observed live:** that `/app/nutrition/` (trailing slash) shows no demo banner
+  for a signed-in user. The owner checks this in the browser; until then it is covered by
+  the e2e test from #109 only.
+
+Rollback: `sudo bash ~/ops-2026-10-25/olin-ops.sh hub-rollback`. It restores the
+`d91341d` Quadlet from the backup above.
+
 ## Live rollout record (2026-09-27)
 
 Target: `ubuntu-4gb-nbg1-1` in Nuremberg. The deployed repository baseline was

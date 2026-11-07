@@ -14,7 +14,7 @@ deployed to the Home bench as inert code (no import, hook, whitelisted method or
 schema reaches it; `tests/test_knowledge_disconnected.py` enforces this). KAP-2
 stays open: R2–R5, Board ratification and a newly authorized two-host attempt.
 
-**Updated:** 2026-10-25
+**Updated:** 2026-11-07
 
 ## Live now
 | Component | State |
@@ -23,14 +23,14 @@ stays open: R2–R5, Board ratification and a newly authorized two-host attempt.
 | infra-agent / home-agent (Hermes) | ✅ operational, independent |
 | Mealie v3.26.0 | ✅ operational (loopback + tailnet) |
 | svc-nutrition (API + MCP) | ✅ operational; USDA prod key live; OFF live |
-| Off-box restic backup | ✅ operational + restore validated |
+| Off-box restic backup | ✅ operational + restore validated; Finance SQLite included since 2026-11-07 (tag `finance`) |
 | home.episteck.com Frappe site | ✅ live (frappe+erpnext) |
 | episteck_home app on home.episteck.com | ✅ actor-aware Control Plane API live |
 | Home MCP | ✅ live behind dedicated gateway; direct loopback `:9932` blocked from callers |
 | Home BFF (confidential OAuth client, EU node) | ✅ live; public session app + socket-only mint process |
 | Hermes delegation gateway | ✅ live on `127.0.0.1:9934`; Home, Nutrition and Finance paths |
-| Home Hub (`svc-home-hub`, Nuremberg) | ✅ live; `/app/nutrition` shows the live Nutrition profile panel (F3c, image `d91341d`). Follow-ups #108/#109 merged; image `3b9a3dc` built and probed, rollout pending (owner) |
-| Olin Finance (`svc-finance`: API `:9935`, MCP `:9936`) | ✅ live since 2026-10-13 (image `9256f8c`). First real data 2026-10-25: Bank of America via SimpleFIN, 2 accounts, first sync OK. Backup block and sync timer not applied yet |
+| Home Hub (`svc-home-hub`, Nuremberg) | ✅ live; `/app/nutrition` shows the live Nutrition profile panel (F3c). Follow-ups #108/#109 live since 2026-11-07 (image `3b9a3dc`); signed-in banner check pending (owner) |
+| Olin Finance (`svc-finance`: API `:9935`, MCP `:9936`) | ✅ live since 2026-10-13; image `6a31366` since 2026-11-07. Bank of America via SimpleFIN (2 accounts) since 2026-10-25. Backed up nightly; sync timer at 06:20 and 18:20 UTC (#117) |
 
 ## G1.5 final state — PASS
 | Item | State |
@@ -103,10 +103,11 @@ Design: `adr/0010-agent-runtime-grant.md`.
 | Feature Activation DocType + `get_feature_state` (B3, ADR-0012) | ✅ merged (#90) and migrated on home.episteck.com. Finance I1 does not consult it |
 | Home changes H1–H4 (audience, `authorize_batch`, Feature Activation, mint + gateway route) | ✅ merged and deployed (#89, #90, #92, #93); `/gateway/finance/` live |
 | Home accepts `svc-finance` (B1; extends ADR-0009 pattern) | ✅ merged (#89); `home_finance_machine_user` set (2026-10-13) |
-| PSD2 callback `/finance/connect/callback` + `app.connect authorize` (B5, ADR-0013) | 🔀 merged (#111, #112); image `03970d5` built on the node, **not installed**; nginx route not applied. Owner ships it with runbook 8c |
-| Sparkasse and Trade Republic cash via Enable Banking (runbook 8b) | ⏳ after B5 ships; owner places the application key and approves in the bank app |
-| Finance backup block and sync timer (runbook 9–10) | ⏳ prepared, owner applies |
-| Telegram (B7), `openai-codex` login (B8), Olin Finance skill (B9), live verification (B11) | ⏳ open |
+| PSD2 callback `/finance/connect/callback` + `app.connect authorize` (B5, ADR-0013) | ✅ live 2026-11-07 (image `6a31366`); nginx route with rate limit (#113) on the BFF vhost; 403/400/404 and 429-after-burst verified, no query string in nginx logs |
+| Sparkasse and Trade Republic cash via Enable Banking (runbook 8b) | ⏳ next; owner registers the redirect URL, places the application key and approves in the bank app |
+| Finance backup block and sync timer (runbook 9–10) | ✅ applied 2026-11-07; snapshot `8af2d8ea` holds `finance.sqlite`. Timer schedule fixed in #117 (`06:20,18:20` fired 06:18 and 06:20 only) |
+| Olin Finance skill + `finance` MCP on `home-agent` (B9) | ✅ installed 2026-11-07; tool discovery through the gateway works, so the runtime grant covers `svc-finance` (B10) |
+| Telegram (B7), `openai-codex` login (B8), live verification (B11) | ⏳ open (B7, B8 owner steps) |
 
 ## G2 blockers
 
