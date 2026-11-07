@@ -12,7 +12,8 @@ No Knowledge endpoint, witness service, runtime or production schema is active.
 | KAP-1 wire contracts | ✅ merged (with #71) |
 | KAP-2 PERSON candidate | 🟡 merged 2026-10-24 (#71) and deployed to the Home bench as **inert** code. No import, hook, whitelisted method or schema reaches it; `tests/test_knowledge_disconnected.py` enforces this. R1/R6 fixed locally |
 | KAP-2 decisions | ✅ 2026-11-07: Erick is witness operator with no backup delegate (accepted risk); latency screen accepted as a gate ([decision sheet](../../spike/knowledge-kap2-two-host/DECISION_SHEET.md)) |
-| KAP-2 open | ⏳ R2 repeated epoch/principal retirement; R3 unknown Home-commit acknowledgement windows; R4 CIRCLE, production Home writers, RT#2 contexts, reauthorization interface, credential custody; one two-host run (needs exact-SHA authorization) |
+| KAP-2 R2/R3/R5 | ✅ local, 2026-11-07: writer principal rotation and retirement on every recovery (restore-safe minted credentials); exact-event resolution of unknown outcomes at every mutation position; A10 latency gate enforced ([validation](reviews/2026-11-07-knowledge-kap2-r2-r3-validation.md)) |
+| KAP-2 open | ⏳ R4: CIRCLE, production Home writers, process attach and reconcile, RT#2 contexts, reauthorization interface, credential custody. Plus one two-host run (needs exact-SHA authorization) |
 | KAP-3…KAP-10 | ⏳ not started |
 
 Details: [KAP-2 consolidation handoff](proposals/KNOWLEDGE_KAP2_CONSOLIDATION_HANDOFF.md). The GCS request-time authorization path is rejected.

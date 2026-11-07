@@ -1,5 +1,18 @@
 # Local validation of the two-host package
 
+**R2/R3/R5 loopback (2026-11-07):** one fresh loopback run of the A1–A11 matrix on the final R2/R3 candidate, in WSL against real disposable MariaDB 10.11 with mTLS. The [R2/R3 validation record](../../docs/architecture/reviews/2026-11-07-knowledge-kap2-r2-r3-validation.md) has the full context.
+
+- **Result:** all 11 executed steps `PASS`. Remote preflight A0 and Frappe A9 were not executed.
+- **Requests:** 329 of 400 attempted, including 161 authorizations and 20 recoveries.
+- **Latency gate:** `GATE_PASS` at both temperatures.
+
+| Temperature | Call p95 / p99 | Pair p95 / p99 |
+| --- | ---: | ---: |
+| Warm | 51.8 / 53.5 ms | 119.8 / 184.5 ms |
+| Cold | 53.1 / 53.4 ms | 120.0 / 120.9 ms |
+
+Both roots were absent at cleanup, and witness admission ended `CLOSED`. An earlier run on this candidate failed A1 because of the privilege probe, which was then fixed (see the record). These are single-host loopback numbers: they are not cross-host latency and not the authorized two-host gate.
+
 **Subsequent R1/R6 correction (2026-10-24):** see the [local validation record](../../docs/architecture/reviews/2026-10-24-knowledge-kap2-r1-r6-validation.md) and [structured evidence](evidence/2026-10-24-r1-r6/result.json). These changes stage admission through exact Home confirmation and retain known incarnation history. The new focused loopback mTLS regression exercises the recovery handshake and role isolation against two private MariaDB instances; its archived witness trace has 30 requests, three expected role denials, one expected CLOSED prepare denial and a CLOSED cleanup event. It is not another full A0–A11 run, Frappe control or latency screen. The previous evidence and measurements below are unchanged historical records.
 
 **Latest continuation:** the [2026-10-24 help-check regression and recovery review](#2026-10-24-help-check-regression-and-recovery-review) follows both stopped remote preparation attempts. The 2026-10-10/12 loopback results below remain historical evidence. No local check establishes Nuremberg MariaDB 11.8 compatibility or two-host acceptance.

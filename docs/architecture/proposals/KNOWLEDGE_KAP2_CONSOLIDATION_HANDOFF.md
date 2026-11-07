@@ -10,7 +10,15 @@ The owner (Erick, acting as Board) recorded the decisions the [decision sheet](.
 - **Erick** is the witness operator, with no backup delegate (accepted risk).
 - The KAP-2 latency screen is **accepted as a pass/fail gate**.
 
-The two-host run is still **not authorized**: it needs a record naming the exact commit SHA and the verified Nuremberg Tailscale IP. KAP-2 stays open on R2, R3, R4 and that run. The candidate on `main` stays inert.
+The two-host run is still **not authorized**: it needs a record naming the exact commit SHA and the verified Nuremberg Tailscale IP. The candidate on `main` stays inert.
+
+**Local R2/R3 work (same day):** see [R2/R3 correction and validation](../reviews/2026-11-07-knowledge-kap2-r2-r3-validation.md).
+
+- **R2:** every recovery rotates the writer epoch and principal, mints a fresh credential, and locks and disconnects every retired principal. A physical restore cannot revive one.
+- **R3:** exact-event resolution of an unknown outcome at every mutation position, so a lost acknowledgement no longer forces a quarantining recovery.
+- **R5:** the A10 latency gate is now enforced.
+
+KAP-2 stays open on R4 and the two-host run. R4 covers CIRCLE, all production Home authority writers, process attach and reconcile, RT#2 contexts, the reauthorization interface and credential custody.
 
 ## Continuation — 2026-10-24
 
