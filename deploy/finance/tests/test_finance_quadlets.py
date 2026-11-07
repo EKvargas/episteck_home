@@ -120,6 +120,27 @@ def test_api_and_mcp_restart_and_start_at_boot():
         assert parsed["Install"]["WantedBy"] == ["default.target"]
 
 
+def fire_times(on_calendar: str) -> set[tuple[int, int, int]]:
+    """Daily fire times of a '*-*-* <time>' expression, read the way systemd reads it.
+
+    systemd splits the time on ':' first and only then on ',', so '06:20,18:20' is
+    hour 06, minutes {20,18}, second 20 (06:18:20 and 06:20:20), not 06:20 and 18:20.
+    """
+    match = re.fullmatch(r"\*-\*-\*\s+([\d:,]+)", on_calendar)
+    assert match, on_calendar
+    parts = [[int(v) for v in part.split(",")] for part in match.group(1).split(":")]
+    if len(parts) == 2:
+        parts.append([0])
+    assert len(parts) == 3, on_calendar
+    hours, minutes, seconds = parts
+    return {(h, m, s) for h in hours for m in minutes for s in seconds}
+
+
+def test_fire_times_reads_the_time_like_systemd():
+    assert fire_times("*-*-* 06:20,18:20") == {(6, 18, 20), (6, 20, 20)}
+    assert fire_times("*-*-* 06,18:20:00") == {(6, 20, 0), (18, 20, 0)}
+
+
 def test_timer_triggers_the_sync_service_at_most_twice_a_day():
     timer = parse(DEPLOY / "finance-sync.timer")
     assert timer["Timer"]["Unit"] == ["finance-sync.service"]
@@ -127,8 +148,14 @@ def test_timer_triggers_the_sync_service_at_most_twice_a_day():
     assert timer["Install"]["WantedBy"] == ["timers.target"]
     calendar = timer["Timer"]["OnCalendar"]
     assert len(calendar) == 1
-    hours = re.search(r"\*-\*-\*\s+([\d:,]+)$", calendar[0]).group(1).split(",")
-    assert 1 <= len(hours) <= MAX_SYNCS_PER_DAY
+    assert 1 <= len(fire_times(calendar[0])) <= MAX_SYNCS_PER_DAY
+
+
+def test_timer_spreads_the_two_syncs_over_the_day():
+    # Morning and evening. Two syncs minutes apart would spend the whole daily PSD2
+    # budget in one burst and leave the evening answer twelve hours old.
+    calendar = parse(DEPLOY / "finance-sync.timer")["Timer"]["OnCalendar"][0]
+    assert fire_times(calendar) == {(6, 20, 0), (18, 20, 0)}
 
 
 def test_no_secret_material_in_any_deploy_artifact():

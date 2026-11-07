@@ -5,7 +5,7 @@
 Description=Episteck Finance sync schedule
 
 [Timer]
-OnCalendar=*-*-* 06:20,18:20
+OnCalendar=*-*-* 06,18:20:00
 Persistent=true
 RandomizedDelaySec=300
 Unit=finance-sync.service
