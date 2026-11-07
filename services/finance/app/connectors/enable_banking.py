@@ -210,7 +210,13 @@ class EnableBankingConnector:
                     out.append(RawBalance(kind, minor, currency, _when(row, now)))
                     break
         if not out:
-            raise ConnectorError(ErrorKind.MALFORMED)
+            # Some banks (Trade Republic) report a single OTHR balance and no standard type.
+            # Only an unambiguous lone OTHR row is taken, as the booked balance.
+            other = [r for r in rows if isinstance(r, dict) and r.get("balance_type") == "OTHR"]
+            if len(other) != 1:
+                raise ConnectorError(ErrorKind.MALFORMED)
+            minor, currency = _amount(other[0].get("balance_amount"))
+            out.append(RawBalance(domain.BalanceKind.BOOKED, minor, currency, _when(other[0], now)))
         return out
 
     def fetch_movements(self, account_ref: str, since: date | None) -> list[RawMovement]:
