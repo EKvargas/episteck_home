@@ -7,6 +7,7 @@ The live process lock and CLOSED bit are deliberately outside restorable DB rows
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import os
 import secrets
 import threading
@@ -15,6 +16,17 @@ from pathlib import Path
 from typing import Any
 
 import pymysql
+
+
+def writer_principal(epoch: int) -> str:
+    """Operator naming convention for the one DB principal bound to a writer epoch."""
+    return f"gw_writer{epoch}"
+
+
+def native_password_hash(password: str) -> str:
+    """MariaDB ``mysql_native_password`` stored form; not usable to authenticate."""
+    stage1 = hashlib.sha1(password.encode("utf-8")).digest()
+    return "*" + hashlib.sha1(stage1).hexdigest().upper()
 
 
 class GatewayBusy(RuntimeError):
@@ -36,15 +48,24 @@ def serialized(method):
 
 class Gateway:
     def __init__(self, *, socket: str, lock_path: str, reader_password: str,
-                 writer_password: str, recovery_password: str) -> None:
+                 recovery_password: str) -> None:
+        """No writer credential is configured: each recovery mints a fresh one.
+
+        Recovery moves to the next epoch's never-used principal, installs a newly
+        generated credential for it (only its stored hash crosses to the witness) and
+        retires every earlier principal, so no writer credential outlives the
+        recovery after it, even if an older datadir is physically restored.
+        """
         self.socket = socket
         self.lock_path = Path(lock_path)
-        self._passwords = (reader_password, writer_password, recovery_password)
+        self._passwords = (reader_password, recovery_password)
+        self._writer_credential: tuple[str, str] | None = None
         self._lock_fd: int | None = None
         self._reader: pymysql.Connection | None = None
         self._writer: pymysql.Connection | None = None
         self._incarnation: str | None = None
         self._partition: str | None = None
+        self._writer_epoch: int | None = None
         self._recovery_phase = "CLOSED"
         self._admission_lock = threading.RLock()
         self.closed = True
@@ -128,41 +149,70 @@ class Gateway:
         self._recovery_phase = "CLOSED"
         self._incarnation = None
         self._partition = None
+        self._writer_epoch = None
+
+    @property
+    def writer_epoch(self) -> int | None:
+        """The writer epoch installed by the current recovery generation, if any."""
+        return self._writer_epoch
+
+    @staticmethod
+    def _close_quietly(connection: pymysql.Connection | None) -> None:
+        if connection is not None:
+            try:
+                connection.close()
+            except (pymysql.MySQLError, OSError):
+                pass
 
     @serialized
     def recover(self, partition: str) -> str:
-        """Install default-deny, keeping serving closed until Home confirms it."""
+        """Install default-deny under a fresh writer principal, keeping serving closed.
+
+        The previous writer session is dropped before rotation; the witness then
+        locks and disconnects every retired writer principal of the partition.
+        """
         self.close_admission()
         self._check_lock()
+        for connection in (self._writer, self._reader):
+            self._close_quietly(connection)
+        self._writer = None
+        self._reader = self._connect("gw_reader", self._passwords[0])
+        current = self._read_current(partition)
+        if not current or type(current[2]) is not int:
+            raise GatewayClosed("partition head is missing")
+        next_epoch = current[2] + 1
+        principal = writer_principal(next_epoch)
+        password = secrets.token_urlsafe(32)
+        self._writer_credential = None
         candidate = secrets.token_hex(32)
-        recovery = self._connect("gw_recovery", self._passwords[2])
+        recovery = self._connect("gw_recovery", self._passwords[1])
         try:
-            self._call(recovery, "recover_e2", (partition, candidate))
+            self._call(recovery, "recover_partition",
+                       (partition, candidate, f"{principal}@localhost",
+                        native_password_hash(password)))
         finally:
             recovery.close()
-        if self._reader is not None:
-            self._reader.close()
-        if self._writer is not None:
-            self._writer.close()
-        self._reader = self._connect("gw_reader", self._passwords[0])
-        self._writer = self._connect("gw_writer2", self._passwords[1])
+        self._writer = self._connect(principal, password)
+        self._writer_credential = (principal, password)
         row = self._read_current(partition)
         self._check_connections()
-        if row != (candidate, 0, 2, 2, "COMMITTED", None, "DENY_ALL"):
+        if row != (candidate, 0, next_epoch, next_epoch, "COMMITTED", None, "DENY_ALL"):
             raise GatewayClosed("fresh default-deny recovery readback failed")
         self._incarnation = candidate
         self._partition = partition
+        self._writer_epoch = next_epoch
         return candidate
 
     def _verify_recovery(self, partition: str, incarnation: str, phase: str) -> None:
         if (not self.closed or self._recovery_phase != phase
                 or partition != self._partition or incarnation != self._incarnation
-                or self._incarnation is None):
+                or self._incarnation is None or self._writer_epoch is None):
             raise GatewayClosed("recovery generation is not awaiting this transition")
         self._check_lock()
         self._check_connections()
+        epoch = self._writer_epoch
         if self._read_current(partition) != (
-            incarnation, 0, 2, 2, "COMMITTED", None, "DENY_ALL"
+            incarnation, 0, epoch, epoch, "COMMITTED", None, "DENY_ALL"
         ):
             raise GatewayClosed("default-deny recovery readback changed")
 
@@ -214,7 +264,7 @@ class Gateway:
         assert self._writer is not None
         try:
             self._writer.ping(reconnect=False)
-            self._call(self._writer, "prepare_e2",
+            self._call(self._writer, "prepare_event",
                        (partition, incarnation, event, expected_revision, digest))
         except pymysql.MySQLError as exc:
             if not exc.args or exc.args[0] != 1644:  # 1644 is the procedure's legal rejection
@@ -228,7 +278,7 @@ class Gateway:
         assert self._writer is not None
         try:
             self._writer.ping(reconnect=False)
-            self._call(self._writer, "commit_e2",
+            self._call(self._writer, "commit_event",
                        (partition, incarnation, event, digest))
         except pymysql.MySQLError as exc:
             if not exc.args or exc.args[0] != 1644:
@@ -259,6 +309,7 @@ class Gateway:
                 except pymysql.MySQLError:
                     pass
         self._reader = self._writer = None
+        self._writer_credential = None
         if self._lock_fd is not None:
             try:
                 os.close(self._lock_fd)

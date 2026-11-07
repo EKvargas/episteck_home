@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -37,8 +38,27 @@ class _Site:
     database: str
 
 
+@dataclass(frozen=True)
+class _UnknownOutcome:
+    """A mutation whose witness or Home step failed with an unproven outcome."""
+    partition: str
+    incarnation: str
+    event_id: str
+    session: int
+    issuer_user: str
+    kind: str
+    source: str
+    domain: str
+    action: str
+    caller_partition: str | None
+    caller_issuer: str | None
+
+
 class PersonAuthority:
     """A local integration unit, not a production admission interface."""
+
+    # Bound for proving that a retired Home mutation session has fully ended.
+    SESSION_RETIRE_SECONDS = 5.0
 
     def __init__(self, *, home_socket: str, witness, binding: TrustedBinding,
                  reader_password: str, mutator_password: str,
@@ -51,11 +71,63 @@ class PersonAuthority:
                                       password=reader_password, database="home_auth",
                                       autocommit=True, connect_timeout=2,
                                       read_timeout=2, write_timeout=2)
-        self.mutator = pymysql.connect(unix_socket=home_socket, user="ha_mutator",
-                                       password=mutator_password, database="home_auth",
-                                       autocommit=True, connect_timeout=2,
-                                       read_timeout=2, write_timeout=2)
+        self._mutator_password = mutator_password
+        self.mutator = self._connect_mutator()
+        self._unknown: _UnknownOutcome | None = None
         self.open = False
+
+    def _connect_mutator(self) -> pymysql.Connection:
+        return pymysql.connect(unix_socket=self.home_socket, user="ha_mutator",
+                               password=self._mutator_password, database="home_auth",
+                               autocommit=True, connect_timeout=2,
+                               read_timeout=2, write_timeout=2)
+
+    @property
+    def unresolved_event(self) -> str | None:
+        """Event ID whose outcome is unproven; Knowledge stays closed until resolved."""
+        return self._unknown.event_id if self._unknown else None
+
+    def _kill_session(self, conn: pymysql.Connection, session: int) -> None:
+        with conn.cursor() as cursor:
+            try:
+                cursor.execute("KILL CONNECTION %s", (int(session),))
+            except pymysql.MySQLError as exc:
+                if not exc.args or exc.args[0] != 1094:  # 1094: the session already ended
+                    raise
+
+    def _retire_session(self, conn: pymysql.Connection, session: int) -> None:
+        """Prove an old mutation session can no longer commit: kill it, wait until gone.
+
+        Once the server thread has ended, its transaction is durably committed or
+        rolled back, so a fresh read of Home is the outcome rather than a guess.
+        """
+        if session == conn.thread_id():
+            raise RuntimeError("cannot retire the session used for resolution")
+        self._kill_session(conn, session)
+        deadline = time.monotonic() + self.SESSION_RETIRE_SECONDS
+        while True:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) FROM information_schema.PROCESSLIST "
+                               "WHERE ID=%s", (int(session),))
+                if cursor.fetchone()[0] == 0:
+                    return
+            if time.monotonic() >= deadline:
+                raise TimeoutError("old Home mutation session is still alive")
+            time.sleep(0.05)
+
+    def _replace_mutator(self, session: int) -> None:
+        """Retire ``session`` and continue on a fresh, never-suspect mutator."""
+        fresh = self._connect_mutator()
+        try:
+            self._retire_session(fresh, session)
+        except Exception:
+            fresh.close()
+            raise
+        stale, self.mutator = self.mutator, fresh
+        try:
+            stale.close()
+        except Exception:
+            pass
 
     def _site(self, conn: pymysql.Connection) -> _Site:
         site_name, service_name = self.binding.site_name(), self.binding.service_name()
@@ -218,9 +290,19 @@ class PersonAuthority:
         return frozenset(action.strip() for action in (value or "").replace("\n", ",").split(",")
                          if action.strip())
 
+    @staticmethod
+    def _fresh_witness_head(row, incarnation: str) -> bool:
+        """Default-deny head under one rotated writer epoch (the gateway checks the exact epoch)."""
+        return bool(row and len(row) == 7 and tuple(row[:2]) == (incarnation, 0)
+                    and type(row[2]) is int and row[2] >= 2 and row[3] == row[2]
+                    and tuple(row[4:]) == ("COMMITTED", None, "DENY_ALL"))
+
     def recover(self, *, recovery_password: str) -> str:
         self.open = False
         self.witness.close_admission()
+        if self._unknown is not None:
+            # An unresolved session could still hold Home row locks or commit late.
+            self._replace_mutator(self._unknown.session)
         recovery = pymysql.connect(
             unix_socket=self.home_socket, user="ha_recovery",
             password=recovery_password, database="home_auth", autocommit=True,
@@ -242,9 +324,8 @@ class PersonAuthority:
                     raise
                 home = self._head(recovery, site.partition)
                 witness_row = self.witness._read_current(site.partition)
-                if home != (incarnation, 0, "DENY_ALL") or witness_row != (
-                    incarnation, 0, 2, 2, "COMMITTED", None, "DENY_ALL"
-                ):
+                if home != (incarnation, 0, "DENY_ALL") or not self._fresh_witness_head(
+                        witness_row, incarnation):
                     raise RuntimeError("fresh default-deny Home/witness readback failed")
                 self._assert_lane(recovery, self._lane_name(site.partition))
                 self.witness.confirm_home(site.partition, incarnation, home)
@@ -260,6 +341,8 @@ class PersonAuthority:
             except Exception:
                 self.witness.close_admission()
                 raise
+        # The new incarnation quarantines any unresolved prior-incarnation event.
+        self._unknown = None
         self.open = True
         return incarnation
 
@@ -312,6 +395,39 @@ class PersonAuthority:
                 caller_issuer: str | None = None) -> tuple[int, str]:
         if not self.open:
             raise RuntimeError("Knowledge admission is closed")
+        _, revision, digest = self._apply(kind, source, event_id, domain=domain, action=action,
+                                          caller_partition=caller_partition,
+                                          caller_issuer=caller_issuer)
+        return revision, digest
+
+    def resolve_unknown(self) -> tuple[str, int, str]:
+        """Settle the one unproven event by exact-event readback, never by inference.
+
+        The old mutation session is first retired and proven gone, so Home's durable
+        rows are the outcome. If Home holds the exact event, the witness COMMIT is
+        published (``HOME_COMMITTED``); if not, the identical request is re-applied
+        under the same event ID, which the witness accepts only for the exact
+        revision/digest it already reserved (``REAPPLIED``). Any failure keeps
+        Knowledge closed; recovery remains the fallback.
+        """
+        unknown = self._unknown
+        if unknown is None:
+            raise RuntimeError("no unresolved Knowledge authority event")
+        self.open = False
+        if self.binding.user_name() != unknown.issuer_user:
+            raise PermissionError("only the original authenticated issuer may resolve its event")
+        self._replace_mutator(unknown.session)
+        path, revision, digest = self._apply(
+            unknown.kind, unknown.source, unknown.event_id, domain=unknown.domain,
+            action=unknown.action, caller_partition=unknown.caller_partition,
+            caller_issuer=unknown.caller_issuer, resolving=unknown)
+        self._unknown = None
+        self.open = True
+        return ("REAPPLIED" if path == "APPLIED" else path), revision, digest
+
+    def _apply(self, kind: str, source: str, event_id: str, *, domain: str, action: str,
+               caller_partition: str | None, caller_issuer: str | None,
+               resolving: _UnknownOutcome | None = None) -> tuple[str, int, str]:
         if (type(event_id) is not str or not event_id or type(domain) is not str
                 or domain not in DOMAINS or type(action) is not str or action not in ACTIONS):
             raise ValueError("invalid exact authority event")
@@ -321,12 +437,20 @@ class PersonAuthority:
         with self._lane(self.mutator, site):
             self.mutator.begin()
             home_committed = False
+            # Once a witness call may have taken effect, or the Home COMMIT was sent,
+            # the outcome is unproven until exact-event readback settles it.
+            outcome_unproven = False
+            commit_sent = False
+            issuer_user = incarnation = None
             try:
                 issuer_user = self.binding.user_name()
                 issuer = self._actor(self.mutator, site, issuer_user)
                 if caller_issuer is not None and caller_issuer != issuer:
                     raise PermissionError("caller issuer disagrees with authenticated Person")
                 incarnation, revision, _ = self._head(self.mutator, site.partition)
+                if resolving is not None and (site.partition, incarnation) != (
+                        resolving.partition, resolving.incarnation):
+                    raise RuntimeError("unresolved event belongs to a superseded incarnation")
                 with self.mutator.cursor() as cursor:
                     cursor.execute("SELECT request_sha,revision,digest,kind FROM home_auth.events "
                                    "WHERE partition_id=%s AND incarnation=%s AND event_id=%s",
@@ -340,10 +464,11 @@ class PersonAuthority:
                     if prior[0] != request_sha or prior[3] != kind:
                         raise ValueError("conflicting exact event retry")
                     self.mutator.rollback()
+                    home_committed = outcome_unproven = True
                     self.witness.prepare(site.partition, incarnation, event_id,
                                          prior[1] - 1, prior[2])
                     self.witness.commit(site.partition, incarnation, event_id, prior[2])
-                    return prior[1], prior[2]
+                    return "HOME_COMMITTED", prior[1], prior[2]
                 with self.mutator.cursor() as cursor:
                     actor_id, target_id = issuer, issuer
                     if kind == "GRANT":
@@ -390,19 +515,36 @@ class PersonAuthority:
                     while cursor.nextset():
                         pass
                 self._assert_lane(self.mutator, self._lane_name(site.partition))
-                self.witness.prepare(site.partition, incarnation, event_id, revision, digest)
+                outcome_unproven = True
+                try:
+                    self.witness.prepare(site.partition, incarnation, event_id, revision, digest)
+                except pymysql.MySQLError as exc:
+                    if exc.args and exc.args[0] == 1644:
+                        outcome_unproven = False  # the witness procedure rejected and rolled back
+                    raise
+                commit_sent = True
                 self.mutator.commit()
                 home_committed = True
                 self._assert_lane(self.mutator, self._lane_name(site.partition))
                 self.witness.commit(site.partition, incarnation, event_id, digest)
-                return next_revision, digest
+                return "APPLIED", next_revision, digest
             except (PermissionError, ValueError):
                 if not home_committed:
                     self.mutator.rollback()
                 raise
             except Exception:
-                if not home_committed:
-                    self.mutator.rollback()
+                if outcome_unproven and incarnation is not None and issuer_user is not None:
+                    self._unknown = _UnknownOutcome(
+                        site.partition, incarnation, event_id, self.mutator.thread_id(),
+                        issuer_user, kind, source, domain, action,
+                        caller_partition, caller_issuer)
+                # Never roll back over a sent COMMIT: its outcome is unknown, and the
+                # resolver retires this session before reading Home again.
+                if not home_committed and not commit_sent:
+                    try:
+                        self.mutator.rollback()
+                    except Exception:
+                        pass  # suspect session; resolution or recovery retires it
                 self.open = False
                 raise
 

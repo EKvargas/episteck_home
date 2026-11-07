@@ -148,7 +148,7 @@ def install_guards(db: PrivateDB, site_database: str, root_password: str = "") -
 def new_authority(home, witness_db, binding):
     gateway = Gateway(socket=str(witness_db.socket),
                       lock_path=str(witness_db.root / "person.lock"),
-                      reader_password="synthetic-read", writer_password="synthetic-two",
+                      reader_password="synthetic-read",
                       recovery_password="synthetic-recover")
     service = PersonAuthority(home_socket=str(home.socket), witness=gateway,
                               binding=binding, reader_password="synthetic-reader",
@@ -918,6 +918,170 @@ def test_computed_allow_is_discarded_after_home_lane_failure(services, failure):
         gateway.authorize = lose_home_after_witness
         assert not authority.authorize(person_requirement("owner")).allow
         assert authority.open is False
+    finally:
+        authority.close()
+        gateway.close()
+
+
+# --- R3: unknown outcome at every mutation position, resolved by exact-event readback.
+# position -> (Home transaction committed before resolution, expected resolution path)
+UNKNOWN_POSITIONS = {
+    "prepare-ack-lost": (False, "REAPPLIED"),
+    "home-commit-ack-lost": (True, "HOME_COMMITTED"),
+    "home-commit-unsent-live": (False, "REAPPLIED"),
+    "home-commit-unsent-dead": (False, "REAPPLIED"),
+    "witness-commit-unsent": (True, "HOME_COMMITTED"),
+    "witness-commit-ack-lost": (True, "HOME_COMMITTED"),
+}
+
+
+def session_alive(home: PrivateDB, thread_id: int) -> bool:
+    return home.sql("SELECT COUNT(*) FROM information_schema.PROCESSLIST "
+                    f"WHERE ID={int(thread_id)}") == "1"
+
+
+def inject_unknown_outcome(position: str, gateway, authority, home: PrivateDB, event: str):
+    """Make exactly one step of ``event`` fail with an unknown outcome."""
+    if position == "prepare-ack-lost":
+        original = gateway.prepare
+
+        def prepare(*args):
+            original(*args)
+            if args[2] == event:
+                raise TimeoutError("synthetic lost PREPARE acknowledgement")
+        gateway.prepare = prepare
+    elif position.startswith("witness-commit"):
+        original = gateway.commit
+
+        def commit(*args):
+            if args[2] == event and position == "witness-commit-unsent":
+                raise TimeoutError("synthetic COMMIT request lost before the witness")
+            original(*args)
+            if args[2] == event:
+                raise TimeoutError("synthetic lost COMMIT acknowledgement")
+        gateway.commit = commit
+    else:
+        connection = authority.mutator
+        original = connection.commit
+
+        def home_commit():
+            if position == "home-commit-ack-lost":
+                original()
+            elif position == "home-commit-unsent-dead":
+                home.sql(f"KILL CONNECTION {connection.thread_id()}")
+            raise pymysql.OperationalError(2013, "synthetic unknown Home COMMIT outcome")
+        connection.commit = home_commit
+
+
+@pytest.mark.parametrize("kind", ["revoke", "grant"])
+@pytest.mark.parametrize("position", sorted(UNKNOWN_POSITIONS))
+def test_unknown_outcome_is_resolved_by_exact_event_readback(services, kind, position):
+    home, witness_db = services
+    gateway, authority = new_authority(home, witness_db, Binding())
+    competitor = PersonAuthority(
+        home_socket=str(home.socket), witness=gateway, binding=Binding(user="actor-user"),
+        reader_password="synthetic-reader", mutator_password="synthetic-mutator")
+    try:
+        incarnation = authority.recover(recovery_password="synthetic-home-recover")
+        if kind == "revoke":
+            authority.activate_grant("grant-1", "initial")
+            mutate, actor_allowed_after = (
+                lambda: authority.revoke_grant("grant-1", "event-x")), False
+        else:
+            mutate, actor_allowed_after = (
+                lambda: authority.activate_grant("grant-1", "event-x")), True
+        before = int(home.sql("SELECT revision FROM home_auth.head WHERE partition_id='p1'"))
+        old_session = authority.mutator.thread_id()
+        inject_unknown_outcome(position, gateway, authority, home, "event-x")
+        with pytest.raises(Exception):
+            mutate()
+        gateway.prepare = type(gateway).prepare.__get__(gateway)
+        gateway.commit = type(gateway).commit.__get__(gateway)
+        assert not authority.open
+        assert authority.unresolved_event == "event-x"
+        # No uncertain allow: an independently admitted reader may allow only when
+        # both stores already committed and agree (lost witness COMMIT ack).
+        competitor.open = True
+        settled = position == "witness-commit-ack-lost"
+        assert competitor.authorize(person_requirement("owner")).allow is (
+            settled and actor_allowed_after)
+        # The client error is never taken as the outcome: Home holds the truth.
+        committed, expected_path = UNKNOWN_POSITIONS[position]
+        assert home.sql("SELECT COUNT(*) FROM home_auth.events "
+                        "WHERE event_id='event-x'") == ("1" if committed else "0")
+        path, revision, digest = authority.resolve_unknown()
+        assert (path, revision) == (expected_path, before + 1)
+        assert not session_alive(home, old_session)
+        assert authority.open and authority.unresolved_event is None
+        assert home.sql("SELECT incarnation,revision,digest FROM home_auth.head "
+                        "WHERE partition_id='p1'") == f"{incarnation}\t{revision}\t{digest}"
+        epoch = gateway.writer_epoch
+        assert gateway._read_current("p1") == (
+            incarnation, revision, epoch, epoch, "COMMITTED", "event-x", digest)
+        assert gateway.event_outcome("p1", incarnation, "event-x") == (
+            "COMMITTED", revision, digest)
+        assert competitor.authorize(person_requirement("owner")).allow is actor_allowed_after
+        # The same exact event is applied once; a later mutation proceeds normally.
+        assert home.sql("SELECT COUNT(*) FROM home_auth.events "
+                        "WHERE event_id='event-x'") == "1"
+        authority.activate_self("KNOWLEDGE", "VIEW", "after-resolution")
+        assert authority.authorize(person_requirement("owner")).allow
+    finally:
+        competitor.close()
+        authority.close()
+        gateway.close()
+
+
+def test_unknown_resolution_requires_the_same_authenticated_issuer(services):
+    home, witness_db = services
+    binding = Binding()
+    gateway, authority = new_authority(home, witness_db, binding)
+    try:
+        incarnation = authority.recover(recovery_password="synthetic-home-recover")
+        authority.activate_grant("grant-1", "initial")
+        inject_unknown_outcome("home-commit-unsent-live", gateway, authority, home, "event-x")
+        with pytest.raises(Exception):
+            authority.revoke_grant("grant-1", "event-x")
+        binding.user = "actor-user"
+        with pytest.raises(PermissionError):
+            authority.resolve_unknown()
+        assert not authority.open and authority.unresolved_event == "event-x"
+        assert gateway._read_current("p1")[4:6] == ("PENDING", "event-x")
+        binding.user = "owner-user"
+        assert authority.resolve_unknown()[0] == "REAPPLIED"
+        assert gateway.event_outcome("p1", incarnation, "event-x")[0] == "COMMITTED"
+    finally:
+        authority.close()
+        gateway.close()
+
+
+def test_unretirable_old_session_keeps_partition_closed_until_recovery(services, monkeypatch):
+    home, witness_db = services
+    binding = Binding()
+    gateway, authority = new_authority(home, witness_db, binding)
+    try:
+        old_incarnation = authority.recover(recovery_password="synthetic-home-recover")
+        authority.activate_grant("grant-1", "initial")
+        inject_unknown_outcome("home-commit-unsent-live", gateway, authority, home, "event-x")
+        with pytest.raises(Exception):
+            authority.revoke_grant("grant-1", "event-x")
+        old_session = authority.mutator.thread_id()
+        monkeypatch.setattr(PersonAuthority, "_kill_session", lambda *_: None)
+        monkeypatch.setattr(PersonAuthority, "SESSION_RETIRE_SECONDS", 0.3)
+        with pytest.raises(TimeoutError):
+            authority.resolve_unknown()
+        assert session_alive(home, old_session)
+        assert not authority.open and authority.unresolved_event == "event-x"
+        binding.user = "actor-user"
+        assert not authority.authorize(person_requirement("owner")).allow
+        binding.user = "owner-user"
+        monkeypatch.undo()
+        # Recovery retires the unresolved session and quarantines everything.
+        fresh = authority.recover(recovery_password="synthetic-home-recover")
+        assert fresh != old_incarnation and authority.unresolved_event is None
+        assert not session_alive(home, old_session)
+        binding.user = "actor-user"
+        assert not authority.authorize(person_requirement("owner")).allow
     finally:
         authority.close()
         gateway.close()

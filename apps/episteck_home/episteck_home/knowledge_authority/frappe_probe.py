@@ -130,7 +130,7 @@ def run() -> dict:
 
         socket = os.environ["KAP2_DB_SOCKET"]
         with Gateway(socket=socket, lock_path=str(Path(socket).parent / "task2-gateway.lock"),
-                     reader_password="synthetic-read", writer_password="synthetic-two",
+                     reader_password="synthetic-read",
                      recovery_password="synthetic-recover") as real_witness:
             incarnation = real_witness.recover("p1")
             with pymysql.connect(unix_socket=socket, user="root",

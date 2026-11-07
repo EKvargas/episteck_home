@@ -25,7 +25,7 @@ import pymysql
 
 GATEWAY_DIR = Path(__file__).resolve().parents[1] / "knowledge-kap2-transactional-witness"
 sys.path.insert(0, str(GATEWAY_DIR))
-from gateway import Gateway  # noqa: E402
+from gateway import Gateway, writer_principal  # noqa: E402
 from test_gateway import PrivateDB  # noqa: E402
 from preflight import verify as verify_preflight  # noqa: E402
 
@@ -62,8 +62,9 @@ class WitnessFixture:
         (root / "db").mkdir(mode=0o700)
         self.db = PrivateDB(root / "db")
         # Passwords are distinct, per-run, and never written to the evidence log.
+        # Later writer epochs get a credential minted by each recovery instead.
         self.passwords = {name: secrets.token_hex(24)
-                          for name in ("gw_reader", "gw_writer1", "gw_writer2", "gw_recovery")}
+                          for name in ("gw_reader", "gw_writer1", "gw_recovery")}
         for name, password in self.passwords.items():
             self.db.sql(f"ALTER USER '{name}'@'localhost' IDENTIFIED BY '{password}'")
         self.gateway = self._new_gateway()
@@ -75,7 +76,6 @@ class WitnessFixture:
     def _new_gateway(self) -> Gateway:
         return Gateway(socket=str(self.db.socket), lock_path=str(self.root / "gateway.lock"),
                        reader_password=self.passwords["gw_reader"],
-                       writer_password=self.passwords["gw_writer2"],
                        recovery_password=self.passwords["gw_recovery"])
 
     def _restart_gateway(self) -> None:
@@ -106,37 +106,75 @@ class WitnessFixture:
         assert self.gateway.closed
 
     def _privileges(self) -> dict[str, bool]:
+        """Probe principal boundaries without ever issuing a legal write.
+
+        Before any recovery the epoch-1 writer is legitimately ACTIVE, so only its
+        direct DML is probed; write-procedure rejection is probed for retired
+        principals after a recovery.
+        """
         result: dict[str, bool] = {}
-        probes = {
-            "reader_direct_dml_denied": ("gw_reader", "UPDATE witness.head SET digest='FORGED'"),
-            "writer_direct_dml_denied": ("gw_writer2", "UPDATE witness.head SET digest='FORGED'"),
-            "recovery_direct_dml_denied": ("gw_recovery", "UPDATE witness.head SET digest='FORGED'"),
-            "old_writer_new_epoch_denied": (
-                "gw_writer1", "CALL witness.prepare_e2('p1','old-incarnation','old',0,'FORGED')"),
-        }
-        for label, (user, statement) in probes.items():
-            with self.db.connect(user, self.passwords[user]) as connection:
-                with connection.cursor() as cursor:
-                    try:
-                        cursor.execute(statement)
-                    except pymysql.MySQLError as exc:
-                        result[label] = bool(exc.args and exc.args[0] in {1142, 1143, 1370, 1644})
-                    else:
-                        result[label] = False
         head = self.db.sql("SELECT incarnation,writer_epoch,revision FROM witness.head "
                            "WHERE partition_id='p1'").split("\t")
-        if len(head) == 3 and head[1] == "2":
+        if len(head) != 3 or not head[1].isdigit():
+            return {"partition_head_present": False}
+        epoch = int(head[1])
+        active = self.gateway._writer_credential
+        if active is None and epoch == 1:
+            active = ("gw_writer1", self.passwords["gw_writer1"])
+        credentials = dict(self.passwords)
+        probes = {
+            "reader_direct_dml_denied": "gw_reader",
+            "recovery_direct_dml_denied": "gw_recovery",
+        }
+        if active is not None:
+            credentials[active[0]] = active[1]
+            probes["writer_direct_dml_denied"] = active[0]
+        else:
+            # A restarted gateway that has not recovered holds no writer credential.
+            result["writer_direct_dml_denied"] = False
+        for label, user in probes.items():
+            with self.db.connect(user, credentials[user]) as connection:
+                with connection.cursor() as cursor:
+                    try:
+                        cursor.execute("UPDATE witness.head SET digest='FORGED'")
+                    except pymysql.MySQLError as exc:
+                        result[label] = bool(exc.args and exc.args[0] in {1142, 1143})
+                    else:
+                        result[label] = False
+        # The next epoch's principal stays unusable until a recovery activates it.
+        try:
+            self.db.connect(writer_principal(epoch + 1), secrets.token_hex(16)).close()
+        except pymysql.MySQLError as exc:
+            result["next_writer_unusable"] = bool(exc.args and exc.args[0] in {1045, 4151})
+        else:
+            result["next_writer_unusable"] = False
+        if epoch != 1:
+            result["old_writer_epoch_denied"] = self._retired_writer_denied(head)
+        return result
+
+    def _retired_writer_denied(self, head: list[str]) -> bool:
+        """R2: the retired epoch-1 writer is locked and, if unlocked, still rejected."""
+        try:
+            self.db.connect("gw_writer1", self.passwords["gw_writer1"]).close()
+        except pymysql.MySQLError as exc:
+            locked = bool(exc.args and exc.args[0] == 4151)
+        else:
+            locked = False
+        self.db.sql("ALTER USER 'gw_writer1'@'localhost' ACCOUNT UNLOCK")
+        try:
             with self.db.connect("gw_writer1", self.passwords["gw_writer1"]) as old:
                 with old.cursor() as cursor:
                     try:
-                        cursor.execute("CALL witness.prepare_e1(%s,%s,%s,%s,%s)",
+                        cursor.execute("CALL witness.prepare_event(%s,%s,%s,%s,%s)",
                                        ("p1", head[0], "obsolete-principal-probe",
                                         int(head[2]), "FORGED"))
                     except pymysql.MySQLError as exc:
-                        result["old_writer_epoch_denied"] = bool(exc.args and exc.args[0] == 1644)
+                        rejected = bool(exc.args and exc.args[0] == 1644)
                     else:
-                        result["old_writer_epoch_denied"] = False
-        return result
+                        rejected = False
+        finally:
+            self.db.sql("ALTER USER 'gw_writer1'@'localhost' ACCOUNT LOCK")
+        return locked and rejected
 
     def dispatch(self, role: str, operation: str, args: list[Any]) -> Any:
         with self.lock:
