@@ -1,14 +1,16 @@
 # Knowledge Architecture (PURE CONTRACTS IMPLEMENTED — no runtime installed)
 
-## KAP delivery state (draft consolidation, 2026-10-10)
+## KAP delivery state (2026-11-07)
 
-KAP-1 wire contracts are architecturally accepted but remain unmerged. KAP-2 is open:
-the typed evaluator, default-closed transactional witness gateway and procedure-only
-PERSON foundation are disconnected disposable candidates. The fresh-incarnation
-recovery amendment is **proposed and Board ratification is pending**. The request-time
-GCS Candidate A was rejected. KAP-3–10 remain ahead. See the
-[consolidation handoff](proposals/KNOWLEDGE_KAP2_CONSOLIDATION_HANDOFF.md) for exact
-PR/worktree disposition, validation and deployment implications.
+The Technology Gate closed on 2026-09-25 and selected SQLite 3.41.2 (S1). Nothing is
+installed. KAP-1 wire contracts are merged. KAP-2 is open. Its typed evaluator,
+default-closed transactional witness gateway and procedure-only PERSON foundation are
+merged (#71) but disconnected and inert. The fresh-incarnation recovery amendment was
+**ratified for v1 on 2026-11-07**
+([ADR-0014](adr/0014-knowledge-authorization-recovery-incarnation.md)). The
+request-time GCS Candidate A was rejected. KAP-3–10 remain ahead. See the
+[consolidation handoff](proposals/KNOWLEDGE_KAP2_CONSOLIDATION_HANDOFF.md) for
+validation and deployment implications.
 
 Episteck **Knowledge** is a governance layer for durable, reusable, contextual
 personal/family knowledge — with ownership, provenance, consent, sharing, and
@@ -17,8 +19,8 @@ correction/deletion. It is **not** a duplicate store for structured domain facts
 
 > The pure contracts live in `packages/home-contracts`. They provide no
 > storage, extraction, indexing, retrieval, embeddings, or service runtime. **No**
-> Knowledge store is installed: not SQLite, Mem0, Graphiti, RAGFlow, Postgres/pgvector
-> or Docling.
+> Knowledge store is installed. SQLite 3.41.2 is selected but not installed; Mem0,
+> Graphiti, RAGFlow, Postgres/pgvector and Docling are not selected.
 
 ## Concepts
 

@@ -1,8 +1,18 @@
 # Knowledge KAP-2 consolidation handoff
 
-**State:** draft, disconnected candidate; KAP-1 accepted, KAP-2 open. This branch begins at `origin/main` `45b0958b46aa27b1326fdaba2f4811ebf20a90e0` (2026-10-10). The selected local PERSON implementation source is PR #69 at `dde967d21a6e0452f3ab3c717d15d0c91b3f8c3c`. The exact consolidated implementation commit is `743aec2dc09b9a7229719bac61c8bf2c968d7501`; this handoff commit follows it and its exact SHA is recorded in the draft PR. No Board ratification of the recovery amendment or production activation is recorded. **Merged:** the owner merged PR #71 into `main` on 2026-10-24 (`8232fa2`); see [Merge outcome](#merge-outcome-2026-10-24).
+**State:** draft, disconnected candidate; KAP-1 accepted, KAP-2 open. This branch begins at `origin/main` `45b0958b46aa27b1326fdaba2f4811ebf20a90e0` (2026-10-10). The selected local PERSON implementation source is PR #69 at `dde967d21a6e0452f3ab3c717d15d0c91b3f8c3c`. The exact consolidated implementation commit is `743aec2dc09b9a7229719bac61c8bf2c968d7501`; this handoff commit follows it and its exact SHA is recorded in the draft PR. The Board ratified the recovery amendment for v1 on 2026-11-07 (see below); no production activation is recorded. **Merged:** the owner merged PR #71 into `main` on 2026-10-24 (`8232fa2`); see [Merge outcome](#merge-outcome-2026-10-24).
 
-## Latest continuation — 2026-10-24
+## Continuation — 2026-11-07 (decisions)
+
+The owner (Erick, acting as Board) recorded the decisions the [decision sheet](../../../spike/knowledge-kap2-two-host/DECISION_SHEET.md#decisions-recorded-2026-11-07-owner-erick-acting-as-board) requested:
+
+- Contract §19 is **ratified for v1** and renumbered [ADR-0014](../adr/0014-knowledge-authorization-recovery-incarnation.md) (it collided with ADR-0010).
+- **Erick** is the witness operator, with no backup delegate (accepted risk).
+- The KAP-2 latency screen is **accepted as a pass/fail gate**.
+
+The two-host run is still **not authorized**: it needs a record naming the exact commit SHA and the verified Nuremberg Tailscale IP. KAP-2 stays open on R2, R3, R4 and that run. The candidate on `main` stays inert.
+
+## Continuation — 2026-10-24
 
 **Subsequent local R1/R6 work — complete locally, 121 affected tests passed:** see [correction and validation](../reviews/2026-10-24-knowledge-kap2-r1-r6-validation.md). Witness recovery stays CLOSED until exact Home/witness default-deny confirmation and staged opening; retained incarnation history rejects known reuse. The disposable transport now carries separate recovery-only close/confirm/open calls, so old runner hashes/request counts do not describe this candidate. This is local work only; R2–R5, complete production recovery proof, Board ratification and a newly authorized exact-SHA two-host attempt remain open. The draft/unmerged hold ended with the owner's merge of PR #71; production activation still requires Board ratification.
 

@@ -1,13 +1,15 @@
 # Roadmap
 
-## Knowledge Authorization Plan (draft delivery path, 2026-10-10)
+## Knowledge Authorization Plan (updated 2026-11-07)
 
-KAP-1 contracts are architecturally accepted and unmerged. KAP-2 has a disconnected,
-local PERSON foundation but remains open; the fresh-incarnation recovery amendment
-awaits Board ratification. KAP-3–10 are subsequent prerequisites. The rejected GCS
-request-time path is retained only as evidence. The
+KAP-1 contracts are merged. KAP-2's disconnected PERSON candidate is merged and inert
+(#71). The fresh-incarnation recovery amendment was **ratified for v1** on 2026-11-07
+([ADR-0014](adr/0014-knowledge-authorization-recovery-incarnation.md)). Erick is the
+witness operator and the KAP-2 latency screen is a gate. KAP-2 still needs R2, R3,
+R4 and one authorized two-host run; KAP-3–10 follow. The rejected GCS request-time
+path is retained only as evidence. The
 [consolidation handoff](proposals/KNOWLEDGE_KAP2_CONSOLIDATION_HANDOFF.md) names the
-selected files, PR dependencies, finite next integration gate and deployment hold.
+selected files, the next integration gate and the deployment implications.
 
 ## Delivered (stages A–G1)
 - Nuremberg node baseline; Tailscale mesh; infra-agent + home-agent (independent Hermes).
@@ -79,23 +81,19 @@ EU customers, a regional deployment/data-residency strategy will be designed sep
 likely dedicated EU Home instances for those customers rather than migrating the personal
 US instance. No stage is scheduled for it.
 
-### Knowledge Technology Gate `[OPEN — PHASE 1 COMPLETE / SPIKE AUTHORIZED]`
-**B1–B6 are RESOLVED**; B6 acceptance authorized this Gate to begin. **No Knowledge
-technology is selected**, and the pure G1.5 contracts are not a Knowledge runtime or
-persistence implementation.
-
-**Phase 1 — candidate investigation and benchmark/spike design — is COMPLETE and
-accepted** (`proposals/KNOWLEDGE_TECHNOLOGY_GATE_PHASE1.md`). **TG-PA-7 authorizes an
-isolated synthetic spike** — disposable, off the production Nuremberg host, synthetic
-data only, stubbed peers. **The spike is not implemented.** Final selection requires
-its empirical evidence plus an explicit Product Architect disposition. Prereqs
-recorded by the Gate: a clear first Knowledge use case (now defined) and B6 closed
-(now closed).
-
-**No stack is pre-selected here.** Earlier wording in this Roadmap named a specific
-candidate stack before the Gate had run; it predated B1–B6 and is superseded by the
-Gate register's candidate table, where every entry remains **UNSELECTED** until the
-Product Architect disposes.
+### Knowledge Technology Gate `[CLOSED 2026-09-25 — SELECTION COMPLETE]`
+**B1–B6 are RESOLVED.** Phase 1 was accepted 2026-09-22, the isolated synthetic spike
+ran, and the Board closed the Gate on 2026-09-25 with **S1: relational canonical
+owner with structured retrieval, on SQLite 3.41.2**
+(`proposals/KNOWLEDGE_TECHNOLOGY_GATE.md`, spike report §27). Closing the Gate
+authorizes **no** runtime, schema, migration or deployment. Six pre-runtime
+obligations remain open:
+1. a production durability mode;
+2. warm/cold end-to-end latency;
+3. timing side-channel closure;
+4. a production R13 mechanism;
+5. a real R14 domain read;
+6. restore-freshness realization.
 
 **Accepted B5 ownership boundary** (`proposals/KNOWLEDGE_B5_OWNERSHIP_BOUNDARIES.md`):
 Home is the trusted identity, security-partition resolution and authorization
@@ -126,7 +124,7 @@ First real Person + explicit consent + real Pregnancy Nutrition Profile + real
 providers + real meal plan + planned→actual + Home Agent with the real user.
 
 Remaining blockers:
-1. Complete the **Knowledge Technology Gate** above.
+1. ✅ **Knowledge Technology Gate** closed 2026-09-25 (see above).
 2. Explicit user approval for real family/health data.
 3. Approved G2 / Health architecture, Real-Person onboarding, and real ConsentGrants.
 
@@ -137,7 +135,8 @@ OIDC client relies on `(issuer, sub)` and is not a G1.6 completion blocker.
 EU residency is **not** a blocker — see the withdrawn G1.7 note above.
 
 Trusted actor design, implementation, production cutover, and closeout are complete.
-The next gate is Knowledge Technology, followed by G2 / Health architecture.
+Next: Knowledge KAP-2 close-out, then KAP-3…KAP-10. G2 / Health architecture still
+needs explicit approval.
 
 ### Later
 Device Gateway/Withings, FHIR, Mind, Calendar, Documents, Finance, reverse proxy +
