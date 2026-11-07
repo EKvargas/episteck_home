@@ -144,6 +144,38 @@ def test_a_balance_without_any_date_falls_back_to_the_fetch_time():
     assert _connector(_router(balances=body)).fetch_balances(REF)[0].as_of == NOW
 
 
+def _othr(amount="7.25", **over):
+    # Trade Republic via Enable Banking (2026-11-07): one OTHR row, no standard type.
+    row = {"name": "Cash", "balance_amount": {"currency": "EUR", "amount": amount},
+           "balance_type": "OTHR", "reference_date": "2026-10-09",
+           "last_committed_transaction": "t-1"}
+    row.update(over)
+    return row
+
+
+def test_a_lone_othr_balance_is_the_booked_balance_when_no_standard_type_is_present():
+    body = {"balances": [_othr()]}
+    [balance] = _connector(_router(balances=body)).fetch_balances(REF)
+    assert balance.kind is domain.BalanceKind.BOOKED
+    assert (balance.amount_minor, balance.currency) == (725, "EUR")
+    assert balance.as_of == datetime(2026, 10, 9, tzinfo=timezone.utc)
+
+
+def test_othr_is_ignored_when_a_standard_type_is_present():
+    body = {"balances": [_othr(amount="1.00"),
+                         {"balance_amount": {"currency": "EUR", "amount": "2.00"},
+                          "balance_type": "CLBD"}]}
+    balances = _connector(_router(balances=body)).fetch_balances(REF)
+    assert [(b.kind, b.amount_minor) for b in balances] == [(domain.BalanceKind.BOOKED, 200)]
+
+
+def test_several_othr_balances_are_ambiguous_and_malformed():
+    body = {"balances": [_othr(amount="1.00"), _othr(amount="2.00")]}
+    with pytest.raises(ConnectorError) as raised:
+        _connector(_router(balances=body)).fetch_balances(REF)
+    assert raised.value.kind is ErrorKind.MALFORMED
+
+
 def test_no_usable_balance_is_malformed_and_a_numeric_amount_is_malformed():
     for body in ({"balances": []}, {"balances": [
             {"balance_amount": {"currency": "EUR", "amount": 5.0}, "balance_type": "CLBD"}]}):
