@@ -38,9 +38,14 @@ Every required step is `PASS` only if its stated assertions execute. The runner 
 
 The client reserves every attempted HTTP request before sending, including denied role calls and the failed anonymous TLS attempt. There are **no automatic retries**. Both client and server enforce a hard **400-request** cutoff; the scripted latency screen accounts for 120 authorization requests and the remainder covers the fixed scenarios. The authoritative request totals are the fsynced Home `matrix_summary` and witness request events; TLS failures appear only in the Home ledger. Exceeding the cap, missing evidence or an unexecuted required step rejects the run. This is a bounded test budget, not a billing quota.
 
-### Latency allocation proposed for review
+### Latency allocation — accepted as a gate (2026-11-07)
 
-The governing Authorization Plan contract §13 sets the **complete future pre-LLM path** at ordinary p95 ≤500 ms and initial p99 ≤800 ms, with p50 ≤300 ms as an aspiration. It does **not** allocate a KAP-2-only allowance. Before a remote run, propose a screening allocation of **one KAP-2 policy/witness call p95 ≤100 ms and p99 ≤200 ms; the measured synthetic pair p95 ≤200 ms and p99 ≤400 ms**. That reserves nominal room for planning, transport, domains, Knowledge and bundling, but percentiles cannot be added as a proof of whole-path latency. The allocation is **unratified** and the runner records distributions without changing a threshold after the fact. Thirty pairs make p99 effectively a maximum and do not pass KAP-10. Complete RT#1/RT#2 and Knowledge latency remain later gates.
+The governing Authorization Plan contract §13 sets the **complete future pre-LLM path** at ordinary p95 ≤500 ms and initial p99 ≤800 ms, with p50 ≤300 ms as an aspiration. It does **not** allocate a KAP-2-only allowance. The owner accepted this KAP-2 screening allocation **as a pass/fail gate** on 2026-11-07, before any two-host measurement:
+
+- **One KAP-2 policy/witness call:** p95 ≤100 ms and p99 ≤200 ms.
+- **Measured synthetic pair:** p95 ≤200 ms and p99 ≤400 ms.
+
+A10 fails if any of the four is exceeded. The allocation reserves nominal room for planning, transport, domains, Knowledge and bundling. Percentiles cannot be added up to prove whole-path latency. The runner records distributions and never changes a threshold after the fact. Thirty pairs make p99 effectively a maximum and do not pass KAP-10. Complete RT#1/RT#2 and Knowledge latency remain later gates.
 
 ## Exact disposable inventory and effects
 

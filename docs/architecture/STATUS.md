@@ -1,18 +1,21 @@
 # Status
 
-## Knowledge delivery update (draft, 2026-10-10)
+## Knowledge (2026-11-07)
 
-KAP-1 is architecturally accepted; KAP-2 is open after the bounded disposable
-PERSON foundation. The proposed recovery amendment has no Board ratification.
-The GCS request-time authorization path is rejected. The disconnected selected
-implementation and all open PR/worktree dispositions are in the
-[KAP-2 consolidation handoff](proposals/KNOWLEDGE_KAP2_CONSOLIDATION_HANDOFF.md).
-No Knowledge endpoint, witness service or production schema is activated.
+No Knowledge endpoint, witness service, runtime or production schema is active.
 
-**2026-10-24:** PR #71 merged the disconnected candidate into `main`, so it is
-deployed to the Home bench as inert code (no import, hook, whitelisted method or
-schema reaches it; `tests/test_knowledge_disconnected.py` enforces this). KAP-2
-stays open: R2–R5, Board ratification and a newly authorized two-host attempt.
+| Item | State |
+| --- | --- |
+| B1–B6 architecture decisions | ✅ resolved |
+| Technology Gate | ✅ closed 2026-09-25: S1 relational owner on **SQLite 3.41.2**. Six pre-runtime obligations remain (durability mode, warm/cold e2e, timing side-channel, R13 production, real R14 domain read, restore-freshness realization) |
+| Authorization Plan contract (KAP-1…KAP-10) | ✅ §17 accepted; **§19 recovery amendment ratified for v1 on 2026-11-07** ([ADR-0014](adr/0014-knowledge-authorization-recovery-incarnation.md)) |
+| KAP-1 wire contracts | ✅ merged (with #71) |
+| KAP-2 PERSON candidate | 🟡 merged 2026-10-24 (#71) and deployed to the Home bench as **inert** code. No import, hook, whitelisted method or schema reaches it; `tests/test_knowledge_disconnected.py` enforces this. R1/R6 fixed locally |
+| KAP-2 decisions | ✅ 2026-11-07: Erick is witness operator with no backup delegate (accepted risk); latency screen accepted as a gate ([decision sheet](../../spike/knowledge-kap2-two-host/DECISION_SHEET.md)) |
+| KAP-2 open | ⏳ R2 repeated epoch/principal retirement; R3 unknown Home-commit acknowledgement windows; R4 CIRCLE, production Home writers, RT#2 contexts, reauthorization interface, credential custody; one two-host run (needs exact-SHA authorization) |
+| KAP-3…KAP-10 | ⏳ not started |
+
+Details: [KAP-2 consolidation handoff](proposals/KNOWLEDGE_KAP2_CONSOLIDATION_HANDOFF.md). The GCS request-time authorization path is rejected.
 
 **Updated:** 2026-11-07
 
@@ -57,8 +60,9 @@ public UI, voice. (Finance I1 is in progress with the owner's own real data, dec
 | G1.5 | ✅ **COMPLETE** |
 | G1.6 | ✅ **COMPLETE** — production closeout 2026-09-19 |
 
-Next: **Knowledge Technology Gate**, then **G2 / Health architecture** with explicit
-approval. No G1.7 stage is created.
+Next: **Knowledge KAP-2 close-out** (the Technology Gate closed 2026-09-25), then
+KAP-3…KAP-10. **G2 / Health architecture** still needs explicit approval. No G1.7
+stage is created.
 
 ## G1.6 — trusted actor binding (COMPLETE)
 
@@ -111,7 +115,8 @@ Design: `adr/0010-agent-runtime-grant.md`.
 
 ## G2 blockers
 
-1. Complete the **Knowledge Technology Gate** before G2 implementation.
+1. ✅ **Knowledge Technology Gate** closed 2026-09-25 (SQLite 3.41.2 selected; no
+   runtime approved).
 2. Obtain explicit user approval for real family/health data.
 3. Approve the G2 / Health architecture, Real-Person onboarding, and real
    ConsentGrants.
