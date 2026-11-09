@@ -6,6 +6,8 @@ the system and links every other document.
 ## Contents
 - `G1_6_VALIDATION.md` — trusted actor binding evidence (threat matrix, PKCE, live runs)
 - `G1_5_VALIDATION.md` — final synthetic security, conversation, deployment, and latency evidence
+- `FINANCE_I1_VALIDATION.md` — Olin Finance I1 live evidence (B11: delegation, Home-down, log hygiene)
+- `FINANCE_I1_PROGRESS.md` — Olin Finance I1 board and session log (identifiers redacted)
 - `ARCHITECTURE.md` — canonical architecture + component map (read first)
 - `DATA_OWNERSHIP.md` — who owns which data (no universal DB)
 - `AGENTS.md` — infra-agent / home-agent; Hermes-memory vs Episteck-Knowledge boundary
@@ -16,7 +18,7 @@ the system and links every other document.
 - `proposals/` — approved design proposals (G1.6 trusted identity; its §23 records the
   2026-09-16 residency correction that withdrew G1.7)
 - `STATUS.md` — current state (update with every change)
-- `adr/` — Architecture Decision Records (0001–0009)
+- `adr/` — Architecture Decision Records (0001–0015)
 - **`architecture-diagram.html`** — explorable whole-product diagram (open in a browser)
 - `architecture-diagram.json` — archify source for the diagram
 

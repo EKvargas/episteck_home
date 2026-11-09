@@ -22,7 +22,7 @@ data access. Authorization is explicit and consent-driven.
 | --- | --- | --- |
 | **Home Control Plane** — `episteck_home` Frappe app on **home.episteck.com** | Ashburn VPS | Canonical identity, family/care relationships, consent, coordination. `[LIVE]` |
 | **Episteck company ERP** — `erp.episteck.com` | Ashburn VPS | Company-internal ERP. **Separate** from Home. Not part of this product. |
-| **Domain services** | Nuremberg node | Independent specialized services (Nutrition, Mealie, Finance `[I1, not deployed]`, future FHIR/Device Gateway/Mind/Knowledge) |
+| **Domain services** | Nuremberg node | Independent specialized services (Nutrition, Mealie, Finance `[I1 LIVE]`, future FHIR/Device Gateway/Mind/Knowledge) |
 | **Agents** | Nuremberg node | Two independent Hermes instances: `infra-agent` (privileged ops) and `home-agent` (unprivileged, user-facing) |
 | **Home BFF** — confidential OAuth client + session boundary | **Nuremberg node (EU)** | Holds the client secret and user tokens server-side; browser gets an opaque cookie. Mints short-lived delegations. `[G1.6]` |
 
@@ -44,7 +44,7 @@ flowchart TB
       NAPI["Nutrition API :9930 (loopback)"]
       NMCP["Nutrition MCP :9931 (loopback)"]
     end
-    subgraph FIN["svc-finance (rootless Podman) [I1 — not deployed]"]
+    subgraph FIN["svc-finance (rootless Podman) [I1 — LIVE]"]
       FAPI["Finance API :9935 (loopback)"]
       FMCP["Finance MCP :9936 (loopback)"]
       FSYNC["sync timer (same image)"]
@@ -60,10 +60,18 @@ flowchart TB
 
   FDC["USDA FoodData Central"]:::ext
   OFF["Open Food Facts"]:::ext
+  BANKS["Banks: SimpleFIN (BofA), Enable Banking PSD2 (Sparkasse, Trade Republic)"]:::ext
+  OAI["OpenAI (openai-codex, home-agent model)"]:::ext
 
   user -- login (OAuth code + S256 PKCE) --> BFF
   BFF -- confidential OAuth --> HOME
-  user --> HA
+  user -- "Telegram (owner allowlist)" --> HA
+  HA -- "model calls" --> OAI
+  HA -- "MCP via gateway :9934<br/>(finance delegation, ADR-0015)" --> FMCP
+  FMCP -- "authorize_batch, once per operation<br/>(machine token + delegation)" --> HOME
+  user -- "PSD2 bank redirect via nginx (ADR-0013)" --> FAPI
+  FSYNC -- "read balances" --> BANKS
+  FIN --> BKP
   BFF -- "short-lived delegation<br/>(opaque session id, no Person id)" --> HA
   HA -- MCP --> HMCP
   HA -- MCP --> NMCP
@@ -162,6 +170,10 @@ Control Plane.
     `bff.home.episteck.com/finance/connect/callback` (GET) to the Finance API. The
     single-use state is its authority; it stores the code and the operator's command
     exchanges it, so the API never holds a provider key. → `adr/0013-finance-psd2-callback.md`
+13. **Finance asks Home once per operation** — its own audience (`svc-finance`, accepted
+    only from its machine user), one `authorize_batch` call for the actor and every
+    co-owner, and its own mint route `/gateway/finance/` with nft port `9936`. Any
+    non-answer from Home is a refusal with no data (503). → `adr/0015-finance-authorization-through-home.md`
 
 ## 5. Cross-cutting rules
 

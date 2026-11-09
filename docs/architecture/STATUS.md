@@ -24,7 +24,7 @@ Details: [KAP-2 consolidation handoff](proposals/KNOWLEDGE_KAP2_CONSOLIDATION_HA
 | Component | State |
 | --- | --- |
 | Nuremberg node + Tailscale mesh | ✅ operational |
-| infra-agent / home-agent (Hermes) | ✅ operational, independent |
+| infra-agent / home-agent (Hermes) | ✅ operational, independent. `home-agent` answers on Telegram (`@EpisteckHome_bot`, owner allowlist) and runs on `openai-codex` / `gpt-5.6-sol` with no fallback since 2026-11-07 |
 | Mealie v3.26.0 | ✅ operational (loopback + tailnet) |
 | svc-nutrition (API + MCP) | ✅ operational; USDA prod key live; OFF live |
 | Off-box restic backup | ✅ operational + restore validated; Finance SQLite included since 2026-11-07 (tag `finance`) |
@@ -34,7 +34,7 @@ Details: [KAP-2 consolidation handoff](proposals/KNOWLEDGE_KAP2_CONSOLIDATION_HA
 | Home BFF (confidential OAuth client, EU node) | ✅ live; public session app + socket-only mint process |
 | Hermes delegation gateway | ✅ live on `127.0.0.1:9934`; Home, Nutrition and Finance paths |
 | Home Hub (`svc-home-hub`, Nuremberg) | ✅ live; `/app/nutrition` shows the live Nutrition profile panel (F3c). Follow-ups #108/#109 live since 2026-11-07 (image `3b9a3dc`); signed-in banner check pending (owner) |
-| Olin Finance (`svc-finance`: API `:9935`, MCP `:9936`) | ✅ live since 2026-10-13; image `6a31366` since 2026-11-07. Bank of America via SimpleFIN (2 accounts) since 2026-10-25. Backed up nightly; sync timer at 06:20 and 18:20 UTC (#117) |
+| Olin Finance (`svc-finance`: API `:9935`, MCP `:9936`) | ✅ live since 2026-10-13; image `dbe6632` since 2026-11-07. Bank of America via SimpleFIN (2 accounts) since 2026-10-25; Sparkasse and Trade Republic cash via Enable Banking since 2026-11-07. Backed up nightly; sync timer at 06:20 and 18:20 UTC (#117). Live verification B11 passed 2026-11-08 (`FINANCE_I1_VALIDATION.md`) |
 
 ## G1.5 final state — PASS
 | Item | State |
@@ -51,7 +51,7 @@ Details: [KAP-2 consolidation handoff](proposals/KNOWLEDGE_KAP2_CONSOLIDATION_HA
 ## Deliberately NOT done
 Real family/health data (G2, blocked on approval). Knowledge tech install
 (Mem0/Graphiti/RAGFlow/pgvector/Docling). FHIR, Device Gateway, Mind, Calendar,
-public UI, voice. (Finance I1 is in progress with the owner's own real data, decision P1.) `svc-home-core` (explicitly rejected — Frappe is the plane).
+public UI, voice. (Finance I1 runs on the owner's own real data, decision P1.) `svc-home-core` (explicitly rejected — Frappe is the plane).
 
 ## Stage completion
 
@@ -99,20 +99,26 @@ Full runtime, provenance, network, rollback, and trust-boundary evidence is in
 
 Design: `adr/0010-agent-runtime-grant.md`.
 
-## Olin Finance I1 (in progress)
+## Olin Finance I1 (live; two owner checks open)
+
+Board: `FINANCE_I1_PROGRESS.md`. Evidence: `FINANCE_I1_VALIDATION.md`. Authorization
+design: ADR-0011, ADR-0012, ADR-0013 and ADR-0015.
 
 | Item | State |
 | --- | --- |
 | Architecture proposal (PR #74) and ADR-0011 | ✅ merged |
 | `services/finance` (store, read model, API/MCP, connectors) | ✅ live on Nuremberg since 2026-10-13 (#96, #97, #99, #102). Bank of America connected 2026-10-25 via SimpleFIN (runbook 8a); first sync OK |
 | Feature Activation DocType + `get_feature_state` (B3, ADR-0012) | ✅ merged (#90) and migrated on home.episteck.com. Finance I1 does not consult it |
-| Home changes H1–H4 (audience, `authorize_batch`, Feature Activation, mint + gateway route) | ✅ merged and deployed (#89, #90, #92, #93); `/gateway/finance/` live |
+| Home changes H1–H4 (audience, `authorize_batch`, Feature Activation, mint + gateway route) | ✅ merged and deployed (#89, #90, #92, #93); `/gateway/finance/` live. Decisions recorded in ADR-0015 (H1, H2, H4) and ADR-0012 (H3) |
 | Home accepts `svc-finance` (B1; extends ADR-0009 pattern) | ✅ merged (#89); `home_finance_machine_user` set (2026-10-13) |
 | PSD2 callback `/finance/connect/callback` + `app.connect authorize` (B5, ADR-0013) | ✅ live 2026-11-07 (image `6a31366`); nginx route with rate limit (#113) on the BFF vhost; 403/400/404 and 429-after-burst verified, no query string in nginx logs |
-| Sparkasse and Trade Republic cash via Enable Banking (runbook 8b) | ⏳ next; owner registers the redirect URL, places the application key and approves in the bank app |
+| Sparkasse and Trade Republic cash via Enable Banking (runbook 8b) | ✅ connected 2026-11-07 (#119 accepts Trade Republic's single `OTHR` balance; image `dbe6632`). Consents run to 2027-05-06 (Sparkasse) and 2027-02-05 (Trade Republic, 90 days at most): renew Trade Republic before 2027-02-05 |
 | Finance backup block and sync timer (runbook 9–10) | ✅ applied 2026-11-07; snapshot `8af2d8ea` holds `finance.sqlite`. Timer schedule fixed in #117 (`06:20,18:20` fired 06:18 and 06:20 only) |
 | Olin Finance skill + `finance` MCP on `home-agent` (B9) | ✅ installed 2026-11-07; tool discovery through the gateway works, so the runtime grant covers `svc-finance` (B10) |
-| Telegram (B7), `openai-codex` login (B8), live verification (B11) | ⏳ open (B7, B8 owner steps) |
+| Telegram (B7) and `openai-codex` login (B8) | ✅ 2026-11-07. Bot `@EpisteckHome_bot` answers only the owner's allowlisted account. Model `gpt-5.6-sol` with no fallback, so Finance figures reach OpenAI only (P2) |
+| Live verification (B11) | ✅ automated matrix passed 2026-11-08 (`FINANCE_I1_VALIDATION.md`): allow, forged header, direct-port bypass, missing, garbage, replayed and expired delegation, Home refused, hanging, 500 and malformed, log hygiene, model provider. ⏳ owner checks O1 (logout or revoke, then re-grant) and O2 (stranger on Telegram) |
+| B11 findings | ⏳ owner decision: F1 nft rule for API `:9935`, F2 image revision label, F3 Finance machine user limited to its own audience |
+| Trade Republic securities (I3) | ⏳ not in I1: PSD2 carries the cash account only. Holdings come from Trade Republic's CSV export (proposal R5) |
 
 ## G2 blockers
 

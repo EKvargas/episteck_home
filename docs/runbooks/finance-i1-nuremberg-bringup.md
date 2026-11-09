@@ -183,6 +183,13 @@ Needs the PSD2 callback (B5, ADR-0013) live first: section 8c.
 6. `link-account` each account you want, with `--provider-ref` set to its reference (the stable **`identification_hash`**), `--type CURRENT`, `--liquidity AVAILABLE`, `--currency EUR`. No second consent is needed: the session already maps every returned account, but only linked accounts are ever read.
 7. **Trade Republic cash:** copy the same application JSON to `secrets/traderepublic.enable_banking` (mode 600, owner `svc-finance`) and repeat steps 3–6 with `--id traderepublic` and its bank name.
 
+**Learned on the first run (2026-11-07):**
+- **Key and certificate.** The application `Olin Finance` runs in restricted mode, which covers the owner's own accounts only. Its private key was generated on the node (`secrets/eb-olin.key`) and never left it. The Control Panel has no upload button: paste the certificate as PEM text. Restricted mode also needs one bank login per bank through "Activate by linking accounts" in the Control Panel, on top of the API consent in step 5.
+- **Trade Republic needs the phone's default browser.** Open the consent link in the phone's default browser (Safari on the owner's phone). The Trade Republic app returns to the default browser, and the Enable Banking session lives only in the browser that started it. Any other browser never reaches the callback.
+- **Trade Republic sends one balance of type `OTHR`.** Finance accepts a lone `OTHR` since #119 (image `dbe6632`). Do not roll back below that image while Trade Republic is connected.
+- **Consent lengths differ.** Sparkasse runs to 2027-05-06. Trade Republic allows 90 days at most: renew before 2027-02-05 with step 5 (`authorize --connection traderepublic`).
+- **Four reads a day.** PSD2 allows 4 unattended reads per account per day. Finance enforces it with `FINANCE_EB_ACCESS_CAP` (default 4), and the timer's two runs stay inside it.
+
 **Rollback:** `rm` the `.enable_banking` file; revoke the application's key in the Control Panel if it was exposed. Revoking the consent at the bank stops all reads; the connection then shows `REAUTH_REQUIRED`.
 
 ### 8c. Ship the PSD2 callback (B5) `[! OK]`
@@ -285,10 +292,10 @@ STEP purge --i-understand-this-deletes-financial-data
 ## Residual risks
 
 - The pepper is the one secret that must be backed up out of band (step 5).
-- PSD2 consent lasts at most the bank's `maximum_consent_validity` (about 180 days); the overview shows `REAUTH_DUE` seven days before.
+- PSD2 consent lasts at most the bank's `maximum_consent_validity` (180 days at Sparkasse, 90 at Trade Republic); the overview shows `REAUTH_DUE` seven days before.
 - SimpleFIN and Enable Banking rate behaviour is unmeasured until the live gate; the budget cap is configuration.
 - The units use `ReadOnly=true`, `NoNewPrivileges` and `DropCapability=ALL`. If a container refuses to start for a write error, check the journal before loosening any of them.
 
-## Phase B (blocked until H5 merges)
+## Phase B (done)
 
-H1 audience, H2 `authorize_batch` plus the real `HomeAuthorizer`, H3 Feature Activation (manual `bench migrate` on home), H4 `/gateway/finance/` route and nft rule, the PSD2 callback route on the BFF vhost, Telegram on `home-agent`, the `openai-codex` login (yours), the Olin Finance skill, and the live check Telegram → Hermes → gateway → Finance → Home.
+H1–H4 (ADR-0015, ADR-0012), the PSD2 callback route, Telegram on `home-agent`, the `openai-codex` login, the Olin Finance skill, and the live check Telegram → Hermes → gateway → Finance → Home are all live. The evidence and how to re-run the checks are in `docs/architecture/FINANCE_I1_VALIDATION.md`.
