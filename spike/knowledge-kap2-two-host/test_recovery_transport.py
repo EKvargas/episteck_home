@@ -118,12 +118,32 @@ class _StubFixture:
         return {"closed": True}
 
 
+class _SignallingEvidence(Evidence):
+    """The real evidence log, also signalling each witness request the Handler finished."""
+
+    def __init__(self, path) -> None:
+        super().__init__(path)
+        self.operations: set[str] = set()
+        self._changed = threading.Condition()
+
+    def write(self, **event) -> None:
+        super().write(**event)
+        if event.get("step") == "witness_request":
+            with self._changed:
+                self.operations.add(event["operation"])
+                self._changed.notify_all()
+
+    def wait_for(self, operation: str, timeout: float) -> bool:
+        with self._changed:
+            return self._changed.wait_for(lambda: operation in self.operations, timeout)
+
+
 @contextmanager
-def _stub_witness(tmp_path, fixture):
+def _stub_witness(tmp_path, fixture, evidence=None):
     """Real witness Handler over loopback mTLS in front of a stub fixture."""
     cert_dir = tmp_path / "certs"
     generate(cert_dir, "127.0.0.1", local=True)
-    evidence = Evidence(tmp_path / "witness.jsonl")
+    evidence = evidence or Evidence(tmp_path / "witness.jsonl")
     server = Server(("127.0.0.1", 0), Handler)
     server.fixture, server.evidence = fixture, evidence
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -173,10 +193,12 @@ def test_disposable_restarts_outlast_the_serving_timeout(tmp_path):
     local replica). Only those disposable restarts get a longer bound; every serving
     call keeps the 2 s fail-closed timeout."""
     slow = {"snapshot": 2.6, "restore": 2.6, "authorize": 2.6}
-    with _stub_witness(tmp_path, _StubFixture(slow)) as clients:
+    evidence = _SignallingEvidence(tmp_path / "witness.jsonl")
+    with _stub_witness(tmp_path, _StubFixture(slow), evidence) as clients:
         assert clients["recovery"].call("snapshot") == {"closed": True}
         assert clients["recovery"].call("restore") == {"closed": True}
         assert clients["recovery"].call("status") == {"closed": True}
         with pytest.raises(WitnessTransportError, match="uncertain witness authorize"):
             clients["serving"].call("authorize", "p1", "incarnation", 0, "ALLOW_A")
-        time.sleep(1.5)  # let the abandoned handler finish before teardown
+        # The abandoned handler still logs its request; wait for it before teardown.
+        assert evidence.wait_for("authorize", timeout=10)

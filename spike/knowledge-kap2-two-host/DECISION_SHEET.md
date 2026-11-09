@@ -16,6 +16,8 @@
 
 No pass criterion, request cap, path, port, credential route or retry rule changed.
 
+**A0 timing risk:** `acquire_mariadb.sh` downloads the pinned `1:11.8.6-5ubuntu0.1` from Ubuntu's live archive, where it was still the candidate in `resolute-updates` on 2026-11-09. When Ubuntu publishes a newer MariaDB update, the pinned version leaves that pocket and attempt 04 would stop at A0, as attempts 01 and 02 did. The replica avoids this through the snapshot archive. Changing the run's acquisition source would need its own review and is not part of this correction.
+
 **Latency feasibility: a decision for Erick before any attempt 04.** A read-only ping from Ashburn to Nuremberg's Tailscale address (direct path, 2026-11-09) measured an RTT of **min 95.6 / avg 99.3 / max 194.7 ms** over 30 packets. A10 times one Home `authorize()` per call, which contains exactly one witness round trip. So even with all corrections:
 
 | A10 metric (ratified gate) | Physical floor on this topology | Expected |

@@ -13,17 +13,23 @@
 | Fixed gateway + `TCP_NODELAY` (monkeypatch) | All 11 executed steps PASS. Warm call p50/p95 **5.4/8.3 ms**, compared with about 50 ms before. |
 | **Final checkout (all three corrections), uninstrumented** | **All 11 executed steps PASS**, 329/400 requests, `Aborted_clients=0`, witness `CLOSED` and both roots absent at cleanup. Loopback call p50/p95: warm **3.2/5.1 ms**, cold **5.3/7.6 ms**. Pair p95: 27.9 ms warm, 33.2 ms cold. Remote preflight A0 and Frappe A9 are remote-only and were not executed. These loopback numbers are not the two-host gate. |
 
-**Bisect:** with the same MariaDB 11.8.6 under Python 3.12, both new gateway tests also fail, so Python 3.14 is not the cause. Under MariaDB 10.11, which offers no TLS, they pass with and without the correction.
+**Bisect:** with the same MariaDB 11.8.6 under Python 3.12, both new gateway tests also fail, so Python 3.14 is not the cause. A stock MariaDB 10.11 offers no TLS, so the original tests passed there with and without the correction.
+
+**Review follow-up (PR #125):** the gateway test fixture now makes every MariaDB offer TLS with a throwaway self-signed certificate, as 11.4+ does by default. A guard test, `test_fixture_offers_tls_like_mariadb_11_8`, proves that TLS is on offer.
+- **On the standard 10.11 stack:** without the gateway correction, `test_pinned_sessions_never_negotiate_tls` now **fails** (`TLSv1.3`). The cross-thread failure itself only reproduces on the replica's OpenSSL 3.5 / MariaDB 11.8 stack.
+- **Probes:** the witness runner's privilege probes (`PrivateDB.connect`) are now socket-only too. `test_witness_probe_sessions_never_negotiate_tls` failed first.
+- **Replica image:** pinned by base-image digest and the Ubuntu snapshot archive of 2026-11-09, so it still builds after Ubuntu supersedes 11.8.6.
+- **`loopback_matrix.sh`:** now propagates the Home runner's exit status. On every exit it keeps the witness logs and removes the container and certificates.
 
 **TDD record:**
 - **Gateway:** `test_serving_thread_survives_writer_loss_and_later_recovery` and `test_pinned_sessions_never_negotiate_tls` failed in the replica (`GatewayClosed` from the reader ping; `('TLSv1.3',)`). They pass after `ssl_disabled=True`.
 - **Transport:** `test_warm_rpc_has_no_small_write_stall` (median ≥ 20 ms) and `test_disposable_restarts_outlast_the_serving_timeout` (snapshot timed out at 2 s) failed locally. They pass after `disable_nagle_algorithm` and the restart-only timeout.
 
-**Suites:**
-- **Local, Python 3.12 / MariaDB 10.11:** the four KAP-2 spike packages (**104 tests**) and the Home contracts, typed-policy, authority and disconnected-inertness tests (**55 passed**).
-  - With all changes, one run gave 103 passed plus 1 setup **error** in the unchanged `test_replaced_lock_path_closes_admission`. A replica matrix overlapped that run, and the host's `mariadb-install-db` aborted on a shared-`/tmp` temp-table collision (`Unknown table 'mysql.tmp_proxies_priv'`). The overlapping matrix failed the same way in its Home bootstrap.
-  - Rerun alone, the test passed, and so did the matrix (all 11 steps, 329/400, warm call p50/p95 4.1/6.7 ms). Run the matrix and the suites one after the other.
-- **Replica:** the gateway suite passes 31/31. The two-host transport tests cannot run in the replica because its Python 3.14 *client* enforces strict X.509, and `certs.py`'s CA has no KeyUsage (`CA cert does not include key usage extension`). They fail the same way without these corrections. The real Home client is Ashburn's Python 3.12, so the run is unaffected. This is recorded as a follow-up.
+**Suites (final, run strictly in sequence):**
+- **Local, Python 3.12 / MariaDB 10.11:** the four KAP-2 spike packages pass **106/106**. The Home contracts, typed-policy, authority and disconnected-inertness tests pass **55/55**.
+- **Replica matrix via `loopback_matrix.sh` on the pinned image:** all 11 executed steps PASS, 329/400 requests, script exit 0, no leftover container or certificates. Loopback warm call p50/p95: 3.1/5.8 ms. A forced certificate failure exits 1 and cleans up.
+- **Overlap failure:** an earlier overlapping run gave one setup **error** (`mariadb-install-db` hit a shared-`/tmp` temp-table collision, `Unknown table 'mysql.tmp_proxies_priv'`) while a replica matrix ran alongside. The overlapping matrix failed the same way in its Home bootstrap. Both pass alone, so run them one after the other.
+- **Replica:** the gateway suite passes 33/33. The two-host transport tests cannot run in the replica because its Python 3.14 *client* enforces strict X.509, and `certs.py`'s CA has no KeyUsage (`CA cert does not include key usage extension`). They fail the same way without these corrections. The real Home client is Ashburn's Python 3.12, so the run is unaffected. This is recorded as a follow-up.
 
 ```sh
 podman build -t localhost/kap2-witness-replica:11.8.6 spike/knowledge-kap2-two-host/replica
