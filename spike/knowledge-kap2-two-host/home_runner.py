@@ -40,6 +40,24 @@ from preflight import verify as verify_preflight
 
 MARKER = "KAP2_PR71_DISPOSABLE_HOME"
 
+# KAP-2 policy/witness screen accepted as a pass/fail gate by the owner on
+# 2026-11-07 (decision sheet R5). Not a whole-path RT#1/RT#2 or Knowledge budget.
+KAP2_LATENCY_GATE_MS = {
+    "call_p95_ms": 100.0, "call_p99_ms": 200.0,
+    "pair_p95_ms": 200.0, "pair_p99_ms": 400.0,
+}
+
+
+def latency_gate_breaches(distribution: dict) -> list[str]:
+    """Metrics over their gate; a missing or invalid value fails closed as a breach."""
+    breaches = []
+    for metric, limit in KAP2_LATENCY_GATE_MS.items():
+        value = distribution.get(metric)
+        if (type(value) not in (int, float) or math.isnan(value) or value < 0
+                or value > limit):
+            breaches.append(metric)
+    return breaches
+
 
 def expect_sql_denial(cursor: pymysql.cursors.Cursor, sql: str,
                       expected_codes: frozenset[int]) -> None:
@@ -612,16 +630,23 @@ class Matrix:
                         pair_values.append(pair_ms)
                         self.evidence.write(step="latency_pair", mode=mode, pair=index,
                                             duration_ms=round(pair_ms, 3), witness_requests=2)
+                    distribution = {
+                        "call_p50_ms": round(median(values), 3),
+                        "call_p95_ms": round(percentile(values, 0.95), 3),
+                        "call_p99_ms": round(percentile(values, 0.99), 3),
+                        "pair_p50_ms": round(median(pair_values), 3),
+                        "pair_p95_ms": round(percentile(pair_values, 0.95), 3),
+                        "pair_p99_ms": round(percentile(pair_values, 0.99), 3),
+                        "pair_max_ms": round(max(pair_values), 3),
+                    }
+                    breaches = latency_gate_breaches(distribution)
+                    # Evidence is written before the gate decides, so a breach is archived.
                     self.evidence.write(step="latency_distribution", mode=mode,
                                         calls=len(values), pairs=len(pair_values),
-                                        call_p50_ms=round(median(values), 3),
-                                        call_p95_ms=round(percentile(values, 0.95), 3),
-                                        call_p99_ms=round(percentile(values, 0.99), 3),
-                                        pair_p50_ms=round(median(pair_values), 3),
-                                        pair_p95_ms=round(percentile(pair_values, 0.95), 3),
-                                        pair_p99_ms=round(percentile(pair_values, 0.99), 3),
-                                        pair_max_ms=round(max(pair_values), 3),
-                                        status="PROPOSED_BUDGET_NOT_RATIFIED")
+                                        **distribution, gate_ms=KAP2_LATENCY_GATE_MS,
+                                        gate_breaches=breaches,
+                                        status="GATE_PASS" if not breaches else "GATE_FAIL")
+                    assert not breaches, f"KAP-2 {mode} latency gate breached: {breaches}"
         self.step("kap2_policy_witness_latency_and_request_count", verify)
 
     def frappe_compatibility(self) -> None:

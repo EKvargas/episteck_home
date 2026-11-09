@@ -1,0 +1,73 @@
+{
+  "status": "completed_locally",
+  "date": "2026-11-07",
+  "base_commit": "dbe6632",
+  "stacked_on": "docs/knowledge-kap2-decisions (PR #120)",
+  "scope": "Local R2/R3 correction and R5 gate enforcement for the disconnected disposable PERSON candidate",
+  "changes": {
+    "R2": "witness.writer_principals registry; prepare_event/commit_event accept only the ACTIVE principal of the head epoch (USER()); recover_partition moves to epoch+1 with that epoch's UNUSED principal, installs a gateway-minted credential (native hash only), locks and disconnects every RETIRED principal; gateway holds no configured writer password",
+    "R3": "PersonAuthority records an unproven outcome after any witness call that may have taken effect or a sent Home COMMIT, never rolls back over a sent COMMIT, and resolve_unknown() retires the old session, then settles the exact event as HOME_COMMITTED or REAPPLIED; recover() retires an unresolved session first",
+    "R5": "home_runner A10 records gate_ms/gate_breaches and fails on any breach of call p95<=100/p99<=200 ms, pair p95<=200/p99<=400 ms; missing or invalid metrics fail closed"
+  },
+  "local_environment": {
+    "os": "WSL Ubuntu 24.04",
+    "python": "3.12.3",
+    "mariadb": "10.11.13-MariaDB-0ubuntu0.24.04.1",
+    "venv": "/home/d064974/kap2-twohost-venv-20261010",
+    "dependency_target": "/home/d064974/kap2-pr71-review-deps-20261024",
+    "new_installs": false
+  },
+  "commands": {
+    "unit_and_contracts": "python -m pytest -q packages/home-contracts/tests apps/episteck_home/tests/test_typed_access_policy.py apps/episteck_home/tests/test_knowledge_authority.py apps/episteck_home/tests/test_knowledge_disconnected.py spike/knowledge-kap2-two-host/test_acquisition.py spike/knowledge-kap2-two-host/test_recovery_transport.py",
+    "gateway_and_two_host": "python -m pytest -q spike/knowledge-kap2-transactional-witness/test_gateway.py spike/knowledge-kap2-two-host/test_latency_gate.py spike/knowledge-kap2-two-host/test_acquisition.py spike/knowledge-kap2-two-host/test_recovery_transport.py",
+    "lane_and_person_vertical": "python -m pytest -q spike/knowledge-kap2-home-authority/test_lane.py spike/knowledge-kap2-person-vertical/test_integrated.py",
+    "pythonpath": "apps/episteck_home:packages/home-contracts/src:<dependency_target>",
+    "loopback_matrix": "certs.py --local; witness_runner.py --loopback-only --bind 127.0.0.1; home_runner.py --local (marked /tmp roots; certificates removed afterwards)"
+  },
+  "red_observations": [
+    {"case": "R2 repeated recovery", "result": "1 failed: writer epoch stayed '2\\t2' after a second recovery (expected '3\\t3')"},
+    {"case": "R3 unknown-outcome matrix", "result": "12 failed only at the missing resolver (AttributeError unresolved_event) after 'not authority.open' passed; the existing code was fail-closed but unresolvable"},
+    {"case": "R3 guards", "result": "2 failed: resolver and session retirement absent"},
+    {"case": "R5 gate", "result": "collection error: KAP2_LATENCY_GATE_MS/latency_gate_breaches absent"},
+    {"case": "Design finding during GREEN", "result": "pre-provisioned writer passwords would be revived by a physical restore of an older datadir; replaced by per-recovery minted credentials and covered by test_physical_restore_cannot_revive_any_writer_credential"},
+    {"case": "First loopback run", "result": "A1 FAIL: privilege probe had no pre-recovery writer and its old gw_writer1 write-procedure probe would perform a legal write in the old incarnation; probe redesigned (no legal writes), rerun PASS"}
+  ],
+  "verification": {
+    "unit_and_contracts": "73 passed in 17.65s",
+    "gateway_and_two_host": "57 passed in 198.49s",
+    "lane_and_person_vertical": "43 passed in 537.65s",
+    "earlier_full_db_suite": "72 passed in 664.63s (gateway+lane+person vertical, writer pool 24, before the probe fix and pool increase)",
+    "diff_check": "PASS",
+    "loopback_matrix": {
+      "steps_passed": 11,
+      "steps_failed": 0,
+      "a9_frappe": "unexecuted (no disposable Frappe bench locally)",
+      "requests": {"total": 329, "cap": 400, "authorize": 161, "recover": 20},
+      "latency_gate": {
+        "warm": {"call_p95_ms": 51.758, "call_p99_ms": 53.546, "pair_p95_ms": 119.805, "pair_p99_ms": 184.542, "status": "GATE_PASS"},
+        "cold": {"call_p95_ms": 53.098, "call_p99_ms": 53.432, "pair_p95_ms": 119.972, "pair_p99_ms": 120.854, "status": "GATE_PASS"}
+      },
+      "cleanup": {"home_root_absent": true, "witness_root_absent": true, "witness_admission": "CLOSED"},
+      "note": "loopback on one host; not cross-host latency and not the authorized two-host gate"
+    }
+  },
+  "actions": {
+    "pushed": "feature branch only",
+    "remote_experiment": false,
+    "ssh": false,
+    "production_changes": false,
+    "board_ratification": "recorded 2026-11-07 in PR #120 (separate)"
+  },
+  "open_items": [
+    "R4: CIRCLE source, all production Home authority writers, Home process attach/reconcile to a live incarnation, RT#2 context invalidation, private human reauthorization interface, production credential custody",
+    "Authorized exact-SHA two-host A0-A11 run including A9 Frappe 15.99.0 and Nuremberg MariaDB 11.8 (registry, ACCOUNT LOCK and KILL procedures unexercised on 11.8)",
+    "Lost in-process unknown-event memory after a Home process crash still requires quarantining recovery",
+    "KAP-3..KAP-10 and the six Technology Gate pre-runtime obligations"
+  ],
+  "production_guarantees": false,
+  "sha256": {
+    "apps/episteck_home/episteck_home/knowledge_authority/integrated.py": "86384a4562be6b54d9db81c2df8fe6a26d19420ef5acf71ce221b88867dd01dd",
+    "spike/knowledge-kap2-transactional-witness/gateway.py": "ba10b21a1a657c0ac7ba0d25c361c3a1c1f8a3f0004f5c9010aab29c9b61b7fd",
+    "spike/knowledge-kap2-transactional-witness/gateway_schema.sql": "db83bbee5a8adacb0281874b64abba09cfee2fdd2adf1e8d6b64465c0d9fe142"
+  }
+}

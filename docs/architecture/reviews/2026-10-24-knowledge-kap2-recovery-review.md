@@ -4,6 +4,8 @@
 
 **Follow-up:** [R1/R6 local correction and validation](2026-10-24-knowledge-kap2-r1-r6-validation.md) records the subsequent authorized local work. The R1/R6 observations below describe the reviewed baseline; the follow-up fixes witness-only early opening and retained known-incarnation reuse, while retaining the wider production proof gates.
 
+**Follow-up 2026-11-07:** [R2/R3 local correction and validation](2026-11-07-knowledge-kap2-r2-r3-validation.md) adds writer-principal rotation and retirement (R2), exact-event resolution of unknown outcomes at every mutation position (R3), and enforces the R5 latency gate. R4 and the two-host run remain open.
+
 **Reviewed baseline:** `6166594bd91482455440e8e938306769100136bd`, plus this continuation's acquisition check/tests and documentation. The governing inputs are [runtime contract §17/§19](../proposals/KNOWLEDGE_AUTHORIZATION_PLAN_RUNTIME_CONTRACT.md), [ADR-0010 (renumbered ADR-0014 on 2026-11-07)](../adr/0014-knowledge-authorization-recovery-incarnation.md), the [incarnation amendment](../proposals/KNOWLEDGE_KAP2_INCARNATION_ADMISSION_AMENDMENT.md) and the [fixed two-host matrix](../../../spike/knowledge-kap2-two-host/README.md). An independent read-only reviewer inspected the recovery code and narrow acquisition diff; no blocking defect was found in the acquisition correction. Findings below distinguish missing proofs from demonstrated authorization failures.
 
 ## Recovery decision and tradeoff

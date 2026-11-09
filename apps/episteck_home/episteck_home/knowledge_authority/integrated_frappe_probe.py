@@ -77,7 +77,7 @@ def run() -> dict:
     output = {}
     gateway = Gateway(socket=witness_socket,
                       lock_path=str(Path(witness_socket).parent / "person-flock"),
-                      reader_password="synthetic-read", writer_password="synthetic-two",
+                      reader_password="synthetic-read",
                       recovery_password="synthetic-recover")
     authority = PersonAuthority(home_socket=socket, witness=gateway,
                                 binding=FrappeBinding(),
