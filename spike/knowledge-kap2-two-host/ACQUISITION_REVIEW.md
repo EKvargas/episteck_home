@@ -1,5 +1,7 @@
 # Nuremberg acquisition correction for architectural review
 
+**2026-11-09 (attempt 03):** the unchanged `acquire_mariadb.sh` (SHA-256 `3275d099…cafd03`) passed on Nuremberg. All seven pinned archives were available, including `libpcre2-posix3=10.46-1build1` from the release pocket, even though apt now prefers `10.46-1ubuntu0.1`. The corrected help check passed, and the private MariaDB 11.8.6 initialized and ran the witness schema. See the [decision sheet](DECISION_SHEET.md#attempt-03--authorized-and-stopped-at-a6-2026-11-09).
+
 **Current status (2026-10-24):** local help-status correction prepared after the second stopped remote attempt; no new remote execution performed or authorized here. See the [latest section](#2026-10-24-help-status-correction). The sections below that precede it retain the historical 2026-10-12 SQL-path correction and its then-current scope. Historical branches, worktrees and experiment comments are preserved.
 
 ## Evidence and narrow correction

@@ -1,5 +1,26 @@
 # KAP-2 two-host gate: decisions before execution
 
+## Attempt 03 — authorized and stopped at A6 (2026-11-09)
+
+**Authorization (Erick, 2026-11-09):** one disposable attempt at `56c7c3f7efc5ece30feecf903da996dd77053f95` between Ashburn (178.156.197.34) and Nuremberg (91.98.132.9, Tailscale 100.81.4.57, re-verified on the host at start). Operator Erick, no backup delegate. It approves the preparation steps, one test run, the marked restore and the cleanup listed below, the latency gate, unchanged A0–A11 criteria and the capacity checks. **Exception:** Mealie may be stopped for the run window, then restarted and health-checked.
+
+**Result: rejected run, not retried.** Evidence and full diagnosis: [result.json](evidence/2026-11-09-two-host-attempt-03/result.json).
+
+| Criterion | Outcome |
+| --- | --- |
+| Capacity | Without the exception, a read-only check failed (1,946 MiB available memory). With Mealie stopped, both gates passed immediately before start: 2,202,001,408 B available memory, 1,967,071,232 B free `/tmp`. Mealie was down 12:46:05–12:54:23 UTC, then healthy. |
+| A0 | **PASS.** Exact pinned MariaDB 11.8.6 acquisition, then 13/13 preflight checks on each runner, including the Frappe 15.99.0 bench. No ACL was needed: `tailscale0` is accepted. |
+| A1–A5 | **PASS** (106 requests). R2 rotation and account locking were correct on MariaDB 11.8 for 10 rotations. |
+| A6 | **FAIL.** In the setup of `unknown_prepare_acknowledgement`, after a fresh recovery, the witness refused the ordinary grant `prepare` (HTTP 503, 0.689 ms). |
+| A7–A10 | **UNEXECUTED.** No latency was measured. 112/400 requests in total. |
+| A11 | Both runners recorded root removal. `verify_cleanup.py` passed on Nuremberg. Ashburn returned `complete=false` only because A9 never ran (no Frappe result); this is preserved, not converted into a pass. |
+
+**Diagnosis (read-only, before SIGTERM):** the database never rejected the call: the only SQL `SIGNAL` was A2's expected probe, and the writer session executed nothing after connecting. The witness gateway's pinned **reader** session, opened by A6's recovery and pinged by `confirm_home`/`open_admission`, was gone about 100 ms later. `_require_open` then closed admission. **The root cause is not proven.** The same sequence passes locally on MariaDB 10.11 with Python 3.12; the remote witness ran MariaDB 11.8.6 with Python 3.14.4.
+
+**Cleanup:** Nuremberg's transient account, home, MariaDB prefix and staging were removed. Ashburn's `kap2-probe` was retained, with its own group only, sudo denied and staging removed. No production bench, site, database, code or service changed apart from the recorded Mealie stop and restart.
+
+**Next:** reproduce A5→A6 locally with MariaDB 11.8.6 and Python 3.14, and correct it under TDD. Then review the new exact commit and obtain a **new** authorization. This authorization is consumed.
+
 ## Decisions recorded 2026-11-07 (owner Erick, acting as Board)
 
 | Decision | Disposition |
@@ -7,7 +28,7 @@
 | Knowledge-only recovery amendment (contract §19) | **RATIFIED for v1.** Now [ADR-0014](../../docs/architecture/adr/0014-knowledge-authorization-recovery-incarnation.md), renumbered from the colliding 0010. Any witness restart, including a routine reboot, closes Knowledge and needs per-Person reauthorization. A later high-water design may supersede it. |
 | Witness accountability | **Erick** is the accountable operator and credential custodian. **No backup delegate** (accepted risk for a personal/family deployment). Without the operator, the witness stays CLOSED and Knowledge denies. |
 | KAP-2 latency screen (R5) | **Accepted as a pass/fail gate:** per-call p95 ≤100 ms / p99 ≤200 ms; synthetic pair p95 ≤200 ms / p99 ≤400 ms. See [README](README.md#latency-allocation--accepted-as-a-gate-2026-11-07). |
-| One disposable remote run | **Not yet authorized.** It still needs an explicit record naming the exact reviewed commit SHA and the Nuremberg Tailscale IPv4 verified on the host at execution time. It also needs re-confirmation of the capacity gates and the action list below. The decisions above do not authorize SSH or remote execution. |
+| One disposable remote run | Authorized and executed on 2026-11-09 at `56c7c3f`; it stopped at A6 (see above). A further attempt needs a new exact-SHA authorization. |
 
 These decisions do not complete KAP-2. R2 and R3 (local proof), R4 (CIRCLE, production Home writers, RT#2 contexts, reauthorization interface, credential custody) and the two-host run stay open.
 

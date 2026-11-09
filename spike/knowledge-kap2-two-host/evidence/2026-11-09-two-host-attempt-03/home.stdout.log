@@ -1,0 +1,27 @@
+Traceback (most recent call last):
+  File "/tmp/kap2-pr71-src-01/spike/knowledge-kap2-two-host/home_runner.py", line 757, in <module>
+    main()
+  File "/tmp/kap2-pr71-src-01/spike/knowledge-kap2-two-host/home_runner.py", line 743, in main
+    matrix.uncertain("prepare")
+  File "/tmp/kap2-pr71-src-01/spike/knowledge-kap2-two-host/home_runner.py", line 523, in uncertain
+    self.step(f"unknown_{phase}_acknowledgement", verify)
+  File "/tmp/kap2-pr71-src-01/spike/knowledge-kap2-two-host/home_runner.py", line 206, in step
+    action()
+  File "/tmp/kap2-pr71-src-01/spike/knowledge-kap2-two-host/home_runner.py", line 479, in verify
+    case.grant_allow()
+  File "/tmp/kap2-pr71-src-01/spike/knowledge-kap2-two-host/home_runner.py", line 125, in grant_allow
+    self.authority.activate_grant("grant-1", f"grant-{secrets.token_hex(6)}")
+  File "/tmp/kap2-pr71-src-01/apps/episteck_home/episteck_home/knowledge_authority/integrated.py", line 554, in activate_grant
+    return self._mutate("GRANT", grant_id, event_id,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/kap2-pr71-src-01/apps/episteck_home/episteck_home/knowledge_authority/integrated.py", line 398, in _mutate
+    _, revision, digest = self._apply(kind, source, event_id, domain=domain, action=action,
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/kap2-pr71-src-01/apps/episteck_home/episteck_home/knowledge_authority/integrated.py", line 520, in _apply
+    self.witness.prepare(site.partition, incarnation, event_id, revision, digest)
+  File "/tmp/kap2-pr71-src-01/spike/knowledge-kap2-two-host/transport.py", line 156, in prepare
+    if self.serving.call("prepare", partition, incarnation, event,
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/kap2-pr71-src-01/spike/knowledge-kap2-two-host/transport.py", line 106, in call
+    raise WitnessTransportError(f"witness refused {operation} ({response.status})")
+transport.WitnessTransportError: witness refused prepare (503)

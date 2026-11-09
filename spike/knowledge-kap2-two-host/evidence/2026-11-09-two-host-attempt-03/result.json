@@ -1,0 +1,208 @@
+{
+  "acquisition": {
+    "install_db_help_check": "PASS (exit 1 plus required usage markers)",
+    "pinned_archives": 7,
+    "result": "PASS",
+    "script_sha256": "3275d099d294ea91e23e8c2229f89bc681ef4e8fc3887c163f9ff6d990cafd03",
+    "versions_reported": "11.8.6"
+  },
+  "approved_sha": "56c7c3f7efc5ece30feecf903da996dd77053f95",
+  "attempt": "kap2-two-host-attempt-03",
+  "authorization": {
+    "backup_delegate": null,
+    "exception": "Mealie may be stopped for the run window and must be restarted and health-checked afterwards",
+    "operator": "Erick",
+    "recorded_utc_date": "2026-11-09",
+    "scope": "one disposable attempt: preparation, one matrix run, marked restore, cleanup per DECISION_SHEET.md"
+  },
+  "cleanup": {
+    "ashburn_account_retained": true,
+    "ashburn_own_group_only": true,
+    "ashburn_staging_paths_absent": true,
+    "ashburn_sudo_denied": true,
+    "home_runner": {
+      "home_cleanup_root_absent": true,
+      "request_attempts": 112
+    },
+    "nuremberg_account_home_prefix_removed": true,
+    "nuremberg_staging_paths_absent": true,
+    "operator_ca_key_location": "operator WSL only; removed after this record",
+    "temporary_acl_added": false,
+    "verify_cleanup_home": {
+      "checks": {
+        "bench_absent": true,
+        "cert_dir_absent": true,
+        "evidence_present": true,
+        "frappe_cleanup_recorded": false,
+        "root_absent": true,
+        "runner_cleanup_recorded": true,
+        "source_absent": true
+      },
+      "complete": false,
+      "note": "frappe_cleanup_recorded is false only because A9 never ran; preserved, not converted to a pass",
+      "side": "home"
+    },
+    "verify_cleanup_source_blob": "0e00e4c435e3df213dd80f703ccbedaefc19d88b (matches committed file)",
+    "verify_cleanup_witness": {
+      "checks": {
+        "cert_dir_absent": true,
+        "evidence_present": true,
+        "listener_absent": true,
+        "root_absent": true,
+        "runner_cleanup_recorded": true,
+        "source_absent": true
+      },
+      "complete": true,
+      "side": "witness"
+    },
+    "witness_runner": {
+      "admission": "CLOSED",
+      "witness_cleanup_root_absent": true
+    }
+  },
+  "criteria": {
+    "A0": "PASS: acquisition plus witness and home runner preflight (13/13 checks each)",
+    "A1": "PASS",
+    "A10": "UNEXECUTED (no latency measured)",
+    "A11": "runner cleanup recorded on both sides; Frappe cleanup absent because A9 never ran",
+    "A2": "PASS",
+    "A2b": "PASS",
+    "A3": "PASS",
+    "A4": "PASS",
+    "A5": "PASS",
+    "A6": "FAIL: unknown_prepare_acknowledgement setup; witness refused the ordinary grant prepare (HTTP 503) after a fresh recovery",
+    "A7": "UNEXECUTED",
+    "A8": "UNEXECUTED",
+    "A9": "UNEXECUTED"
+  },
+  "disposition": "STOPPED_AT_A6",
+  "evidence_sha256": {
+    "home.jsonl": "fde97910117471a9b503547dbe07cf67dd40cce96d330373b74ffa2af1db5c28",
+    "home.stdout.log": "23c409b9bee55a4aaff1eb5e3eccb32de16ad8e5773538a66dd306889a39ab8f",
+    "witness.jsonl": "7f9c0cb6934d6b05ef3753239cc0a11aa1d7c51b1d314b4c14c9743c3af19b01",
+    "witness.stdout.log": "26ea0f9af7df64cb57db6a3ae7913e64b5dd2d5cc4ee841b1e1a62949e32cd92"
+  },
+  "failure_diagnosis": {
+    "home_error": "transport.WitnessTransportError: witness refused prepare (503)",
+    "interpretation": [
+      "The single SQL SIGNAL is A2's expected obsolete-writer probe, so prepare_event did not reject the call.",
+      "The writer session executed no statement after connecting, so the CALL was never sent.",
+      "The gateway's pinned reader session, opened by A6's recovery and pinged successfully by confirm_home and open_admission, was gone ~100 ms later; _require_open's reader ping failed, closing admission (503).",
+      "R2 rotation and account locking were correct on MariaDB 11.8 for 10 rotations."
+    ],
+    "read_only_witness_db_inspection_before_sigterm": {
+      "global_status": {
+        "Aborted_clients": 3,
+        "Access_denied_errors": 8,
+        "Com_call_procedure": 119,
+        "Com_kill": 1,
+        "Com_resignal": 1,
+        "Com_rollback": 1,
+        "Com_signal": 1
+      },
+      "head": "writer_epoch 11, publisher_epoch 11, revision 0, COMMITTED, DENY_ALL, no pending event",
+      "processlist": "only gw_writer11 (session 56, Sleep, examined_rows 0, sent_rows 0); NO gw_reader session",
+      "witness_process": "two sockets (listener plus one DB socket); gateway flock still held",
+      "writer_registry": "epochs 1-10 RETIRED and locked; gw_writer11 ACTIVE and unlocked; 12+ UNUSED and locked"
+    },
+    "root_cause": "NOT PROVEN. The same sequence passes locally on MariaDB 10.11 / Python 3.12. Reproduce locally with MariaDB 11.8.6 and Python 3.14 before any correction.",
+    "witness_event": {
+      "duration_ms": 0.689,
+      "operation": "prepare",
+      "role": "serving",
+      "status": 503
+    }
+  },
+  "hosts": {
+    "home": "ubuntu-4gb-ash-1",
+    "home_tailscale_ipv4": "100.71.79.33",
+    "witness": "ubuntu-4gb-nbg1-1",
+    "witness_tailscale_ipv4": "100.81.4.57"
+  },
+  "mealie_exception": {
+    "health": "active, /api/app/about HTTP 200, v3.26.0",
+    "healthy_utc": "2026-11-09T12:54:23Z",
+    "restarted_utc": "2026-11-09T12:54:16Z",
+    "stopped_utc": "2026-11-09T12:46:05Z"
+  },
+  "network_acl": "none added: Ashburn->100.81.4.57:19442 returned connection refused before the run (tailscale0 accepted)",
+  "nuremberg_capacity_immediately_before_start": {
+    "both_gates_passed": true,
+    "checked_utc": "2026-11-09T12:46:07Z",
+    "memory_available_bytes": 2202001408,
+    "memory_min_bytes": 2147483648,
+    "note": "earlier read-only check on 2026-11-09 found 1,946 MiB available (FAIL); Mealie was stopped under the recorded exception",
+    "tmp_free_bytes": 1967071232,
+    "tmp_min_bytes": 1879048192
+  },
+  "production": {
+    "ashburn_mariadb": "active before and after; unchanged",
+    "deploy": false,
+    "home_bench": "unchanged; home.episteck.com ping 200 after cleanup",
+    "mealie": "stopped and restarted under the recorded exception; healthy",
+    "merge": false,
+    "migration": false,
+    "nuremberg_mariadb": "LoadState=not-found, inactive; unchanged"
+  },
+  "request_counts": {
+    "by_operation": {
+      "authorize": 21,
+      "close_admission": 11,
+      "commit": 14,
+      "confirm_home": 11,
+      "event_outcome": 1,
+      "kill_writer": 1,
+      "open_admission": 11,
+      "prepare": 15,
+      "probe_privileges": 2,
+      "read_current": 11,
+      "recover": 11,
+      "status": 2,
+      "tls_handshake": 1
+    },
+    "by_outcome": {
+      "WitnessTransportError": 6,
+      "ok": 105,
+      "rejected": 1
+    },
+    "by_role": {
+      "anonymous": 1,
+      "recovery": 57,
+      "serving": 54
+    },
+    "cap": 400,
+    "total": 112
+  },
+  "retried": false,
+  "steps": {
+    "dependency_issuer_and_expiry_invalidation": "PASS",
+    "grant_self_bypass_and_ordinary_write": "PASS",
+    "reader-first_revocation_order": "PASS",
+    "transport_credential_isolation_and_closed_start": "PASS",
+    "unknown_prepare_acknowledgement": "FAIL",
+    "writer-first_revocation_order": "PASS",
+    "writer_connection_loss_with_live_reader": "PASS"
+  },
+  "tool_versions": {
+    "frappe_bench": "Frappe 15.99.0 (5cca1fa7e38cfab74c78627c93a9210dc3fdbccc), bench CLI 5.29.0",
+    "home_mariadb": "10.11.14-MariaDB-0ubuntu0.24.04.1 (system binaries, private datadir)",
+    "home_python": "3.12.3 (isolated venv)",
+    "python_wheels": {
+      "PyMySQL": "1.2.3",
+      "Pygments": "2.21.0",
+      "iniconfig": "2.3.1",
+      "packaging": "26.3",
+      "pluggy": "1.6.0",
+      "pytest": "9.1.1"
+    },
+    "witness_mariadb": "11.8.6-MariaDB-5ubuntu0.1 (private extracted prefix)",
+    "witness_os": "Ubuntu 26.04.1 LTS, kernel 7.0.0-31-generic",
+    "witness_python": "3.14.4 (system, private dependency path)"
+  },
+  "witness_request_events": 111,
+  "witness_successful_prepare_ms": {
+    "count": 14,
+    "max": 3.143,
+    "min": 1.294
+  }
+}
