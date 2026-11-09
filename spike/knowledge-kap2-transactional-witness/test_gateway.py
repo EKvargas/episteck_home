@@ -10,6 +10,7 @@ import sys
 import tempfile
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pymysql
@@ -590,3 +591,41 @@ def test_restored_committed_ready_rows_cannot_open_gate(db: PrivateDB) -> None:
         assert fresh != "old-incarnation"
         assert restored.authorize("p1", "old-incarnation", 0, "OLD_ALLOW") is False
         assert restored.authorize("p1", fresh, 0, "DENY_ALL") is False
+
+
+def test_serving_thread_survives_writer_loss_and_later_recovery(db: PrivateDB) -> None:
+    """Two-host attempt 03, A5 -> A6: the witness serves and recovers on different
+    HTTP threads. A writer lost on the serving thread must not break the sessions
+    that a later recovery pins and the serving thread then uses."""
+    serving = ThreadPoolExecutor(max_workers=1)
+
+    def serve(gateway: Gateway, method: str, *args):
+        return serving.submit(getattr(gateway, method), *args).result(timeout=10)
+
+    try:
+        with new_gateway(db) as gateway:
+            incarnation = recover_and_admit(gateway)
+            serve(gateway, "prepare", "p1", incarnation, "grant-1", 0, "ALLOW_A")
+            serve(gateway, "commit", "p1", incarnation, "grant-1", "ALLOW_A")
+            assert gateway._writer is not None
+            db.sql(f"KILL CONNECTION {gateway._writer.thread_id()}")
+            assert serve(gateway, "authorize", "p1", incarnation, 1, "ALLOW_A") is False
+            fresh = recover_and_admit(gateway)
+            serve(gateway, "prepare", "p1", fresh, "grant-2", 0, "ALLOW_B")
+            serve(gateway, "commit", "p1", fresh, "grant-2", "ALLOW_B")
+            assert serve(gateway, "authorize", "p1", fresh, 1, "ALLOW_B") is True
+    finally:
+        serving.shutdown()
+
+
+def test_pinned_sessions_never_negotiate_tls(db: PrivateDB) -> None:
+    """The witness is socket-only; PyMySQL's default PREFERRED TLS must not wrap its
+    sessions when the server offers TLS (MariaDB 11.4+ does so by default)."""
+    with new_gateway(db) as gateway:
+        recover_and_admit(gateway)
+        for session in (gateway._reader, gateway._writer):
+            assert session is not None
+            with session.cursor() as cursor:
+                cursor.execute("SELECT VARIABLE_VALUE FROM information_schema.SESSION_STATUS "
+                               "WHERE VARIABLE_NAME='Ssl_version'")
+                assert cursor.fetchone() in (None, ("",))

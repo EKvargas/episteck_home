@@ -83,8 +83,13 @@ class Gateway:
             raise
 
     def _connect(self, user: str, password: str) -> pymysql.Connection:
+        # Socket-only by design: the private socket's filesystem permissions are the
+        # boundary. PyMySQL otherwise negotiates unverified TLS whenever the server
+        # offers it (MariaDB 11.4+ does by default). On those TLS sessions, a writer
+        # lost on the serving thread broke the next recovery's pinned reader on that
+        # thread (two-host attempt 03, A6).
         return pymysql.connect(unix_socket=self.socket, user=user, password=password,
-                               database="witness", autocommit=True,
+                               database="witness", autocommit=True, ssl_disabled=True,
                                connect_timeout=2, read_timeout=2, write_timeout=2)
 
     def _check_lock(self) -> None:
