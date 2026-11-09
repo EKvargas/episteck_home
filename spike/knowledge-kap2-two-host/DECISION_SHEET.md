@@ -1,5 +1,35 @@
 # KAP-2 two-host gate: decisions before execution
 
+## Attempt 03 root cause and corrections (2026-11-09, local only)
+
+**Root cause (reproduced, then fixed under TDD):** PyMySQL 1.2 negotiates unverified TLS whenever the server offers it ("PREFERRED" mode). MariaDB 11.4+ offers TLS by default; 10.11 does not. On Nuremberg's 11.8.6, the witness gateway's pinned unix-socket sessions were therefore TLS sessions, which nobody intended. In A5 the writer kill correctly broke the writer on the serving HTTP thread. On that thread, the first read on the reader pinned by the next recovery then failed with a spurious `BrokenPipe`. PyMySQL dropped the socket (the server logged `Aborted connection … gw_reader … error writing communication packets`), and the gateway closed admission: A6's 503. A5's final check hit the same failure but expected a deny, which masked it. Python 3.12 fails the same way, so the Python version was a red herring.
+
+**Reproduction:** a local container replica of the witness host, defined in [replica/](replica/): Ubuntu 26.04.1, Python 3.14.4, `mariadb-server 1:11.8.6-5ubuntu0.1`, PyMySQL 1.2.3. It reproduced attempt 03 exactly: A6 FAIL at 112 requests, `Aborted_clients=3`, only `gw_writer11` left. `Com_kill=1` across the run rules out the gateway's own retire-KILL loop, because MariaDB counts statements inside procedures. See [LOCAL_VALIDATION.md](LOCAL_VALIDATION.md#attempt-03-root-cause-replica-2026-11-09).
+
+**Corrections (each with a test that failed first):**
+
+| Defect | Effect on a remote run | Correction |
+| --- | --- | --- |
+| Gateway sessions silently negotiated TLS on MariaDB 11.4+ | A6 FAIL (attempt 03) | `gateway.py`: `ssl_disabled=True`. The witness is socket-only by design. |
+| The witness reply's header and body writes stalled behind Nagle and delayed ACK | About 45 ms added to every loopback call. Across hosts, a further round trip plus about 40 ms, inflating A10. | `witness_runner.py`: `TCP_NODELAY` on accepted connections. Loopback call p50 fell from about 50 ms to 5–6 ms. |
+| A 2 s client timeout on the A9 witness DB restarts; MariaDB 11.8 took 1.9–2.5 s | A9 restore failed intermittently in the replica | `transport.py`: a 30 s bound **only** for `snapshot`/`restore`. All serving and recovery-transition calls keep 2 s. |
+
+No pass criterion, request cap, path, port, credential route or retry rule changed.
+
+**Latency feasibility: a decision for Erick before any attempt 04.** A read-only ping from Ashburn to Nuremberg's Tailscale address (direct path, 2026-11-09) measured an RTT of **min 95.6 / avg 99.3 / max 194.7 ms** over 30 packets. A10 times one Home `authorize()` per call, which contains exactly one witness round trip. So even with all corrections:
+
+| A10 metric (ratified gate) | Physical floor on this topology | Expected |
+| --- | --- | --- |
+| Warm call p95 ≤ 100 ms | 1 RTT + about 5 ms local work ≈ 100–105 ms | Likely breach |
+| Cold call p95 ≤ 100, p99 ≤ 200 ms | Half the cold calls open TCP and TLS 1.3 first: ≥ 3 RTT ≈ 290 ms | **Certain breach** |
+| Warm pair p95 ≤ 200 ms | 2 RTT + local work + the runner's two evidence fsyncs inside the pair window ≈ 210–230 ms | Likely breach |
+| Cold pair p95 ≤ 200, p99 ≤ 400 ms | ≥ 4 RTT ≈ 390 ms | **Certain p95 breach** |
+
+An attempt 04 on Ashburn↔Nuremberg with the unchanged gate is therefore expected to pass correctness (A0–A9, A11) but fail A10. That is the gate rejecting a transatlantic synchronous witness, not a defect. Before authorizing, decide one of the following:
+1. **Keep the gate and change the topology:** a witness host in Home's region, on a separate host and failure domain. The remote run then targets that host.
+2. **Keep the topology and revise the gate:** a Board decision, for example RTT-relative or warm-only limits, recorded before the run.
+3. **Run attempt 04 unchanged** to obtain the formal remote measurement, accepting the expected A10 failure and another Mealie window.
+
 ## Attempt 03 — authorized and stopped at A6 (2026-11-09)
 
 **Authorization (Erick, 2026-11-09):** one disposable attempt at `56c7c3f7efc5ece30feecf903da996dd77053f95` between Ashburn (178.156.197.34) and Nuremberg (91.98.132.9, Tailscale 100.81.4.57, re-verified on the host at start). Operator Erick, no backup delegate. It approves the preparation steps, one test run, the marked restore and the cleanup listed below, the latency gate, unchanged A0–A11 criteria and the capacity checks. **Exception:** Mealie may be stopped for the run window, then restarted and health-checked.

@@ -1,0 +1,16 @@
+# Local replica of the Nuremberg witness environment used by two-host attempt 03.
+# Ubuntu 26.04 system Python 3.14 plus the same pinned MariaDB 11.8.6 packages and
+# PyMySQL/pytest versions. Local diagnosis only; nothing here contacts either host.
+FROM docker.io/library/ubuntu:26.04
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      python3 python3-pip ca-certificates procps \
+      mariadb-server=1:11.8.6-5ubuntu0.1 mariadb-server-core=1:11.8.6-5ubuntu0.1 \
+      mariadb-client=1:11.8.6-5ubuntu0.1 mariadb-client-core=1:11.8.6-5ubuntu0.1 \
+      mariadb-common=1:11.8.6-5ubuntu0.1 libmariadb3=1:11.8.6-5ubuntu0.1 \
+ && rm -rf /var/lib/apt/lists/*
+RUN python3 -m pip install --break-system-packages --no-cache-dir --target /deps \
+      PyMySQL==1.2.3 pytest==9.1.1
+# Run with --userns=keep-id so the non-root witness can write mounted output dirs.
+ENV PYTHONPATH=/deps PYTHONDONTWRITEBYTECODE=1

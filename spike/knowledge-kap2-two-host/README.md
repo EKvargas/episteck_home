@@ -1,6 +1,8 @@
 # KAP-2 two-host PERSON acceptance package
 
-**Attempt 03 (authorized, 2026-11-09, `56c7c3f`): stopped at A6, 112/400 requests, no latency measured.** It is the first attempt past A0: A0–A5 passed, including the MariaDB 11.8.6 acquisition and the R2 rotation on 11.8. A6's setup failed when the witness gateway lost its pinned reader session after a fresh recovery. The root cause is not yet proven. See the [decision sheet](DECISION_SHEET.md#attempt-03--authorized-and-stopped-at-a6-2026-11-09) and the [evidence](evidence/2026-11-09-two-host-attempt-03/result.json).
+**Attempt 03 (authorized, 2026-11-09, `56c7c3f`): stopped at A6, 112/400 requests, no latency measured.** It is the first attempt past A0: A0–A5 passed, including the MariaDB 11.8.6 acquisition and the R2 rotation on 11.8. A6's setup failed when the witness gateway lost its pinned reader session after a fresh recovery. See the [decision sheet](DECISION_SHEET.md#attempt-03--authorized-and-stopped-at-a6-2026-11-09) and the [evidence](evidence/2026-11-09-two-host-attempt-03/result.json).
+
+**Root cause found and corrected locally (2026-11-09):** on MariaDB 11.4+, PyMySQL silently negotiated TLS on the gateway's unix-socket sessions. Two further run blockers were also fixed: a Nagle stall in witness replies and a too-short A9 restart timeout. The ratified A10 latency gate cannot be met across Ashburn↔Nuremberg's ~96 ms RTT, so it needs a decision before attempt 04. See [root cause and corrections](DECISION_SHEET.md#attempt-03-root-cause-and-corrections-2026-11-09-local-only).
 
 **R2/R3/R5 follow-up (local only, 2026-11-07):** see the [validation record](../../docs/architecture/reviews/2026-11-07-knowledge-kap2-r2-r3-validation.md).
 
