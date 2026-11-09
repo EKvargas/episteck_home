@@ -298,4 +298,4 @@ STEP purge --i-understand-this-deletes-financial-data
 
 ## Phase B (done)
 
-H1–H4 (ADR-0014, ADR-0012), the PSD2 callback route, Telegram on `home-agent`, the `openai-codex` login, the Olin Finance skill, and the live check Telegram → Hermes → gateway → Finance → Home are all live. The evidence and how to re-run the checks are in `docs/architecture/FINANCE_I1_VALIDATION.md`.
+H1–H4 (ADR-0015, ADR-0012), the PSD2 callback route, Telegram on `home-agent`, the `openai-codex` login, the Olin Finance skill, and the live check Telegram → Hermes → gateway → Finance → Home are all live. The evidence and how to re-run the checks are in `docs/architecture/FINANCE_I1_VALIDATION.md`.

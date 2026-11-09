@@ -97,14 +97,14 @@ Design: `adr/0010-agent-runtime-grant.md`.
 ## Olin Finance I1 (live; two owner checks open)
 
 Board: `FINANCE_I1_PROGRESS.md`. Evidence: `FINANCE_I1_VALIDATION.md`. Authorization
-design: ADR-0011, ADR-0012, ADR-0013 and ADR-0014.
+design: ADR-0011, ADR-0012, ADR-0013 and ADR-0015.
 
 | Item | State |
 | --- | --- |
 | Architecture proposal (PR #74) and ADR-0011 | ✅ merged |
 | `services/finance` (store, read model, API/MCP, connectors) | ✅ live on Nuremberg since 2026-10-13 (#96, #97, #99, #102). Bank of America connected 2026-10-25 via SimpleFIN (runbook 8a); first sync OK |
 | Feature Activation DocType + `get_feature_state` (B3, ADR-0012) | ✅ merged (#90) and migrated on home.episteck.com. Finance I1 does not consult it |
-| Home changes H1–H4 (audience, `authorize_batch`, Feature Activation, mint + gateway route) | ✅ merged and deployed (#89, #90, #92, #93); `/gateway/finance/` live. Decisions recorded in ADR-0014 (H1, H2, H4) and ADR-0012 (H3) |
+| Home changes H1–H4 (audience, `authorize_batch`, Feature Activation, mint + gateway route) | ✅ merged and deployed (#89, #90, #92, #93); `/gateway/finance/` live. Decisions recorded in ADR-0015 (H1, H2, H4) and ADR-0012 (H3) |
 | Home accepts `svc-finance` (B1; extends ADR-0009 pattern) | ✅ merged (#89); `home_finance_machine_user` set (2026-10-13) |
 | PSD2 callback `/finance/connect/callback` + `app.connect authorize` (B5, ADR-0013) | ✅ live 2026-11-07 (image `6a31366`); nginx route with rate limit (#113) on the BFF vhost; 403/400/404 and 429-after-burst verified, no query string in nginx logs |
 | Sparkasse and Trade Republic cash via Enable Banking (runbook 8b) | ✅ connected 2026-11-07 (#119 accepts Trade Republic's single `OTHR` balance; image `dbe6632`). Consents run to 2027-05-06 (Sparkasse) and 2027-02-05 (Trade Republic, 90 days at most): renew Trade Republic before 2027-02-05 |

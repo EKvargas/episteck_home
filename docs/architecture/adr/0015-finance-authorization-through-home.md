@@ -1,4 +1,4 @@
-# ADR-0014: Finance asks Home once per operation, through its own audience and mint route
+# ADR-0015: Finance asks Home once per operation, through its own audience and mint route
 
 ## Status
 Accepted (2026-11-08), written after the fact. Implemented by #89 (Home accepts

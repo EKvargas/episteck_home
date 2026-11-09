@@ -18,7 +18,7 @@ the system and links every other document.
 - `proposals/` — approved design proposals (G1.6 trusted identity; its §23 records the
   2026-09-16 residency correction that withdrew G1.7)
 - `STATUS.md` — current state (update with every change)
-- `adr/` — Architecture Decision Records (0001–0014)
+- `adr/` — Architecture Decision Records (0001–0015)
 - **`architecture-diagram.html`** — explorable whole-product diagram (open in a browser)
 - `architecture-diagram.json` — archify source for the diagram
 

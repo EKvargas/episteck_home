@@ -67,7 +67,7 @@ flowchart TB
   BFF -- confidential OAuth --> HOME
   user -- "Telegram (owner allowlist)" --> HA
   HA -- "model calls" --> OAI
-  HA -- "MCP via gateway :9934<br/>(finance delegation, ADR-0014)" --> FMCP
+  HA -- "MCP via gateway :9934<br/>(finance delegation, ADR-0015)" --> FMCP
   FMCP -- "authorize_batch, once per operation<br/>(machine token + delegation)" --> HOME
   user -- "PSD2 bank redirect via nginx (ADR-0013)" --> FAPI
   FSYNC -- "read balances" --> BANKS
@@ -173,7 +173,7 @@ Control Plane.
 13. **Finance asks Home once per operation** — its own audience (`svc-finance`, accepted
     only from its machine user), one `authorize_batch` call for the actor and every
     co-owner, and its own mint route `/gateway/finance/` with nft port `9936`. Any
-    non-answer from Home is a refusal with no data (503). → `adr/0014-finance-authorization-through-home.md`
+    non-answer from Home is a refusal with no data (503). → `adr/0015-finance-authorization-through-home.md`
 
 ## 5. Cross-cutting rules
 
