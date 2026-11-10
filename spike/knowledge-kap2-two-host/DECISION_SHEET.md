@@ -1,5 +1,37 @@
 # KAP-2 two-host gate: decisions before execution
 
+## Decision 2026-11-10: a dedicated witness host in Home's region (option 1)
+
+**Decision (Erick, 2026-11-10):** keep the ratified A10 gate and change the topology. Attempt 04 targets a **new dedicated witness host in Hetzner Ashburn**, a separate server from Home's `ubuntu-4gb-ash-1`. Nuremberg is no longer the witness host, so attempt 04 needs no Mealie stop and no Nuremberg account. This decision does not authorize creating the host or running attempt 04.
+
+**Why:** within one region the round trip should be around a millisecond, against Nuremberg's measured 95.6 ms floor. This is an estimate and must be measured read-only before authorization. Correctness on MariaDB 11.8.6 is already shown in the local replica.
+
+**Consequence to note:** a regional outage takes Home and its witness down together. A lost witness fails closed: Knowledge denies, then needs per-Person reauthorization under ADR-0014. The shared fate costs availability, not safety.
+
+**Production placement stays open.** The new host is disposable for this run. Where a production witness lives, and the cost of a persistent US-region host, is a later decision.
+
+**Proposed witness host (Erick creates it when ready):**
+
+| Property | Value | Why |
+| --- | --- | --- |
+| Location | Hetzner Cloud Ashburn | Same region as Home |
+| Size | 4 GB RAM or more | Keeps the 2 GiB available-memory gate with nothing else running |
+| Image | Ubuntu 26.04 | The pinned MariaDB 11.8.6 packages are built for 26.04 (`resolute`) |
+| Access | SSH key only, joined to the tailnet | The runners bind to and verify a Tailscale IPv4 in `100.64.0.0/10` |
+| Lifetime | Created for the run, deleted after the evidence is archived | Disposal ends with deleting the server |
+
+**Host preparation (proven locally on 2026-11-10):** [`replica/fresh_host_acquisition.sh`](replica/fresh_host_acquisition.sh) runs the **unmodified** `acquire_mariadb.sh` on a fresh Ubuntu 26.04 container after three root steps:
+1. Pin the host's apt source to Ubuntu's snapshot archive `20261109T000000Z`. This removes the A0 timing risk, because the pinned packages stay fetchable after Ubuntu supersedes them.
+2. Install the runtime libraries the extracted binaries link against: `liburing2 libaio1t64 libnuma1 libedit2 libncurses6`. A bare image lacks them; Nuremberg happened to have them.
+3. Create the transient non-sudo `kap2-probe` account.
+
+On a dedicated host, these system changes are discarded with the server. Details: [LOCAL_VALIDATION.md](LOCAL_VALIDATION.md#fresh-witness-host-acquisition-2026-11-10).
+
+**Before authorizing attempt 04:**
+1. Erick creates the host and joins it to the tailnet.
+2. Read-only checks from Ashburn: round-trip time to the new Tailscale address. Read-only checks on the new host: available memory and free `/tmp`.
+3. Erick authorizes one attempt at the exact SHA. The authorization names the new host (name, public IP and Tailscale IPv4) and approves the host preparation above, the unchanged run steps with this host in Nuremberg's place, and deleting the server after the evidence is archived. It keeps the gate, the A0–A11 criteria and the capacity gates unchanged.
+
 ## Attempt 03 root cause and corrections (2026-11-09, local only)
 
 **Root cause (reproduced, then fixed under TDD):** PyMySQL 1.2 negotiates unverified TLS whenever the server offers it ("PREFERRED" mode). MariaDB 11.4+ offers TLS by default; 10.11 does not. On Nuremberg's 11.8.6, the witness gateway's pinned unix-socket sessions were therefore TLS sessions, which nobody intended. In A5 the writer kill correctly broke the writer on the serving HTTP thread. On that thread, the first read on the reader pinned by the next recovery then failed with a spurious `BrokenPipe`. PyMySQL dropped the socket (the server logged `Aborted connection … gw_reader … error writing communication packets`), and the gateway closed admission: A6's 503. A5's final check hit the same failure but expected a deny, which masked it. Python 3.12 fails the same way, so the Python version was a red herring.
@@ -16,7 +48,7 @@
 
 No pass criterion, request cap, path, port, credential route or retry rule changed.
 
-**A0 timing risk:** `acquire_mariadb.sh` downloads the pinned `1:11.8.6-5ubuntu0.1` from Ubuntu's live archive, where it was still the candidate in `resolute-updates` on 2026-11-09. When Ubuntu publishes a newer MariaDB update, the pinned version leaves that pocket and attempt 04 would stop at A0, as attempts 01 and 02 did. The replica avoids this through the snapshot archive. Changing the run's acquisition source would need its own review and is not part of this correction.
+**A0 timing risk:** `acquire_mariadb.sh` downloads the pinned `1:11.8.6-5ubuntu0.1` from Ubuntu's live archive, where it was still the candidate in `resolute-updates` on 2026-11-09. When Ubuntu publishes a newer MariaDB update, the pinned version leaves that pocket and attempt 04 would stop at A0, as attempts 01 and 02 did. The replica avoids this through the snapshot archive. Changing the run's acquisition source would need its own review and is not part of this correction. **Resolved for attempt 04 (2026-11-10):** the dedicated host's apt source is pinned to the snapshot archive, and the script stays unchanged.
 
 **Latency feasibility: a decision for Erick before any attempt 04.** A read-only ping from Ashburn to Nuremberg's Tailscale address (direct path, 2026-11-09) measured an RTT of **min 95.6 / avg 99.3 / max 194.7 ms** over 30 packets. A10 times one Home `authorize()` per call, which contains exactly one witness round trip. So even with all corrections:
 
@@ -31,6 +63,8 @@ An attempt 04 on Ashburn↔Nuremberg with the unchanged gate is therefore expect
 1. **Keep the gate and change the topology:** a witness host in Home's region, on a separate host and failure domain. The remote run then targets that host.
 2. **Keep the topology and revise the gate:** a Board decision, for example RTT-relative or warm-only limits, recorded before the run.
 3. **Run attempt 04 unchanged** to obtain the formal remote measurement, accepting the expected A10 failure and another Mealie window.
+
+**Decided 2026-11-10: option 1.** See [the decision](#decision-2026-11-10-a-dedicated-witness-host-in-homes-region-option-1).
 
 ## Attempt 03 — authorized and stopped at A6 (2026-11-09)
 

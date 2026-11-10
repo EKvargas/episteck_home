@@ -1,5 +1,19 @@
 # Local validation of the two-host package
 
+## Fresh witness host acquisition (2026-11-10)
+
+This tests the preparation of the dedicated Ashburn witness host ([decision](DECISION_SHEET.md#decision-2026-11-10-a-dedicated-witness-host-in-homes-region-option-1)). `replica/fresh_host_acquisition.sh` prepares a fresh `ubuntu:26.04` container, pinned to the replica's digest, the way the new host would be prepared. It then runs the reviewed `acquire_mariadb.sh` **unmodified** as the non-sudo `kap2-probe`.
+
+| Run | Result |
+| --- | --- |
+| Snapshot apt source only (`snapshot.ubuntu.com/ubuntu/20261109T000000Z`) | All 7 pinned packages downloaded from the snapshot. The script's `ldd` check then failed with `liburing.so.2`, `libaio.so.1t64`, `libnuma.so.1`, `libedit.so.2` and `libncurses.so.6` not found. |
+| Snapshot source plus `liburing2 libaio1t64 libnuma1 libedit2 libncurses6` | **PASS**: `mariadbd Ver 11.8.6-MariaDB-5ubuntu0.1`, exit 0 |
+| Control: live archive | `1:11.8.6-5ubuntu0.1` was still the candidate on 2026-11-10 |
+
+Nuremberg passed A0 without the library step because those libraries were already installed there. A freshly created host may lack them, so the host preparation installs them from the same snapshot.
+
+Reproduce (WSL with podman, network access): `spike/knowledge-kap2-two-host/replica/fresh_host_acquisition.sh`
+
 ## Attempt 03 root cause (replica, 2026-11-09)
 
 **Replica:** [replica/Containerfile](replica/Containerfile) rebuilds the attempt-03 witness host locally with podman: Ubuntu 26.04.1, system Python 3.14.4, the pinned `mariadb-server 1:11.8.6-5ubuntu0.1` packages and PyMySQL 1.2.3. [replica/loopback_matrix.sh](replica/loopback_matrix.sh) runs the witness inside the replica and the Home runner on the host (Python 3.12 / MariaDB 10.11), as in the real topology. No remote host was contacted except one read-only RTT ping (see the decision sheet).
