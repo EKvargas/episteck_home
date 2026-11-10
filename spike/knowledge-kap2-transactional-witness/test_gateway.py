@@ -10,6 +10,7 @@ import sys
 import tempfile
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pymysql
@@ -32,11 +33,12 @@ def current_writer(gateway: Gateway) -> tuple[str, str]:
 
 
 class PrivateDB:
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, offer_tls: bool = False) -> None:
         self.root = root
         self.data = root / "data"
         self.socket = root / "db.sock"
         self.process: subprocess.Popen[bytes] | None = None
+        self.tls_args = self._self_signed_tls() if offer_tls else []
         self.data.mkdir()
         self.run("mariadb-install-db", "--no-defaults", f"--datadir={self.data}",
                  "--auth-root-authentication-method=normal", "--skip-test-db")
@@ -67,6 +69,14 @@ class PrivateDB:
                  "GRANT EXECUTE ON PROCEDURE witness.recover_partition TO 'gw_recovery'@'localhost';"
                  + "".join(writers))
 
+    def _self_signed_tls(self) -> list[str]:
+        """Offer TLS on any MariaDB version, as 11.4+ does by default (tests only)."""
+        key, cert = self.root / "tls.key", self.root / "tls.crt"
+        self.run("openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt",
+                 "ec_paramgen_curve:P-256", "-nodes", "-days", "1",
+                 "-subj", "/CN=kap2-test-db", "-keyout", str(key), "-out", str(cert))
+        return [f"--ssl-cert={cert}", f"--ssl-key={key}"]
+
     @staticmethod
     def run(*args: str, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
         result = subprocess.run(args, input=input_text, text=True, capture_output=True)
@@ -82,7 +92,7 @@ class PrivateDB:
         self.process = subprocess.Popen(
             ["mariadbd", "--no-defaults", f"--datadir={self.data}",
              f"--socket={self.socket}", f"--pid-file={self.root / 'pid'}",
-             f"--log-error={self.root / 'log'}", "--skip-networking"],
+             f"--log-error={self.root / 'log'}", "--skip-networking", *self.tls_args],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         for _ in range(100):
@@ -104,14 +114,17 @@ class PrivateDB:
             self.process.wait(timeout=10)
 
     def connect(self, user: str, password: str) -> pymysql.Connection:
+        # Socket-only, like the gateway: the witness runner's probes use this too.
         return pymysql.connect(unix_socket=str(self.socket), user=user,
-                               password=password, database="witness", autocommit=True)
+                               password=password, database="witness", autocommit=True,
+                               ssl_disabled=True)
 
 
 @pytest.fixture
 def db():
     with tempfile.TemporaryDirectory(prefix="kap2-gateway-") as directory:
-        server = PrivateDB(Path(directory))
+        # Offer TLS like the remote witness's MariaDB 11.8 so socket-only checks bite.
+        server = PrivateDB(Path(directory), offer_tls=True)
         try:
             yield server
         finally:
@@ -590,3 +603,62 @@ def test_restored_committed_ready_rows_cannot_open_gate(db: PrivateDB) -> None:
         assert fresh != "old-incarnation"
         assert restored.authorize("p1", "old-incarnation", 0, "OLD_ALLOW") is False
         assert restored.authorize("p1", fresh, 0, "DENY_ALL") is False
+
+
+def test_serving_thread_survives_writer_loss_and_later_recovery(db: PrivateDB) -> None:
+    """Two-host attempt 03, A5 -> A6: the witness serves and recovers on different
+    HTTP threads. A writer lost on the serving thread must not break the sessions
+    that a later recovery pins and the serving thread then uses."""
+    serving = ThreadPoolExecutor(max_workers=1)
+
+    def serve(gateway: Gateway, method: str, *args):
+        return serving.submit(getattr(gateway, method), *args).result(timeout=10)
+
+    try:
+        with new_gateway(db) as gateway:
+            incarnation = recover_and_admit(gateway)
+            serve(gateway, "prepare", "p1", incarnation, "grant-1", 0, "ALLOW_A")
+            serve(gateway, "commit", "p1", incarnation, "grant-1", "ALLOW_A")
+            assert gateway._writer is not None
+            db.sql(f"KILL CONNECTION {gateway._writer.thread_id()}")
+            assert serve(gateway, "authorize", "p1", incarnation, 1, "ALLOW_A") is False
+            fresh = recover_and_admit(gateway)
+            serve(gateway, "prepare", "p1", fresh, "grant-2", 0, "ALLOW_B")
+            serve(gateway, "commit", "p1", fresh, "grant-2", "ALLOW_B")
+            assert serve(gateway, "authorize", "p1", fresh, 1, "ALLOW_B") is True
+    finally:
+        serving.shutdown()
+
+
+def test_pinned_sessions_never_negotiate_tls(db: PrivateDB) -> None:
+    """The witness is socket-only; PyMySQL's default PREFERRED TLS must not wrap its
+    sessions when the server offers TLS (MariaDB 11.4+ does so by default)."""
+    with new_gateway(db) as gateway:
+        recover_and_admit(gateway)
+        for session in (gateway._reader, gateway._writer):
+            assert session is not None
+            assert session_tls_version(session) == ""
+
+
+def test_witness_probe_sessions_never_negotiate_tls(db: PrivateDB) -> None:
+    """The witness runner's privilege probes share its HTTP threads: socket-only too."""
+    with db.connect("gw_reader", "synthetic-read") as probe:
+        assert session_tls_version(probe) == ""
+
+
+def test_fixture_offers_tls_like_mariadb_11_8(db: PrivateDB) -> None:
+    """Guards the two tests above against passing vacuously on a no-TLS server."""
+    offered = pymysql.connect(unix_socket=str(db.socket), user="gw_reader",
+                              password="synthetic-read", database="witness")
+    try:
+        assert session_tls_version(offered).startswith("TLS")
+    finally:
+        offered.close()
+
+
+def session_tls_version(session: pymysql.Connection) -> str:
+    with session.cursor() as cursor:
+        cursor.execute("SELECT VARIABLE_VALUE FROM information_schema.SESSION_STATUS "
+                       "WHERE VARIABLE_NAME='Ssl_version'")
+        row = cursor.fetchone()
+    return "" if row is None else row[0]

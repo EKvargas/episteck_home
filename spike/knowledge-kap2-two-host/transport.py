@@ -14,6 +14,12 @@ import time
 from pathlib import Path
 from typing import Any
 
+# The A9 physical snapshot/restore controls restart the disposable witness MariaDB,
+# which took 1.9-2.5 s for MariaDB 11.8 in the local replica. Only these get a longer
+# bound; serving and recovery-transition calls keep the 2 s fail-closed timeout.
+DISPOSABLE_RESTARTS = frozenset({"snapshot", "restore"})
+DISPOSABLE_RESTART_TIMEOUT_S = 30.0
+
 
 class WitnessTransportError(RuntimeError):
     pass
@@ -84,12 +90,17 @@ class WitnessClient:
             self.close()
         index = self.ledger.reserve(self.role, operation)
         start = time.perf_counter_ns()
+        timeout = (DISPOSABLE_RESTART_TIMEOUT_S if operation in DISPOSABLE_RESTARTS
+                   else self.timeout)
         try:
             connection = getattr(self._local, "connection", None)
             if connection is None:
                 connection = http.client.HTTPSConnection(
-                    self.host, self.port, context=self.context, timeout=self.timeout)
+                    self.host, self.port, context=self.context, timeout=timeout)
                 self._local.connection = connection
+            connection.timeout = timeout
+            if connection.sock is not None:
+                connection.sock.settimeout(timeout)
             payload = json.dumps({"operation": operation, "args": args},
                                  separators=(",", ":"), ensure_ascii=True).encode("ascii")
             if len(payload) > 4096:

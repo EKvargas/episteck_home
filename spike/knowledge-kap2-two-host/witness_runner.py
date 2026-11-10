@@ -231,6 +231,9 @@ class Server(ThreadingHTTPServer):
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
+    # Replies are a header write then a body write; with Nagle the body waits for the
+    # client's delayed ACK, adding about 40 ms (plus a round trip across hosts) per call.
+    disable_nagle_algorithm = True
 
     def log_message(self, *_: Any) -> None:
         pass

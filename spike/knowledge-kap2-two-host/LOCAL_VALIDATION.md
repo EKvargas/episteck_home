@@ -1,5 +1,56 @@
 # Local validation of the two-host package
 
+## Fresh witness host acquisition (2026-11-10)
+
+This tests the preparation of the dedicated Ashburn witness host ([decision](DECISION_SHEET.md#decision-2026-11-10-a-dedicated-witness-host-in-homes-region-option-1)). `replica/fresh_host_acquisition.sh` prepares a fresh `ubuntu:26.04` container, pinned to the replica's digest, the way the new host would be prepared. It then runs the reviewed `acquire_mariadb.sh` **unmodified** as the non-sudo `kap2-probe`.
+
+| Run | Result |
+| --- | --- |
+| Snapshot apt source only (`snapshot.ubuntu.com/ubuntu/20261109T000000Z`) | All 7 pinned packages downloaded from the snapshot. The script's `ldd` check then failed with `liburing.so.2`, `libaio.so.1t64`, `libnuma.so.1`, `libedit.so.2` and `libncurses.so.6` not found. |
+| Snapshot source plus `liburing2 libaio1t64 libnuma1 libedit2 libncurses6` | **PASS**: `mariadbd Ver 11.8.6-MariaDB-5ubuntu0.1`, exit 0 |
+| Control: live archive | `1:11.8.6-5ubuntu0.1` was still the candidate on 2026-11-10 |
+
+Nuremberg passed A0 without the library step because those libraries were already installed there. A freshly created host may lack them, so the host preparation installs them from the same snapshot.
+
+Reproduce (WSL with podman, network access): `spike/knowledge-kap2-two-host/replica/fresh_host_acquisition.sh`
+
+## Attempt 03 root cause (replica, 2026-11-09)
+
+**Replica:** [replica/Containerfile](replica/Containerfile) rebuilds the attempt-03 witness host locally with podman: Ubuntu 26.04.1, system Python 3.14.4, the pinned `mariadb-server 1:11.8.6-5ubuntu0.1` packages and PyMySQL 1.2.3. [replica/loopback_matrix.sh](replica/loopback_matrix.sh) runs the witness inside the replica and the Home runner on the host (Python 3.12 / MariaDB 10.11), as in the real topology. No remote host was contacted except one read-only RTT ping (see the decision sheet).
+
+| Run (witness in replica) | Result |
+| --- | --- |
+| Commit `be46ade`, unchanged | A6 **FAIL** at 112 requests, `Aborted_clients=3`, `Com_kill=1`, only `gw_writer11` left. Matches attempt 03 exactly. |
+| Same, instrumented (MariaDB general log, failing exception chain) | The pinned sessions ran over TLS: every failing stack passes through `ssl.py`, and the new unit test reads `Ssl_version=TLSv1.3`. After A5's expected writer `BrokenPipe` on the serving thread, the next recovery's reader failed on its first serving-thread read (`BrokenPipe`), twice; the first was masked by an expected deny. The server logged `Aborted connection … gw_reader … (Got an error writing communication packets)`. |
+| Same, gateway forced to `ssl_disabled=True` (monkeypatch) | All 11 executed steps PASS, 329/400 requests, `Aborted_clients=0`. |
+| Fixed gateway, unchanged runner | A1–A8 PASS. A9 restore FAIL: the witness restart took 2,482 ms against the client's 2 s timeout. |
+| Fixed gateway + `TCP_NODELAY` (monkeypatch) | All 11 executed steps PASS. Warm call p50/p95 **5.4/8.3 ms**, compared with about 50 ms before. |
+| **Final checkout (all three corrections), uninstrumented** | **All 11 executed steps PASS**, 329/400 requests, `Aborted_clients=0`, witness `CLOSED` and both roots absent at cleanup. Loopback call p50/p95: warm **3.2/5.1 ms**, cold **5.3/7.6 ms**. Pair p95: 27.9 ms warm, 33.2 ms cold. Remote preflight A0 and Frappe A9 are remote-only and were not executed. These loopback numbers are not the two-host gate. |
+
+**Bisect:** with the same MariaDB 11.8.6 under Python 3.12, both new gateway tests also fail, so Python 3.14 is not the cause. A stock MariaDB 10.11 offers no TLS, so the original tests passed there with and without the correction.
+
+**Review follow-up (PR #125):** the gateway test fixture now makes every MariaDB offer TLS with a throwaway self-signed certificate, as 11.4+ does by default. A guard test, `test_fixture_offers_tls_like_mariadb_11_8`, proves that TLS is on offer.
+- **On the standard 10.11 stack:** without the gateway correction, `test_pinned_sessions_never_negotiate_tls` now **fails** (`TLSv1.3`). The cross-thread failure itself only reproduces on the replica's OpenSSL 3.5 / MariaDB 11.8 stack.
+- **Probes:** the witness runner's privilege probes (`PrivateDB.connect`) are now socket-only too. `test_witness_probe_sessions_never_negotiate_tls` failed first.
+- **Replica image:** pinned by base-image digest and the Ubuntu snapshot archive of 2026-11-09, so it still builds after Ubuntu supersedes 11.8.6.
+- **`loopback_matrix.sh`:** now propagates the Home runner's exit status. On every exit it keeps the witness logs and removes the container and certificates.
+
+**TDD record:**
+- **Gateway:** `test_serving_thread_survives_writer_loss_and_later_recovery` and `test_pinned_sessions_never_negotiate_tls` failed in the replica (`GatewayClosed` from the reader ping; `('TLSv1.3',)`). They pass after `ssl_disabled=True`.
+- **Transport:** `test_warm_rpc_has_no_small_write_stall` (median ≥ 20 ms) and `test_disposable_restarts_outlast_the_serving_timeout` (snapshot timed out at 2 s) failed locally. They pass after `disable_nagle_algorithm` and the restart-only timeout.
+
+**Suites (final, run strictly in sequence):**
+- **Local, Python 3.12 / MariaDB 10.11:** the four KAP-2 spike packages pass **106/106**. The Home contracts, typed-policy, authority and disconnected-inertness tests pass **55/55**.
+- **Replica matrix via `loopback_matrix.sh` on the pinned image:** all 11 executed steps PASS, 329/400 requests, script exit 0, no leftover container or certificates. Loopback warm call p50/p95: 3.1/5.8 ms. A forced certificate failure exits 1 and cleans up.
+- **Overlap failure:** an earlier overlapping run gave one setup **error** (`mariadb-install-db` hit a shared-`/tmp` temp-table collision, `Unknown table 'mysql.tmp_proxies_priv'`) while a replica matrix ran alongside. The overlapping matrix failed the same way in its Home bootstrap. Both pass alone, so run them one after the other.
+- **Replica:** the gateway suite passes 33/33. The two-host transport tests cannot run in the replica because its Python 3.14 *client* enforces strict X.509, and `certs.py`'s CA has no KeyUsage (`CA cert does not include key usage extension`). They fail the same way without these corrections. The real Home client is Ashburn's Python 3.12, so the run is unaffected. This is recorded as a follow-up.
+
+```sh
+podman build -t localhost/kap2-witness-replica:11.8.6 spike/knowledge-kap2-two-host/replica
+spike/knowledge-kap2-two-host/replica/run_pytest.sh -q spike/knowledge-kap2-transactional-witness
+HOME_PY=/path/to/venv/bin/python spike/knowledge-kap2-two-host/replica/loopback_matrix.sh
+```
+
 **R2/R3/R5 loopback (2026-11-07):** one fresh loopback run of the A1–A11 matrix on the final R2/R3 candidate, in WSL against real disposable MariaDB 10.11 with mTLS. The [R2/R3 validation record](../../docs/architecture/reviews/2026-11-07-knowledge-kap2-r2-r3-validation.md) has the full context.
 
 - **Result:** all 11 executed steps `PASS`. Remote preflight A0 and Frappe A9 were not executed.

@@ -1,0 +1,22 @@
+# Local replica of the Nuremberg witness environment used by two-host attempt 03.
+# Ubuntu 26.04 system Python 3.14 plus the same pinned MariaDB 11.8.6 packages and
+# PyMySQL/pytest versions. Local diagnosis only; nothing here contacts either host.
+# The base image is pinned by digest and apt resolves against the Ubuntu snapshot
+# archive of the attempt date, so the exact package versions stay installable after
+# newer MariaDB updates supersede them in the live archive.
+FROM docker.io/library/ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c
+ENV DEBIAN_FRONTEND=noninteractive
+ARG UBUNTU_SNAPSHOT=20261109T000000Z
+# The snapshot archive is HTTPS-only, so the CA bundle comes first from the live archive.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+ && apt-get update --snapshot "$UBUNTU_SNAPSHOT" \
+ && apt-get install -y --no-install-recommends --snapshot "$UBUNTU_SNAPSHOT" \
+      python3 python3-pip procps openssl \
+      mariadb-server=1:11.8.6-5ubuntu0.1 mariadb-server-core=1:11.8.6-5ubuntu0.1 \
+      mariadb-client=1:11.8.6-5ubuntu0.1 mariadb-client-core=1:11.8.6-5ubuntu0.1 \
+      mariadb-common=1:11.8.6-5ubuntu0.1 libmariadb3=1:11.8.6-5ubuntu0.1 \
+ && rm -rf /var/lib/apt/lists/*
+RUN python3 -m pip install --break-system-packages --no-cache-dir --target /deps \
+      PyMySQL==1.2.3 pytest==9.1.1
+# Run with --userns=keep-id so the non-root witness can write mounted output dirs.
+ENV PYTHONPATH=/deps PYTHONDONTWRITEBYTECODE=1

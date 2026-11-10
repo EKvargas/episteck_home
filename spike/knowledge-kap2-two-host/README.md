@@ -1,6 +1,10 @@
 # KAP-2 two-host PERSON acceptance package
 
-**Attempt 03 (authorized, 2026-11-09, `56c7c3f`): stopped at A6, 112/400 requests, no latency measured.** It is the first attempt past A0: A0–A5 passed, including the MariaDB 11.8.6 acquisition and the R2 rotation on 11.8. A6's setup failed when the witness gateway lost its pinned reader session after a fresh recovery. The root cause is not yet proven. See the [decision sheet](DECISION_SHEET.md#attempt-03--authorized-and-stopped-at-a6-2026-11-09) and the [evidence](evidence/2026-11-09-two-host-attempt-03/result.json).
+**Attempt 03 (authorized, 2026-11-09, `56c7c3f`): stopped at A6, 112/400 requests, no latency measured.** It is the first attempt past A0: A0–A5 passed, including the MariaDB 11.8.6 acquisition and the R2 rotation on 11.8. A6's setup failed when the witness gateway lost its pinned reader session after a fresh recovery. See the [decision sheet](DECISION_SHEET.md#attempt-03--authorized-and-stopped-at-a6-2026-11-09) and the [evidence](evidence/2026-11-09-two-host-attempt-03/result.json).
+
+**Root cause found and corrected locally (2026-11-09):** on MariaDB 11.4+, PyMySQL silently negotiated TLS on the gateway's unix-socket sessions. Two further run blockers were also fixed: a Nagle stall in witness replies and a too-short A9 restart timeout. The ratified A10 latency gate cannot be met across Ashburn↔Nuremberg's ~96 ms RTT, so it needs a decision before attempt 04. See [root cause and corrections](DECISION_SHEET.md#attempt-03-root-cause-and-corrections-2026-11-09-local-only).
+
+**Decided 2026-11-10:** keep the gate and move the witness to a new dedicated host in Home's region (Hetzner Ashburn). See [the decision](DECISION_SHEET.md#decision-2026-11-10-a-dedicated-witness-host-in-homes-region-option-1).
 
 **R2/R3/R5 follow-up (local only, 2026-11-07):** see the [validation record](../../docs/architecture/reviews/2026-11-07-knowledge-kap2-r2-r3-validation.md).
 
@@ -66,6 +70,12 @@ A10 fails if any of the four is exceeded. The allocation reserves nominal room f
 No cloud resource or paid request is part of this package. Tailscale and mTLS are both required; neither a bearer token nor a caller-supplied partition/issuer establishes authority. `home_runner.py` uses the existing trusted synthetic binding and asserts caller-supplied changes cannot override it. CIRCLE issuance remains denied because its authoritative source is not in this PERSON vertical.
 
 ## Prepared execution sequence — **do not run remotely without authorization**
+
+**Attempt 04 (decision 2026-11-10):**
+- Read "Nuremberg" below as the new dedicated Ashburn witness host, and `<NBG_TAILSCALE_IP>` as its Tailscale IPv4.
+- Its preparation adds the snapshot apt source and the runtime libraries listed in the [decision sheet](DECISION_SHEET.md#decision-2026-11-10-a-dedicated-witness-host-in-homes-region-option-1).
+- Its disposal ends with deleting the server.
+- The host is one cloud resource, so the authorization must name it.
 
 1. On a trusted operator machine, record the exact approved PR head, derive the current Nuremberg Tailscale IPv4 from that host, and generate one-run Ed25519 CA/server/serving/recovery certificates with `python certs.py --out <new-operator-dir> --server-ip <NBG_TAILSCALE_IP>`. Keep `ca.key` on the operator machine. Verify the certificate IP SAN and file mode 0600. Copy only `ca.crt`, `server.crt`, `server.key` to Nuremberg; only `ca.crt`, `serving.crt`, `serving.key`, `recovery.crt`, `recovery.key` to Ashburn, into the exact certificate directories above. Keys and synthetic DB passwords are never committed or placed in evidence.
 2. After fresh authorization, verify and reuse Ashburn's retained non-sudo account, create only Nuremberg's transient OS user, acquire MariaDB binaries on Nuremberg with the reviewed `sh spike/knowledge-kap2-two-host/acquire_mariadb.sh`, create the isolated Python environments and Ashburn Frappe 15.99.0 bench, clone the exact PR SHA into the temporary checkouts, and permit only Ashburn→Nuremberg Tailscale TCP `19442`. Verify the checkout SHA, free port, tools, absent roots, and no production path in arguments. The Nuremberg listener starts first and records `CLOSED` before Home begins.
