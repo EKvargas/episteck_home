@@ -93,6 +93,27 @@ sudo -u home-agent curl --max-time 3 http://127.0.0.1:9935/health
 
 Expected for `9935`: `www-data` gets the health JSON; `home-agent` times out (dropped).
 
+### Persist at boot (2026-11-15)
+
+Without this, a reboot drops the whole table (nothing else loads it, and the stock
+`nftables.service` stays disabled because its `nftables.conf` flushes the ruleset,
+which would wipe ufw). `episteck-gateway-nft.service` loads ONLY this table, before
+`episteck-mcp-gateway.service`:
+
+```bash
+{ echo "table inet episteck_gateway"; echo "delete table inet episteck_gateway"; \
+  cat /tmp/episteck-gateway-rendered.nft; } > /tmp/episteck-gateway-boot.nft
+sudo install -d -m 0755 /etc/episteck/nft
+sudo install -m 0644 /tmp/episteck-gateway-boot.nft /etc/episteck/nft/episteck-gateway.nft
+sudo nft --check -f /etc/episteck/nft/episteck-gateway.nft
+sudo install -m 0644 deploy/gateway/episteck-gateway-nft.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now episteck-gateway-nft.service
+```
+
+The `table …; delete table …` prefix makes every load an atomic replacement, so a
+restart never duplicates rules. After any policy change: re-render, replace
+`/etc/episteck/nft/episteck-gateway.nft`, then `sudo systemctl restart episteck-gateway-nft.service`.
+
 Expected: Hermes reaches `9934`; the ordinary alternate user is denied there;
 Hermes and `svc-home-bff` are denied direct `9931/9932`; the gateway user reaches
 both direct MCP ports (an MCP HTTP error is acceptable, connection refusal is
