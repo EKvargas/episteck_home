@@ -185,7 +185,6 @@ BRINGUP = DEPLOY / "bringup.sh"
 RUNBOOK = ROOT / "docs" / "runbooks" / "finance-i1-nuremberg-bringup.md"
 
 
-@pytest.mark.skipif(shutil.which("bash") is None, reason="bash not available")
 def test_build_labels_the_image_with_its_commit():
     """B11 F2: the image carries org.opencontainers.image.revision=<sha>."""
     text = BRINGUP.read_text(encoding="utf-8")
@@ -201,6 +200,7 @@ def test_verify_reaches_the_api_as_www_data_because_nft_allows_only_nginx():
     assert all("runuser -u www-data -- curl" in line for line in curls)
 
 
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash not available")
 def test_bringup_script_is_syntactically_valid():
     result = subprocess.run(["bash", "-n", BRINGUP.relative_to(ROOT).as_posix()], cwd=ROOT,
                             capture_output=True, text=True)
