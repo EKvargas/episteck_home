@@ -43,6 +43,18 @@ def test_render_step_resolves_the_numeric_www_data_uid():
     assert "__WWW_DATA_UID__" in RENDER
 
 
+BOOT_UNIT = (ROOT / "episteck-gateway-nft.service").read_text(encoding="utf-8")
+
+
+def test_boot_unit_loads_only_the_dedicated_table_before_the_gateway():
+    """The table must survive a reboot, without ever flushing ufw's ruleset."""
+    assert "ExecStart=/usr/sbin/nft -f /etc/episteck/nft/episteck-gateway.nft" in BOOT_UNIT
+    assert "Before=network-pre.target shutdown.target episteck-mcp-gateway.service" in BOOT_UNIT
+    assert "WantedBy=multi-user.target" in BOOT_UNIT
+    assert "Type=oneshot" in BOOT_UNIT and "RemainAfterExit=yes" in BOOT_UNIT
+    assert "flush" not in BOOT_UNIT.replace("never flushes", "")
+
+
 def test_finance_mcp_port_is_reachable_only_by_the_gateway_uid():
     accept = "ip daddr 127.0.0.1 tcp dport { 9931, 9932, 9936 } meta skuid $GATEWAY_UID accept"
     drop = "ip daddr 127.0.0.1 tcp dport { 9931, 9932, 9936 } drop"

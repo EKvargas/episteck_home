@@ -1,0 +1,17 @@
+[Unit]
+Description=Episteck gateway nftables table (loopback isolation: G1.6 + B11 F1)
+Documentation=https://github.com/EKvargas/episteck_home/blob/main/deploy/gateway/README.md
+# Same ordering pattern as Ubuntu's nftables.service, but loads ONLY table inet
+# episteck_gateway and never flushes the ruleset (ufw keeps its own tables).
+DefaultDependencies=no
+Wants=network-pre.target
+Before=network-pre.target shutdown.target episteck-mcp-gateway.service
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/episteck/nft/episteck-gateway.nft
+
+[Install]
+WantedBy=multi-user.target
