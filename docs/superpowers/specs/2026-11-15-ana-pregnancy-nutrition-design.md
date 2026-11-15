@@ -51,16 +51,20 @@ prescripción automática ni integración clínica/FHIR en este alcance.
 
 ## Supuestos propuestos y decisiones pendientes
 
-**Propuesta del agente:** primer canal web móvil de Home Hub, con sesión propia
-de Ana; conservar Next.js, BFF, Home y svc-nutrition existentes. Interfaz principal
-en español y referencias alemanas/europeas, complementadas por WHO cuando
-corresponda. Canal, idioma de Ana y país de aplicación deben confirmarse antes de
-cerrar el diseño. No se presupone que Ana tenga diabetes ni una indicación clínica.
+**Propuesta actualizada:** el usuario pidió evaluar reutilizar el agente/bot de
+Telegram de Finanzas. Telegram pasa a ser el candidato prioritario para captura
+y consulta conversacional, reutilizando home-agent, BFF, Home y svc-nutrition;
+Home Hub queda disponible para configuración y visualización detallada. Esta
+propuesta no declara que Telegram multiusuario esté implementado ni que el
+usuario haya aprobado aún el diseño completo. Interfaz en español y referencias
+alemanas/europeas más WHO siguen siendo supuestos del agente por confirmar.
+No se presupone que Ana tenga diabetes ni una indicación clínica.
 
 Se preguntó al usuario: «Para su primer uso real, ¿cómo imaginas que Ana
 registraría y consultaría lo que come a lo largo de un día?». La respuesta está
-pendiente. El canal modifica el trabajo de identidad y captura; este documento
-no declara que el usuario haya elegido web móvil.
+pendiente en sus detalles. La pregunta posterior del usuario identifica Telegram
+como opción a reutilizar; ya no se propone obligar a Ana a comenzar por la web.
+El canal modifica el trabajo de identidad y captura.
 
 La modalidad de texto sirve para una entrega temprana del mismo producto. Audio
 y foto siguen siendo requisitos de la experiencia completa. No se consideran
@@ -68,7 +72,9 @@ cumplidos mediante controles simulados o una pantalla de adjuntar archivos.
 
 ## Recorrido principal y datos necesarios
 
-1. Ana inicia sesión con su propia identidad; revisa qué información se usa y qué
+1. Ana inicia sesión con su propia identidad y, si se elige Telegram, vincula su
+   interlocutor de Telegram mediante un flujo verificado fuera del modelo;
+   revisa qué información se usa y qué
    comparte, si decide compartir. El acceso propio no requiere inventar un
    ConsentGrant cruzado. El acceso de otra persona sí respeta el modelo Home.
 2. Se configura un perfil mínimo confirmado: contexto de embarazo y etapa si es
@@ -193,6 +199,46 @@ que sus mensajes actúen con la identidad del propietario. Si se elige Telegram,
 la identidad de cada interlocutor, su autorización y la separación de conversación
 son requisitos previos, no una tarea de configuración superficial.
 
+### Reutilización del agente y bot de Telegram
+
+La conexión de Nutrition **ya existe en la base documentada**:
+`docs/architecture/AGENTS.md` describe home-agent conectado al MCP nutricional y
+`deploy/gateway/nginx-mcp-gateway.conf` define `/gateway/nutrition/` junto a Home y
+Finance. `G1_6_VALIDATION.md` registra pruebas históricas de Nutrition por Hermes.
+No se verificó el runtime desplegado en esta revisión ni se enviaron mensajes.
+No hace falta diseñar un agente nuevo por dominio ni almacenar el diario en
+memoria de Hermes: Nutrition continúa siendo la fuente del diario y del cálculo.
+
+Reutilizable: interfaz conversacional, despliegue del agente, integración MCP,
+gateway y patrón de fuentes/delegación. Se necesita un comportamiento nutricional
+específico para borrador, confirmación, corrección, procedencia y falta de datos;
+las reglas de Finance no resuelven ese flujo por sí solas.
+
+El mismo bot público puede ser la entrada de ambas personas, pero el transporte
+debe aportar un contexto confiable por interlocutor, no un actor elegido en el
+prompt. Antes de añadir a Ana se debe concretar y probar:
+
+- Vinculación y revocación Telegram↔Home verificadas; no confiar en nombre visible,
+  texto del mensaje o un `person_id` indicado por el modelo.
+- Delegación por persona/solicitud, sustituyendo el único enlace global cuando
+  corresponda. No alternar un runtime global entre Erick y Ana.
+- Sesiones MCP, historial, resúmenes, memoria, borradores y adjuntos aislados por
+  persona/conversación; una conversación grupal no habilita compartir salud.
+- Herramientas y permisos por dominio. La vinculación de Ana para Nutrition no
+  otorga acceso a Finance del propietario ni reutiliza su grant. El filtro de
+  herramientas es complementario a la autorización del servidor, no su sustituto.
+- Confirmación vinculada al borrador, persona y revisión; un mensaje o botón
+  antiguo no confirma otra ingesta ni duplica la anterior.
+- Prueba intercalada de dos interlocutores con autorías y sujetos distintos;
+  negación de accesos cruzados, de Finance no autorizado y después de revocar.
+- Inspección del soporte real de voz/foto en la versión/configuración de Hermes.
+  Tener transporte de medios no prueba transcripción, visión ni cálculo fiables.
+
+Si esa asociación multiusuario requiere más trabajo que el piloto web, se debe
+mostrar ese costo al usuario; no afirmar que Telegram reduce automáticamente el
+trabajo total. No cambiar el bot productivo ni el grant de Finance como efecto de
+esta evaluación.
+
 ## Distancia al uso real: evidencia y brechas
 
 | Capacidad | Estado comprobado o documentado | Falta para Ana |
@@ -234,7 +280,8 @@ Orden propuesto, sin estimaciones de calendario hasta cerrar canal y proveedores
    publicar solo reglas revisadas y registrar incompatibilidades/faltantes.
 2. **Acceso de Ana y persistencia fiable:** onboarding propio, unidades/rangos,
    instantáneas, confirmación idempotente y correcciones con revisión.
-3. **Piloto web por texto, si se elige ese canal:** diario y resumen reales,
+3. **Piloto conversacional por texto, preferentemente Telegram si se resuelve su
+   identidad multiusuario:** diario y resumen reales,
    catálogo inicial revisado, fuentes visibles y configuración por regla. Es una
    entrega parcial explícita; no sustituye los requisitos de audio/foto.
 4. **Audio real:** proveedor y retención concretados; transcripción editable y
@@ -270,6 +317,9 @@ de este diseño mediante `superpowers:writing-plans`.
 - El despliegue y respaldo de los nuevos datos son verificables; Ana completa el
   flujo en su móvil sin asistencia técnica continua. Se recogen dificultades
   reales antes de ampliar alcance. No se promete reconocimiento perfecto.
+- Si Telegram es el canal, las verificaciones de interlocutor, aislamiento y
+  delegación anteriores pasan con dos personas. Finance del propietario conserva
+  su comportamiento y Ana no obtiene acceso por compartir bot.
 
 Audio y foto completos exigen además una prueba real por modalidad, incluyendo
 error de extracción, archivo rechazado, cancelación, no confirmado y limpieza de

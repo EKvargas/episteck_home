@@ -30,7 +30,18 @@
     {"metric": "iodine_ug", "code_reference": "230", "current_DGE_reference": "220", "url": "https://www.dge.de/wissenschaft/referenzwerte/jod/", "note": "Catalog comparison only; not a supplement dose for Ana."}
   ],
   "candidate_reference_set": "https://www.gesund-ins-leben.de/fuer-fachkreise/familien-vor-und-in-der-schwangerschaft/handlungsempfehlungen/",
-  "delivery_sequence_proposed": ["Reviewed catalog and context", "Ana identity and reliable intake persistence", "Useful first text diary pilot in selected channel", "Real audio", "Real photo", "Daily-use acceptance and operational closeout"],
+  "delivery_sequence_proposed": ["Verify existing Telegram/Home/Nutrition wiring and installed media capabilities without personal records", "Design verified per-person Telegram identity and isolation, retaining owner Finance access", "Reviewed catalog and reliable intake persistence", "Useful first text diary pilot in Telegram if multi-user binding is delivered", "Real audio and photo", "Daily-use acceptance and operational closeout"],
+  "telegram_reuse": {
+    "user_request": "Evaluate reuse of existing Finance Telegram agent and interface for Nutrition",
+    "recommendation": "Reuse home-agent and bot as conversational entry; keep Nutrition as canonical store and calculator, Finance as separate domain",
+    "nutrition_connection": "Already documented; AGENTS.md and gateway Nutrition route plus historical G1.6 validation",
+    "production_reverified": false,
+    "reusable": ["Telegram conversational interface", "Home agent deployment", "Nutrition MCP connection", "Delegation gateway patterns"],
+    "new_delivery_required": ["Verified Telegram interlocutor to Home identity binding", "Per-person delegations instead of a single global runtime pointer", "Isolated history, memory, MCP sessions, drafts and media", "Domain-scoped tools and server-side authorization", "Nutrition capture and confirmation flow", "Verified real media extraction"],
+    "finance_invariant": "Do not share or replace the owner runtime grant for Ana; joining the same bot must not confer access to owner Finance",
+    "channel_state": "Telegram is now the priority candidate proposed in response to user; complete channel design and text-first phasing remain to be agreed",
+    "evidence": ["docs/architecture/AGENTS.md", "deploy/gateway/nginx-mcp-gateway.conf", "services/home-bff/home_bff/runtime.py", "services/home-bff/home_bff/internal_app.py", "services/home-bff/home_bff/store.py", "docs/architecture/G1_6_VALIDATION.md"]
+  },
   "not_a_scope_reduction": "Audio and photo remain requirements. A text-first pilot is proposed for earlier value, not accepted as the complete request.",
   "pilot_catalog_proposed": ["All reported food and drinks, including unknown data", "Free sugar and caffeine references; alcohol and preparation-specific notices", "Institutional dietary-pattern and hydration guidance", "Intake and coverage of iron, folate, iodine, calcium, B12, vitamin D and DHA with reviewed applicable references only", "Personal preferences and source-labelled goals; reported supplements with verified composition, without new automatic dosing"],
   "catalog_review_proposed": "Documented Episteck review of current primary institutional sources, units, context and adaptations; no claimed clinical endorsement or implicit requirement for professional sign-off on basic institutional guidance.",
@@ -41,7 +52,7 @@
     "clarified_as_agent_proposals": ["Minimum pilot catalog", "Meaning and attribution of source review"],
     "design_remains_draft": true
   },
-  "open_product_question": "How would Ana register and consult her food through a normal day? Channel/locale and willingness for a text-first pilot are not confirmed.",
+  "open_product_question": "User proposed reuse of Telegram; detailed daily flow, locale and willingness for a text-first pilot are not confirmed. Telegram identity isolation must be designed before Ana uses it.",
   "no_time_or_percentage_estimate": "Channel, providers and new-route work remain unresolved; a percentage or promised launch date would be unsupported.",
   "verification": {
     "domain": {"command": "PYTHONPATH=packages/nutrition-domain/src python -m pytest packages/nutrition-domain/tests -q -p no:cacheprovider", "passed": 9},
