@@ -1,0 +1,53 @@
+{
+  "result": "READINESS_ASSESSMENT_AND_DRAFT_DESIGN",
+  "date": "2026-11-15",
+  "base_sha": "f36e851b3ac5a102d41c3621f69a802ac834abcc",
+  "remote_checked": "origin/main fetched; same SHA as worktree base",
+  "worktree": "nutrition-sugar-review",
+  "branch": "spike/nutrition-intake-review",
+  "skills": ["superpowers:brainstorming", "domain-modeling"],
+  "design": "docs/superpowers/specs/2026-11-15-ana-pregnancy-nutrition-design.md",
+  "design_state": "DRAFT_SCOPE_NOT_APPROVED_FOR_IMPLEMENTATION",
+  "G2": "Already approved by user for pregnancy Nutrition; no repeated approval requested. Onboarding and effective permissions not demonstrated.",
+  "clinical_data_used": false,
+  "production_inspected": false,
+  "conclusion": "Backend foundations exist, but Ana does not yet have a demonstrated end-to-end daily diary. This is functional delivery work, not a configuration-only activation.",
+  "gaps": [
+    {"area": "Identity", "state": "FOUNDATION_PRESENT_ONBOARDING_UNVERIFIED", "evidence": "docs/architecture/SECURITY_AND_CONSENT.md", "next": "Ana authenticates as herself; cross-person sharing remains explicit and revocable."},
+    {"area": "Telegram", "state": "OWNER_ONLY_AS_DOCUMENTED", "evidence": "docs/architecture/STATUS.md; services/home-bff/home_bff/internal_app.py", "next": "Do not treat adding Ana to an allowlist as sufficient actor binding."},
+    {"area": "Food arithmetic", "state": "PRESENT_WITH_LOCAL_TESTS", "evidence": "packages/nutrition-domain/src/nutrition_domain/calculator.py", "next": "Add validated volume basis, ranges and missing-data coverage."},
+    {"area": "Pregnancy references", "state": "REQUIRES_CURRENT_SOURCE_REVIEW", "evidence": "services/nutrition/app/reference/pregnancy_targets.py", "next": "Audit full catalog before personal use; passing tests currently preserve some old constants."},
+    {"area": "Diary UI", "state": "NOT_DELIVERED", "evidence": "apps/home-hub/src/app/nutrition/page.tsx", "next": "Real capture, confirmation, correction, reload and daily summary."},
+    {"area": "Historical facts", "state": "REQUIRES_SNAPSHOTS_AND_REVISIONS", "evidence": "services/nutrition/app/service.py:_to_confirmed; services/nutrition/app/store/repository.py", "next": "Freeze facts used and prevent duplicate confirmations; correct with revisions."},
+    {"area": "Rule provenance", "state": "DESIGNED_NOT_IMPLEMENTED", "evidence": "docs/architecture/reviews/2026-11-15-nutrition-sugar-review.json:patron_recomendaciones", "next": "Per-rule sources, versions, adaptations, activation and reproducible evaluation."},
+    {"area": "Effective personal goals", "state": "STORED_BUT_NOT_RESOLVED_IN_GAP", "evidence": "services/nutrition/app/service.py:create_pregnancy_profile and _daily_gap", "next": "Apply and explain effective goals per metric while preserving references."},
+    {"area": "Sugar and caffeine", "state": "NOT_MAPPED", "evidence": "services/nutrition/app/providers/nutrient_map.py", "next": "Validated food facts and classifications; do not infer all free sugars from total sugars."},
+    {"area": "Audio and photo", "state": "SIMULATED_ONLY", "evidence": "spike/nutrition-intake-prototype/index.html", "next": "Real capture, extraction, review, providers, bounded uploads and media policy."},
+    {"area": "Operational readiness", "state": "NO_REAL_ANA_PILOT_EVIDENCE", "evidence": "docs/architecture/STATUS.md", "next": "New-route authorization, deployment, Nutrition restore and first-user acceptance."}
+  ],
+  "source_drift_examples": [
+    {"metric": "iron_mg", "code_reference": "30", "current_DGE_reference": "27", "url": "https://www.dge.de/wissenschaft/referenzwerte/eisen/", "note": "Catalog comparison only; not a supplement dose for Ana."},
+    {"metric": "iodine_ug", "code_reference": "230", "current_DGE_reference": "220", "url": "https://www.dge.de/wissenschaft/referenzwerte/jod/", "note": "Catalog comparison only; not a supplement dose for Ana."}
+  ],
+  "candidate_reference_set": "https://www.gesund-ins-leben.de/fuer-fachkreise/familien-vor-und-in-der-schwangerschaft/handlungsempfehlungen/",
+  "delivery_sequence_proposed": ["Reviewed catalog and context", "Ana identity and reliable intake persistence", "Useful first text diary pilot in selected channel", "Real audio", "Real photo", "Daily-use acceptance and operational closeout"],
+  "not_a_scope_reduction": "Audio and photo remain requirements. A text-first pilot is proposed for earlier value, not accepted as the complete request.",
+  "pilot_catalog_proposed": ["All reported food and drinks, including unknown data", "Free sugar and caffeine references; alcohol and preparation-specific notices", "Institutional dietary-pattern and hydration guidance", "Intake and coverage of iron, folate, iodine, calcium, B12, vitamin D and DHA with reviewed applicable references only", "Personal preferences and source-labelled goals; reported supplements with verified composition, without new automatic dosing"],
+  "catalog_review_proposed": "Documented Episteck review of current primary institutional sources, units, context and adaptations; no claimed clinical endorsement or implicit requirement for professional sign-off on basic institutional guidance.",
+  "builder_review": {
+    "completed": true,
+    "questions_identified": 4,
+    "already_pending_user_input": ["Daily-use channel, language and country", "Acceptance of earlier text-first pilot"],
+    "clarified_as_agent_proposals": ["Minimum pilot catalog", "Meaning and attribution of source review"],
+    "design_remains_draft": true
+  },
+  "open_product_question": "How would Ana register and consult her food through a normal day? Channel/locale and willingness for a text-first pilot are not confirmed.",
+  "no_time_or_percentage_estimate": "Channel, providers and new-route work remain unresolved; a percentage or promised launch date would be unsupported.",
+  "verification": {
+    "domain": {"command": "PYTHONPATH=packages/nutrition-domain/src python -m pytest packages/nutrition-domain/tests -q -p no:cacheprovider", "passed": 9},
+    "service_selected": {"command": "PYTHONPATH=packages/nutrition-domain/src;services/nutrition python -m pytest services/nutrition/tests/test_service.py services/nutrition/tests/test_stage_f.py services/nutrition/tests/test_authorization.py -q -p no:cacheprovider", "passed": 26},
+    "hub_selected": {"cwd": "apps/home-hub", "command": "node --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/integration/nutrition/profile-contract.test.ts src/integration/nutrition/profile-loader.test.ts src/integration/nutrition/profile-panel-model.test.ts src/integration/nutrition/live-subject.test.ts", "passed": 88},
+    "total_passed": 123,
+    "scope": "Existing selected local tests with synthetic data; no proposed-feature tests, no new e2e or deployment proof. Python commands show PYTHONPATH values conceptually; set env in PowerShell before running."
+  }
+}

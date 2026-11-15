@@ -1,0 +1,177 @@
+{
+  "resultado": "REVISION_Y_RECOMENDACIONES",
+  "fecha": "2026-11-15",
+  "base": {
+    "ref": "origin/main",
+    "sha": "f36e851b3ac5a102d41c3621f69a802ac834abcc",
+    "worktree": "nutrition-sugar-review",
+    "alcance": "Revision del codigo y documentacion; sin consultar datos personales ni verificar produccion.",
+    "primera_lectura": "docs/architecture/STATUS.md"
+  },
+  "alcance_confirmado": "Azucar consumido en comidas y bebidas, con captura sencilla por audio, texto o foto y porciones aproximadas corregibles. Avisos extensibles por nutriente, sustancia y preparacion.",
+  "requisitos_nuevos": {
+    "captura": ["Audio", "Texto libre", "Foto"],
+    "porcion": "Aceptar vaso pequeno o taza como aproximaciones explicitas; permitir ml/g indicados y correccion sencilla.",
+    "calculo": "IA propone alimento y porcion; el motor determinista escala datos de etiqueta/producto/receta verificables. La aproximacion de porcion no permite inventar composicion.",
+    "umbrales": "Reglas extensibles por nutriente, sustancia y preparacion; referencias generales diferenciadas de indicaciones individuales profesionales.",
+    "dato_clinico_pendiente": "Se pregunto por diabetes gestacional/diabetes o indicacion profesional; aun sin respuesta. No se asume diagnostico ni se asigna objetivo individual."
+  },
+  "conclusion": "La infraestructura nutricional existe, pero el tracking y la visualizacion de azucar no estan implementados en la ruta actual.",
+  "hallazgos": [
+    {
+      "id": "F1",
+      "hecho": "El servicio distingue PLANNED y ACTUAL, calcula con Decimal y autoriza el acceso por persona mediante Home.",
+      "evidencia": ["services/nutrition/app/service.py:153", "services/nutrition/app/service.py:173", "services/nutrition/app/service.py:277", "docs/architecture/adr/0004-svc-nutrition-source-of-truth.md"]
+    },
+    {
+      "id": "F2",
+      "hecho": "El conjunto canonico y los mapas de USDA y Open Food Facts incluyen carbohidratos, pero no azucares totales, anadidos o libres.",
+      "evidencia": ["services/nutrition/app/providers/nutrient_map.py:7", "services/nutrition/app/providers/nutrient_map.py:16", "services/nutrition/app/providers/nutrient_map.py:27"]
+    },
+    {
+      "id": "F3",
+      "hecho": "La pagina Nutrition en modo LIVE muestra el panel de perfil. La pagina de embarazo utiliza mocks identificados como DEMO.",
+      "evidencia": ["apps/home-hub/src/app/nutrition/page.tsx:14", "apps/home-hub/src/app/nutrition/page.tsx:27", "apps/home-hub/src/app/nutrition/pregnancy/page.tsx:13", "apps/home-hub/src/app/nutrition/pregnancy/page.tsx:54"]
+    },
+    {
+      "id": "F4",
+      "hecho": "daily_gap_v2 considera un nutriente KNOWN si aparece en cualquier alimento; no expresa cobertura parcial por alimento. La suma incluye solo valores disponibles.",
+      "riesgo": "Presentar una suma parcial como total completo del dia.",
+      "evidencia": ["services/nutrition/app/service.py:360", "packages/nutrition-domain/src/nutrition_domain/calculator.py:35"]
+    },
+    {
+      "id": "F5",
+      "hecho": "El registro habitual guarda referencias de alimentos y gramos. Al consultar totales, _to_confirmed vuelve a obtener los valores del proveedor; esa ruta no congela los hechos nutricionales usados al confirmar la ingesta.",
+      "riesgo": "Los valores historicos pueden cambiar si cambia la fuente.",
+      "evidencia": ["services/nutrition/app/service.py:153", "services/nutrition/app/service.py:173", "services/nutrition/app/service.py:258"]
+    }
+  ],
+  "recomendacion": {
+    "opcion": "Extender svc-nutrition y Home Hub con un diario de azucar, primero sintetico.",
+    "prioridad_1": [
+      "Mostrar azucares totales en gramos por porcion realmente consumida, alimento, comida y dia.",
+      "Mostrar anadidos solo cuando exista un dato explicito; libres solo con clasificacion y metodo documentados. Son medidas relacionadas que no deben sumarse entre si.",
+      "Distinguir COMPLETO, PARCIAL, DESCONOCIDO y SIN_REGISTROS. Cero solo cuando este explicitamente informado.",
+      "Mostrar cuantos alimentos registrados tienen datos de azucar. Esa cobertura no demuestra que se haya registrado todo lo consumido.",
+      "Conservar junto a cada ingesta el valor por 100 g o 100 ml, fuente, identificador, fecha de consulta, porcion confirmada y metodo de conversion.",
+      "Separar cantidad confirmada de valor nutricional medido o estimado. Una etiqueta tambien puede contener valores medios.",
+      "Ofrecer confirmacion rapida de comidas habituales y comi lo planificado, incluyendo la porcion; una propuesta de IA requiere confirmacion."
+    ],
+    "prioridad_2": [
+      "Barras diarias de siete dias por comida o bebida; dias sin registro y con datos parciales deben distinguirse de cero.",
+      "Detalle desplegable que explique de donde sale cada cifra y permita corregir porciones con trazabilidad.",
+      "Entrada por etiqueta o codigo de barras para productos y por ingredientes confirmados para recetas; validar conversiones de volumen y peso."
+    ],
+    "objetivos": "Propuesta: activar por defecto la referencia institucional de azucares libres <10% de energia (WHO y consenso DGE/DAG/DDG), aplicada al embarazo en el portal BIOEG/familienplanung.de. Ofrecer <5% como orientacion adicional condicional. A 2000 kcal: <50 g y <25 g respectivamente; mostrar esa base estandar hasta disponer de una apropiada para la persona. No requiere prescripcion profesional para funcionar; una indicacion individual puede modificarlo. Distinguir recomendacion de salud publica, decision editorial y limite clinico. Cambio propuesto, aun no aplicado a la demo.",
+    "glucosa": "Si el usuario busca glucosa sanguinea, requiere una propuesta separada en Health; el diario nutricional no proporciona una medicion de glucosa.",
+    "responsabilidades": "svc-nutrition conserva hechos e ingestas; Home autoriza persona y acciones; Home Hub presenta; Mealie sigue siendo fuente de recetas y planes."
+  },
+  "patron_recomendaciones": {
+    "estado": "DISENO_PROPUESTO_NO_IMPLEMENTADO",
+    "requisito_confirmado": "Toda recomendacion aplicada debe mostrar su procedencia, sea institucional, adaptada por Episteck, profesional o personal; admitir referencias confiables por defecto y preferencias configurables.",
+    "existente_en_codigo": {
+      "origenes": ["REFERENCE_TARGET", "USER_CONFIGURED", "PROFESSIONAL_PROVIDED", "AI_SUGGESTION"],
+      "referencias": "pregnancy_targets_detailed incluye source_org, source_ref, stage y provenance por nutriente.",
+      "limites": "No hay contrato comun de recomendacion aplicada ni trazabilidad completa en la UI. NutrientTarget guarda nutrient, amount y source; el perfil tiene target_source global; Home Hub solo muestra categoria y numero de objetivos.",
+      "advertencia_semantica": "authoritative permite usar objetivos confirmados en el calculo; no demuestra respaldo cientifico. USER_CONFIGURED tambien se considera authoritative en el dominio actual."
+    },
+    "origenes_propuestos": [
+      {"tipo": "INSTITUTIONAL_REFERENCE", "etiqueta": "Referencia institucional", "descripcion": "Regla extraida fielmente de una guia identificada, con poblacion y alcance comprobados."},
+      {"tipo": "EPISTECK_GUIDANCE", "etiqueta": "Orientacion de Episteck basada en fuentes", "descripcion": "Seleccion o adaptacion editorial identificada; conserva sus fuentes y explicita cada supuesto propio. No atribuye la adaptacion a la institucion."},
+      {"tipo": "PROFESSIONAL_GUIDANCE", "etiqueta": "Indicacion profesional", "descripcion": "Incluye procedencia, contexto y vigencia. Si la comunico el usuario, identificarla como reportada; no fingir verificacion de autoria profesional."},
+      {"tipo": "PERSONAL_GOAL", "etiqueta": "Objetivo personal", "descripcion": "Elegido por la persona autorizada; no requiere cita cientifica para expresar una preferencia ni se presenta como evidencia medica."},
+      {"tipo": "AI_PROPOSAL", "etiqueta": "Propuesta de IA pendiente", "descripcion": "No activa automaticamente una recomendacion. La aceptacion como preferencia personal conserva su origen AI y no la convierte en guia cientifica."}
+    ],
+    "contrato_conceptual": {
+      "regla": ["Identificador y version", "Metrica o condicion exacta", "Unidad, operador y periodo", "Objetivo, maximo, minimo, evitar o condicion por preparacion", "Contexto de aplicacion y exclusiones", "Origen de la recomendacion"],
+      "evidencia": ["Organizacion o autor", "Titulo y enlace directo de cada fuente", "Version o fecha de publicacion y seccion pertinente", "Fecha de revision", "Tipo y fuerza de evidencia solo si estan documentados", "Limitaciones y desacuerdos relevantes"],
+      "adaptacion": ["Que afirma la fuente", "Que selecciona o cambia Episteck o el usuario", "Calculo o supuesto aplicado, incluida base energetica cuando corresponda"],
+      "seleccion": ["Por defecto, eleccion personal o indicacion profesional", "Quien selecciono o modifico y cuando, sin exponer informacion privada fuera del acceso autorizado", "Motivo y regla sustituida si corresponde"],
+      "evaluacion": ["Version exacta de la regla usada", "Datos de ingesta y fuentes usadas", "Fecha y periodo evaluados", "Rango e informacion faltante", "Resultado y explicacion legible"]
+    },
+    "politicas_de_aplicacion": [
+      "Catalogo de referencias revisadas, con fuentes primarias, poblacion y contexto; no convertir resultados arbitrarios de busqueda o una respuesta AI en default de salud.",
+      "Configurar por regla o nutriente, no solo una categoria de fuente para todo el perfil: pueden coexistir objetivos institucionales, profesionales y personales.",
+      "Registrar por separado respaldo de la regla, adaptacion y motivo de activacion. Estar activo no implica mayor calidad de evidencia.",
+      "Un objetivo personal puede modificar la meta efectiva sin borrar ni cambiar el contenido de una referencia institucional; mostrar ambas si divergen.",
+      "No resolver guias discrepantes promediando cifras ni seleccionando siempre la mas restrictiva. Comprobar contexto, metrica y vigencia y hacer visible la seleccion o el conflicto.",
+      "Una indicacion profesional puede sustituir una referencia para el mismo objetivo y contexto si corresponde; conservar la referencia y el motivo, sin inferir autenticidad profesional por el simple texto del usuario.",
+      "Guardar las versiones de regla y configuracion usadas en cada evaluacion; una actualizacion de guia no reescribe silenciosamente avisos historicos.",
+      "No activar un default de salud sin procedencia y contexto suficientes. La informacion incompleta produce no evaluable o cobertura parcial; no inventar una cifra. Una preferencia personal se atribuye a la persona aunque no tenga estudio.",
+      "Separar preferencia de avisos de la fuente cientifica: silenciar o cambiar una meta no modifica lo que recomienda una institucion. Los cambios son explicitamente configurables y trazables.",
+      "La fuente de la regla y la fuente del alimento son distintas. Mostrar ambas: por ejemplo guia de azucares libres y etiqueta del producto, junto al supuesto de porcion.",
+      "Implementar este patron dentro de Nutrition, respetando su propiedad del dominio y autorizacion Home; no crear un servicio universal de consejo ni activar el runtime Knowledge."
+    ],
+    "presentacion": {
+      "siempre_visible": ["Que se recomienda y que medida usa", "Origen: institucional, Episteck, profesional o personal", "Por que se aplica: predeterminado, elegido o indicado", "Si el calculo es estimado o incompleto"],
+      "detalle_por_que": ["Fuentes con enlaces, fecha y version", "Texto de la regla original resumido", "Adaptaciones y calculos", "Contexto, limites e incertidumbre", "Cambios personales e historial de version"],
+      "ejemplo_sintetico": "Objetivo personal: 25 g/dia de azucares libres. Elegido por ti. Base orientativa: opcion del 5% de energia de la OMS; conversion con 2000 kcal/dia. Esa base energetica es un supuesto declarado, no un requerimiento calculado para Ana. La preferencia no se presenta como limite clinico ni como orden de la OMS para Ana."
+    },
+    "criterios_de_aceptacion": [
+      "Desde cualquier aviso puede consultarse origen, fuente o autor personal, version y motivo de aplicacion.",
+      "Una adaptacion editorial no aparece como cita literal institucional ni una preferencia personal como prescripcion.",
+      "Cambiar una meta conserva la referencia original y el historial; no reclasifica las fuentes.",
+      "Dos nutrientes con origenes diferentes muestran su procedencia individual.",
+      "Los calculos incompletos no se presentan como totales definitivos; las propuestas AI no se activan solas.",
+      "Una guia actualizada no altera silenciosamente la explicacion de una evaluacion pasada."
+    ]
+  },
+  "ejemplo_sintetico": {
+    "nota": "Ilustracion propuesta; no es una respuesta disponible del servicio ni datos de Ana.",
+    "estado": "PARCIAL",
+    "azucares_totales_conocidos_g": "18.0",
+    "alimentos_registrados": 3,
+    "alimentos_con_datos": 2,
+    "alimentos_sin_datos": 1,
+    "azucares_anadidos_g": null,
+    "mensaje": "18 g contabilizados; falta el dato de 1 de 3 alimentos. El total del dia no esta completo."
+  },
+  "G2": {
+    "aprobacion_explicita_obtenida_en_esta_sesion": true,
+    "fecha_aprobacion": "2026-11-15",
+    "evidencia_aprobacion": "G2 es aprobado",
+    "datos_reales_utilizados": false,
+    "siguiente_paso_propuesto": "Preparar la demo sintetica aceptada y concretar captura multimodal y reglas. La aprobacion G2 ya consta; faltan arquitectura concreta, onboarding y ConsentGrants efectivos, no repetir la misma solicitud de aprobacion."
+  },
+  "fuentes_externas": [
+    {
+      "titulo": "BIOEG / familienplanung.de - Zucker in der Schwangerschaft",
+      "url": "https://www.familienplanung.de/schwangerschaft/die-schwangerschaft/gesundheit-und-ernaehrung/ernaehrung/zucker/",
+      "aplicacion": "Orientacion institucional en embarazo: limitar azucares libres, referencia del 10% de energia; no prohibicion de todo azucar. Actualizada 25-06-2026."
+    },
+    {
+      "titulo": "DGE/DAG/DDG - Quantitative Empfehlung zur Zuckerzufuhr",
+      "url": "https://www.dge.de/wissenschaft/stellungnahmen-und-positionspapiere/stellungnahmen/quantitative-empfehlung-zur-zuckerzufuhr-in-deutschland/",
+      "aplicacion": "Consenso institucional aleman: azucares libres <10% de energia."
+    },
+    {
+      "titulo": "European Commission - Nutrition labelling",
+      "url": "https://food.ec.europa.eu/food-safety/labelling-and-nutrition/food-information-consumers-legislation/nutrition-labelling_en",
+      "aplicacion": "La declaracion obligatoria incluye azucares y carbohidratos por separado y expresa valores por 100 g o 100 ml; no garantiza un campo separado de azucares anadidos."
+    },
+    {
+      "titulo": "EFSA - Total dietary sugars",
+      "url": "https://www.efsa.europa.eu/en/glossary/total-dietary-sugars",
+      "aplicacion": "Los azucares totales incluyen los naturalmente presentes y los anadidos."
+    },
+    {
+      "titulo": "EFSA - Free sugars",
+      "url": "https://www.efsa.europa.eu/en/glossary/free-sugars",
+      "aplicacion": "Los libres incluyen anadidos y los presentes en miel, jarabes y zumos; no equivalen a los azucares totales."
+    }
+  ],
+  "verificacion": {
+    "pruebas": "python -m pytest packages/nutrition-domain/tests -q -p no:cacheprovider",
+    "entorno": "PYTHONPATH=packages/nutrition-domain/src; PYTHONDONTWRITEBYTECODE=1",
+    "resultado": "9 passed",
+    "limite": "Pruebas existentes del dominio, no pruebas de una funcionalidad de azucar implementada.",
+    "cambios": "Informe, glosario y documentos de estado actualizados con aprobacion G2 y patron propuesto de recomendaciones trazables; demo aislada en spike/nutrition-intake-prototype/index.html. El patron no esta implementado en produccion. Sin cambios en servicios productivos, despliegues, migraciones ni uso de datos reales.",
+    "demo": {
+      "tipo": "Prototipo desechable, no integrado ni desplegado",
+      "audio_y_foto": "Simulados; sin transcripcion, vision ni subida real",
+      "casos_verificados_en_navegador": ["Porcion estimada 150-200 ml: 15.9-21.2 g", "Correccion a 150 ml y confirmacion con un clic: 15.9 g", "Borrador de audio simulado no suma antes de confirmar", "Receta desconocida queda sin datos y produce cobertura parcial", "300 ml superan referencia ilustrativa de 25 g", "Rango 21.2-26.5 g cruza referencia ilustrativa de 25 g", "Pestana activa corresponde al escenario", "Vista movil 390 px sin desbordamiento horizontal", "Sin errores JavaScript en la verificacion final"],
+      "lectura_adicional": "spike/nutrition-intake-prototype/README.md",
+      "fuentes": "docs/architecture/reviews/2026-11-15-pregnancy-food-threshold-references.md"
+    }
+  }
+}
