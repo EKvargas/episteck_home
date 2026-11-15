@@ -78,18 +78,20 @@ def _config(key: str) -> str | None:
 def _accepted_audiences(machine_user: str) -> frozenset[str]:
     """Audiences this authenticated machine caller may present.
 
-    Any machine caller may present a Control Plane delegation (unchanged G1.6). A
-    Nutrition delegation binds only when presented by Nutrition's OWN machine user,
-    named in site config; if that key is unset, it never binds. A Finance delegation
-    binds the same way, only for `home_finance_machine_user`.
+    Any machine caller may present a Control Plane delegation (unchanged G1.6), except
+    Finance's machine user. A Nutrition delegation binds only when presented by
+    Nutrition's OWN machine user, named in site config; if that key is unset, it never
+    binds. A Finance delegation binds the same way, only for `home_finance_machine_user`,
+    and that user may present NOTHING else (B11 finding F3, 2026-11-15): isolation is now
+    two-way for Finance.
     """
+    finance_user = _config("home_finance_machine_user")
+    if finance_user and machine_user == finance_user:
+        return frozenset({FINANCE_AUDIENCE})
     audiences = {CONTROL_PLANE_AUDIENCE}
     nutrition_user = _config("home_nutrition_machine_user")
     if nutrition_user and machine_user == nutrition_user:
         audiences.add(NUTRITION_AUDIENCE)
-    finance_user = _config("home_finance_machine_user")
-    if finance_user and machine_user == finance_user:
-        audiences.add(FINANCE_AUDIENCE)
     return frozenset(audiences)
 
 

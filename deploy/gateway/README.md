@@ -65,9 +65,14 @@ sudo nft --check -f /tmp/episteck-gateway-rendered.nft
 ```
 
 The rendered policy allows uid `1003` (`home-agent`) to `127.0.0.1:9934`, and
-allows only the rendered numeric `svc-home-gateway` UID to direct ports `9931`
-and `9932`. All other local sender UIDs are dropped for those destinations.
-There is no admin, health, root, shared-group, or `www-data` exception.
+allows only the rendered numeric `svc-home-gateway` UID to direct ports `9931`,
+`9932` and `9936`. All other local sender UIDs are dropped for those destinations.
+There is no admin, health, root, shared-group, or `www-data` exception there.
+
+The Finance API `127.0.0.1:9935` (B11 finding F1, 2026-11-15) is reachable only by
+the rendered numeric `www-data` UID, because nginx serves the public PSD2 callback
+(`/finance/connect/callback`). Every other local user is dropped, Hermes included.
+Operator health checks therefore run as `www-data` (`bringup.sh verify` does).
 
 After the coordinated runtime cutover, apply only this table and run the real
 connection matrix as the actual Unix users:
@@ -82,7 +87,11 @@ sudo -u svc-home-bff curl --max-time 3 http://127.0.0.1:9931/mcp
 sudo -u svc-home-bff curl --max-time 3 http://127.0.0.1:9932/mcp
 sudo -u svc-home-gateway curl --max-time 3 http://127.0.0.1:9931/mcp
 sudo -u svc-home-gateway curl --max-time 3 http://127.0.0.1:9932/mcp
+sudo -u www-data curl --max-time 3 http://127.0.0.1:9935/health
+sudo -u home-agent curl --max-time 3 http://127.0.0.1:9935/health
 ```
+
+Expected for `9935`: `www-data` gets the health JSON; `home-agent` times out (dropped).
 
 Expected: Hermes reaches `9934`; the ordinary alternate user is denied there;
 Hermes and `svc-home-bff` are denied direct `9931/9932`; the gateway user reaches

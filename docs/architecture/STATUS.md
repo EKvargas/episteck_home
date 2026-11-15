@@ -118,7 +118,7 @@ design: ADR-0011, ADR-0012, ADR-0013 and ADR-0015.
 | Olin Finance skill + `finance` MCP on `home-agent` (B9) | ✅ installed 2026-11-07; tool discovery through the gateway works, so the runtime grant covers `svc-finance` (B10) |
 | Telegram (B7) and `openai-codex` login (B8) | ✅ 2026-11-07. Bot `@EpisteckHome_bot` answers only the owner's allowlisted account. Model `gpt-5.6-sol` with no fallback, so Finance figures reach OpenAI only (P2) |
 | Live verification (B11) | ✅ automated matrix passed 2026-11-08 (`FINANCE_I1_VALIDATION.md`): allow, forged header, direct-port bypass, missing, garbage, replayed and expired delegation, Home refused, hanging, 500 and malformed, log hygiene, model provider. ⏳ owner checks O1 (logout or revoke, then re-grant) and O2 (stranger on Telegram) |
-| B11 findings | ⏳ owner decision: F1 nft rule for API `:9935`, F2 image revision label, F3 Finance machine user limited to its own audience |
+| B11 findings | ✅ owner approved 2026-11-15, all three fixed in one PR: F1 nft lets only `www-data` reach API `:9935` (`deploy/gateway/episteck-gateway.nft`, applied on the node), F2 `bringup.sh build` labels the image `org.opencontainers.image.revision=<sha>` (takes effect on the next Finance build), F3 Home binds only `svc-finance` delegations for `home_finance_machine_user` (`auth_hook._accepted_audiences`, isolation now two-way). Node SSH also hardened the same day: key-only + fail2ban |
 | Trade Republic securities (I3) | ⏳ not in I1: PSD2 carries the cash account only. Holdings come from Trade Republic's CSV export (proposal R5) |
 
 ## G2 blockers

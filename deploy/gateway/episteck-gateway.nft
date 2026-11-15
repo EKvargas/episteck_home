@@ -1,8 +1,9 @@
-# Dedicated OUTPUT policy for the G1.6 gateway. Render the placeholder with the
-# numeric svc-home-gateway uid before syntax checking/loading. This file never
-# flushes or replaces unrelated nftables tables.
+# Dedicated OUTPUT policy for the G1.6 gateway. Render the placeholders with the
+# numeric svc-home-gateway and www-data uids before syntax checking/loading. This
+# file never flushes or replaces unrelated nftables tables.
 define HERMES_UID = 1003
 define GATEWAY_UID = __SVC_HOME_GATEWAY_UID__
+define WWW_DATA_UID = __WWW_DATA_UID__
 
 table inet episteck_gateway {
     chain output {
@@ -15,5 +16,10 @@ table inet episteck_gateway {
         # Only the dedicated nginx gateway may call the direct MCP services.
         ip daddr 127.0.0.1 tcp dport { 9931, 9932, 9936 } meta skuid $GATEWAY_UID accept
         ip daddr 127.0.0.1 tcp dport { 9931, 9932, 9936 } drop
+
+        # Only nginx (www-data) may call the Finance API: it serves the public PSD2
+        # callback route. No other local user, Hermes included (B11 finding F1).
+        ip daddr 127.0.0.1 tcp dport 9935 meta skuid $WWW_DATA_UID accept
+        ip daddr 127.0.0.1 tcp dport 9935 drop
     }
 }
