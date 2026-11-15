@@ -148,6 +148,25 @@ información incompleta, sesión expirada y error. Se probará en el móvil de A
 La elección estética final requiere una propuesta visual concreta; esta sección
 define la cobertura funcional, no declara aprobado un diseño gráfico.
 
+### Estudio visual preparado (2026-11-15)
+
+El usuario autorizó concretar las pantallas y el recorrido. Se prepararon tres
+jerarquías en la misma ruta existente de Nutrition, con AppShell y tema de Home
+Hub: A (resumen del día), B (diario por comidas) y C (nutrientes con contexto).
+Comparten vistas Hoy/Diario/Nutrientes/Semana, fuentes y captura, con un chat
+Telegram simulado que usa los mismos registros en memoria. No son integración
+productiva ni datos reales de Ana.
+
+La entrada requiere desarrollo + MOCK + `prototype=ana`; la ruta normal y el
+acceso LIVE conservan su comportamiento. La voz y foto siguen simuladas. El
+runner local es `npm run prototype:ana` desde `apps/home-hub`, con URL
+`http://127.0.0.1:3015/app/nutrition?prototype=ana&variant=A` y variantes B/C.
+
+Se recomienda explorar A como portada y B como diario; **es propuesta del agente,
+no una selección de Ana**. La aprobación del diseño visual sigue pendiente.
+[Guía del estudio](../../../apps/home-hub/src/app/nutrition/prototype/README.md)
+y [resultado estructurado de la verificación](../../architecture/reviews/2026-11-15-ana-nutrition-ui-prototype.json).
+
 ## Patrón de recomendaciones aplicadas
 
 Se adopta como requisito la separación definida en el informe de esta sesión:

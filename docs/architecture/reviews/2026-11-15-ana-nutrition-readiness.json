@@ -34,13 +34,14 @@
   "visual_ui": {
     "user_requirement": "Ana is very visual; the app UI must be covered alongside Telegram",
     "first_pilot_requirement": true,
-    "state": "FUNCTIONAL_SCOPE_DEFINED_NOT_IMPLEMENTED",
+    "state": "VISUAL_PROTOTYPE_PREPARED_NOT_INTEGRATED",
+    "prototype_result": "docs/architecture/reviews/2026-11-15-ana-nutrition-ui-prototype.json",
     "views": ["Today with coverage and uncertainties", "Diary grouped by meals with editable portions", "Nutrient indicators appropriate to goal/maximum/qualitative rule", "Weekly history with missing and partial days visible", "Source and adaptation detail for each recommendation", "In-app text capture and draft review; real audio/photo only when delivered"],
     "canonical_store": "svc-nutrition, shared with Telegram; no separate UI copy of the diary",
     "cross_interface_acceptance": ["Telegram confirmation appears on app load or refresh", "App correction appears on the next Telegram query", "Cross-interface retries do not duplicate and concurrent edits preserve revisions", "Every interface authorizes access independently; links do not grant access"],
     "visual_acceptance": ["Mobile layout validated with Ana", "No mock content in LIVE diary", "Unknown/estimated/partial states are visible", "Meaning does not depend only on color", "Source, units, assumptions and last refresh are accessible"],
     "not_required_initially": "New real-time synchronization infrastructure",
-    "aesthetic_direction": "Pending concrete visual design; not approved by this requirements update"
+    "aesthetic_direction": "Three concrete structural variants are prepared in the existing development-only MOCK route; user selection is pending"
   },
   "telegram_reuse": {
     "user_request": "Evaluate reuse of existing Finance Telegram agent and interface for Nutrition",

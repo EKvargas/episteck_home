@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prototype:ana": "node test-support/start-ana-nutrition-prototype.mjs",
     "build": "next build",
     "postbuild": "node test-support/stage-standalone.mjs",
     "start": "next start",

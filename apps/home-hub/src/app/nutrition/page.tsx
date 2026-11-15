@@ -5,15 +5,20 @@ import { LiveProfilePanel } from './LiveProfilePanel';
 import { NutritionDemoCluster } from './NutritionDemoCluster';
 import { NutritionHeader } from './NutritionHeader';
 import styles from './page.module.css';
+import { AnaNutritionPrototype } from './prototype/AnaNutritionPrototype';
 
 export const dynamic = 'force-dynamic';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
 export default async function NutritionPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  const params = await searchParams;
+  // Throwaway visual study. Explicitly unavailable in production and in LIVE mode.
+  if (process.env.NODE_ENV === 'development' && SERVER_CONFIGURATION.mode === 'MOCK' && params.prototype === 'ana') {
+    return <AnaNutritionPrototype variant={typeof params.variant === 'string' ? params.variant : 'A'} />;
+  }
   if (SERVER_CONFIGURATION.mode === 'MOCK') return <NutritionDemoCluster />;
 
-  const params = await searchParams;
   return (
     <div className={styles.nutritionCanvas}>
       <NutritionHeader />
