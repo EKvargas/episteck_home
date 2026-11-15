@@ -67,7 +67,8 @@ case "$step" in
     src="$BASE/build/$1"
     [ -f "$src/services/finance/Dockerfile" ] || { echo "extract the commit archive into $src first" >&2; exit 2; }
     chown -R "$SVC:$SVC" "$src"
-    ( cd "$src" && as_svc podman build -t "localhost/episteck-finance:$1" -f services/finance/Dockerfile . )
+    ( cd "$src" && as_svc podman build --label "org.opencontainers.image.revision=$1" \
+        -t "localhost/episteck-finance:$1" -f services/finance/Dockerfile . )
     as_svc podman image ls --noheading localhost/episteck-finance
     ;;
 
@@ -95,11 +96,12 @@ case "$step" in
 
   verify)
     echo "== listeners (loopback only)"; ss -tlnH | grep -E ':(9935|9936)\b'
-    echo "== health"; curl -sS --max-time 5 http://127.0.0.1:9935/health; echo
+    # nft (deploy/gateway, B11 F1) lets only www-data reach 9935, so check as www-data.
+    echo "== health"; runuser -u www-data -- curl -sS --max-time 5 http://127.0.0.1:9935/health; echo
     echo "== overview without a session must be 401"
-    curl -sS --max-time 5 -o /dev/null -w "%{http_code}\n" http://127.0.0.1:9935/overview
-    echo "== overview with any session must be 503 until Phase B wires Home (fail closed)"
-    curl -sS --max-time 5 -o /dev/null -w "%{http_code}\n" -H 'X-Episteck-Delegation: not-a-real-token' http://127.0.0.1:9935/overview
+    runuser -u www-data -- curl -sS --max-time 5 -o /dev/null -w "%{http_code}\n" http://127.0.0.1:9935/overview
+    echo "== overview with a bogus session must be refused (401/503, fail closed)"
+    runuser -u www-data -- curl -sS --max-time 5 -o /dev/null -w "%{http_code}\n" -H 'X-Episteck-Delegation: not-a-real-token' http://127.0.0.1:9935/overview
     echo "== containers"; as_svc podman ps --format '{{.Names}} {{.Status}}'
     echo "== timers"; as_svc systemctl --user list-timers --no-pager
     echo "== recent sync result"; as_svc journalctl --user -u finance-sync --no-pager -n 5 -o cat 2>/dev/null || true

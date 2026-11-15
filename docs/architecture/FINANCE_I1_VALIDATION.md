@@ -124,9 +124,9 @@ rules not proven live:
 
 | # | Severity | Finding | Proposed action |
 | --- | --- | --- | --- |
-| F1 | Low | `finance-api` 9935 accepts TCP from every local uid; nft covers 9934, 9931, 9932 and 9936 only. Not a bypass: `/overview` needs a delegation, only the mint socket issues one, and Home checks it (D1, D2, H1). | Owner decision. Add `tcp dport 9935 meta skuid 33 accept` and `tcp dport 9935 drop` (nginx serves the public callback as `www-data`), or accept as is. |
-| F2 | Low | The Finance image has no `org.opencontainers.image.revision` label. The tag carries the full SHA. | Add `--label org.opencontainers.image.revision=<sha>` in the next Finance build. |
-| F3 | Low | Audience isolation is one-way (`auth_hook.py`, `_accepted_audiences`). Home accepts a Control Plane delegation from any machine caller, Finance's included, so one minted for Home MCP or Nutrition would also pass `authorize_batch`. Only `svc-home-gateway` ever holds one (mint socket matrix), for 120 s and single use. | Owner decision. A small Home PR: when the caller is `home_finance_machine_user`, accept only `svc-finance`. |
+| F1 | Low (✅ fixed 2026-11-15) | `finance-api` 9935 accepted TCP from every local uid; nft covers 9934, 9931, 9932 and 9936 only. Not a bypass: `/overview` needs a delegation, only the mint socket issues one, and Home checks it (D1, D2, H1). | Owner decision. Add `tcp dport 9935 meta skuid 33 accept` and `tcp dport 9935 drop` (nginx serves the public callback as `www-data`), or accept as is. |
+| F2 | Low (✅ fixed 2026-11-15, next build) | The Finance image had no `org.opencontainers.image.revision` label. The tag carries the full SHA. | Add `--label org.opencontainers.image.revision=<sha>` in the next Finance build. |
+| F3 | Low (✅ fixed 2026-11-15) | Audience isolation was one-way (`auth_hook.py`, `_accepted_audiences`). Home accepts a Control Plane delegation from any machine caller, Finance's included, so one minted for Home MCP or Nutrition would also pass `authorize_batch`. Only `svc-home-gateway` ever holds one (mint socket matrix), for 120 s and single use. | Owner decision. A small Home PR: when the caller is `home_finance_machine_user`, accept only `svc-finance`. |
 | F4 | Info | MCP refusals are tool results (`{"ok": false, "error": …}`) over transport HTTP 200. The API uses 401, 403 and 503. | None: by design. |
 
 ## Owner checks

@@ -313,6 +313,14 @@ def test_finance_caller_cannot_present_a_nutrition_audience(hook):
     assert fake.local.episteck_delegated_user is None
 
 
+def test_other_callers_still_present_a_control_plane_audience_with_finance_configured(hook):
+    module, fake = hook
+    _configure_finance_caller(fake)  # caller stays home-mcp@example.invalid
+    fake.headers["X-Episteck-Delegation"] = _token(aud="home-control-plane", jti="tok-f7")
+    module.establish_delegated_context()
+    assert fake.local.episteck_delegated_user == "person@example.invalid"
+
+
 def test_nutrition_caller_cannot_present_a_finance_audience(hook):
     module, fake = hook
     _configure_finance_caller(fake)
@@ -323,13 +331,16 @@ def test_nutrition_caller_cannot_present_a_finance_audience(hook):
     assert fake.local.episteck_delegated_user is None
 
 
-def test_finance_caller_may_still_present_control_plane_audience(hook):
+def test_finance_caller_cannot_present_the_default_control_plane_token(hook):
+    """B11 F3 (2026-11-15) reverses the old one-way isolation: Finance's machine user
+    no longer binds a Control Plane delegation, only its own svc-finance audience."""
     module, fake = hook
     _configure_finance_caller(fake)
     fake.session.user = FINANCE_CALLER
-    fake.headers["X-Episteck-Delegation"] = _token(jti="tok-f6")
+    fake.headers["X-Episteck-Delegation"] = _token(jti="tok-f8")
     module.establish_delegated_context()
-    assert fake.local.episteck_delegation_audience == "home-control-plane"
+    assert fake.local.episteck_delegated_user is None
+    assert fake.local.episteck_delegation_audience is None
 
 
 def test_control_plane_binding_records_its_audience(hook):
