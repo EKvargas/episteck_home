@@ -52,11 +52,14 @@ prescripción automática ni integración clínica/FHIR en este alcance.
 ## Supuestos propuestos y decisiones pendientes
 
 **Propuesta actualizada:** el usuario pidió evaluar reutilizar el agente/bot de
-Telegram de Finanzas. Telegram pasa a ser el candidato prioritario para captura
-y consulta conversacional, reutilizando home-agent, BFF, Home y svc-nutrition;
-Home Hub queda disponible para configuración y visualización detallada. Esta
-propuesta no declara que Telegram multiusuario esté implementado ni que el
-usuario haya aprobado aún el diseño completo. Interfaz en español y referencias
+Telegram de Finanzas y después confirmó que la interfaz visual también debe
+cubrirse porque Ana es muy visual. Se contemplan **dos interfaces del mismo
+producto desde el primer piloto**: Telegram para captura y consulta
+conversacional; Home Hub móvil para registro, revisión e historial visual.
+Se reutilizan home-agent, BFF, Home y svc-nutrition. La UI no queda relegada a una
+fase posterior ni se sustituye por mensajes de Telegram. Esta propuesta no
+declara que Telegram multiusuario o la UI integrada estén implementados ni que
+el usuario haya aprobado aún el diseño completo. Interfaz en español y referencias
 alemanas/europeas más WHO siguen siendo supuestos del agente por confirmar.
 No se presupone que Ana tenga diabetes ni una indicación clínica.
 
@@ -98,6 +101,52 @@ cumplidos mediante controles simulados o una pantalla de adjuntar archivos.
    certeza cuando faltan datos ni invitan a restringir o compensar comidas.
 8. Cada aviso ofrece procedencia y configuración accesibles, incluidas las
    razones por las que se aplica o no puede evaluarse una regla.
+
+## Interfaz visual: requisito del primer piloto
+
+**Requisito confirmado por el usuario:** Ana es muy visual y debe disponer de la
+interfaz de la app además de Telegram. La elección de Telegram no desplaza este
+requisito. La pantalla actual LIVE solo muestra el perfil y la de embarazo usa
+mocks: ninguna constituye todavía este diario visual integrado.
+
+Propuesta funcional para Home Hub, priorizando móvil:
+
+- **Hoy:** comidas y bebidas registradas, resumen de nutrientes relevantes y
+  avisos prioritarios. Cada cifra distingue cantidad indicada, estimada y dato
+  desconocido; la cobertura del registro siempre acompaña al resumen.
+- **Diario por comidas:** tarjetas con alimento, porción, hora y procedencia de
+  captura; revisar, completar o corregir sin buscar el mensaje original. Las
+  fotos solo aparecen si existen y su tratamiento/retención lo permite, no se
+  inventan imágenes que simulen evidencia del consumo.
+- **Vista de nutrientes:** indicadores legibles con unidad, fuente y detalle.
+  Distinguir objetivos de ingesta, máximos y recomendaciones cualitativas; no
+  usar una misma barra de completar para todos ni hacer que el color implique
+  seguridad clínica. Mostrar inicialmente lo relevante y permitir ampliar el
+  resto para evitar saturar la pantalla.
+- **Semana:** evolución por día con huecos y datos parciales visibles; no unir
+  días sin registros como si fueran ceros ni cambiar retroactivamente la regla
+  usada en cada evaluación. Acceso al detalle de un día.
+- **Por qué este aviso:** origen visible y detalle desplegable con fuentes,
+  adaptación, cálculo, contexto y razón de activación. Acceso a metas personales
+  y referencias sin confundirlas entre sí.
+- **Añadir y revisar:** entrada de texto y revisión/confirmación de borradores
+  dentro de la app. Audio/foto aparecen como capacidad real solo cuando su
+  integración esté entregada; no hay botones que aparenten procesamiento activo.
+
+Telegram y Home Hub leen/escriben el mismo diario y las mismas evaluaciones en
+Nutrition. El alcance inicial exige que una confirmación por Telegram aparezca
+al cargar/actualizar la app y una corrección en la app se refleje en la siguiente
+consulta de Telegram; no exige una nueva infraestructura de sincronización en
+tiempo real. Se identifica la última actualización y se manejan conflictos de
+revisión sin sobrescribir cambios de otra interfaz. Las rutas de cada interfaz
+comprueban identidad y permisos por separado; un enlace desde Telegram a la app
+no concede acceso por sí mismo.
+
+Los mismos datos deben poder leerse sin depender solo de colores, con rangos y
+etiquetas visibles, controles táctiles accesibles y estados de carga, vacío,
+información incompleta, sesión expirada y error. Se probará en el móvil de Ana.
+La elección estética final requiere una propuesta visual concreta; esta sección
+define la cobertura funcional, no declara aprobado un diseño gráfico.
 
 ## Patrón de recomendaciones aplicadas
 
@@ -247,7 +296,7 @@ esta evaluación.
 | Cálculo determinista y separación planificado/real | Código y pruebas locales sintéticas | Unidades domésticas/volumen, rangos, hechos congelados, idempotencia y revisiones |
 | Autorización por persona | Código y pruebas locales; evidencia histórica en STATUS | Identidad propia de Ana y pruebas con rutas nuevas; compartir/revocar si lo elige |
 | Perfil de embarazo | Creador existente y referencias fijas | Contexto validado y catálogo vigente por regla; no usar constantes antiguas como perfil individual |
-| Diario en la app | Nutrition LIVE muestra resumen de perfil | Crear, revisar, confirmar, corregir, consultar y recuperar un diario real |
+| Diario visual en la app | Nutrition LIVE muestra resumen de perfil; embarazo sigue usando mocks | Entregar Hoy, diario por comidas, nutrientes, semana, fuentes y edición como parte del primer piloto, sobre datos reales autorizados |
 | Azúcar y cafeína | No están en el mapa canónico actual | Fuente válida, mapeo, clasificación y regla con datos faltantes |
 | Cobertura parcial | UNKNOWN existe; daily_gap_v2 marca KNOWN si algún alimento informa el nutriente | Cobertura por entrada y nutriente; no presentar suma parcial como total completo |
 | Historial reproducible | La lectura vuelve a consultar valores del proveedor | Congelar los hechos usados y versionar correcciones y reglas |
@@ -280,10 +329,12 @@ Orden propuesto, sin estimaciones de calendario hasta cerrar canal y proveedores
    publicar solo reglas revisadas y registrar incompatibilidades/faltantes.
 2. **Acceso de Ana y persistencia fiable:** onboarding propio, unidades/rangos,
    instantáneas, confirmación idempotente y correcciones con revisión.
-3. **Piloto conversacional por texto, preferentemente Telegram si se resuelve su
-   identidad multiusuario:** diario y resumen reales,
-   catálogo inicial revisado, fuentes visibles y configuración por regla. Es una
-   entrega parcial explícita; no sustituye los requisitos de audio/foto.
+3. **Primer piloto con Telegram y UI visual móvil:** diario y resumen reales por
+   texto en ambas interfaces, vistas Hoy/diario/nutrientes/semana, catálogo inicial
+   revisado, fuentes visibles y configuración por regla. Resolver antes la
+   identidad multiusuario de Telegram. El piloto no se declara completo con el
+   bot solo. La entrega por texto sigue siendo una propuesta de secuencia y no
+   sustituye los requisitos de audio/foto.
 4. **Audio real:** proveedor y retención concretados; transcripción editable y
    confirmación en el mismo diario. Error de transcripción no crea una ingesta.
 5. **Foto real:** alimentos candidatos y límites visibles; permitir etiqueta o
@@ -320,6 +371,14 @@ de este diseño mediante `superpowers:writing-plans`.
 - Si Telegram es el canal, las verificaciones de interlocutor, aislamiento y
   delegación anteriores pasan con dos personas. Finance del propietario conserva
   su comportamiento y Ana no obtiene acceso por compartir bot.
+- Ana puede usar Hoy, diario, nutrientes, semana y fuentes desde la UI móvil,
+  sin mocks en LIVE. Una comida confirmada en Telegram aparece al actualizar la
+  app; una porción corregida en la app se refleja al volver a consultar al bot.
+- Ambas interfaces mantienen autoría, revisiones y contexto; una confirmación
+  repetida entre bot y app no duplica la comida y una edición concurrente no
+  sobrescribe silenciosamente otra. Un enlace del bot no evita el login.
+- La vista semanal distingue días vacíos/parciales y el detalle de una tarjeta
+  conserva fuente, unidad y supuestos; color por sí solo no expresa el estado.
 
 Audio y foto completos exigen además una prueba real por modalidad, incluyendo
 error de extracción, archivo rechazado, cancelación, no confirmado y limpieza de
@@ -341,7 +400,9 @@ Comandos y resultado estructurado:
 
 ## Decisiones que no se deben dar por tomadas
 
-- Canal inicial y recorrido cotidiano de Ana, idioma y país de referencias.
+- Detalles del recorrido cotidiano de Ana, idioma y país de referencias. La
+  cobertura de Telegram más UI visual sí está recogida como requisito; faltan
+  decisiones de diseño de identidad y propuesta visual concreta.
 - Si acepta comenzar por texto mientras se completan audio/foto.
 - Proveedor(s) y tratamiento de medios reales; no se eligieron por este documento.
 - Datos contextuales necesarios para reglas personales; no se atribuye a Ana un

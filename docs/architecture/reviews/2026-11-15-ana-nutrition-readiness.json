@@ -17,7 +17,7 @@
     {"area": "Telegram", "state": "OWNER_ONLY_AS_DOCUMENTED", "evidence": "docs/architecture/STATUS.md; services/home-bff/home_bff/internal_app.py", "next": "Do not treat adding Ana to an allowlist as sufficient actor binding."},
     {"area": "Food arithmetic", "state": "PRESENT_WITH_LOCAL_TESTS", "evidence": "packages/nutrition-domain/src/nutrition_domain/calculator.py", "next": "Add validated volume basis, ranges and missing-data coverage."},
     {"area": "Pregnancy references", "state": "REQUIRES_CURRENT_SOURCE_REVIEW", "evidence": "services/nutrition/app/reference/pregnancy_targets.py", "next": "Audit full catalog before personal use; passing tests currently preserve some old constants."},
-    {"area": "Diary UI", "state": "NOT_DELIVERED", "evidence": "apps/home-hub/src/app/nutrition/page.tsx", "next": "Real capture, confirmation, correction, reload and daily summary."},
+    {"area": "Diary UI", "state": "NOT_DELIVERED_REQUIRED_FOR_FIRST_PILOT", "evidence": "apps/home-hub/src/app/nutrition/page.tsx; apps/home-hub/src/app/nutrition/pregnancy/page.tsx", "next": "Mobile Today, meal diary, nutrients, week, provenance and editing against the same real diary as Telegram; existing pregnancy view is mock."},
     {"area": "Historical facts", "state": "REQUIRES_SNAPSHOTS_AND_REVISIONS", "evidence": "services/nutrition/app/service.py:_to_confirmed; services/nutrition/app/store/repository.py", "next": "Freeze facts used and prevent duplicate confirmations; correct with revisions."},
     {"area": "Rule provenance", "state": "DESIGNED_NOT_IMPLEMENTED", "evidence": "docs/architecture/reviews/2026-11-15-nutrition-sugar-review.json:patron_recomendaciones", "next": "Per-rule sources, versions, adaptations, activation and reproducible evaluation."},
     {"area": "Effective personal goals", "state": "STORED_BUT_NOT_RESOLVED_IN_GAP", "evidence": "services/nutrition/app/service.py:create_pregnancy_profile and _daily_gap", "next": "Apply and explain effective goals per metric while preserving references."},
@@ -30,7 +30,18 @@
     {"metric": "iodine_ug", "code_reference": "230", "current_DGE_reference": "220", "url": "https://www.dge.de/wissenschaft/referenzwerte/jod/", "note": "Catalog comparison only; not a supplement dose for Ana."}
   ],
   "candidate_reference_set": "https://www.gesund-ins-leben.de/fuer-fachkreise/familien-vor-und-in-der-schwangerschaft/handlungsempfehlungen/",
-  "delivery_sequence_proposed": ["Verify existing Telegram/Home/Nutrition wiring and installed media capabilities without personal records", "Design verified per-person Telegram identity and isolation, retaining owner Finance access", "Reviewed catalog and reliable intake persistence", "Useful first text diary pilot in Telegram if multi-user binding is delivered", "Real audio and photo", "Daily-use acceptance and operational closeout"],
+  "delivery_sequence_proposed": ["Verify existing Telegram/Home/Nutrition wiring and installed media capabilities without personal records", "Design verified per-person Telegram identity and isolation, retaining owner Finance access", "Reviewed catalog and reliable intake persistence", "First pilot with Telegram plus mobile visual UI on the same diary; bot-only delivery is insufficient", "Real audio and photo", "Daily-use acceptance and operational closeout"],
+  "visual_ui": {
+    "user_requirement": "Ana is very visual; the app UI must be covered alongside Telegram",
+    "first_pilot_requirement": true,
+    "state": "FUNCTIONAL_SCOPE_DEFINED_NOT_IMPLEMENTED",
+    "views": ["Today with coverage and uncertainties", "Diary grouped by meals with editable portions", "Nutrient indicators appropriate to goal/maximum/qualitative rule", "Weekly history with missing and partial days visible", "Source and adaptation detail for each recommendation", "In-app text capture and draft review; real audio/photo only when delivered"],
+    "canonical_store": "svc-nutrition, shared with Telegram; no separate UI copy of the diary",
+    "cross_interface_acceptance": ["Telegram confirmation appears on app load or refresh", "App correction appears on the next Telegram query", "Cross-interface retries do not duplicate and concurrent edits preserve revisions", "Every interface authorizes access independently; links do not grant access"],
+    "visual_acceptance": ["Mobile layout validated with Ana", "No mock content in LIVE diary", "Unknown/estimated/partial states are visible", "Meaning does not depend only on color", "Source, units, assumptions and last refresh are accessible"],
+    "not_required_initially": "New real-time synchronization infrastructure",
+    "aesthetic_direction": "Pending concrete visual design; not approved by this requirements update"
+  },
   "telegram_reuse": {
     "user_request": "Evaluate reuse of existing Finance Telegram agent and interface for Nutrition",
     "recommendation": "Reuse home-agent and bot as conversational entry; keep Nutrition as canonical store and calculator, Finance as separate domain",
@@ -39,7 +50,7 @@
     "reusable": ["Telegram conversational interface", "Home agent deployment", "Nutrition MCP connection", "Delegation gateway patterns"],
     "new_delivery_required": ["Verified Telegram interlocutor to Home identity binding", "Per-person delegations instead of a single global runtime pointer", "Isolated history, memory, MCP sessions, drafts and media", "Domain-scoped tools and server-side authorization", "Nutrition capture and confirmation flow", "Verified real media extraction"],
     "finance_invariant": "Do not share or replace the owner runtime grant for Ana; joining the same bot must not confer access to owner Finance",
-    "channel_state": "Telegram is now the priority candidate proposed in response to user; complete channel design and text-first phasing remain to be agreed",
+    "channel_state": "Telegram plus app visual UI are in scope; complete identity/channel design and text-first phasing remain to be agreed",
     "evidence": ["docs/architecture/AGENTS.md", "deploy/gateway/nginx-mcp-gateway.conf", "services/home-bff/home_bff/runtime.py", "services/home-bff/home_bff/internal_app.py", "services/home-bff/home_bff/store.py", "docs/architecture/G1_6_VALIDATION.md"]
   },
   "not_a_scope_reduction": "Audio and photo remain requirements. A text-first pilot is proposed for earlier value, not accepted as the complete request.",
@@ -52,7 +63,7 @@
     "clarified_as_agent_proposals": ["Minimum pilot catalog", "Meaning and attribution of source review"],
     "design_remains_draft": true
   },
-  "open_product_question": "User proposed reuse of Telegram; detailed daily flow, locale and willingness for a text-first pilot are not confirmed. Telegram identity isolation must be designed before Ana uses it.",
+  "open_product_question": "Telegram and visual app are required together. Detailed daily flow, visual direction, locale and willingness for text-first modality phasing remain to be confirmed. Telegram identity isolation must be designed before Ana uses it.",
   "no_time_or_percentage_estimate": "Channel, providers and new-route work remain unresolved; a percentage or promised launch date would be unsupported.",
   "verification": {
     "domain": {"command": "PYTHONPATH=packages/nutrition-domain/src python -m pytest packages/nutrition-domain/tests -q -p no:cacheprovider", "passed": 9},
