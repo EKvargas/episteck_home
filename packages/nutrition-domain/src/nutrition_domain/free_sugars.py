@@ -75,10 +75,12 @@ _BLS_NEGATIVE = re.compile(
     r"ungesüßt|ungezuckert|ohne zucker|unsweetened|no added sugar|without sugar", _I)
 # German stems match inside compounds (Apfelsaft); English words need boundaries.
 _BLS_FREE_MARKER = re.compile(
-    r"saft|säfte|nektar|gezuckert|gesüßt|sirup|konfitüre|marmelade|gelee|kandiert"
+    r"saft|säfte|nektar(?!in)|gezuckert|gesüßt|sirup|konfitüre|marmelade|gelee|kandiert"
     r"|smoothie|limonade|\bcola|schoko|honig(?!melone)"
     r"|\bjuice|\bnectar|\bsugared\b|\bsweetened\b|\bsyrup\b|\bjam\b|\bcandied\b|\bchocolate",
     _I)
+# Own juice / aspic is not a sweet marker (canned fish and meat fall back to the letter default).
+_BLS_NOT_SWEET_PHRASE = re.compile(r"im eigenen saft|in gelee|in aspik", _I)
 _BLS_FRUIT_PREP = re.compile(
     r"mit frucht|mit früchten|fruchtjoghurt|fruchtquark|with fruit", _I)
 # An M product that is itself sweetened stays FREE even with a fruit preparation.
@@ -128,7 +130,7 @@ def _classify_bls(letter: str | None, name: str | None) -> FreeSugarClass:
         return _UNKNOWN
     if letter in ("X", "Y") and not negated and _is_dessert(name):
         return _FREE
-    if not negated and _BLS_FREE_MARKER.search(name):
+    if not negated and _BLS_FREE_MARKER.search(_BLS_NOT_SWEET_PHRASE.sub(" ", name)):
         return _FREE
     return default
 
