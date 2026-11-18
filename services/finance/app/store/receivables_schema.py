@@ -46,9 +46,11 @@ CREATE TABLE IF NOT EXISTS funding_exchange(
     workspace_id TEXT NOT NULL, funding_id TEXT NOT NULL, exchange_id TEXT NOT NULL,
     PRIMARY KEY(funding_id, exchange_id));
 CREATE INDEX IF NOT EXISTS ix_funding_exchange ON funding_exchange(workspace_id, exchange_id);
+-- Shares are replaced (E11) by revoking the live set and inserting a new one.
 CREATE TABLE IF NOT EXISTS funding_share(
-    workspace_id TEXT NOT NULL, funding_id TEXT NOT NULL, payer_id TEXT NOT NULL,
-    eur_minor INTEGER NOT NULL, PRIMARY KEY(funding_id, payer_id));
+    id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, funding_id TEXT NOT NULL,
+    payer_id TEXT NOT NULL, eur_minor INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS ix_funding_share ON funding_share(funding_id);
 
 CREATE TABLE IF NOT EXISTS ledger_entry(
     id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, number INTEGER NOT NULL,
@@ -58,6 +60,7 @@ CREATE TABLE IF NOT EXISTS ledger_entry(
     UNIQUE(workspace_id, number));
 CREATE INDEX IF NOT EXISTS ix_ledger_cp ON ledger_entry(workspace_id, counterparty_id, currency);
 CREATE INDEX IF NOT EXISTS ix_ledger_source ON ledger_entry(workspace_id, source_ref);
+CREATE INDEX IF NOT EXISTS ix_ledger_reverses ON ledger_entry(reverses_id);
 
 CREATE TABLE IF NOT EXISTS receipt(
     id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, number INTEGER NOT NULL,
@@ -65,8 +68,9 @@ CREATE TABLE IF NOT EXISTS receipt(
     amount_minor INTEGER NOT NULL, received_on TEXT NOT NULL, verification TEXT NOT NULL,
     movement_id TEXT, description TEXT NOT NULL,
     UNIQUE(workspace_id, number));
-CREATE UNIQUE INDEX IF NOT EXISTS ux_receipt_movement ON receipt(movement_id)
-    WHERE movement_id IS NOT NULL;
+-- movement_id is the ROOT movement. One LIVE receipt per root is enforced in code: a
+-- revoked receipt must not block re-recording the same movement (Task 8 -> Task 9).
+CREATE INDEX IF NOT EXISTS ix_receipt_movement ON receipt(movement_id);
 CREATE TABLE IF NOT EXISTS allocation(
     id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, receipt_id TEXT NOT NULL,
     line_id TEXT NOT NULL, amount_minor INTEGER NOT NULL, method TEXT NOT NULL);
@@ -80,6 +84,7 @@ CREATE TABLE IF NOT EXISTS payer_rule(
     id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, key_hash TEXT NOT NULL,
     counterparty_id TEXT);
 CREATE INDEX IF NOT EXISTS ix_payer_rule ON payer_rule(workspace_id, key_hash);
+-- movement_id is the ROOT movement (PENDING and its BOOKED successor share one role).
 CREATE TABLE IF NOT EXISTS movement_role(
     id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, movement_id TEXT NOT NULL,
     role TEXT NOT NULL);
@@ -107,6 +112,8 @@ CREATE TABLE IF NOT EXISTS pending_item(
     resolved_at TEXT, resolution TEXT, snooze_until TEXT,
     PRIMARY KEY(workspace_id, code));
 CREATE INDEX IF NOT EXISTS ix_pending_dedupe ON pending_item(workspace_id, dedupe_key);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_pending_open_dedupe ON pending_item(workspace_id, dedupe_key)
+    WHERE resolved_at IS NULL;
 CREATE TABLE IF NOT EXISTS ref_counter(
     workspace_id TEXT NOT NULL, prefix TEXT NOT NULL, last INTEGER NOT NULL,
     PRIMARY KEY(workspace_id, prefix));

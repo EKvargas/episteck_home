@@ -120,6 +120,12 @@ class ExchangeLine:
 
 @dataclass(frozen=True)
 class Funding:
+    """A set of partner payments funding exchanges.
+
+    ``movement_ids`` read back from the store are ROOT movement ids (a BOOKED successor is
+    stored and returned as the PENDING movement it supersedes), deduplicated.
+    """
+
     id: str
     workspace_id: str
     number: int

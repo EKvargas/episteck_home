@@ -1,4 +1,9 @@
-"""Pending queue: questions for the owner and notices. The caller owns the transaction."""
+"""Pending queue: questions for the owner and notices. The caller owns the transaction.
+
+Codes are matched case-insensitively ("p3" is "P3"). Every datetime the queue handles (the
+clock, ``snooze(until)``) must be timezone-aware; a naive one raises ``ValueError`` before
+anything is written.
+"""
 from __future__ import annotations
 
 import json
@@ -17,9 +22,17 @@ class UnknownPending(Exception):
 
 
 class AlreadyResolved(Exception):
+    """The first resolution stays on ``.resolution``; the message is generic (§6.9 logs)."""
+
     def __init__(self, resolution: str | None) -> None:
-        super().__init__(resolution)
+        super().__init__("pending item already resolved")
         self.resolution = resolution
+
+
+def _aware(value: datetime, what: str) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError(f"{what} must be timezone-aware")
+    return value
 
 
 class PendingQueue:
@@ -27,25 +40,37 @@ class PendingQueue:
         self._repo = repo
         self._clock = clock
 
+    def _now(self) -> datetime:
+        return _aware(self._clock(), "clock")
+
     def add(self, conn, ws: str, kind: PendingKind, options: Sequence[str],
-            payload: dict[str, Any], dedupe_key: str,
-            requires_answer: bool = True) -> PendingItem:
+            payload: dict[str, Any], dedupe_key: str, requires_answer: bool = True, *,
+            dedupe_include_resolved: bool = False) -> PendingItem:
+        """Returns the existing item for ``dedupe_key`` instead of a new one.
+
+        By default only an unresolved item dedupes; ``dedupe_include_resolved`` also returns a
+        resolved one, so a key asks at most once ever (once per crossing / per ISO week).
+        """
+        now = self._now()
         try:
             json.dumps(payload)
         except (TypeError, ValueError) as exc:
             raise ValueError("payload must be JSON-serialisable") from exc
-        existing = self._repo.pending_by_dedupe(conn, ws, dedupe_key)
+        existing = self._repo.pending_by_dedupe(conn, ws, dedupe_key,
+                                                include_resolved=dedupe_include_resolved)
         if existing is not None:
             return existing
         item = PendingItem(
             f"P{self._repo.next_number(conn, ws, 'P')}", ws, kind, requires_answer,
-            tuple(options), dict(payload), dedupe_key, self._clock())
+            tuple(options), dict(payload), dedupe_key, now)
         self._repo.insert_pending(conn, item)
         return item
 
-    def notice(self, conn, ws: str, text_key: str, payload: dict[str, Any]) -> PendingItem:
+    def notice(self, conn, ws: str, text_key: str, payload: dict[str, Any], *,
+               dedupe_include_resolved: bool = False) -> PendingItem:
         return self.add(conn, ws, PendingKind.INFO, [], {**payload, "text_key": text_key},
-                        f"INFO:{text_key}", requires_answer=False)
+                        f"INFO:{text_key}", requires_answer=False,
+                        dedupe_include_resolved=dedupe_include_resolved)
 
     def get(self, conn, ws: str, code: str) -> PendingItem | None:
         return self._repo.pending_by_code(conn, ws, code)
@@ -54,7 +79,7 @@ class PendingQueue:
         return self._repo.pending_open(conn, ws)
 
     def for_delivery(self, conn, ws: str) -> list[PendingItem]:
-        now = self._clock()
+        now = self._now()
         due = [
             i for i in self._repo.pending_open(conn, ws)
             if i.delivered_at is None
@@ -69,19 +94,21 @@ class PendingQueue:
         return out
 
     def resolve(self, conn, ws: str, code: str, resolution: str, *, human: bool) -> PendingItem:
+        now = self._now()
         item = self.get(conn, ws, code)
         if item is None:
             raise UnknownPending(code)
-        if item.resolved_at is not None:
-            raise AlreadyResolved(item.resolution)
-        now = self._clock()
-        self._repo.mark_pending_resolved(conn, ws, code, resolution, now)
+        if item.resolved_at is not None or not self._repo.mark_pending_resolved(
+                conn, ws, item.code, resolution, now):
+            raise AlreadyResolved(self._repo.pending_by_code(conn, ws, item.code).resolution)
         if human:
             self._repo.log_intervention(conn, ws, item.kind.value, now)
-        return self._repo.pending_by_code(conn, ws, code)
+        return self._repo.pending_by_code(conn, ws, item.code)
 
     def snooze(self, conn, ws: str, code: str, until: datetime) -> PendingItem:
-        if self.get(conn, ws, code) is None:
+        _aware(until, "until")
+        item = self.get(conn, ws, code)
+        if item is None:
             raise UnknownPending(code)
-        self._repo.set_pending_snooze(conn, ws, code, until)
-        return self._repo.pending_by_code(conn, ws, code)
+        self._repo.set_pending_snooze(conn, ws, item.code, until)
+        return self._repo.pending_by_code(conn, ws, item.code)
