@@ -10,7 +10,7 @@ Last updated: 2026-11-18 (design and plan approved; execution started: Tasks 1-2
 2. Verify the facts you depend on before acting. Anything that contradicts this file: stop, correct it, tell the owner.
 3. Use TDD (`superpowers:test-driven-development`). Small PRs, at most 800 changed lines. Commits `<type>: summary`, lowercase, branches `feature/...`. Commit and PR bodies end with the session-link line the harness gives you.
 4. **No stacked PRs:** each PR branches from the current `origin/main`; the next starts after the previous one merged.
-5. **Production changes are run by the owner.** Prepare exact `! ssh -F C:/Users/D064974/.ssh/config episteck-node1 '...'` commands with a rollback; verify read-only afterwards. Secrets never go through the chat.
+5. **Production changes are run by the owner.** Prepare exact `! ssh -F <ssh config> episteck-node1 '...'` commands with a rollback; verify read-only afterwards. Secrets never go through the chat.
 6. When a task ends: set its status, add PR numbers and evidence, append one line to the session log (section 6), and tell the owner what is next. Warn at about 70% context.
 7. Off limits: Nutrition files, `apps/home-hub/**` (I4a is a later PR) and `apps/episteck_home/**`.
 
@@ -82,17 +82,24 @@ A one-off cron job delivers to the owner's Telegram a message with two inline bu
 | Exact create / list / remove `hermes cron` syntax | pendiente |
 | S1 verdict (`BUTTONS` or `CODE_REPLY`) | pendiente |
 
+Read-only findings from the installed Hermes 0.21.2 docs and code (2026-11-18), before the owner test:
+
+- Cron runs cannot use `clarify` ("cron jobs cannot ask clarifying questions"), so a cron message carries no inline buttons. Buttons exist in live Telegram sessions (`send_clarify` in the Telegram adapter). Expected: `CODE_REPLY` for the cron message (the owner answers "P3", "P3 sí"), with buttons once the owner is in the live session.
+- `hermes cron create --name <n> --deliver telegram "<schedule>" "<prompt>"`; one-shot schedule `in 2m`; cron expressions use the node time zone (UTC), so `35 6,18 * * *`; `hermes cron list`; `hermes cron remove <id or name>`.
+- A final response containing `[SILENT]` suppresses delivery (failed runs always deliver).
+- `--deliver telegram` uses the configured Telegram home channel (set on the node).
+
 ### S2. Shape of USD-account credit descriptions (read-only)
 
 Counts and token-class templates only (letters to `A`, digits to `9`, a short list of known words kept); no names, no amounts.
 
 | Field | Result |
 | --- | --- |
-| Count of credits | pendiente |
-| Count of distinct `description_key` values | pendiente |
-| Repeated payers map to one key | pendiente |
-| Directory where Hermes stores documents sent to the bot | pendiente |
-| S2 verdict (`STABLE` or `UNSTABLE`) | pendiente |
+| Count of credits | small sample (history since I1 go-live); exact counts stay off the repo |
+| Count of distinct `description_key` values | fewer keys than credits |
+| Repeated payers map to one key | yes. Zelle keys carry the payer name and no other variable text once digit tokens drop. Caveat: the alphanumeric code after `CONF#` can, rarely, have no digit; `description_key` therefore also drops the token that follows a token ending in `#` (ruling at Task 2) |
+| Directory where Hermes stores documents sent to the bot | `/home/home-agent/.hermes/cache/documents` |
+| S2 verdict (`STABLE` or `UNSTABLE`) | `STABLE` (2026-11-18, run read-only as `svc-finance` on the host, `mode=ro`) → Task 13 sets `FINANCE_DESCRIPTION_RULES=on` |
 
 ## 6. Session log (append one line per session)
 

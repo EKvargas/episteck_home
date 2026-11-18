@@ -26,7 +26,7 @@
   - `gh` always with `--repo github.com/EKvargas/episteck_home` or `GH_HOST=github.com`.
   - **No stacked PRs:** each PR branches from the current `origin/main`, and the next starts only after the previous one merged.
   - Aim for ≤ 800 changed lines per PR.
-- Production is run by the owner. Prepare exact `! ssh -F C:/Users/D064974/.ssh/config episteck-node1 '…'` commands with rollback; verify read-only afterwards. Real data stays on Nuremberg.
+- Production is run by the owner. Prepare exact `! ssh -F <ssh config> episteck-node1 '…'` commands with rollback; verify read-only afterwards. Real data stays on Nuremberg.
 - Test command, from `services/finance` (called `FINTEST` below): `uv run --no-project --python 3.13 --with "fastapi>=0.140" --with uvicorn --with "pydantic>=2" --with httpx --with fastmcp==4.0.3 --with "pyjwt[crypto]" --with pytest python -m pytest`. Hermes tests, from the repo root: `uv run --no-project --python 3.13 --with pytest python -m pytest deploy/hermes/tests -q`. Before each PR, also run the Linux suite (WSL command in `docs/architecture/FINANCE_I1_PROGRESS.md` §4).
 
 ## Review Focus
@@ -142,7 +142,7 @@ Task 0 runs on the node in parallel with PRs 1–6.
   - `plan_allocation(amount_minor: int, lines: Sequence[OpenLine], limit: int = EXACT_SUBSET_LIMIT) -> AllocationPlan`
 - `text.py`:
   - `normalize_alias(text: str) -> str`: NFKD, accents dropped, casefold, whitespace collapsed, edge punctuation stripped.
-  - `description_key(text: str) -> str`: upper case, every token containing a digit removed, whitespace collapsed; `""` if nothing remains.
+  - `description_key(text: str) -> str`: upper case, every token containing a digit removed, the token right after a token ending in `#` removed (S2: confirmation codes can lack digits), whitespace collapsed; `""` if nothing remains.
 
 - [ ] **Step 1: Write the failing tests**
 
