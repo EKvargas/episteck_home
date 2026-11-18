@@ -51,11 +51,11 @@ Task 0 runs on the node in parallel with PRs 1-6.
 
 | Task | Work | PR | Status |
 | --- | --- | --- | --- |
-| 0 | Two spikes on the node (owner-run, no repo code) | - | waiting on owner |
-| 1 | ADR-0016, documentation pointers and the I2 board | 1 | in progress |
-| 2 | Pure core: model, FX arithmetic, allocation, text keys | 1 | in progress |
-| 3 | Schema and repository | 2 | not started |
-| 4 | Pending queue and intervention log | 2 | not started |
+| 0 | Two spikes on the node (owner-run, no repo code) | - | S2 done; S1 waiting on owner |
+| 1 | ADR-0016, documentation pointers and the I2 board | 1 | done (#128) |
+| 2 | Pure core: model, FX arithmetic, allocation, text keys | 1 | done (#128) |
+| 3 | Schema and repository | 2 | in review (PR 2) |
+| 4 | Pending queue and intervention log | 2 | in review (PR 2) |
 | 5 | Ledger: record an exchange and the receivables view | 3 | not started |
 | 6 | Funding: link partner payments, rate, EUR shares | 3 | not started |
 | 7 | Receipts, allocation, credits, held cash, small-difference adjustment | 4 | not started |
@@ -104,3 +104,4 @@ Counts and token-class templates only (letters to `A`, digits to `9`, a short li
 ## 6. Session log (append one line per session)
 
 - 2026-11-18: design and plan approved; execution started (Tasks 1-2 in PR 1; Task 0 waiting on the owner). Nothing deployed.
+- 2026-11-18: PR 1 merged (#128); Tasks 3–4 implemented on feature/finance-i2-store.

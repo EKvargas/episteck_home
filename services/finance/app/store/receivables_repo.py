@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 import uuid
 from collections.abc import Iterator, Mapping, Sequence
@@ -16,7 +17,7 @@ from .. import domain
 from ..receivables.allocation import OpenLine
 from ..receivables.model import (
     Allocation, AllocationMethod, Counterparty, CounterpartyKind, EntryKind, Exchange,
-    ExchangeLine, Funding, LedgerEntry, MovementRoleKind, Opening, Receipt, ReceiptKind,
+    ExchangeLine, Funding, LedgerEntry, MovementRoleKind, Opening, PendingItem, PendingKind, Receipt, ReceiptKind,
     Verification,
 )
 from ..receivables.text import normalize_alias
@@ -84,6 +85,14 @@ def _receipt(r: sqlite3.Row) -> Receipt:
         r["id"], r["workspace_id"], r["number"], ReceiptKind(r["kind"]), r["payer_id"],
         r["currency"], r["amount_minor"], _d(r["received_on"]), Verification(r["verification"]),
         r["movement_id"], r["description"])
+
+
+def _pending(r: sqlite3.Row) -> PendingItem:
+    return PendingItem(
+        r["code"], r["workspace_id"], PendingKind(r["kind"]), bool(r["requires_answer"]),
+        tuple(json.loads(r["options"])), json.loads(r["payload"]), r["dedupe_key"],
+        _dt(r["created_at"]), _dt(r["delivered_at"]), _dt(r["resolved_at"]), r["resolution"],
+        _dt(r["snooze_until"]))
 
 
 def _movement(r: sqlite3.Row) -> domain.Movement:
@@ -445,3 +454,47 @@ class ReceivablesRepository:
         r = conn.execute("SELECT role FROM workspace_member WHERE workspace_id=? AND person_id=?",
                          (ws, person_id)).fetchone()
         return r["role"] if r else None
+
+    # --- pending queue (mutable table) ----------------------------------------------
+    def insert_pending(self, conn, p: PendingItem) -> None:
+        conn.execute(
+            "INSERT INTO pending_item(workspace_id,code,kind,requires_answer,options,payload,"
+            "dedupe_key,created_at) VALUES(?,?,?,?,?,?,?,?)",
+            (p.workspace_id, p.code, p.kind.value, int(p.requires_answer),
+             json.dumps(list(p.options)), json.dumps(p.payload), p.dedupe_key,
+             _ts(p.created_at)))
+
+    def pending_by_code(self, conn, ws: str, code: str) -> PendingItem | None:
+        r = conn.execute("SELECT * FROM pending_item WHERE workspace_id=? AND code=?",
+                         (ws, code)).fetchone()
+        return _pending(r) if r else None
+
+    def pending_by_dedupe(self, conn, ws: str, key: str) -> PendingItem | None:
+        r = conn.execute(
+            "SELECT * FROM pending_item WHERE workspace_id=? AND dedupe_key=? "
+            "AND resolved_at IS NULL ORDER BY rowid LIMIT 1", (ws, key)).fetchone()
+        return _pending(r) if r else None
+
+    def pending_open(self, conn, ws: str) -> list[PendingItem]:
+        rows = conn.execute("SELECT * FROM pending_item WHERE workspace_id=? "
+                            "AND resolved_at IS NULL", (ws,)).fetchall()
+        return sorted((_pending(r) for r in rows), key=lambda p: int(p.code[1:]))
+
+    def mark_pending_delivered(self, conn, ws: str, code: str, at: datetime,
+                               resolve: bool) -> None:
+        if resolve:
+            conn.execute(
+                "UPDATE pending_item SET delivered_at=?, resolved_at=?, resolution='delivered' "
+                "WHERE workspace_id=? AND code=?", (_ts(at), _ts(at), ws, code))
+        else:
+            conn.execute("UPDATE pending_item SET delivered_at=? WHERE workspace_id=? AND code=?",
+                         (_ts(at), ws, code))
+
+    def mark_pending_resolved(self, conn, ws: str, code: str, resolution: str,
+                              at: datetime) -> None:
+        conn.execute("UPDATE pending_item SET resolved_at=?, resolution=? "
+                     "WHERE workspace_id=? AND code=?", (_ts(at), resolution, ws, code))
+
+    def set_pending_snooze(self, conn, ws: str, code: str, until: datetime) -> None:
+        conn.execute("UPDATE pending_item SET snooze_until=? WHERE workspace_id=? AND code=?",
+                     (_ts(until), ws, code))
