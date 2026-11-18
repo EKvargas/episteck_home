@@ -8,7 +8,9 @@ import pytest
 
 from app.receivables.allocation import OpenLine, plan_allocation
 from app.receivables.fx import deviation, implied_rate, rate_text, split_largest_remainder
-from app.receivables.model import AllocationMethod
+from datetime import timedelta
+
+from app.receivables.model import LINK_BAND, NOTICE_BAND, RESURFACE_AFTER, AllocationMethod
 from app.receivables.text import description_key, normalize_alias
 
 
@@ -43,8 +45,8 @@ def test_split_edge_cases():
 
 
 def test_deviation_against_ecb():
-    assert deviation(Fraction(23, 25), Decimal("1.0870")) < Fraction(3, 100)
-    assert deviation(Fraction(23, 25), Decimal("1.2000")) > Fraction(8, 100)
+    assert deviation(Fraction(23, 25), Decimal("1.0870")) < NOTICE_BAND
+    assert deviation(Fraction(23, 25), Decimal("1.2000")) > LINK_BAND
 
 
 def test_exact_subset_prefers_oldest_combination():
@@ -79,3 +81,9 @@ def test_alias_and_description_keys():
     assert description_key("ZELLE PAYMENT FROM A B CONF# ABCDEFGHI") == "ZELLE PAYMENT FROM A B CONF#"
     assert description_key("") == ""
     assert description_key("123 4/5 99") == ""
+
+
+def test_band_and_resurface_constants():
+    assert NOTICE_BAND == Fraction(3, 100)
+    assert LINK_BAND == Fraction(8, 100)
+    assert RESURFACE_AFTER == timedelta(hours=20)

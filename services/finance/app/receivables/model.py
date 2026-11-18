@@ -5,8 +5,9 @@ Human refs: ``C<n>`` exchange, ``F<n>`` funding, ``R<n>`` receipt, ``E<n>`` entr
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from enum import Enum
+from fractions import Fraction
 from typing import Any
 
 # Sentinels
@@ -14,13 +15,13 @@ OWNER = "OWNER"
 CASH_ABROAD = "CASH_ABROAD"
 
 # Constants (exact, from the design spec)
-NOTICE_BAND = 3  # percent, vs ECB
-LINK_BAND = 8  # percent, vs ECB
+NOTICE_BAND = Fraction(3, 100)  # ratio (3 %), vs ECB; compare with fx.deviation()
+LINK_BAND = Fraction(8, 100)  # ratio (8 %), vs ECB; compare with fx.deviation()
 EUR_ADJUST_TOLERANCE_MINOR = 100  # 1,00 EUR
 FUND_ALERT_DEFAULT_MINOR = 50000  # 500 USD
 HIGH_VALUE_USD_MINOR = 50000  # 500 USD or equivalent
 EXACT_SUBSET_LIMIT = 16
-RESURFACE_AFTER_HOURS = 20
+RESURFACE_AFTER = timedelta(hours=20)
 CRON_TIMES_UTC = ("06:35", "18:35")
 
 
