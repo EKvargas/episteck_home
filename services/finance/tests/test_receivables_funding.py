@@ -200,7 +200,7 @@ def test_eur_override_wins_over_share(tmp_path):
 def test_eur_charges_and_their_reversal_consume_credits_per_payer(tmp_path, monkeypatch):
     calls = []
     monkeypatch.setattr(funding, "consume_credits",
-                        lambda repo, conn, ws, payer, cur: calls.append((payer, cur)))
+                        lambda repo, conn, ws, payer, cur, **kw: calls.append((payer, cur)))
     repo, q = make(tmp_path)
     with repo.tx() as c:
         ex = exchange(repo, c, D13, E1_LINES + [LineInput("b", 1000)])

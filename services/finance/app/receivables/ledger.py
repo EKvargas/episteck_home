@@ -134,6 +134,8 @@ def _where(accounts: dict[str, str], settles_to: str | None) -> str | None:
 
 
 def receivables_view(repo: ReceivablesRepository, conn, ws: str, now: datetime) -> dict:
+    from .receipts import held_cash_shown  # lazy: receipts imports ValidationError from here
+
     accounts = {r["id"]: r["institution"] for r in conn.execute(
         "SELECT id, institution FROM account WHERE workspace_id=?", (ws,))}
     cps = {c.id: c for c in repo.list_counterparties(conn, ws)}
@@ -163,9 +165,11 @@ def receivables_view(repo: ReceivablesRepository, conn, ws: str, now: datetime) 
                     "usd": _usd(el.usd_minor),
                     "debt": format_minor(repo.line_charged(conn, ws, ol.line_id), cur),
                     "outstanding": format_minor(ol.outstanding_minor, cur), "currency": cur})
+            shown = held_cash_shown(repo, conn, ws, cp_id, cur)
             owed.append({
                 "counterparty": cp.label, "currency": cur, "amount": format_minor(bal, cur),
-                "where": _where(accounts, cp.settles_to), "held_cash": None,
+                "where": _where(accounts, cp.settles_to),
+                "held_cash": None if shown is None else format_minor(shown, cur),
                 "opening": opening, "lines": lines})
             owed_sub[cur] = owed_sub.get(cur, 0) + bal
         else:

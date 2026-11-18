@@ -24,6 +24,7 @@ from .model import (
     LedgerEntry, MovementRoleKind, PendingItem, PendingKind,
 )
 from .pending import PendingQueue
+from .receipts import consume_credits
 
 LinkResult = Literal["LINKED", "WAITING", "AMBIGUOUS", "ALREADY_LINKED"]
 
@@ -38,11 +39,6 @@ def _id() -> str:
 
 def _error(code: str) -> dict:
     return {"ok": False, "error": code}
-
-
-def consume_credits(repo: ReceivablesRepository, conn, ws: str, payer_id: str,
-                    currency: str) -> None:
-    """Seam: Task 7 applies the payer's receipt credits FIFO to open lines. No-op for now."""
 
 
 def _day(mv: domain.Movement) -> date:
@@ -132,7 +128,7 @@ def create_funding(repo: ReceivablesRepository, conn, ws: str, movement_ids: Seq
     for root in payments:
         repo.insert_movement_role(conn, ws, root, MovementRoleKind.EXCHANGE_FUNDING)
     for payer in dict.fromkeys(charged):
-        consume_credits(repo, conn, ws, payer, "EUR")
+        consume_credits(repo, conn, ws, payer, "EUR", queue=queue, now=now)
     _notify(conn, ws, funding, exchanges, rate, repo.usd_per_eur_on(conn, day), queue)
     return funding
 
@@ -296,5 +292,5 @@ def reverse_funding(repo: ReceivablesRepository, conn, ws: str, funding_id: str,
     if funding is None:
         raise ValidationError("funding")
     for payer in _undo(repo, conn, ws, funding, reason, now):
-        consume_credits(repo, conn, ws, payer, "EUR")
+        consume_credits(repo, conn, ws, payer, "EUR", queue=queue, now=now)
     return [ask_link_funding(repo, conn, ws, root, queue) for root in funding.movement_ids]
