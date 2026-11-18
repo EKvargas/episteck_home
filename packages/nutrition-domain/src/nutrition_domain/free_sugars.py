@@ -84,8 +84,16 @@ _BLS_FRUIT_PREP = re.compile(
 # An M product that is itself sweetened stays FREE even with a fruit preparation.
 _BLS_M_SWEETENED = re.compile(r"gesüßt|schoko", _I)
 # "Eis" as a word or compound ending (Vanilleeis), not Eisbein, Eier or Reis.
+# "-kuchen" is a dessert except savoury or pancake kinds (Reibekuchen, Flammkuchen,
+# Zwiebelkuchen, Kartoffel-Gemüse-Kuchen, Pfannkuchen, Eierkuchen).
+# "creme" is a dessert except savoury creams and cream soups/sauces (checked below).
 _BLS_DESSERT = re.compile(
-    r"dessert|pudding|speiseeis|ice cream|kuchen|torte|creme|mousse|\b\w*(?<!r)eis\b", _I)
+    r"dessert|pudding|speiseeis|ice cream|torte|mousse|\b\w*(?<!r)eis\b"
+    r"|(?<!reibe)(?<!flamm)(?<!zwiebel)(?<!kartoffel)(?<!gemüse)(?<!gemüse-)"
+    r"(?<!pfann)(?<!eier)kuchen"
+    r"|(?<!schinken)(?<!salat)(?<!dill)(?<!kräuter)(?<!krabben)(?<!avocado)(?<!frischkäse)creme",
+    _I)
+_BLS_SAVOURY_CREAM = re.compile(r"suppe|sauce|soße", _I)
 
 
 def _classify_off(category: str | None) -> FreeSugarClass:
@@ -99,6 +107,15 @@ def _classify_off(category: str | None) -> FreeSugarClass:
     return _UNKNOWN
 
 
+def _is_dessert(name: str) -> bool:
+    """Dessert words, but "creme" in a soup or sauce name does not count."""
+    for m in _BLS_DESSERT.finditer(name):
+        if m.group().lower() == "creme" and _BLS_SAVOURY_CREAM.search(name):
+            continue
+        return True
+    return False
+
+
 def _classify_bls(letter: str | None, name: str | None) -> FreeSugarClass:
     letter = (letter or "").strip().upper()
     default = _BLS_LETTER.get(letter, _UNKNOWN)
@@ -109,7 +126,7 @@ def _classify_bls(letter: str | None, name: str | None) -> FreeSugarClass:
         negated or not _BLS_M_SWEETENED.search(name)
     ):
         return _UNKNOWN
-    if letter in ("X", "Y") and not negated and _BLS_DESSERT.search(name):
+    if letter in ("X", "Y") and not negated and _is_dessert(name):
         return _FREE
     if not negated and _BLS_FREE_MARKER.search(name):
         return _FREE
