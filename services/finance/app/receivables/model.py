@@ -98,7 +98,7 @@ class Exchange:
     workspace_id: str
     number: int
     partner_id: str
-    total_usd_minor: int
+    total_usd_minor: int  # total at registration; after a correction sum the current lines
     delivered_on: date
     created_at: datetime
     ves_amount_minor: int | None = None
