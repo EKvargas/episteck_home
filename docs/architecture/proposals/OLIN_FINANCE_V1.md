@@ -190,6 +190,8 @@ Home Hub (Next 16 / React 19) tiene contexto de Person en vivo (F3a) y `DataEnve
 
 ### 5.2 Intercambio familiar (EUR → VES → USD)
 
+> Sustituido por `docs/superpowers/specs/2026-11-18-finance-i2-exchanges-design.md`.
+
 | Paso real | Fuente principal | Intervención típica |
 | --- | --- | --- |
 | 1. Un familiar pide VES para un beneficiario | El dueño reenvía el mensaje o dicta una nota de voz. Si no, Olin la crea en el paso 2 | 0–1 |
@@ -237,6 +239,8 @@ Estados de una solicitud: `REQUESTED → FUNDED → DELIVERY_REPORTED → DELIVE
 - EquatePlus es una cuenta `EMPLOYEE_PLAN` con lotes disponibles y restringidos. Un lote restringido **nunca** cuenta como disponible.
 
 ### 6.5 Intercambios y cuentas por cobrar
+
+> Sustituido por `docs/superpowers/specs/2026-11-18-finance-i2-exchanges-design.md`.
 
 El nombre en el modelo es genérico (*errands* y préstamos) para que sea reutilizable. El intercambio EUR→VES es una plantilla.
 
@@ -465,6 +469,8 @@ Hace falta la extracción con visión (capturas en español) y el razonamiento d
 
 ### 9.1 Recorrido completo: mensaje o captura → registro → reconciliación → consulta
 
+> Sustituido por `docs/superpowers/specs/2026-11-18-finance-i2-exchanges-design.md`.
+
 ```mermaid
 sequenceDiagram
   autonumber
@@ -570,7 +576,7 @@ Cada incremento deja algo **usable con datos reales**. Supuesto: un ingeniero ex
 | --- | --- | --- | --- | --- |
 | **I0** Decisiones | Plan desbloqueado | P1–P4 decididas (2026-10-10); diseño de H5 (escrito, pendiente de revisión); disposición del piloto | — | 2–3 |
 | **I1** "¿Cuánto tenemos y dónde?" | Erick pregunta por Telegram y ve saldos reales con fuente y fecha | `svc-finance` (store, Quadlet, backup), H1–H5, adaptadores EB (Sparkasse, efectivo de TR) y SimpleFIN (BofA), autoridad de saldo, frescura, BCE, `finance_overview`, Telegram en Hermes + skill, verificación live | I0 | 20–30 |
-| **I2** Intercambios | Flujo completo de §9.1 con el banco como disparador | Casos, financiación, entregas, acuerdos, recibos, asignación, deudas heredadas (importación guiada inicial, posible export de chat), cola + cron con botones, correcciones, `finance_receivables` desglosado | I1 | 10–15 |
+| **I2** Intercambios | Sustituido por `docs/superpowers/specs/2026-11-18-finance-i2-exchanges-design.md`. Flujo completo de §9.1 con el banco como disparador | Casos, financiación, entregas, acuerdos, recibos, asignación, deudas heredadas (importación guiada inicial, posible export de chat), cola + cron con botones, correcciones, `finance_receivables` desglosado | I1 | 10–15 |
 | **I3** Gasto, suscripciones, inversiones | Responde a "¿en qué gastamos y desde qué cuenta?" y separa disponible, invertido y restringido | Reglas, transferencias internas, recurrentes, importación CSV de TR, snapshots de EquatePlus, efectivo USD, reconciliación | I1 | 8–12 |
 | **I4** Overview en Home Hub | Página Finanzas + pendientes resolubles desde la web + nivel 3 | Adaptador servidor, transporte, UI y contador de intervenciones | I2, I3, F3b.3 (patrón de transporte) | 6–10 |
 | **I5** Ana | Vista del hogar con el N26 de Ana | Person real de Ana, su ConsentGrant, su app de EB, multi-sujeto H2 | I1, aprobación de datos de Ana | 2–4 |
@@ -665,7 +671,7 @@ P1–P4 quedaron decididas el 2026-10-10 (§0.1). Las demás siguen abiertas.
 4. **P4. Concesión de runtime (H5):** ¿duración máxima aceptable (30, 60 o 90 días) y la revocación desde el Hub es suficiente?
 5. **P5. Sparkasse:** ¿hay algo atado a ella (nómina, crédito, Bausparvertrag, tarjeta de crédito, Schufa, domiciliaciones difíciles)? ¿Cambiar a N26 Standard ahora o después de I1?
 6. **P6. BofA:** ¿qué cuentas (checking o savings)? ¿Las devoluciones familiares llegan siempre por Zelle? (BofA ya está confirmado en el buscador de SimpleFIN.)
-7. **P7. Intercambios:** ¿el amigo en España es siempre el mismo y con el mismo IBAN? ¿Quién propone el importe en USD y cuándo? ¿Cuántos intercambios hay al mes?
+7. **P7. Intercambios:** ¿el socio de cambio es siempre el mismo y con el mismo IBAN? ¿Quién propone el importe en USD y cuándo? ¿Cuántos intercambios hay al mes?
 8. **P8. Deudas heredadas:** ¿cuántos deudores, importes aproximados, y existe algún registro (notas, hoja de cálculo, chats)?
 9. **P9. Regalo o anticipo:** ¿cuál es el valor por defecto de una solicitud nueva y quién lo decide?
 10. **P10. Ana:** ¿quiere su N26 en Olin? ¿Qué verá Erick (saldos, movimientos) y qué verá Ana de Erick (consentimiento recíproco)?
