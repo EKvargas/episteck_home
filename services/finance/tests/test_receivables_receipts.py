@@ -347,10 +347,11 @@ def test_reallocate_respects_invariants(tmp_path):
             reallocate(repo, c, WS, f.id, [(la[0], 100)], NOW)
 
 
-def live_adjustment_sum(repo, c):
-    return sum(e.amount_minor for e in repo.effective_adjustments_for_lines(
-        c, WS, [r["line_id"] for r in c.execute(
-            "SELECT DISTINCT source_ref AS line_id FROM ledger_entry WHERE kind='ADJUSTMENT'")]))
+def adjustment_total(repo, c):
+    """Sum of effective ADJUSTMENTs, whether sourced to a line or to a receipt."""
+    refs = [r["ref"] for r in c.execute(
+        "SELECT DISTINCT source_ref AS ref FROM ledger_entry WHERE kind='ADJUSTMENT'")]
+    return sum(e.amount_minor for e in repo.effective_adjustments_for_refs(c, WS, refs))
 
 
 def test_reverse_funding_reverses_small_difference_with_its_charge(tmp_path):
@@ -360,15 +361,15 @@ def test_reverse_funding_reverses_small_difference_with_its_charge(tmp_path):
         m = move(repo, c, "m1", -27600)
         assert try_link(repo, c, WS, m, q, NOW) == "LINKED"
         r = receipt(repo, c, q, "b", "EUR", 7300)
-        assert live_adjustment_sum(repo, c) == -60
+        assert adjustment_total(repo, c) == -60
         reverse_funding(repo, c, WS, repo.live_funding_for_exchange(c, ex.id).id, "x", q, NOW)
-        assert live_adjustment_sum(repo, c) == 0
+        assert adjustment_total(repo, c) == 0
         assert repo.balance(c, WS, "b", "EUR") == -7300
         assert repo.receipt_remainders(c, WS, "b", "EUR") == [(r, 7300)]
         assert repo.open_lines(c, WS, "b", "EUR") == []
         assert try_link(repo, c, WS, m, q, NOW) == "LINKED"  # re-fund the same exchange
         assert repo.balance(c, WS, "b", "EUR") == 0
-        assert live_adjustment_sum(repo, c) == -60  # not applied twice
+        assert adjustment_total(repo, c) == -60  # not applied twice
         assert repo.open_lines(c, WS, "b", "EUR") == []
         assert repo.receipt_remainders(c, WS, "b", "EUR") == []
 
@@ -379,9 +380,44 @@ def test_add_to_reverses_small_difference_before_recharging(tmp_path):
         exchange(repo, c, D13)
         assert try_link(repo, c, WS, move(repo, c, "m1", -27600), q, NOW) == "LINKED"
         receipt(repo, c, q, "b", "EUR", 7300)
-        assert live_adjustment_sum(repo, c) == -60
+        assert adjustment_total(repo, c) == -60
         move(repo, c, "m2", -100, D15)
         assert link_choice(repo, c, WS, "m2", "ADD_TO:C1", q, NOW)["ok"] is not False
         assert repo.balance(c, WS, "b", "EUR") == 0  # 73.87 charged, 73.00 paid, 0.87 closed
-        assert live_adjustment_sum(repo, c) == -87
+        assert adjustment_total(repo, c) == -87
         assert repo.open_lines(c, WS, "b", "EUR") == []
+
+
+def test_reverse_funding_reverses_receipt_side_write_off(tmp_path):
+    repo, q = make(tmp_path)
+    with repo.tx() as c:
+        ex = exchange(repo, c, D13)
+        m = move(repo, c, "m1", -27600)
+        assert try_link(repo, c, WS, m, q, NOW) == "LINKED"
+        r = receipt(repo, c, q, "b", "EUR", 7400)
+        assert adjustment_total(repo, c) == 40
+        reverse_funding(repo, c, WS, repo.live_funding_for_exchange(c, ex.id).id, "x", q, NOW)
+        assert adjustment_total(repo, c) == 0
+        assert repo.balance(c, WS, "b", "EUR") == -7400
+        assert repo.receipt_remainders(c, WS, "b", "EUR") == [(r, 7400)]
+        assert try_link(repo, c, WS, m, q, NOW) == "LINKED"  # the 0.40 is closed once
+        assert repo.balance(c, WS, "b", "EUR") == 0
+        assert adjustment_total(repo, c) == 40
+        assert repo.receipt_remainders(c, WS, "b", "EUR") == []
+
+
+def test_reallocate_reverses_credit_write_off_first(tmp_path):
+    repo, q = make(tmp_path)
+    with repo.tx() as c:
+        c1 = exchange(repo, c, D13)
+        assert try_link(repo, c, WS, move(repo, c, "m1", -27600), q, NOW) == "LINKED"
+        r = receipt(repo, c, q, "b", "EUR", 7400)
+        assert adjustment_total(repo, c) == 40
+        line = repo.current_lines(c, c1.id)[1].id
+        with pytest.raises(ValidationError):  # the full receipt amount bounds the parts
+            reallocate(repo, c, WS, r.id, [(line, 7401)], NOW)
+        assert adjustment_total(repo, c) == 40  # nothing written on error
+        reallocate(repo, c, WS, r.id, [(line, 7000)], NOW)
+        assert adjustment_total(repo, c) == 0
+        assert repo.balance(c, WS, "b", "EUR") == -40
+        assert repo.receipt_remainders(c, WS, "b", "EUR") == [(r, 400)]

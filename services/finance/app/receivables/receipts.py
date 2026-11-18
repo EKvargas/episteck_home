@@ -193,6 +193,21 @@ def _live_receipt(repo: ReceivablesRepository, conn, ws: str, receipt_id: str) -
     return _receipt(row)
 
 
+def reverse_receipt_adjustments(repo: ReceivablesRepository, conn, ws: str,
+                                receipt_ids: Sequence[str], reason: str, now: datetime) -> None:
+    """Undoes the credit write-offs (ADJUSTMENTs sourced to a receipt) of these receipts.
+
+    Call it whenever a receipt's live allocations are revoked: the write-off assumed a small
+    remainder that no longer exists. If the remainder is small again later,
+    ``consume_credits`` applies the rule again.
+    """
+    for adj in repo.effective_adjustments_for_receipts(conn, ws, receipt_ids):
+        repo.insert_entry(conn, LedgerEntry(
+            _id(), ws, repo.next_number(conn, ws, "E"), adj.counterparty_id, adj.currency,
+            -adj.amount_minor, EntryKind.REVERSAL, now.date(), adj.source_ref, reason,
+            reverses_id=adj.id))
+
+
 def reallocate(repo: ReceivablesRepository, conn, ws: str, receipt_id: str,
                parts: Sequence[tuple[str, int]], now: datetime) -> None:
     """Replaces the receipt's live allocations by ``parts`` (``OWNER``). Nothing is written
@@ -232,6 +247,7 @@ def reallocate(repo: ReceivablesRepository, conn, ws: str, receipt_id: str,
     if total > receipt.amount_minor:
         raise ValidationError("parts", {"amount": fmt(receipt.amount_minor), "part": fmt(total)})
 
+    reverse_receipt_adjustments(repo, conn, ws, [receipt_id], "reallocated", now)
     for row in current:
         repo.revoke(conn, ws, "allocation", row["id"], "reallocated", now)
     for line_id, part in totals.items():

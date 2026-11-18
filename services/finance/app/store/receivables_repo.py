@@ -474,6 +474,18 @@ class ReceivablesRepository:
     def effective_adjustments_for_lines(self, conn, ws: str,
                                         line_ids: Sequence[str]) -> list[LedgerEntry]:
         """Effective ADJUSTMENTs whose ``source_ref`` is one of ``line_ids``, oldest first."""
+        return self.effective_adjustments_for_refs(conn, ws, line_ids)
+
+    def effective_adjustments_for_receipts(self, conn, ws: str,
+                                           receipt_ids: Sequence[str]) -> list[LedgerEntry]:
+        """Effective ADJUSTMENTs whose ``source_ref`` is one of ``receipt_ids``."""
+        return self.effective_adjustments_for_refs(conn, ws, receipt_ids)
+
+    def effective_adjustments_for_refs(self, conn, ws: str,
+                                       refs: Sequence[str]) -> list[LedgerEntry]:
+        """Effective ADJUSTMENTs whose ``source_ref`` is one of ``refs`` (line or receipt ids,
+        which are globally unique), oldest first."""
+        line_ids = list(dict.fromkeys(refs))
         if not line_ids:
             return []
         marks = ",".join("?" * len(line_ids))

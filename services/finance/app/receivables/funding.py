@@ -24,7 +24,7 @@ from .model import (
     LedgerEntry, MovementRoleKind, PendingItem, PendingKind,
 )
 from .pending import PendingQueue
-from .receipts import consume_credits
+from .receipts import consume_credits, reverse_receipt_adjustments
 
 LinkResult = Literal["LINKED", "WAITING", "AMBIGUOUS", "ALREADY_LINKED"]
 
@@ -268,6 +268,7 @@ def _undo(repo: ReceivablesRepository, conn, ws: str, funding: Funding, reason: 
     the allocations on those lines. Returns the payers whose charges were reversed."""
     payers: list[str] = []
     lines: list[str] = []
+    receipts: list[str] = []
     for eid in funding.exchange_ids:
         for entry in repo.effective_charges_for_exchange(conn, ws, eid, "EUR"):
             lines.append(entry.source_ref)
@@ -277,6 +278,8 @@ def _undo(repo: ReceivablesRepository, conn, ws: str, funding: Funding, reason: 
                 reverses_id=entry.id))
             for aid in repo.live_allocation_ids_for_line(conn, ws, entry.source_ref):
                 repo.revoke(conn, ws, "allocation", aid, reason, now)
+                receipts.append(conn.execute("SELECT receipt_id FROM allocation WHERE id=?",
+                                             (aid,)).fetchone()["receipt_id"])
             payers.append(entry.counterparty_id)
     for adj in repo.effective_adjustments_for_lines(conn, ws, lines):
         # a small difference closed on a line goes with the charge it settled
@@ -284,6 +287,7 @@ def _undo(repo: ReceivablesRepository, conn, ws: str, funding: Funding, reason: 
             _id(), ws, repo.next_number(conn, ws, "E"), adj.counterparty_id, adj.currency,
             -adj.amount_minor, EntryKind.REVERSAL, now.date(), adj.source_ref, reason,
             reverses_id=adj.id))
+    reverse_receipt_adjustments(repo, conn, ws, receipts, reason, now)
     repo.replace_funding_shares(conn, ws, funding.id, {}, reason, now)  # revokes, adds none
     for root in funding.movement_ids:
         for role_id in repo.live_role_ids_for_movement(conn, root):
