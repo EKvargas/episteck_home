@@ -68,6 +68,33 @@ Inferencia o interpretación producida por AI que va más allá de la extracció
 de una evidencia y permanece explícitamente tentativa.
 _Evitar_: recuerdo confirmado, diagnóstico, dato observado.
 
+## Orientación nutricional y procedencia
+
+**Nutrition Recommendation (recomendación nutricional)**:
+Orientación atribuida a una fuente para un contexto y periodo concretos, con
+alcance y limitaciones explícitos; su aplicación no la convierte en diagnóstico.
+_Evitar_: verdad clínica universal, respuesta libre de AI sin procedencia.
+
+**Nutrition Reference (referencia nutricional)**:
+Recomendación publicada por una institución identificada para una población
+definida; es distinta de la adaptación que Episteck haga de ella.
+_Evitar_: objetivo personal, indicación individual, frontera de seguridad.
+
+**Episteck Guidance (orientación de Episteck)**:
+Recomendación definida o adaptada por Episteck a partir de evidencia identificada,
+con los supuestos y decisiones propios diferenciados de la fuente original.
+_Evitar_: recomendación institucional literal, prescripción profesional.
+
+**Personal Nutrition Goal (objetivo nutricional personal)**:
+Preferencia de orientación elegida por una persona autorizada para sí o para un
+ámbito permitido, sin adquirir por ello validez científica o clínica.
+_Evitar_: referencia institucional, consentimiento para acceder a otros datos.
+
+**Applied Recommendation (recomendación aplicada)**:
+Orientación seleccionada en un contexto concreto cuya procedencia conserva la
+fuente original, las adaptaciones y el motivo de selección.
+_Evitar_: autoridad científica por estar activa, objetivo global sin contexto.
+
 ## Primer vertical aprobado
 
 **Health Journey (recorrido de salud)**:

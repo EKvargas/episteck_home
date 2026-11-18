@@ -119,14 +119,17 @@ This work may proceed as architecture research in parallel, but it is **not a Kn
 Technology Gate blocker** and does not authorize production deployment or provider
 credential onboarding.
 
-### G2 — Health / real family onboarding `[BLOCKED]`
+### G2 — Health / real family onboarding `[USER APPROVED; ONBOARDING PENDING]`
 First real Person + explicit consent + real Pregnancy Nutrition Profile + real
 providers + real meal plan + planned→actual + Home Agent with the real user.
 
-Remaining blockers:
+Approval and remaining delivery:
 1. ✅ **Knowledge Technology Gate** closed 2026-09-25 (see above).
-2. Explicit user approval for real family/health data.
-3. Approved G2 / Health architecture, Real-Person onboarding, and real ConsentGrants.
+2. ✅ User explicitly approved G2 on 2026-11-15 for Ana's pregnancy nutrition
+   ("G2 es aprobado"); see `STATUS.md`. Do not re-request the same project approval.
+3. Concrete G2 / Health architecture, Real-Person onboarding, and authenticated,
+   scoped ConsentGrants remain to be delivered and validated. Project approval
+   does not create runtime grants or establish another person's sharing consent.
 
 Duplicate OIDC `sub` remediation is deferred under approved amendment A5. The G1.6
 actor path does not use `sub`; remediation remains mandatory before any native/public
@@ -135,8 +138,8 @@ OIDC client relies on `(issuer, sub)` and is not a G1.6 completion blocker.
 EU residency is **not** a blocker — see the withdrawn G1.7 note above.
 
 Trusted actor design, implementation, production cutover, and closeout are complete.
-Next: Knowledge KAP-2 close-out, then KAP-3…KAP-10. G2 / Health architecture still
-needs explicit approval.
+Next for Knowledge: KAP-2 close-out, then KAP-3…KAP-10. G2 pregnancy nutrition has
+user authorization recorded; concrete architecture and real onboarding are pending.
 
 ### Later
 Device Gateway/Withings, FHIR, Mind, Calendar, Documents, Finance, reverse proxy +
