@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from fractions import Fraction
@@ -24,6 +25,7 @@ from .model import (
     LedgerEntry, MovementRoleKind, PendingItem, PendingKind,
 )
 from .pending import PendingQueue
+from .receipts import consume_credits, release_charges
 
 LinkResult = Literal["LINKED", "WAITING", "AMBIGUOUS", "ALREADY_LINKED"]
 
@@ -38,11 +40,6 @@ def _id() -> str:
 
 def _error(code: str) -> dict:
     return {"ok": False, "error": code}
-
-
-def consume_credits(repo: ReceivablesRepository, conn, ws: str, payer_id: str,
-                    currency: str) -> None:
-    """Seam: Task 7 applies the payer's receipt credits FIFO to open lines. No-op for now."""
 
 
 def _day(mv: domain.Movement) -> date:
@@ -86,6 +83,53 @@ def _charges_eur(repo: ReceivablesRepository, conn, ws: str, ln: ExchangeLine) -
     return payer is not None and payer.kind is CounterpartyKind.PERSON
 
 
+@dataclass(frozen=True)
+class FundingSplit:
+    """A funding's EUR over its exchanges' current lines (§6.2, R16): the implied rate, the
+    per-payer shares (OWNER and FUND included, informational) and the per-line EUR charges
+    (PERSON lines with an EUR debt only; an owner-stated EUR figure wins)."""
+
+    usd_minor: int
+    rate: Fraction
+    shares: dict[str, int]
+    charges: tuple[tuple[ExchangeLine, int], ...]
+
+
+def split_funding(repo: ReceivablesRepository, conn, ws: str, eur_minor: int,
+                  lines: Sequence[ExchangeLine]) -> FundingSplit:
+    """Pure: the largest-remainder split of ``eur_minor`` over ``lines`` (in exchange-number,
+    then position order). Raises ``ValueError`` if either side is not positive."""
+    usd = sum(ln.usd_minor for ln in lines)
+    rate = implied_rate(eur_minor, usd)
+    shares: dict[str, int] = {}
+    charges: list[tuple[ExchangeLine, int]] = []
+    for ln, part in zip(lines, split_largest_remainder(eur_minor, [ln.usd_minor for ln in lines])):
+        shares[ln.payer_id] = shares.get(ln.payer_id, 0) + part
+        amount = ln.eur_override_minor if ln.eur_override_minor is not None else part
+        if amount > 0 and _charges_eur(repo, conn, ws, ln):
+            charges.append((ln, amount))
+    return FundingSplit(usd, rate, shares, tuple(charges))
+
+
+def write_eur_charges(repo: ReceivablesRepository, conn, ws: str,
+                      charges: Sequence[tuple[ExchangeLine, int]], day: date) -> list[str]:
+    """One EUR CHARGE per line (``source_ref`` = line id). Returns the payers charged."""
+    for ln, amount in charges:
+        repo.insert_entry(conn, LedgerEntry(
+            _id(), ws, repo.next_number(conn, ws, "E"), ln.payer_id, "EUR", amount,
+            EntryKind.CHARGE, day, ln.id))
+    return list(dict.fromkeys(ln.payer_id for ln, _ in charges))
+
+
+def funding_day(repo: ReceivablesRepository, conn, ws: str, funding: Funding) -> date:
+    """The day its EUR charges take effect: the latest partner payment (latest versions)."""
+    days = [_day(mv) for root in funding.movement_ids
+            if (mv := repo.movement_current(conn, ws, root)) is not None]
+    if not days:
+        raise ValidationError("movement")
+    return max(days)
+
+
 def create_funding(repo: ReceivablesRepository, conn, ws: str, movement_ids: Sequence[str],
                    exchange_ids: Sequence[str], queue: PendingQueue, now: datetime) -> Funding:
     payments: dict[str, domain.Movement] = {}
@@ -110,30 +154,17 @@ def create_funding(repo: ReceivablesRepository, conn, ws: str, movement_ids: Seq
 
     lines = [ln for ex in exchanges for ln in repo.current_lines(conn, ex.id)]
     eur = sum(-mv.amount_minor for mv in payments.values())
-    usd = sum(ln.usd_minor for ln in lines)
-    rate = implied_rate(eur, usd)
-    splits = split_largest_remainder(eur, [ln.usd_minor for ln in lines])
-    shares: dict[str, int] = {}
-    for ln, part in zip(lines, splits):
-        shares[ln.payer_id] = shares.get(ln.payer_id, 0) + part
+    split = split_funding(repo, conn, ws, eur, lines)
     day = max(_day(mv) for mv in payments.values())
     funding = Funding(_id(), ws, repo.next_number(conn, ws, "F"), tuple(payments),
-                      tuple(ex.id for ex in exchanges), eur, usd, now)
-    repo.insert_funding(conn, funding, shares)
-
-    charged: list[str] = []
-    for ln, part in zip(lines, splits):
-        amount = ln.eur_override_minor if ln.eur_override_minor is not None else part
-        if amount > 0 and _charges_eur(repo, conn, ws, ln):
-            repo.insert_entry(conn, LedgerEntry(
-                _id(), ws, repo.next_number(conn, ws, "E"), ln.payer_id, "EUR", amount,
-                EntryKind.CHARGE, day, ln.id))
-            charged.append(ln.payer_id)
+                      tuple(ex.id for ex in exchanges), eur, split.usd_minor, now)
+    repo.insert_funding(conn, funding, split.shares)
+    charged = write_eur_charges(repo, conn, ws, split.charges, day)
     for root in payments:
         repo.insert_movement_role(conn, ws, root, MovementRoleKind.EXCHANGE_FUNDING)
-    for payer in dict.fromkeys(charged):
-        consume_credits(repo, conn, ws, payer, "EUR")
-    _notify(conn, ws, funding, exchanges, rate, repo.usd_per_eur_on(conn, day), queue)
+    for payer in charged:
+        consume_credits(repo, conn, ws, payer, "EUR", queue=queue, now=now)
+    _notify(conn, ws, funding, exchanges, split.rate, repo.usd_per_eur_on(conn, day), queue)
     return funding
 
 
@@ -268,24 +299,18 @@ def link_choice(repo: ReceivablesRepository, conn, ws: str, movement_id: str | N
 
 def _undo(repo: ReceivablesRepository, conn, ws: str, funding: Funding, reason: str,
           now: datetime) -> list[str]:
-    """Revokes a live funding with its shares and roles, reverses its EUR charges and revokes
-    the allocations on those lines. Returns the payers whose charges were reversed."""
-    payers: list[str] = []
-    for eid in funding.exchange_ids:
-        for entry in repo.effective_charges_for_exchange(conn, ws, eid, "EUR"):
-            repo.insert_entry(conn, LedgerEntry(
-                _id(), ws, repo.next_number(conn, ws, "E"), entry.counterparty_id, "EUR",
-                -entry.amount_minor, EntryKind.REVERSAL, now.date(), entry.source_ref, reason,
-                reverses_id=entry.id))
-            for aid in repo.live_allocation_ids_for_line(conn, ws, entry.source_ref):
-                repo.revoke(conn, ws, "allocation", aid, reason, now)
-            payers.append(entry.counterparty_id)
+    """Revokes a live funding with its shares and roles and releases its EUR charges with
+    their line settlements, forgiveness included (``release_charges``, R28). Returns the
+    payers whose charges were reversed."""
+    charges = [entry for eid in funding.exchange_ids
+               for entry in repo.effective_charges_for_exchange(conn, ws, eid, "EUR")]
+    payers = [payer for payer, _ in release_charges(repo, conn, ws, charges, reason, now)]
     repo.replace_funding_shares(conn, ws, funding.id, {}, reason, now)  # revokes, adds none
     for root in funding.movement_ids:
         for role_id in repo.live_role_ids_for_movement(conn, root):
             repo.revoke(conn, ws, "movement_role", role_id, reason, now)
     repo.revoke(conn, ws, "funding", funding.id, reason, now)
-    return list(dict.fromkeys(payers))
+    return payers
 
 
 def reverse_funding(repo: ReceivablesRepository, conn, ws: str, funding_id: str, reason: str,
@@ -296,5 +321,5 @@ def reverse_funding(repo: ReceivablesRepository, conn, ws: str, funding_id: str,
     if funding is None:
         raise ValidationError("funding")
     for payer in _undo(repo, conn, ws, funding, reason, now):
-        consume_credits(repo, conn, ws, payer, "EUR")
+        consume_credits(repo, conn, ws, payer, "EUR", queue=queue, now=now)
     return [ask_link_funding(repo, conn, ws, root, queue) for root in funding.movement_ids]

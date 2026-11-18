@@ -262,6 +262,62 @@ def test_reversal_needs_one_effective_target(tmp_path):
         assert rr.balance(c, WS, "cp-1", "USD") == 0
 
 
+def test_reversal_must_mirror_its_target(tmp_path):
+    _, rr = make(tmp_path)
+    with rr.tx() as c:
+        rr.insert_entry(c, entry("e1", 1, 12000))
+    bad = [
+        entry("e9", 9, -12000, cpid="cp-2", kind=EntryKind.REVERSAL, rev="e1"),  # other party
+        reversal("e9", 9, "e1", -12000, cur="EUR"),                             # other currency
+        reversal("e9", 9, "e1", -11999),                                        # not the negation
+        reversal("e9", 9, "e1", 12000),                                         # same sign
+    ]
+    for e in bad:
+        with pytest.raises(ValueError):
+            with rr.tx() as c:
+                rr.insert_entry(c, e)
+    with rr.tx() as c:
+        rr.insert_entry(c, reversal("e2", 2, "e1", -12000))
+        assert rr.balance(c, WS, "cp-1", "USD") == 0
+
+
+def test_open_lines_subtract_forgiveness_sourced_to_the_line(tmp_path):
+    _, rr = make(tmp_path)
+    with rr.tx() as c:
+        rr.insert_exchange(c, exchange(), [line()])
+        rr.insert_entry(c, entry("e1", 1, 12000))
+        rr.insert_entry(c, entry("e2", 2, -2000, kind=EntryKind.FORGIVE))
+    with rr.read() as c:
+        assert rr.open_lines(c, WS, "cp-1", "USD") == [OpenLine("line-1", 10000, 101)]
+        assert rr.balance(c, WS, "cp-1", "USD") == 10000
+
+
+def test_lookups_by_human_ref(tmp_path):
+    _, rr = make(tmp_path)
+    with rr.tx() as c:
+        rr.insert_exchange(c, exchange(), [line()])
+        rr.insert_funding(c, Funding("f1", WS, 3, (), ("x1",), 9200, 10000, T0), {"cp-1": 9200})
+        rr.insert_receipt(c, receipt("r1", 4, 5000))
+        rr.insert_entry(c, entry("e1", 5, 12000))
+        rr.insert_entry(c, entry("e2", 6, 100, kind=EntryKind.ADJUSTMENT))
+        rr.insert_entry(c, reversal("e3", 7, "e2", -100))
+        assert rr.funding_by_ref(c, WS, " f3").id == "f1"
+        assert rr.receipt_by_ref(c, WS, "r4").id == "r1"
+        assert rr.entry_by_ref(c, WS, "E5").id == "e1"
+        assert rr.entry_by_ref(c, WS, "E6") is None  # undone by a live REVERSAL
+        assert rr.entry_by_ref(c, WS, "E6", include_undone=True).id == "e2"
+        assert rr.exchange_by_id(c, WS, "x1").number == 1
+        for ref in ("F", "F3x", "C3", "f99", "F" + "9" * 10):
+            assert rr.funding_by_ref(c, WS, ref) is None
+        rr.revoke(c, WS, "funding", "f1", "r", T0)
+        rr.revoke(c, WS, "receipt", "r1", "r", T0)
+        rr.revoke(c, WS, "exchange", "x1", "r", T0)
+        assert rr.funding_by_ref(c, WS, "F3") is None
+        assert rr.funding_by_ref(c, WS, "F3", include_revoked=True).id == "f1"
+        assert rr.receipt_by_ref(c, WS, "R4") is None
+        assert rr.exchange_by_id(c, WS, "x1") is None
+
+
 def test_open_lines_subtract_live_allocations(tmp_path):
     _, rr = make(tmp_path)
     with rr.tx() as c:
@@ -677,3 +733,14 @@ def test_revoke_rejects_unknown_table(tmp_path):
             rr.revoke(c, WS, "ledger_entries", "e1", "typo", T0)
     with rr.read() as c:
         assert c.execute("SELECT COUNT(*) FROM revocation").fetchone()[0] == 0
+
+
+def test_receipt_by_id_finds_the_live_receipt_only(tmp_path):
+    _, rr = make(tmp_path)
+    with rr.tx() as c:
+        rr.insert_receipt(c, receipt("r1", 1, 5000))
+        assert rr.receipt_by_id(c, WS, "r1").number == 1
+        assert rr.receipt_by_id(c, "ws-2", "r1") is None
+        assert rr.receipt_by_id(c, WS, "nope") is None
+        rr.revoke(c, WS, "receipt", "r1", "x", T0)
+        assert rr.receipt_by_id(c, WS, "r1") is None
