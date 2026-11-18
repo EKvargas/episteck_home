@@ -308,6 +308,59 @@ def adjustments(repo, c, cp):
             for e in repo.effective_adjustments_for_refs(c, WS, refs)]
 
 
+def undone(repo, c, entry):
+    """The entry is no longer effective and exactly one REVERSAL references it."""
+    reversals = [e for e in repo.entries(c, WS, entry.counterparty_id)
+                 if e.kind is REVERSAL and e.reverses_id == entry.id]
+    return repo.entry_by_ref(c, WS, f"E{entry.number}") is None and len(reversals) == 1
+
+
+def test_reverse_funding_undoes_forgiveness_with_the_charge(tmp_path):
+    repo, q = make(tmp_path)
+    with repo.tx() as c:
+        exchange(repo, c)
+        fund(repo, c, q, "m1", 27600)
+        gift = forgive(repo, c, WS, "C1:Familiar B", 2000, "gift", NOW)
+        assert repo.balance(c, WS, "b", "EUR") == 5360
+        reverse(repo, c, WS, "F1", "wrong payment", q, NOW)
+        assert undone(repo, c, gift)
+        assert repo.balance(c, WS, "b", "EUR") == 0  # no fake credit
+        assert not [r for r in receivables_view(repo, c, WS, NOW)["held_for_others"]
+                    if r["counterparty"] == "Familiar B"]
+        assert try_link(repo, c, WS, repo.movement_current(c, WS, "m1"), q, NOW) == "LINKED"
+        assert repo.balance(c, WS, "b", "EUR") == 7360  # charged in full again
+        assert outstanding(repo, c, "b", "EUR") == [7360]
+        again = forgive(repo, c, WS, "C1:Familiar B", None, "gift again", NOW)
+        assert again.amount_minor == -7360 and repo.balance(c, WS, "b", "EUR") == 0
+
+
+def test_correction_undoes_forgiveness_on_a_recharged_line_of_the_funding(tmp_path):
+    repo, q = make(tmp_path)
+    with repo.tx() as c:
+        c1 = exchange(repo, c, D13, [LineInput("a", 12000), LineInput("b", 8000)])
+        c2 = exchange(repo, c, D13, [LineInput("b", 4000)])
+        move(repo, c, "m1", -22080)
+        create_funding(repo, c, WS, ["m1"], [c1.id, c2.id], q, NOW)
+        gift = forgive(repo, c, WS, "C2:Familiar B", 1000, "gift", NOW)
+        assert repo.balance(c, WS, "b", "EUR") == 7360 + 3680 - 1000
+        correct_exchange(repo, c, WS, c1.id, [LineInput("a", 12000), LineInput("b", 6000)],
+                         None, "b was 60", NOW, queue=q)
+        assert undone(repo, c, gift)
+        assert repo.balance(c, WS, "b", "EUR") == 6022 + 4014  # C2 re-charged in full
+        forgive(repo, c, WS, "C2:Familiar B", 1000, "gift again", NOW)
+        assert repo.balance(c, WS, "b", "EUR") == 6022 + 4014 - 1000
+
+
+def test_reverse_exchange_undoes_its_forgiveness_once(tmp_path):
+    repo, q = make(tmp_path)
+    with repo.tx() as c:
+        exchange(repo, c)
+        gift = forgive(repo, c, WS, "C1:Familiar A", 2000, "gift", NOW)
+        reverse(repo, c, WS, "C1", "duplicate", q, NOW)
+        assert undone(repo, c, gift)
+        assert repo.balance(c, WS, "a", "USD") == 0
+
+
 def test_correction_moves_a_small_difference_to_the_new_line(tmp_path):
     repo, q = make(tmp_path)
     with repo.tx() as c:

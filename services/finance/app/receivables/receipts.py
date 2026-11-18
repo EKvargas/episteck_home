@@ -209,9 +209,10 @@ def release_charges(repo: ReceivablesRepository, conn, ws: str, charges: Sequenc
                     reason: str, now: datetime) -> list[tuple[str, str]]:
     """Undoes effective CHARGEs together with what settled their lines.
 
-    In one step: a ``REVERSAL`` of each charge and of the ADJUSTMENTs sourced to its line
-    (R26), revocation of the line's live allocations and reversal of those receipts'
-    write-offs (R27). A FORGIVE sourced to the line is left to the caller. Returns the
+    In one step: a ``REVERSAL`` of each charge and of the settlements sourced to its line
+    (small-difference ADJUSTMENTs, R26, and FORGIVEs, R28: a gift on an un-charged line would
+    show as a credit; the owner forgives again once it is charged again), revocation of the
+    line's live allocations and reversal of those receipts' write-offs (R27). Returns the
     (payer, currency) pairs touched; the caller re-runs ``consume_credits`` for them.
     """
     lines = list(dict.fromkeys(e.source_ref for e in charges))
@@ -220,8 +221,8 @@ def release_charges(repo: ReceivablesRepository, conn, ws: str, charges: Sequenc
     allocations = repo.live_allocations_for_lines(conn, ws, lines)
     for a in allocations:
         repo.revoke(conn, ws, "allocation", a.id, reason, now)
-    for adj in repo.effective_adjustments_for_lines(conn, ws, lines):
-        reverse_entry(repo, conn, ws, adj, reason, now)
+    for settled in repo.effective_settlements_for_lines(conn, ws, lines):
+        reverse_entry(repo, conn, ws, settled, reason, now)
     reverse_receipt_adjustments(repo, conn, ws, [a.receipt_id for a in allocations], reason, now)
     return list(dict.fromkeys((e.counterparty_id, e.currency) for e in charges))
 

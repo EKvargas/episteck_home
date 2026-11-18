@@ -299,11 +299,9 @@ def link_choice(repo: ReceivablesRepository, conn, ws: str, movement_id: str | N
 
 def _undo(repo: ReceivablesRepository, conn, ws: str, funding: Funding, reason: str,
           now: datetime) -> list[str]:
-    """Revokes a live funding with its shares and roles and releases its EUR charges
-    (``release_charges``). Returns the payers whose charges were reversed.
-
-    A FORGIVE sourced to one of those lines stays: the lines keep their ids, so a re-created
-    funding charges them again and the forgiveness applies again."""
+    """Revokes a live funding with its shares and roles and releases its EUR charges with
+    their line settlements, forgiveness included (``release_charges``, R28). Returns the
+    payers whose charges were reversed."""
     charges = [entry for eid in funding.exchange_ids
                for entry in repo.effective_charges_for_exchange(conn, ws, eid, "EUR")]
     payers = [payer for payer, _ in release_charges(repo, conn, ws, charges, reason, now)]

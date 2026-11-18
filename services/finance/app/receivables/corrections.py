@@ -2,7 +2,8 @@
 
 No fact is edited. Undo is a ``REVERSAL`` entry and/or a ``revocation`` row, and whatever
 settled a released line goes with it: its allocations (re-made by ``consume_credits``), its
-small-difference ADJUSTMENTs (R26) and the write-offs of the receipts involved (R27).
+small-difference ADJUSTMENTs (R26), its FORGIVEs (R28: forgive again once re-charged) and
+the write-offs of the receipts involved (R27).
 The caller owns the transaction; every function validates before its first write.
 """
 from __future__ import annotations
@@ -353,14 +354,10 @@ def _reverse_exchange(repo: ReceivablesRepository, conn, ws: str, ref: str, reas
     funding = repo.live_funding_for_exchange(conn, ex.id)
     if funding is not None:  # reverse the funding first (F<n>)
         raise ValidationError("funded", {"funding_ref": f"F{funding.number}"})
-    line_ids = [ln.id for ln in repo.current_lines(conn, ex.id)]
-    gifts = repo.effective_entries_for_refs(conn, ws, line_ids, (EntryKind.FORGIVE,))
     charges = [*repo.effective_charges_for_exchange(conn, ws, ex.id, "USD"),
                *repo.effective_charges_for_exchange(conn, ws, ex.id, "EUR")]
 
-    touched = release_charges(repo, conn, ws, charges, reason, now)
-    for gift in gifts:  # nothing is left to forgive
-        reverse_entry(repo, conn, ws, gift, reason, now)
+    touched = release_charges(repo, conn, ws, charges, reason, now)  # gifts included (R28)
     repo.revoke(conn, ws, "exchange", ex.id, reason, now)
     _settle(repo, conn, ws, touched, queue, now)
     return {"ok": True, "status": "reversed", "ref": f"C{ex.number}"}

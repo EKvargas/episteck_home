@@ -45,6 +45,11 @@ REVOCABLE_TABLES = frozenset({
 })
 
 
+# Entries sourced to a line that settle part of its charge: they reduce the line's
+# outstanding (open_lines) and are reversed whenever the line is un-charged (R26, R28).
+LINE_SETTLEMENTS = (EntryKind.ADJUSTMENT, EntryKind.FORGIVE)
+_SETTLEMENT_SQL = ",".join(f"'{k.value}'" for k in LINE_SETTLEMENTS)
+
 MAX_REF_DIGITS = 9  # "C<n>" refs; longer digit strings are not refs (and overflow SQLite)
 MAX_LINE_POSITION = 99  # open-line order is exchange number * 100 + position
 
@@ -518,7 +523,7 @@ class ReceivablesRepository:
             "  SELECT SUM(a.amount_minor) FROM allocation a WHERE a.workspace_id=? "
             f"  AND a.line_id=c.line_id AND {_live('allocation', 'a')}), 0)"
             " + COALESCE((SELECT SUM(j.amount_minor) FROM ledger_entry j WHERE j.workspace_id=?"
-            "  AND j.kind IN ('ADJUSTMENT','FORGIVE') AND j.source_ref=c.line_id"
+            f"  AND j.kind IN ({_SETTLEMENT_SQL}) AND j.source_ref=c.line_id"
             f"  AND {_effective('j')}), 0)"
             " AS outstanding"
             " FROM (SELECT l.source_ref AS line_id, x.number * 100 + el.position AS ord,"
@@ -548,6 +553,12 @@ class ReceivablesRepository:
                                         line_ids: Sequence[str]) -> list[LedgerEntry]:
         """Effective ADJUSTMENTs whose ``source_ref`` is one of ``line_ids``, oldest first."""
         return self.effective_adjustments_for_refs(conn, ws, line_ids)
+
+    def effective_settlements_for_lines(self, conn, ws: str,
+                                        line_ids: Sequence[str]) -> list[LedgerEntry]:
+        """Effective ``LINE_SETTLEMENTS`` (ADJUSTMENT, FORGIVE) sourced to these lines, oldest
+        first: what goes with a line's charge when it is un-charged (R26, R28)."""
+        return self.effective_entries_for_refs(conn, ws, line_ids, LINE_SETTLEMENTS)
 
     def effective_adjustments_for_receipts(self, conn, ws: str,
                                            receipt_ids: Sequence[str]) -> list[LedgerEntry]:
