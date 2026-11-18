@@ -13,6 +13,8 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 
+from .receivables_schema import SCHEMA_I2
+
 BUSY_TIMEOUT_MS = 10_000
 
 SCHEMA = """
@@ -132,6 +134,7 @@ def connect(path: str) -> sqlite3.Connection:
 
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    conn.executescript(SCHEMA_I2)
 
 
 @contextmanager
