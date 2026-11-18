@@ -48,7 +48,17 @@ class OpenFoodFactsProvider(FoodProvider):
                     nutrients[canon] = to_canonical(val, off_unit, CANONICAL_UNITS[canon])
                 except ValueError:
                     continue
-        return FoodRecord(f"off:{code}", product.get("product_name") or code, nutrients, self.name, str(code))
+        tags = product.get("categories_tags") or []
+        category = ",".join(tags) or None
+        serving_g = None
+        sq = product.get("serving_quantity")
+        if sq not in (None, "") and str(product.get("serving_quantity_unit") or "g").lower() == "g":
+            try:
+                serving_g = Decimal(str(sq))
+            except ArithmeticError:
+                serving_g = None
+        return FoodRecord(f"off:{code}", product.get("product_name") or code, nutrients, self.name, str(code),
+                          category=category, serving_g=serving_g)
 
     def get_nutrients(self, food_id: str, quantity, unit: str) -> dict:
         if unit not in ("g", "gram", "grams"):

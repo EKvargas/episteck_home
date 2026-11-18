@@ -9,6 +9,7 @@ CANONICAL_UNITS = {
     "calcium_mg": "mg", "iron_mg": "mg", "folate_ug": "ug", "vitamin_b12_ug": "ug",
     "vitamin_d_ug": "ug", "iodine_ug": "ug", "zinc_mg": "mg", "selenium_ug": "ug",
     "choline_mg": "mg", "dha_g": "g", "epa_g": "g",
+    "sugars_total_g": "g", "sugars_added_g": "g",
 }
 
 # USDA FoodData Central nutrient number -> canonical key (+ expected USDA unit).
@@ -21,6 +22,7 @@ USDA_BY_NUMBER = {
     "314": ("iodine_ug", "UG"), "309": ("zinc_mg", "MG"), "317": ("selenium_ug", "UG"),
     "421": ("choline_mg", "MG"),
     "621": ("dha_g", "G"), "629": ("epa_g", "G"),
+    "269": ("sugars_total_g", "G"), "539": ("sugars_added_g", "G"),
 }
 
 # Open Food Facts nutriments key (per 100g) -> (canonical key, OFF unit)
@@ -32,6 +34,7 @@ OFF_KEYS = {
     "vitamin-d_100g": ("vitamin_d_ug", "g"), "zinc_100g": ("zinc_mg", "g"),
     "selenium_100g": ("selenium_ug", "g"), "iodine_100g": ("iodine_ug", "g"),
     "folates_100g": ("folate_ug", "g"),
+    "sugars_100g": ("sugars_total_g", "g"), "added-sugars_100g": ("sugars_added_g", "g"),
 }
 
 # unit conversion to canonical (factor to multiply the raw value by)

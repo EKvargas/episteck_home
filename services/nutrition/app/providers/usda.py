@@ -43,8 +43,17 @@ class UsdaFoodProvider(FoodProvider):
                     nutrients[canon] = to_canonical(amount, usda_unit, CANONICAL_UNITS[canon])
                 except ValueError:
                     continue  # unknown conversion -> leave nutrient UNKNOWN (absent)
+        category = (data.get("foodCategory") or {}).get("description") or None
+        serving_g = None
+        for portion in data.get("foodPortions") or []:
+            if portion.get("gramWeight") is not None:
+                serving_g = Decimal(str(portion["gramWeight"]))
+                break
+        if serving_g is None and data.get("servingSize") is not None                 and str(data.get("servingSizeUnit", "")).lower() == "g":
+            serving_g = Decimal(str(data["servingSize"]))
         return FoodRecord(f"usda:{fdc}", data.get("description", ""), nutrients,
-                          f"{self.name}:{data.get('dataType','?')}", str(fdc))
+                          f"{self.name}:{data.get('dataType','?')}", str(fdc),
+                          category=category, serving_g=serving_g)
 
     def get_nutrients(self, food_id: str, quantity, unit: str) -> dict:
         if unit not in ("g", "gram", "grams"):
