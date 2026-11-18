@@ -440,6 +440,36 @@ class ReceivablesRepository:
             (ws, ws, payer_id, currency)).fetchall()
         return [OpenLine(r["line_id"], r["outstanding"], r["ord"]) for r in rows]
 
+    def line_with_exchange(self, conn, ws: str,
+                           line_id: str) -> tuple[ExchangeLine, Exchange] | None:
+        """A line (any version) and its live exchange; ``None`` if unknown or revoked."""
+        r = conn.execute(
+            "SELECT el.* FROM exchange_line el JOIN exchange x ON x.id=el.exchange_id "
+            f"WHERE el.workspace_id=? AND el.id=? AND {_live('exchange', 'x')}",
+            (ws, line_id)).fetchone()
+        if r is None:
+            return None
+        x = conn.execute("SELECT * FROM exchange WHERE id=?", (r["exchange_id"],)).fetchone()
+        return _line(r), _exchange(x)
+
+    def line_charged(self, conn, ws: str, line_id: str) -> int:
+        """Σ effective CHARGEs booked against one exchange line."""
+        return conn.execute(
+            "SELECT COALESCE(SUM(l.amount_minor),0) AS s FROM ledger_entry l "
+            "WHERE l.workspace_id=? AND l.source_ref=? AND l.kind='CHARGE' "
+            f"AND {_effective('l')}", (ws, line_id)).fetchone()["s"]
+
+    def flows_since_creation(self, conn, ws: str, cp_id: str,
+                             currency: str) -> tuple[int, int, date | None]:
+        """(Σ effective CHARGEs, Σ effective PAYMENTs as a positive figure, earliest date)."""
+        r = conn.execute(
+            "SELECT COALESCE(SUM(CASE WHEN l.kind='CHARGE' THEN l.amount_minor END),0) AS out_, "
+            "COALESCE(SUM(CASE WHEN l.kind='PAYMENT' THEN -l.amount_minor END),0) AS in_, "
+            "MIN(l.effective_on) AS since FROM ledger_entry l WHERE l.workspace_id=? "
+            f"AND l.counterparty_id=? AND l.currency=? AND {_effective('l')} "
+            "AND l.kind<>'REVERSAL'", (ws, cp_id, currency)).fetchone()
+        return r["out_"], r["in_"], _d(r["since"]) if r["since"] else None
+
     def receipt_remainders(self, conn, ws: str, payer_id: str,
                            currency: str) -> list[tuple[Receipt, int]]:
         rows = conn.execute(
