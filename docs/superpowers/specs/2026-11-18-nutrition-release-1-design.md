@@ -1,6 +1,6 @@
 # Nutrition release 1: Ana's food diary by voice, with a pregnancy mode
 
-**Status:** draft for owner approval · **Date:** 2026-11-18 · **Owner:** Erick
+**Status:** approved by the owner 2026-11-18 · **Date:** 2026-11-18 · **Owner:** Erick
 **Background:** [2026-11-15 draft scope (Codex)](2026-11-15-ana-pregnancy-nutrition-design.md),
 [sugar review](../../architecture/reviews/2026-11-15-nutrition-sugar-review.json),
 [readiness review](../../architecture/reviews/2026-11-15-ana-nutrition-readiness.json),
@@ -31,7 +31,7 @@ to February 2027). Target: Ana uses release 1 daily **before then, early January
 | G2 approved for Ana's pregnancy nutrition | Owner, 2026-11-15 |
 | Ana logs **everything** she eats and drinks, not only sugary items | Owner, 2026-11-18 |
 | Ana gets **her own Telegram bot**; voice is the main input | Owner, 2026-11-18 |
-| Ana's agent chats through a subscription login, the same way OpenClaw and the owner's bots do: a ChatGPT (Codex) login, or Kimi K2.6 through the existing Kimi plan. **No pay-per-use OpenAI API.** Which one is confirmed before step 4 of section 8 | Owner, 2026-11-18 |
+| Ana's agent chats through **the owner's ChatGPT (Codex) login**, the same account as the owner's bot, with **Kimi K2.6** (existing Kimi plan) as fallback. **No pay-per-use OpenAI API** | Owner, 2026-11-18 |
 | Voice notes are transcribed **on the server** (faster-whisper), as OpenClaw and both Hermes agents already do | Owner's setups; Claude's call, 2026-11-18 |
 | If early January is tight, the bot comes first and the remaining app views follow (section 8) | Owner, 2026-11-18 |
 | Spanish interface; German/EU references plus WHO | Owner, 2026-11-18 |
@@ -145,13 +145,13 @@ Ana (Telegram, voice/text)                    Ana (phone browser)
 - **Skill:** `olin-nutrition` in a root-owned external skills directory, the same
   pattern as the Finance skill, so the agent cannot rewrite its own rules. Behavior is
   in 6.8.
-- **Chat model:** a subscription login, never a pay-per-use API key. Recommended: a
-  ChatGPT (Codex) device login with **Ana's own account**, if she has a paid plan. Her
-  conversations then stay in her account and use her own limits, so they can't slow
-  the owner's Finance bot. Alternatives: Kimi K2.6 through the existing Kimi plan (her
-  food conversations then go to Moonshot AI; for Finance the owner kept real data on
-  OpenAI only), or the owner's ChatGPT login (shared limits with his bot). No fallback
-  provider, as for `home-agent`. The owner confirms the choice before step 4 of section 8.
+- **Chat model (owner's decision):** `openai-codex` with the **owner's ChatGPT account**,
+  the same account as `home-agent` (a separate device login into Ana's `~/.hermes`;
+  the owner's agent files are never copied or shared). **Fallback:** Kimi K2.6 through
+  the existing Kimi plan (`fallback_providers`), so when ChatGPT is unavailable her food
+  conversations go to Moonshot AI. The owner's own `home-agent` keeps no fallback.
+  Accepted consequences: both bots share the owner's ChatGPT plan limits, and Ana's
+  conversations appear under the owner's account. Never a pay-per-use API key.
 - **Voice:** Hermes local STT (faster-whisper), `language: es`. Start with `base`, as
   the existing agents do; if Spanish voice notes come out poorly, compare `small` on a
   few sample recordings (RAM and CPU on Nuremberg are limited, so measure). Audio never
