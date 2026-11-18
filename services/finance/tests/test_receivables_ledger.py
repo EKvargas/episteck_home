@@ -183,3 +183,137 @@ def test_repo_flows_ignore_reversed_charges(tmp_path):
         repo.insert_entry(c, LedgerEntry("r1", WS, 99, "f", "USD", -6000, EntryKind.REVERSAL,
                                          date(2026, 11, 13), "x", reverses_id=eid))
         assert repo.flows_since_creation(c, WS, "f", "USD") == (0, 0, None)
+
+
+def _fund_rows(view):
+    return {(r["counterparty"], r["currency"]): r for r in view["held_for_others"]}
+
+
+def _entry(repo, c, n, cp, cur, amount, kind=EntryKind.CHARGE, basis=None):
+    repo.insert_entry(c, LedgerEntry(f"t{n}", WS, 900 + n, cp, cur, amount, kind,
+                                     date(2026, 11, 13), f"s{n}", basis=basis))
+
+
+def _add(repo, c, cid, label, kind, status="ACTIVE", **kw):
+    repo.insert_counterparty(c, Counterparty(cid, WS, kind, label, status, **kw), [label])
+
+
+def _bad(repo, lines):
+    with repo.tx() as c:
+        with pytest.raises(ValidationError) as err:
+            record_exchange(repo, c, WS, partner_id="p",
+                            total_usd_minor=sum(ln.usd_minor for ln in lines), lines=lines,
+                            evidence=None, now=NOW)
+    return err.value
+
+
+def test_override_must_be_positive(tmp_path):
+    repo = make(tmp_path)
+    for ov in (0, -7350):
+        err = _bad(repo, [LineInput("b", 8000, eur_override_minor=ov)])
+        assert err.field == "eur_override" and err.detail["usd"] == "80.00"
+    assert isinstance(err.detail["override"], str)
+
+
+def test_override_refused_with_explicit_usd_debt(tmp_path):
+    repo = make(tmp_path)
+    assert _bad(repo, [LineInput("b", 8000, "USD", eur_override_minor=7350)]).field == "eur_override"
+
+
+def test_override_refused_on_owner_and_fund_lines(tmp_path):
+    repo = make(tmp_path)
+    assert _bad(repo, [LineInput(OWNER, 8000, eur_override_minor=100)]).field == "eur_override"
+    assert _bad(repo, [LineInput("f", 8000, eur_override_minor=100)]).field == "eur_override"
+
+
+def test_override_on_usd_paying_person_without_debt_currency_makes_it_eur(tmp_path):
+    repo = make(tmp_path)
+    with repo.tx() as c:
+        ex = record_exchange(repo, c, WS, partner_id="p", total_usd_minor=8000,
+                             lines=[LineInput("a", 8000, eur_override_minor=7350)],
+                             evidence=None, now=NOW)
+        ln = repo.current_lines(c, ex.id)[0]
+        assert ln.debt_currency == "EUR" and ln.eur_override_minor == 7350
+        assert repo.balance(c, WS, "a", "USD") == 0
+
+
+def test_explicit_eur_debt_on_fund_line_is_refused(tmp_path):
+    repo = make(tmp_path)
+    assert _bad(repo, [LineInput("f", 8000, "EUR")]).field == "debt_currency"
+
+
+def test_inactive_fund_with_balance_is_listed(tmp_path):
+    repo = make(tmp_path)
+    with repo.tx() as c:
+        _add(repo, c, "g", "Fondo G", CounterpartyKind.FUND, "ARCHIVED", opening=Opening.CONFIRMED)
+        _entry(repo, c, 1, "g", "USD", -50000, EntryKind.OPENING, "CONFIRMED")
+        rows = _fund_rows(receivables_view(repo, c, WS, NOW))
+        assert rows[("Fondo G", "USD")]["amount"] == "500.00"
+        assert receivables_view(repo, c, WS, NOW)["subtotals"]["held_for_others"] == {"USD": "500.00"}
+
+
+def test_fund_balance_in_eur_is_listed(tmp_path):
+    repo = make(tmp_path)
+    with repo.tx() as c:
+        _add(repo, c, "g", "Fondo G", CounterpartyKind.FUND, opening=Opening.CONFIRMED)
+        _entry(repo, c, 1, "g", "EUR", -10000, EntryKind.PAYMENT)
+        view = receivables_view(repo, c, WS, NOW)
+        assert _fund_rows(view)[("Fondo G", "EUR")]["amount"] == "100.00"
+        assert view["subtotals"]["held_for_others"] == {"EUR": "100.00"}
+
+
+def test_advancing_fund_shows_negative_and_does_not_net_subtotal(tmp_path):
+    repo = make(tmp_path)
+    with repo.tx() as c:
+        _add(repo, c, "g", "Fondo G", CounterpartyKind.FUND, opening=Opening.CONFIRMED)
+        _add(repo, c, "h", "Fondo H", CounterpartyKind.FUND, opening=Opening.CONFIRMED)
+        _entry(repo, c, 1, "g", "USD", -50000, EntryKind.OPENING, "CONFIRMED")
+        _entry(repo, c, 2, "h", "USD", 10000)
+        view = receivables_view(repo, c, WS, NOW)
+        rows = _fund_rows(view)
+        assert rows[("Fondo H", "USD")]["amount"] == "-100.00"
+        assert view["subtotals"]["held_for_others"] == {"USD": "500.00"}
+
+
+def test_known_opening_fund_shows_balance(tmp_path):
+    repo = make(tmp_path)
+    with repo.tx() as c:
+        _add(repo, c, "g", "Fondo G", CounterpartyKind.FUND, opening=Opening.CONFIRMED)
+        view = receivables_view(repo, c, WS, NOW)
+        assert _fund_rows(view)[("Fondo G", "USD")]["amount"] == "0.00"
+
+
+def test_cash_abroad_where_is_kept_on_owed_rows(tmp_path):
+    repo = make(tmp_path)
+    with repo.tx() as c:
+        _entry(repo, c, 1, "c", "USD", 5000)
+        rows = receivables_view(repo, c, WS, NOW)["owed_to_you"]
+        assert rows[0]["where"] == CASH_ABROAD
+
+
+def test_every_live_balance_appears_in_some_row(tmp_path):
+    repo = make(tmp_path)
+    with repo.tx() as c:
+        _add(repo, c, "g", "Fondo G", CounterpartyKind.FUND, "ARCHIVED", opening=Opening.CONFIRMED)
+        _entry(repo, c, 1, "g", "EUR", -700, EntryKind.PAYMENT)
+        _entry(repo, c, 2, "f", "EUR", 300)
+        _entry(repo, c, 3, "a", "USD", 900)
+        _entry(repo, c, 4, "b", "EUR", -400, EntryKind.PAYMENT)
+        view = receivables_view(repo, c, WS, NOW)
+        shown = {(r["counterparty"], r["currency"])
+                 for r in view["owed_to_you"] + view["held_for_others"]}
+        labels = {cp.id: cp.label for cp in repo.list_counterparties(c, WS)}
+        for (cid, cur), bal in repo.balances(c, WS).items():
+            if bal:
+                assert (labels[cid], cur) in shown
+
+
+def test_owed_to_partner_sums_current_lines_after_correction(tmp_path):
+    repo = make(tmp_path)
+    with repo.tx() as c:
+        ex = e1(repo, c)
+        c.execute("INSERT INTO exchange_line(id,workspace_id,exchange_id,version,position,"
+                  "payer_id,usd_minor,debt_currency) VALUES('l2',?,?,2,0,'a',25000,'USD')",
+                  (WS, ex.id))
+        owed = receivables_view(repo, c, WS, NOW)["owed_to_partner"]
+        assert owed["amount"] == "250.00" and owed["exchanges"][0]["usd"] == "250.00"

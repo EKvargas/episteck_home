@@ -47,6 +47,46 @@ def _usd(minor: int) -> str:
     return format_minor(minor, "USD")
 
 
+def validate_lines(repo: ReceivablesRepository, conn, ws: str,
+                   lines: Sequence[LineInput]) -> list[tuple[LineInput, str]]:
+    """Resolves each line's debt currency and rejects inconsistent EUR overrides (R17).
+
+    Reused by every writer of lines. An override is a positive EUR figure on a PERSON line
+    whose debt is EUR: it is refused on OWNER/FUND lines, with an explicit USD debt, or when
+    not positive. With an override and no explicit debt currency the debt is EUR. An explicit
+    EUR debt on a FUND line is refused rather than coerced.
+    """
+    resolved: list[tuple[LineInput, str]] = []
+    for ln in lines:
+        ov = ln.eur_override_minor
+        bad = {"override": format_minor(ov, "EUR"), "usd": _usd(ln.usd_minor)} if ov is not None else {}
+        if ln.payer_id == OWNER:
+            if ov is not None:
+                raise ValidationError("eur_override", bad)
+            # Not a debt: stored in USD (the column is NOT NULL) and never charged.
+            resolved.append((ln, "USD"))
+            continue
+        payer = repo.get_counterparty(conn, ws, ln.payer_id)
+        if (payer is None or payer.status != "ACTIVE"
+                or payer.kind not in (CounterpartyKind.PERSON, CounterpartyKind.FUND)):
+            raise ValidationError("payer")
+        if payer.kind is CounterpartyKind.FUND:
+            if ln.debt_currency not in (None, "USD"):
+                raise ValidationError("debt_currency")
+            if ov is not None:
+                raise ValidationError("eur_override", bad)
+            cur = "USD"
+        else:
+            if ov is not None and (ov <= 0 or ln.debt_currency == "USD"):
+                raise ValidationError("eur_override", bad)
+            cur = ln.debt_currency or ("EUR" if ov is not None
+                                       else payer.pay_currency or "USD")
+        if cur not in DEBT_CURRENCIES:
+            raise ValidationError("debt_currency")
+        resolved.append((ln, cur))
+    return resolved
+
+
 def record_exchange(repo: ReceivablesRepository, conn, ws: str, *, partner_id: str,
                     total_usd_minor: int, lines: Sequence[LineInput],
                     evidence: Evidence | None, now: datetime) -> Exchange:
@@ -58,23 +98,7 @@ def record_exchange(repo: ReceivablesRepository, conn, ws: str, *, partner_id: s
     if len(lines) > MAX_LINE_POSITION + 1:
         raise ValidationError("lines", {"max": str(MAX_LINE_POSITION + 1)})
 
-    resolved: list[tuple[LineInput, str]] = []
-    for ln in lines:
-        if ln.payer_id == OWNER:
-            # Not a debt: stored in USD (the column is NOT NULL) and never charged.
-            resolved.append((ln, "USD"))
-            continue
-        payer = repo.get_counterparty(conn, ws, ln.payer_id)
-        if (payer is None or payer.status != "ACTIVE"
-                or payer.kind not in (CounterpartyKind.PERSON, CounterpartyKind.FUND)):
-            raise ValidationError("payer")
-        if payer.kind is CounterpartyKind.FUND:
-            cur = "USD"
-        else:
-            cur = ln.debt_currency or payer.pay_currency or "USD"
-        if cur not in DEBT_CURRENCIES:
-            raise ValidationError("debt_currency")
-        resolved.append((ln, cur))
+    resolved = validate_lines(repo, conn, ws, lines)
 
     total_lines = sum(ln.usd_minor for ln in lines)
     if total_lines != total_usd_minor:
@@ -110,7 +134,8 @@ def _where(accounts: dict[str, str], settles_to: str | None) -> str | None:
 
 
 def receivables_view(repo: ReceivablesRepository, conn, ws: str, now: datetime) -> dict:
-    accounts = {a.id: a.institution for a in repo.base.list_accounts(ws)}
+    accounts = {r["id"]: r["institution"] for r in conn.execute(
+        "SELECT id, institution FROM account WHERE workspace_id=?", (ws,))}
     cps = {c.id: c for c in repo.list_counterparties(conn, ws)}
     order = {cid: i for i, cid in enumerate(cps)}
     balances = repo.balances(conn, ws)
@@ -151,33 +176,42 @@ def receivables_view(repo: ReceivablesRepository, conn, ws: str, now: datetime) 
                 "account": _where(accounts, cp.settles_to)})
             held_sub[cur] = held_sub.get(cur, 0) - bal
 
+    # Every fund row with a balance or flows, whatever its status; an ACTIVE fund always
+    # shows its USD row. A negative amount means the owner is advancing the fund (R18).
     for cp in cps.values():
-        if cp.kind is not CounterpartyKind.FUND or cp.status != "ACTIVE":
+        if cp.kind is not CounterpartyKind.FUND:
             continue
-        cur = "USD"
-        bal = balances.get((cp.id, cur), 0)
-        out, inn, since = repo.flows_since_creation(conn, ws, cp.id, cur)
-        unknown = cp.opening in (None, Opening.UNKNOWN)
-        held.append({
-            "counterparty": cp.label, "kind": "FUND", "currency": cur,
-            "amount": None if unknown else format_minor(-bal, cur),
-            "opening": (cp.opening or Opening.UNKNOWN).value,
-            "since": since.isoformat() if since else None,
-            "out_since": format_minor(out, cur) if unknown else None,
-            "in_since": format_minor(inn, cur) if unknown else None,
-            "account": _where(accounts, cp.settles_to)})
-        if not unknown:
-            held_sub[cur] = held_sub.get(cur, 0) - bal
+        currencies = {cur for (cid, cur) in balances if cid == cp.id}
+        if cp.status == "ACTIVE":
+            currencies.add("USD")
+        for cur in sorted(currencies):
+            bal = balances.get((cp.id, cur), 0)
+            out, inn, since = repo.flows_since_creation(conn, ws, cp.id, cur)
+            if not (bal or out or inn or (cp.status == "ACTIVE" and cur == "USD")):
+                continue
+            unknown = cp.opening in (None, Opening.UNKNOWN)
+            held.append({
+                "counterparty": cp.label, "kind": "FUND", "currency": cur,
+                "amount": None if unknown else format_minor(-bal, cur),
+                "opening": (cp.opening or Opening.UNKNOWN).value,
+                "since": since.isoformat() if since else None,
+                "out_since": format_minor(out, cur) if unknown else None,
+                "in_since": format_minor(inn, cur) if unknown else None,
+                "account": _where(accounts, cp.settles_to)})
+            if not unknown and bal < 0:
+                held_sub[cur] = held_sub.get(cur, 0) - bal
 
     to_fix: list[dict] = []
     partner_ex: list[dict] = []
     partner_total = 0
     for ex in repo.open_exchanges(conn, ws):
-        partner_total += ex.total_usd_minor
+        current = repo.current_lines(conn, ex.id)
+        ex_total = sum(el.usd_minor for el in current)  # corrections add line versions
+        partner_total += ex_total
         partner_ex.append({"exchange_ref": f"C{ex.number}",
                            "delivered_on": ex.delivered_on.isoformat(),
-                           "usd": _usd(ex.total_usd_minor)})
-        for el in repo.current_lines(conn, ex.id):
+                           "usd": _usd(ex_total)})
+        for el in current:
             payer = cps.get(el.payer_id)
             if el.debt_currency == "EUR" and payer is not None:
                 to_fix.append({"counterparty": payer.label, "exchange_ref": f"C{ex.number}",

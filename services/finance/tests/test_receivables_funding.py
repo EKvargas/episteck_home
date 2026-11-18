@@ -347,3 +347,26 @@ def test_unlinked_partner_payments_and_current_movement(tmp_path):
         assert repo.movement_current(c, WS, "m2").amount_minor == -5000
         assert repo.movement_current(c, WS, "nope") is None
         assert repo.movement_current(c, "ws-2", "m1") is None
+
+
+def test_old_unlinked_payment_does_not_block_split_link(tmp_path):
+    repo, q = make(tmp_path)
+    with repo.tx() as c:
+        old = pay(repo, c, "old", 5000, D13)
+        assert try_link(repo, c, WS, old, q, NOW) == "WAITING"
+        ex = exchange(repo, c, D14, [LineInput("a", 30000)])
+        assert try_link(repo, c, WS, pay(repo, c, "m1", 13800, D15), q, NOW) == "WAITING"
+        assert try_link(repo, c, WS, pay(repo, c, "m2", 13800, D16), q, NOW) == "LINKED"
+        f = repo.live_funding_for_exchange(c, ex.id)
+        assert set(f.movement_ids) == {"m1", "m2"}
+
+
+def test_payment_dated_before_delivery_is_never_pooled(tmp_path):
+    repo, q = make(tmp_path)
+    with repo.tx() as c:
+        x = pay(repo, c, "x", 13800, date(2026, 10, 1))
+        assert try_link(repo, c, WS, x, q, NOW) == "WAITING"
+        ex = exchange(repo, c, D14, [LineInput("b", 30000)])
+        assert try_link(repo, c, WS, pay(repo, c, "y", 13800, D15), q, NOW) == "WAITING"
+        assert repo.live_funding_for_exchange(c, ex.id) is None
+        assert repo.balance(c, WS, "b", "EUR") == 0

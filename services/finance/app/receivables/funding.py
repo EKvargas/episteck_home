@@ -169,15 +169,24 @@ def try_link(repo: ReceivablesRepository, conn, ws: str, movement: domain.Moveme
     if compatible:
         ask_link_funding(repo, conn, ws, mv.id, queue)
         return "AMBIGUOUS"
-    root = repo.movement_root(conn, mv.id)
-    pool = sorted([mv, *(p for p in repo.unlinked_partner_payments(conn, ws)
-                         if repo.movement_root(conn, p.id) != root)], key=_day)
-    if len(pool) > 1:
-        together = _compatible(repo, conn, ws, sum(-p.amount_minor for p in pool),
-                               max(_day(p) for p in pool))
-        if len(together) == 1:
-            create_funding(repo, conn, ws, [p.id for p in pool], [together[0].id], queue, now)
-            return "LINKED"
+    root, day = repo.movement_root(conn, mv.id), _day(mv)
+    unlinked = [p for p in repo.unlinked_partner_payments(conn, ws)
+                if repo.movement_root(conn, p.id) != root]
+    ecb = repo.usd_per_eur_on(conn, day)
+    fits: list[tuple[Exchange, list[domain.Movement]]] = []
+    for ex in _candidates(repo, conn, ws, day):
+        # only payments from the delivery up to this payment can belong to this exchange (R19)
+        pool = sorted([mv, *(p for p in unlinked if ex.delivered_on <= _day(p) <= day)],
+                      key=_day)
+        if len(pool) < 2:
+            continue
+        eur = sum(-p.amount_minor for p in pool)
+        if ecb is None or deviation(implied_rate(eur, _usd(repo, conn, ex)), ecb) <= LINK_BAND:
+            fits.append((ex, pool))
+    if len(fits) == 1:
+        ex, pool = fits[0]
+        create_funding(repo, conn, ws, [p.id for p in pool], [ex.id], queue, now)
+        return "LINKED"
     return "WAITING"
 
 
