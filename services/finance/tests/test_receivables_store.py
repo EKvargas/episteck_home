@@ -289,3 +289,37 @@ def test_next_number_is_per_prefix_and_workspace(tmp_path):
     with rr.tx() as c:
         assert [rr.next_number(c, WS, "C"), rr.next_number(c, WS, "C"),
                 rr.next_number(c, WS, "P"), rr.next_number(c, "ws-2", "C")] == [1, 2, 1, 1]
+
+
+def _chain(tmp_path):
+    repo, rr = make(tmp_path)
+    seed_connection(repo)
+    repo.add_account(make_account())
+    repo.insert_movement(make_movement("m1", tx="t1", fp="f1"))
+    repo.insert_movement(make_movement("m2", tx="t2", fp="f2", supersedes="m1"))
+    repo.insert_movement(make_movement("m3", tx="t3", fp="f3", supersedes="m2"))
+    return repo, rr
+
+
+@pytest.mark.parametrize("funded,looked_up", [("m1", "m3"), ("m3", "m1")])
+def test_funding_stores_root_movement(tmp_path, funded, looked_up):
+    _, rr = _chain(tmp_path)
+    with rr.tx() as c:
+        rr.insert_funding(c, Funding("f1", WS, 1, (funded,), ("x1",), 1, 1, T0), {})
+    with rr.read() as c:
+        assert rr.live_funding_for_movement(c, looked_up).id == "f1"
+        assert rr.live_funding_for_movement(c, "m2").id == "f1"
+    assert raw_execute(_chain_repo(tmp_path), "SELECT movement_id FROM funding_movement") == [("m1",)]
+
+
+def _chain_repo(tmp_path):
+    return make_repo(tmp_path)
+
+
+def test_revoke_rejects_unknown_table(tmp_path):
+    _, rr = make(tmp_path)
+    with pytest.raises(ValueError):
+        with rr.tx() as c:
+            rr.revoke(c, WS, "ledger_entries", "e1", "typo", T0)
+    with rr.read() as c:
+        assert c.execute("SELECT COUNT(*) FROM revocation").fetchone()[0] == 0

@@ -25,6 +25,11 @@ from .repo import FinanceRepository, _d, _dt, _ts
 
 IGNORE: Literal["IGNORE"] = "IGNORE"
 
+REVOCABLE_TABLES = frozenset({
+    "exchange", "funding", "funding_share", "ledger_entry", "receipt", "allocation",
+    "payer_rule", "movement_role", "partner_identifier",
+})
+
 
 class DuplicateAlias(Exception):
     """An alias is already used by another counterparty in the workspace."""
@@ -201,7 +206,7 @@ class ReceivablesRepository:
             "INSERT INTO funding(id,workspace_id,number,eur_minor,usd_minor,created_at) "
             "VALUES(?,?,?,?,?,?)",
             (f.id, f.workspace_id, f.number, f.eur_minor, f.usd_minor, _ts(f.created_at)))
-        for mid in f.movement_ids:
+        for mid in dict.fromkeys(self.movement_root(conn, m) for m in f.movement_ids):
             conn.execute("INSERT INTO funding_movement(workspace_id,funding_id,movement_id) "
                          "VALUES(?,?,?)", (f.workspace_id, f.id, mid))
         for eid in f.exchange_ids:
@@ -311,12 +316,14 @@ class ReceivablesRepository:
     # --- revocation and rules ----------------------------------------------------
     def revoke(self, conn, ws: str, table: str, target_id: str, reason: str,
                at: datetime) -> None:
+        if table not in REVOCABLE_TABLES:
+            raise ValueError(f"table is not revocable: {table}")
         try:
             conn.execute(
                 "INSERT INTO revocation(id,workspace_id,table_name,target_id,reason,at) "
                 "VALUES(?,?,?,?,?,?)", (_new_id(), ws, table, target_id, reason, _ts(at)))
         except sqlite3.IntegrityError as exc:
-            if "UNIQUE" in str(exc):
+            if exc.sqlite_errorname == "SQLITE_CONSTRAINT_UNIQUE":
                 raise AlreadyRevoked(f"{table}:{target_id}") from exc
             raise
 
