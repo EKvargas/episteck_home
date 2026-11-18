@@ -121,6 +121,15 @@ design: ADR-0011, ADR-0012, ADR-0013 and ADR-0015.
 | B11 findings | ✅ owner approved 2026-11-15, all three fixed in one PR: F1 nft lets only `www-data` reach API `:9935` (`deploy/gateway/episteck-gateway.nft`, applied on the node), F2 `bringup.sh build` labels the image `org.opencontainers.image.revision=<sha>` (takes effect on the next Finance build), F3 Home binds only `svc-finance` delegations for `home_finance_machine_user` (`auth_hook._accepted_audiences`, isolation now two-way). Node SSH also hardened the same day: key-only + fail2ban |
 | Trade Republic securities (I3) | ⏳ not in I1: PSD2 carries the cash account only. Holdings come from Trade Republic's CSV export (proposal R5) |
 
+## Olin Finance I2 (designed, in implementation)
+
+Board: `FINANCE_I2_PROGRESS.md`. Design: `docs/superpowers/specs/2026-11-18-finance-i2-exchanges-design.md`.
+Decision: ADR-0016.
+
+| Item | State |
+| --- | --- |
+| I2 family currency exchanges (receivables ledger in svc-finance) | I2 designed and in implementation; nothing deployed |
+
 ## G2 blockers
 
 1. ✅ **Knowledge Technology Gate** closed 2026-09-25 (SQLite 3.41.2 selected; no
