@@ -19,6 +19,14 @@ def _build_provider():
     mode = os.environ.get("FOOD_PROVIDER", "auto")
     if mode == "synthetic":
         return SyntheticFoodProvider()
+    bls_db = os.environ.get("BLS_DB")
+    if bls_db and os.path.exists(bls_db):
+        # BLS alone justifies the chain, even without a USDA key.
+        from .providers.bls import BlsFoodProvider
+        from .providers.usda import UsdaFoodProvider
+        from .providers.openfoodfacts import OpenFoodFactsProvider
+        from .providers.chain import ProviderChain
+        return ProviderChain([BlsFoodProvider(bls_db), OpenFoodFactsProvider(), UsdaFoodProvider()])
     if os.environ.get("USDA_API_KEY") or os.environ.get("OFF_BASE_URL") or mode == "chain":
         from .providers.usda import UsdaFoodProvider
         from .providers.openfoodfacts import OpenFoodFactsProvider

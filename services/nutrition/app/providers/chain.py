@@ -1,4 +1,4 @@
-"""Provider chain behind the FoodProvider ABC. USDA primary, OFF secondary, room for BLS.
+"""Provider chain behind the FoodProvider ABC. BLS (when configured), OFF and USDA.
 
 - search_food: queries providers in order; each hit keeps its provider prefix (usda:/off:)
   so results are never source-ambiguous. Results are CONCATENATED, not merged.
@@ -21,7 +21,7 @@ class ProviderChain(FoodProvider):
 
     def _route(self, food_id: str) -> FoodProvider:
         prefix = food_id.split(":", 1)[0]
-        mapping = {"usda": "USDA_FDC", "off": "OPEN_FOOD_FACTS"}
+        mapping = {"usda": "USDA_FDC", "off": "OPEN_FOOD_FACTS", "bls": "BLS"}
         want = mapping.get(prefix)
         for p in self._providers:
             if getattr(p, "name", None) == want:
