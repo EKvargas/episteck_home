@@ -444,7 +444,10 @@ class ReceivablesRepository:
             "SELECT line_id, outstanding, ord FROM ("
             " SELECT c.line_id, c.ord, c.first_number, c.charged - COALESCE(("
             "  SELECT SUM(a.amount_minor) FROM allocation a WHERE a.workspace_id=? "
-            f"  AND a.line_id=c.line_id AND {_live('allocation', 'a')}), 0) AS outstanding"
+            f"  AND a.line_id=c.line_id AND {_live('allocation', 'a')}), 0)"
+            " + COALESCE((SELECT SUM(j.amount_minor) FROM ledger_entry j WHERE j.workspace_id=?"
+            f"  AND j.kind='ADJUSTMENT' AND j.source_ref=c.line_id AND {_effective('j')}), 0)"
+            " AS outstanding"
             " FROM (SELECT l.source_ref AS line_id, x.number * 100 + el.position AS ord,"
             "  MIN(l.number) AS first_number, SUM(l.amount_minor) AS charged"
             "  FROM ledger_entry l JOIN exchange_line el ON el.id=l.source_ref"
@@ -453,7 +456,7 @@ class ReceivablesRepository:
             f"  AND {_effective('l')} AND {_live('exchange', 'x')}"
             "  GROUP BY l.source_ref) c"
             ") WHERE outstanding > 0 ORDER BY ord, first_number",
-            (ws, ws, payer_id, currency)).fetchall()
+            (ws, ws, ws, payer_id, currency)).fetchall()
         return [OpenLine(r["line_id"], r["outstanding"], r["ord"]) for r in rows]
 
     def line_with_exchange(self, conn, ws: str,
@@ -505,7 +508,9 @@ class ReceivablesRepository:
                            currency: str) -> list[tuple[Receipt, int]]:
         rows = conn.execute(
             "SELECT r.*, r.amount_minor - COALESCE((SELECT SUM(a.amount_minor) FROM allocation a "
-            f"WHERE a.receipt_id=r.id AND {_live('allocation', 'a')}),0) AS remainder "
+            f"WHERE a.receipt_id=r.id AND {_live('allocation', 'a')}),0) "
+            f"- COALESCE((SELECT SUM(j.amount_minor) FROM ledger_entry j WHERE j.source_ref=r.id "
+            f"AND j.kind='ADJUSTMENT' AND {_effective('j')}),0) AS remainder "
             f"FROM receipt r WHERE r.workspace_id=? AND r.payer_id=? AND r.currency=? "
             f"AND {_live('receipt', 'r')} AND remainder > 0 ORDER BY r.received_on, r.number",
             (ws, payer_id, currency)).fetchall()

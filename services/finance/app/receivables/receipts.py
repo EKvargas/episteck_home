@@ -67,13 +67,36 @@ def _entry(repo: ReceivablesRepository, conn, ws: str, payer_id: str, currency: 
         source_ref))
 
 
+def _settled_ref(repo: ReceivablesRepository, conn, ws: str, payer_id: str, currency: str,
+                 balance: int, fallback: str) -> str:
+    """What a small difference closes: the open line holding a residual the payer still owes,
+    or the receipt holding a remainder we hold of theirs."""
+    if balance > 0:
+        lines = repo.open_lines(conn, ws, payer_id, currency)
+        fits = [ln for ln in lines if ln.outstanding_minor >= balance]
+        if fits:
+            return min(fits, key=lambda ln: (ln.outstanding_minor, -ln.order)).line_id
+        if lines:
+            return max(lines, key=lambda ln: ln.order).line_id
+    else:
+        rems = repo.receipt_remainders(conn, ws, payer_id, currency)
+        fits = [r for r, left in rems if left >= -balance]
+        if fits:
+            return fits[-1].id
+        if rems:
+            return rems[-1][0].id
+    return fallback
+
+
 def _close_small_difference(repo: ReceivablesRepository, conn, ws: str, payer_id: str,
                             currency: str, ref: str, day: date, queue: PendingQueue) -> None:
-    """EUR only: a balance of at most 1,00 either way is closed by an ADJUSTMENT."""
+    """EUR only: a balance of at most 1,00 either way is closed by an ADJUSTMENT whose
+    ``source_ref`` names the line (residual owed) or receipt (credit held) it settles."""
     balance = repo.balance(conn, ws, payer_id, currency)
     if currency != "EUR" or balance == 0 or abs(balance) > EUR_ADJUST_TOLERANCE_MINOR:
         return
-    _entry(repo, conn, ws, payer_id, currency, -balance, EntryKind.ADJUSTMENT, day, ref)
+    target = _settled_ref(repo, conn, ws, payer_id, currency, balance, ref)
+    _entry(repo, conn, ws, payer_id, currency, -balance, EntryKind.ADJUSTMENT, day, target)
     queue.notice(conn, ws, f"small_difference_closed:{ref}", {
         "ref": ref, "currency": currency, "amount": format_minor(-balance, currency)})
 
@@ -97,14 +120,14 @@ def record_receipt(repo: ReceivablesRepository, conn, ws: str, *, kind: ReceiptK
             conn, ws, movement_id,
             MovementRoleKind.FUND_DEPOSIT if is_fund else MovementRoleKind.RECEIVABLE_PAYMENT)
     if is_fund:
+        _notice_applied(repo, conn, ws, receipt, (), amount_minor, queue)
         return receipt
 
     plan = plan_allocation(amount_minor, repo.open_lines(conn, ws, payer_id, currency))
     for line_id, part in plan.parts:
         repo.insert_allocation(conn, Allocation(_id(), ws, receipt.id, line_id, part,
                                                 plan.method))
-    if plan.parts:
-        _notice_applied(repo, conn, ws, receipt, plan.parts, plan.remainder_minor, queue)
+    _notice_applied(repo, conn, ws, receipt, plan.parts, plan.remainder_minor, queue)
     if balance_before > 0:
         _close_small_difference(repo, conn, ws, payer_id, currency, receipt.id, received_on,
                                 queue)
@@ -231,7 +254,7 @@ def mark_held_cash(repo: ReceivablesRepository, conn, ws: str, cp_id: str, curre
 
 def held_cash_shown(repo: ReceivablesRepository, conn, ws: str, cp_id: str,
                     currency: str) -> int | None:
-    """min(stated - live CASH receipts dated on or after the statement day, balance), floored at 0.
+    """min(stated - live CASH receipts dated strictly after the statement day, balance), floored at 0.
 
     ``None`` when no statement exists. Display only: it never changes a balance.
     """
@@ -241,7 +264,7 @@ def held_cash_shown(repo: ReceivablesRepository, conn, ws: str, cp_id: str,
     amount, stated_on = stated
     cash = conn.execute(
         "SELECT COALESCE(SUM(r.amount_minor),0) AS s FROM receipt r WHERE r.workspace_id=? "
-        "AND r.payer_id=? AND r.currency=? AND r.kind='CASH' AND r.received_on>=? AND "
+        "AND r.payer_id=? AND r.currency=? AND r.kind='CASH' AND r.received_on>? AND "
         "NOT EXISTS (SELECT 1 FROM revocation v WHERE v.table_name='receipt' AND v.target_id=r.id)",
         (ws, cp_id, currency, stated_on.isoformat())).fetchone()["s"]
     return max(0, min(amount - cash, repo.balance(conn, ws, cp_id, currency)))

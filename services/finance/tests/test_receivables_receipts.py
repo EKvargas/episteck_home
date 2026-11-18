@@ -22,7 +22,7 @@ from tests.support import make_account, make_repo, seed_connection, seed_workspa
 
 WS = "ws-1"
 NOW = datetime(2026, 11, 20, 10, 0, tzinfo=timezone.utc)
-D13, D14, D15, D20 = (date(2026, 11, d) for d in (13, 14, 15, 20))
+D13, D14, D15, D20, D21 = (date(2026, 11, d) for d in (13, 14, 15, 20, 21))
 PARTNER_IBAN = "XX00 SYNTHETIC PARTNER 0001"
 E1_LINES = [LineInput("a", 12000), LineInput("b", 8000), LineInput(OWNER, 4000),
             LineInput("f", 6000)]
@@ -117,7 +117,8 @@ def test_e2_prepayment_is_credit_then_consumed_at_funding(tmp_path):
         r = receipt(repo, c, q, "b", "EUR", 5000)
         assert repo.balance(c, WS, "b", "EUR") == -5000
         assert allocs(c, r.id) == []
-        assert repo.pending_by_dedupe(c, WS, "INFO:receipt_applied:R1") is None
+        n = repo.pending_by_dedupe(c, WS, "INFO:receipt_applied:R1")
+        assert (n.payload["exchanges"], n.payload["credit"]) == ([], "50.00")
         exchange(repo, c, D13)
         fund_all(repo, c, q, "m1", 27600)
         assert repo.balance(c, WS, "b", "EUR") == 2360
@@ -147,9 +148,11 @@ def test_e18_small_difference_closes(tmp_path):
         exchange(repo, c, D13)
         fund_all(repo, c, q, "m1", 27600)
         assert repo.balance(c, WS, "b", "EUR") == 7360
+        line = repo.open_lines(c, WS, "b", "EUR")[0].line_id
         r = receipt(repo, c, q, "b", "EUR", 7300)
         assert repo.balance(c, WS, "b", "EUR") == 0
-        assert [(e.amount_minor, e.source_ref) for e in adjustments(repo, c, "b")] == [(-60, r.id)]
+        assert repo.open_lines(c, WS, "b", "EUR") == []
+        assert [(e.amount_minor, e.source_ref) for e in adjustments(repo, c, "b")] == [(-60, line)]
         assert repo.pending_by_dedupe(c, WS, f"INFO:small_difference_closed:{r.id}") is not None
 
 
@@ -179,10 +182,28 @@ def test_prepaid_credit_meeting_charge_gets_small_difference_closed(tmp_path):
         exchange(repo, c, D13)
         fund_all(repo, c, q, "m1", 27600)
         assert repo.balance(c, WS, "b", "EUR") == 0
-        assert [(e.amount_minor, e.source_ref) for e in adjustments(repo, c, "b")] == [(-60, r.id)]
+        assert repo.open_lines(c, WS, "b", "EUR") == []
+        [adj] = adjustments(repo, c, "b")
+        assert adj.amount_minor == -60 and adj.source_ref != r.id
         assert repo.pending_by_dedupe(c, WS, f"INFO:small_difference_closed:{r.id}") is not None
         consume_credits(repo, c, WS, "b", "EUR", queue=q, now=NOW)  # nothing left: no-op
         assert len(adjustments(repo, c, "b")) == 1
+
+
+def test_overpayment_within_tolerance_closes_the_receipt_remainder(tmp_path):
+    repo, q = make(tmp_path)
+    with repo.tx() as c:
+        exchange(repo, c, D13)
+        fund_all(repo, c, q, "m1", 27600)
+        r = receipt(repo, c, q, "b", "EUR", 7400)  # 0.40 over the 73.60 line
+        assert repo.balance(c, WS, "b", "EUR") == 0
+        assert repo.receipt_remainders(c, WS, "b", "EUR") == []
+        [adj] = adjustments(repo, c, "b")
+        assert (adj.amount_minor, adj.source_ref) == (40, r.id)
+        exchange(repo, c, D20, [LineInput("b", 1000)])
+        fund_all(repo, c, q, "m2", 920, D20)
+        assert repo.balance(c, WS, "b", "EUR") == 920  # the old 0.40 does not reduce it
+        assert [o.outstanding_minor for o in repo.open_lines(c, WS, "b", "EUR")] == [920]
 
 
 def test_in_kind_requires_description(tmp_path):
@@ -240,14 +261,23 @@ def test_e8_held_cash_display_follows_cash_receipts(tmp_path):
         assert receivables_view(repo, c, WS, NOW)["owed_to_you"][0]["held_cash"] is None
         mark_held_cash(repo, c, WS, "a", "USD", 15000, NOW)
         assert held_cash_shown(repo, c, WS, "a", "USD") == 15000
-        receipt(repo, c, q, "a", "USD", 10000, day=D20)  # CASH, after the statement day
+        receipt(repo, c, q, "a", "USD", 10000, day=D21)  # CASH, after the statement day
         assert held_cash_shown(repo, c, WS, "a", "USD") == 5000
         assert receivables_view(repo, c, WS, NOW)["owed_to_you"][0]["held_cash"] == "50.00"
         receipt(repo, c, q, "a", "USD", 7000, kind=ReceiptKind.IN_KIND, description="x",
-                day=D20)  # not cash: no effect
+                day=D21)  # not cash: no effect
         assert held_cash_shown(repo, c, WS, "a", "USD") == 5000
         mark_held_cash(repo, c, WS, "a", "USD", 90000, NOW)  # capped at the balance
         assert held_cash_shown(repo, c, WS, "a", "USD") == 13000
+
+
+def test_held_cash_same_day_receipt_before_statement_is_not_zeroed(tmp_path):
+    repo, q = make(tmp_path)
+    with repo.tx() as c:
+        exchange(repo, c, D13, [LineInput("a", 30000)])
+        receipt(repo, c, q, "a", "USD", 10000, day=D20)  # same day as the statement
+        mark_held_cash(repo, c, WS, "a", "USD", 15000, NOW)  # NOW is D20
+        assert held_cash_shown(repo, c, WS, "a", "USD") == 15000
 
 
 def test_mark_held_cash_validates(tmp_path):
@@ -268,6 +298,8 @@ def test_fund_deposit_increases_what_you_hold(tmp_path):
         r = receipt(repo, c, q, "f", "USD", 4000, kind=ReceiptKind.BANK, movement_id="m1")
         assert repo.balance(c, WS, "f", "USD") == before - 4000
         assert allocs(c, r.id) == []
+        n = repo.pending_by_dedupe(c, WS, "INFO:receipt_applied:R1")
+        assert (n.payload["exchanges"], n.payload["credit"]) == ([], "40.00")
         assert repo.movement_role(c, "m1") is MovementRoleKind.FUND_DEPOSIT
         [e] = [e for e in repo.entries(c, WS, "f") if e.kind is EntryKind.PAYMENT]
         assert (e.amount_minor, e.source_ref) == (-4000, r.id)
