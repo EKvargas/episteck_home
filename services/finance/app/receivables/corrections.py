@@ -77,7 +77,9 @@ def correct_exchange(repo: ReceivablesRepository, conn, ws: str, exchange_id: st
     ex = repo.exchange_by_id(conn, ws, exchange_id)
     if ex is None:
         raise ValidationError("exchange")
-    if not lines or len(lines) > MAX_LINE_POSITION + 1:
+    if not lines:
+        raise ValidationError("lines")
+    if len(lines) > MAX_LINE_POSITION + 1:
         raise ValidationError("lines", {"max": str(MAX_LINE_POSITION + 1)})
     if any(ln.usd_minor <= 0 for ln in lines):
         raise ValidationError("usd")
