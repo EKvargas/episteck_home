@@ -7,12 +7,23 @@ from typing import Sequence
 
 from .model import EXACT_SUBSET_LIMIT, AllocationMethod
 
+# The order of a PERSON's positive OPENING (R29): older than every exchange line, whose order
+# is exchange number * 100 + position (>= 100).
+OPENING_ORDER = -1
+
 
 @dataclass(frozen=True)
 class OpenLine:
+    """An open item: an exchange line, or a PERSON's positive OPENING (``line_id`` = the
+    OPENING entry id, ``order`` = ``OPENING_ORDER``; it has no exchange)."""
+
     line_id: str
     outstanding_minor: int
     order: int
+
+    @property
+    def is_opening(self) -> bool:
+        return self.order == OPENING_ORDER
 
 
 @dataclass(frozen=True)

@@ -27,7 +27,7 @@ from decimal import Decimal
 from typing import Literal
 
 from .. import domain
-from ..receivables.allocation import OpenLine
+from ..receivables.allocation import OPENING_ORDER, OpenLine
 from ..receivables.model import (
     Allocation, AllocationMethod, Counterparty, CounterpartyKind, EntryKind, Exchange,
     ExchangeLine, Funding, LedgerEntry, MovementRoleKind, Opening, PendingItem, PendingKind,
@@ -481,6 +481,12 @@ class ReceivablesRepository:
                          f"AND {_live('receipt', 'r')}", (ws, number)).fetchone()
         return _receipt(r) if r else None
 
+    def receipt_by_id(self, conn, ws: str, receipt_id: str) -> Receipt | None:
+        """The live receipt; ``None`` if unknown, of another workspace or revoked."""
+        r = conn.execute(f"SELECT r.* FROM receipt r WHERE r.workspace_id=? AND r.id=? "
+                         f"AND {_live('receipt', 'r')}", (ws, receipt_id)).fetchone()
+        return _receipt(r) if r else None
+
     def insert_receipt(self, conn, r: Receipt) -> None:
         """Stores the ROOT movement id; raises ``DuplicateReceipt`` if that root already has a
         live receipt. A revoked receipt does not block re-recording the movement."""
@@ -511,30 +517,44 @@ class ReceivablesRepository:
             (a.id, a.workspace_id, a.receipt_id, a.line_id, a.amount_minor, a.method.value))
 
     def open_lines(self, conn, ws: str, payer_id: str, currency: str) -> list[OpenLine]:
-        """One row per line: Σ effective CHARGEs − Σ live allocations + Σ effective
-        ADJUSTMENT/FORGIVE entries sourced to the line, kept when > 0.
+        """One row per open item, kept when its outstanding is > 0, oldest first.
 
-        A CHARGE undone by a live REVERSAL no longer counts, so a re-charged line (funding
-        re-created) or a corrected exchange (new line version) is never counted twice.
+        An exchange line owes Σ effective CHARGEs − Σ live allocations + Σ effective
+        ADJUSTMENT/FORGIVE entries sourced to the line. A CHARGE undone by a live REVERSAL no
+        longer counts, so a re-charged line (funding re-created) or a corrected exchange (new
+        line version) is never counted twice.
+
+        A PERSON's positive effective OPENING is an item too (R29), computed the same way from
+        its amount: ``line_id`` is the OPENING entry id and ``order`` is ``OPENING_ORDER``, so it
+        comes before every exchange line (``OpenLine.is_opening``).
         """
+        def outstanding(ref: str) -> str:
+            return (
+                f"- COALESCE((SELECT SUM(a.amount_minor) FROM allocation a WHERE "
+                f"a.workspace_id=:ws AND a.line_id={ref} AND {_live('allocation', 'a')}), 0) "
+                f"+ COALESCE((SELECT SUM(j.amount_minor) FROM ledger_entry j WHERE "
+                f"j.workspace_id=:ws AND j.kind IN ({_SETTLEMENT_SQL}) AND j.source_ref={ref} "
+                f"AND {_effective('j')}), 0)")
+
         rows = conn.execute(
             "SELECT line_id, outstanding, ord FROM ("
-            " SELECT c.line_id, c.ord, c.first_number, c.charged - COALESCE(("
-            "  SELECT SUM(a.amount_minor) FROM allocation a WHERE a.workspace_id=? "
-            f"  AND a.line_id=c.line_id AND {_live('allocation', 'a')}), 0)"
-            " + COALESCE((SELECT SUM(j.amount_minor) FROM ledger_entry j WHERE j.workspace_id=?"
-            f"  AND j.kind IN ({_SETTLEMENT_SQL}) AND j.source_ref=c.line_id"
-            f"  AND {_effective('j')}), 0)"
+            f" SELECT c.line_id, c.ord, c.first_number, c.charged {outstanding('c.line_id')}"
             " AS outstanding"
             " FROM (SELECT l.source_ref AS line_id, x.number * 100 + el.position AS ord,"
             "  MIN(l.number) AS first_number, SUM(l.amount_minor) AS charged"
             "  FROM ledger_entry l JOIN exchange_line el ON el.id=l.source_ref"
             "  JOIN exchange x ON x.id=el.exchange_id"
-            "  WHERE l.workspace_id=? AND l.counterparty_id=? AND l.currency=? AND l.kind='CHARGE'"
-            f"  AND {_effective('l')} AND {_live('exchange', 'x')}"
+            "  WHERE l.workspace_id=:ws AND l.counterparty_id=:cp AND l.currency=:cur"
+            f"  AND l.kind='CHARGE' AND {_effective('l')} AND {_live('exchange', 'x')}"
             "  GROUP BY l.source_ref) c"
+            f" UNION ALL SELECT o.id, {OPENING_ORDER}, o.number, o.amount_minor"
+            f" {outstanding('o.id')} FROM ledger_entry o JOIN counterparty p"
+            " ON p.id=o.counterparty_id AND p.workspace_id=o.workspace_id"
+            " WHERE o.workspace_id=:ws AND o.counterparty_id=:cp AND o.currency=:cur"
+            " AND o.kind='OPENING' AND o.amount_minor > 0 AND p.kind='PERSON'"
+            f" AND {_effective('o')}"
             ") WHERE outstanding > 0 ORDER BY ord, first_number",
-            (ws, ws, ws, payer_id, currency)).fetchall()
+            {"ws": ws, "cp": payer_id, "cur": currency}).fetchall()
         return [OpenLine(r["line_id"], r["outstanding"], r["ord"]) for r in rows]
 
     def line_with_exchange(self, conn, ws: str,
@@ -644,6 +664,28 @@ class ReceivablesRepository:
             f"AND {_live('receipt', 'r')} AND remainder > 0 ORDER BY r.received_on, r.number",
             (ws, payer_id, currency)).fetchall()
         return [(_receipt(r), r["remainder"]) for r in rows]
+
+    def credit_sources(self, conn, ws: str, payer_id: str,
+                       currency: str) -> list[tuple[str, int]]:
+        """What a PERSON has paid ahead, as ``(source id, remaining)`` with remaining > 0,
+        oldest first: a negative effective OPENING (a credit the owner stated, R29; its entry id
+        is the ``receipt_id`` of the allocations it makes), then ``receipt_remainders``.
+        An opening's remaining is −amount − Σ live allocations − Σ effective ADJUSTMENTs
+        sourced to it (a small credit written off)."""
+        rows = conn.execute(
+            "SELECT o.id, -o.amount_minor - COALESCE((SELECT SUM(a.amount_minor) FROM allocation a "
+            "WHERE a.workspace_id=o.workspace_id AND a.receipt_id=o.id "
+            f"AND {_live('allocation', 'a')}),0) "
+            "- COALESCE((SELECT SUM(j.amount_minor) FROM ledger_entry j WHERE "
+            "j.workspace_id=o.workspace_id AND j.source_ref=o.id AND j.kind='ADJUSTMENT' "
+            f"AND {_effective('j')}),0) AS remainder FROM ledger_entry o JOIN counterparty p "
+            "ON p.id=o.counterparty_id AND p.workspace_id=o.workspace_id WHERE o.workspace_id=? "
+            "AND o.counterparty_id=? AND o.currency=? AND o.kind='OPENING' AND o.amount_minor<0 "
+            f"AND p.kind='PERSON' AND {_effective('o')} AND remainder > 0 ORDER BY o.number",
+            (ws, payer_id, currency)).fetchall()
+        return ([(r["id"], r["remainder"]) for r in rows]
+                + [(rec.id, left) for rec, left in self.receipt_remainders(conn, ws, payer_id,
+                                                                           currency)])
 
     # --- revocation and rules ----------------------------------------------------
     def revoke(self, conn, ws: str, table: str, target_id: str, reason: str,

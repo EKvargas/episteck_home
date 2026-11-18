@@ -123,8 +123,9 @@ def test_owed_to_you_row_and_where(tmp_path):
     assert view["owed_to_you"] == [{
         "counterparty": "Familiar A", "currency": "USD", "amount": "120.00",
         "where": "Banco Sintetico", "held_cash": None, "opening": None,
-        "lines": [{"exchange_ref": "C1", "delivered_on": "2026-11-13", "usd": "120.00",
-                   "debt": "120.00", "outstanding": "120.00", "currency": "USD"}]}]
+        "lines": [{"exchange_ref": "C1", "entry_ref": None, "delivered_on": "2026-11-13",
+                   "usd": "120.00", "debt": "120.00", "outstanding": "120.00",
+                   "currency": "USD"}]}]
 
 
 def test_fund_with_unknown_opening_shows_flows_not_balance(tmp_path):

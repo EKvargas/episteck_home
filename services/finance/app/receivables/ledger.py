@@ -112,7 +112,10 @@ def record_exchange(repo: ReceivablesRepository, conn, ws: str, *, partner_id: s
         ev.ves_amount_minor, repo.hash_key(ev.ves_reference) if ev.ves_reference else None)
     ex_lines = new_lines(ex.id, 1, resolved)
     repo.insert_exchange(conn, ex, ex_lines)
-    charge_usd_lines(repo, conn, ws, ex_lines, delivered)
+    from .receipts import consume_credits  # lazy: receipts imports ValidationError from here
+
+    for payer, cur in charge_usd_lines(repo, conn, ws, ex_lines, delivered):
+        consume_credits(repo, conn, ws, payer, cur)  # what they paid ahead pays it (R30)
     return ex
 
 
@@ -181,14 +184,26 @@ def receivables_view(repo: ReceivablesRepository, conn, ws: str, now: datetime) 
         opening = cp.opening.value if cp.opening else None
         if bal > 0:
             lines = []
+            openings = {e.id: e for e in repo.effective_entries_for_refs(
+                conn, ws, [cp_id], (EntryKind.OPENING,))}
             for ol in repo.open_lines(conn, ws, cp_id, cur):
+                if ol.is_opening:  # the opening is an open item with no exchange (R29)
+                    op = openings.get(ol.line_id)
+                    if op is not None:
+                        lines.append({
+                            "exchange_ref": None, "entry_ref": f"E{op.number}",
+                            "delivered_on": op.effective_on.isoformat(), "usd": None,
+                            "debt": format_minor(op.amount_minor, cur),
+                            "outstanding": format_minor(ol.outstanding_minor, cur),
+                            "currency": cur})
+                    continue
                 found = repo.line_with_exchange(conn, ws, ol.line_id)
                 if found is None:
                     continue
                 el, ex = found
                 lines.append({
-                    "exchange_ref": f"C{ex.number}", "delivered_on": ex.delivered_on.isoformat(),
-                    "usd": _usd(el.usd_minor),
+                    "exchange_ref": f"C{ex.number}", "entry_ref": None,
+                    "delivered_on": ex.delivered_on.isoformat(), "usd": _usd(el.usd_minor),
                     "debt": format_minor(repo.line_charged(conn, ws, ol.line_id), cur),
                     "outstanding": format_minor(ol.outstanding_minor, cur), "currency": cur})
             shown = held_cash_shown(repo, conn, ws, cp_id, cur)

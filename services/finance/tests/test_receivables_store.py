@@ -733,3 +733,14 @@ def test_revoke_rejects_unknown_table(tmp_path):
             rr.revoke(c, WS, "ledger_entries", "e1", "typo", T0)
     with rr.read() as c:
         assert c.execute("SELECT COUNT(*) FROM revocation").fetchone()[0] == 0
+
+
+def test_receipt_by_id_finds_the_live_receipt_only(tmp_path):
+    _, rr = make(tmp_path)
+    with rr.tx() as c:
+        rr.insert_receipt(c, receipt("r1", 1, 5000))
+        assert rr.receipt_by_id(c, WS, "r1").number == 1
+        assert rr.receipt_by_id(c, "ws-2", "r1") is None
+        assert rr.receipt_by_id(c, WS, "nope") is None
+        rr.revoke(c, WS, "receipt", "r1", "x", T0)
+        assert rr.receipt_by_id(c, WS, "r1") is None

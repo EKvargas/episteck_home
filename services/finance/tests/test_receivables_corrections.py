@@ -18,7 +18,7 @@ from app.receivables.model import (
     Verification,
 )
 from app.receivables.pending import PendingQueue
-from app.receivables.receipts import record_receipt
+from app.receivables.receipts import reallocate, record_receipt
 from app.store.receivables_repo import ReceivablesRepository
 from tests.support import make_account, make_repo, seed_connection, seed_workspace
 
@@ -263,10 +263,10 @@ def test_history_keeps_every_version(tmp_path):
         ex = exchange(repo, c)
         v1 = repo.current_lines(c, ex.id)
         correct_exchange(repo, c, WS, ex.id, [LineInput("a", 10000), LineInput("f", 8000)],
-                         None, "first fix", NOW)
+                         None, "first fix", NOW, queue=q)
         v2 = repo.current_lines(c, ex.id)
         correct_exchange(repo, c, WS, ex.id, [LineInput("a", 9000), LineInput("f", 9000)],
-                         18000, "second fix", NOW)
+                         18000, "second fix", NOW, queue=q)
         v3 = repo.current_lines(c, ex.id)
         assert [ln.version for ln in v3] == [3, 3]
         assert c.execute("SELECT COUNT(*) AS n FROM exchange_line WHERE exchange_id=?",
@@ -444,3 +444,65 @@ def test_reverse_entries_and_payer_rules(tmp_path):
         assert reverse(repo, c, WS, "familiar a rule", "wrong person", q, NOW)["rules"] == 1
         assert repo.rule_for(c, WS, repo.hash_key("KEY-1")) is None
         assert ex.id == repo.exchange_by_ref(c, WS, "C1").id
+
+
+def test_forgive_never_makes_a_balance_negative(tmp_path):
+    repo, q = make(tmp_path)
+    with repo.tx() as c:
+        exchange(repo, c, D13, [LineInput("a", 10000)])
+        c2 = exchange(repo, c, D14, [LineInput("a", 5000)])
+        r = receipt(repo, c, q, "a", "USD", 10000)  # exact: C1
+        reallocate(repo, c, WS, r.id, [(repo.current_lines(c, c2.id)[0].id, 5000)], NOW)
+        assert repo.balance(c, WS, "a", "USD") == 5000  # C1 shows 100.00, R1 keeps 50.00
+        assert outstanding(repo, c, "a", "USD") == [10000]
+        before = counts(c)
+        with pytest.raises(ValidationError) as e:
+            forgive(repo, c, WS, "C1:Familiar A", 6000, "gift", NOW)
+        assert (e.value.field, e.value.detail["outstanding"]) == ("amount", "50.00")
+        assert counts(c) == before
+        entry = forgive(repo, c, WS, "C1:Familiar A", None, "gift", NOW)
+        assert entry.amount_minor == -5000 and repo.balance(c, WS, "a", "USD") == 0
+        after = counts(c)
+        for target in ("C1:Familiar A", "Familiar A"):  # nothing is owed: no credit is made
+            with pytest.raises(ValidationError) as e:
+                forgive(repo, c, WS, target, None, "gift", NOW)
+            assert e.value.field == "outstanding"
+        assert counts(c) == after
+
+
+def test_forgive_on_an_exchange_uses_the_currency_still_open(tmp_path):
+    repo, q = make(tmp_path)
+    with repo.tx() as c:
+        exchange(repo, c, D13, [LineInput("b", 8000), LineInput("b", 2000, debt_currency="USD")])
+        fund(repo, c, q, "m1", 9200)
+        with pytest.raises(ValidationError) as e:
+            forgive(repo, c, WS, "C1:Familiar B", None, "gift", NOW)  # both still open
+        assert e.value.field == "currency"
+        receipt(repo, c, q, "b", "USD", 2000)
+        entry = forgive(repo, c, WS, "C1:Familiar B", None, "gift", NOW)
+        assert (entry.currency, entry.amount_minor) == ("EUR", -7360)
+        with pytest.raises(ValidationError) as e:
+            forgive(repo, c, WS, "C1:Familiar B", None, "gift", NOW)
+        assert e.value.field == "outstanding"
+
+
+def test_reversing_a_persons_only_opening_clears_the_flag(tmp_path):
+    repo, q = make(tmp_path)
+    with repo.tx() as c:
+        only = record_opening(repo, c, WS, "a", "USD", 12000, Opening.APPROXIMATE, "segun", NOW)
+        reverse(repo, c, WS, f"E{only.number}", "typo", q, NOW)
+        assert repo.get_counterparty(c, WS, "a").opening is None
+        record_opening(repo, c, WS, "a", "USD", 100, Opening.CONFIRMED, "segun", NOW)
+        eur = record_opening(repo, c, WS, "a", "EUR", 200, Opening.APPROXIMATE, "segun", NOW)
+        reverse(repo, c, WS, f"E{eur.number}", "typo", q, NOW)
+        assert repo.get_counterparty(c, WS, "a").opening is Opening.CONFIRMED
+
+
+def test_correct_exchange_requires_the_queue(tmp_path):
+    repo, q = make(tmp_path)
+    with repo.tx() as c:
+        ex = exchange(repo, c)
+        before = counts(c)
+        with pytest.raises(TypeError):
+            correct_exchange(repo, c, WS, ex.id, E1_LINES, None, "x", NOW)
+        assert counts(c) == before

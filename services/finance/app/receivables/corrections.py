@@ -3,7 +3,8 @@
 No fact is edited. Undo is a ``REVERSAL`` entry and/or a ``revocation`` row, and whatever
 settled a released line goes with it: its allocations (re-made by ``consume_credits``), its
 small-difference ADJUSTMENTs (R26), its FORGIVEs (R28: forgive again once re-charged) and
-the write-offs of the receipts involved (R27).
+the write-offs of the receipts involved (R27). A PERSON's opening is an open item or a credit
+(R29), released the same way (``release_opening``) when it is reversed or replaced.
 The caller owns the transaction; every function validates before its first write.
 """
 from __future__ import annotations
@@ -27,7 +28,9 @@ from .model import (
     LedgerEntry, Opening, PendingItem, PendingKind, ReceiptKind,
 )
 from .pending import PendingQueue
-from .receipts import consume_credits, release_charges, reverse_receipt_adjustments
+from .receipts import (
+    consume_credits, release_charges, release_opening, reverse_receipt_adjustments,
+)
 
 Touched = list[tuple[str, str]]  # (payer id, currency) whose credits are applied again
 
@@ -66,13 +69,14 @@ def _one(repo: ReceivablesRepository, conn, ws: str, label: str, field: str) -> 
 # --- correct an exchange ------------------------------------------------------------
 def correct_exchange(repo: ReceivablesRepository, conn, ws: str, exchange_id: str,
                      lines: Sequence[LineInput], total_usd_minor: int | None, reason: str,
-                     now: datetime, *, queue: PendingQueue | None = None) -> Exchange:
+                     now: datetime, *, queue: PendingQueue) -> Exchange:
     """Writes version n+1 of the lines with REVERSALs of the old charges and new charges (E11).
 
     ``total_usd_minor`` ``None`` lets the total follow the new lines; a given total must equal
     their sum. A paid exchange keeps its funding and EUR: shares and EUR charges are recomputed
     for every exchange of that funding (the implied rate changes for all of them). Refused
     below what was already applied to a payer (§6.8 limit) and while a line is forgiven.
+    ``queue`` is required (R30): re-applied credits close their small differences with a notice.
     Returns the exchange; its header total stays the registration figure.
     """
     ex = repo.exchange_by_id(conn, ws, exchange_id)
@@ -161,15 +165,19 @@ def _recharge(repo: ReceivablesRepository, conn, ws: str, funding: Funding, spli
 # --- forgive ------------------------------------------------------------------------
 def forgive(repo: ReceivablesRepository, conn, ws: str, target_ref: str,
             amount_minor: int | None, reason: str, now: datetime) -> LedgerEntry:
-    """Turns what is owed into a gift: FORGIVE entries (negative) sourced to the lines they
-    settle, oldest first, so open lines stay consistent with the balance.
+    """Turns what is owed into a gift: FORGIVE entries (negative) sourced to the open items
+    they settle, oldest first (a PERSON's opening first, R29), so open items stay consistent
+    with the balance.
 
-    ``target_ref`` is ``C<n>:<payer label>`` (the payer's lines on that exchange) or a
-    counterparty label (its balance in the one currency it owes; a part on no line, such as an
-    opening, is sourced to the counterparty). ``None`` forgives all of it; more is refused.
-    Several lines give several entries; the first one is returned.
+    ``target_ref`` is ``C<n>:<payer label>`` (the payer's open lines on that exchange, in the
+    one currency still open there) or a counterparty label (its open items in the one currency
+    it owes). What can be forgiven is min(Σ outstanding, balance): a FORGIVE never makes a
+    balance negative, so it never creates a credit (R30). ``None`` forgives all of it; more is
+    refused. Several items give several entries; the first one is returned.
     """
-    cp, cur, lines, owed = _forgive_target(repo, conn, ws, target_ref)
+    cp, cur, lines = _forgive_target(repo, conn, ws, target_ref)
+    owed = min(sum(ol.outstanding_minor for ol in lines),
+               max(0, repo.balance(conn, ws, cp.id, cur)))
     if owed <= 0:
         raise ValidationError("outstanding")
     amount = owed if amount_minor is None else amount_minor
@@ -178,20 +186,18 @@ def forgive(repo: ReceivablesRepository, conn, ws: str, target_ref: str,
                                          "amount": format_minor(amount, cur)})
     parts: list[tuple[str, int]] = []
     left = amount
-    for ol in lines:
+    for ol in lines:  # amount <= Σ outstanding: the items take all of it
         take = min(left, ol.outstanding_minor)
         if take > 0:
             parts.append((ol.line_id, take))
             left -= take
-    if left:
-        parts.append((cp.id, left))
     written = [_write(repo, conn, ws, cp.id, cur, -part, EntryKind.FORGIVE, ref, reason, now)
                for ref, part in parts]
     return written[0]
 
 
 def _forgive_target(repo: ReceivablesRepository, conn, ws: str,
-                    target_ref: str) -> tuple[Counterparty, str, list[OpenLine], int]:
+                    target_ref: str) -> tuple[Counterparty, str, list[OpenLine]]:
     m = _EXCHANGE_TARGET.fullmatch(target_ref)
     if m:
         ex = repo.exchange_by_ref(conn, ws, m[1])
@@ -199,13 +205,20 @@ def _forgive_target(repo: ReceivablesRepository, conn, ws: str,
             raise ValidationError("exchange")
         cp = _one(repo, conn, ws, m[2], "payer")
         mine = [ln for ln in repo.current_lines(conn, ex.id) if ln.payer_id == cp.id]
-        currencies = {ln.debt_currency for ln in mine}
-        if len(currencies) != 1:
-            raise ValidationError("payer" if not mine else "currency")
-        cur = currencies.pop()
+        if not mine:
+            raise ValidationError("payer")
         ids = {ln.id for ln in mine}
-        lines = [ol for ol in repo.open_lines(conn, ws, cp.id, cur) if ol.line_id in ids]
-        return cp, cur, lines, sum(ol.outstanding_minor for ol in lines)
+        open_by_cur: dict[str, list[OpenLine]] = {}  # only currencies still open there count
+        for cur in sorted({ln.debt_currency for ln in mine}):
+            found = [ol for ol in repo.open_lines(conn, ws, cp.id, cur) if ol.line_id in ids]
+            if found:
+                open_by_cur[cur] = found
+        if len(open_by_cur) > 1:
+            raise ValidationError("currency", {"currencies": ", ".join(open_by_cur)})
+        if not open_by_cur:
+            raise ValidationError("outstanding")
+        cur, found = open_by_cur.popitem()
+        return cp, cur, found
     cp = _one(repo, conn, ws, target_ref, "counterparty")
     owed = {cur: bal for (cid, cur), bal in repo.balances(conn, ws).items()
             if cid == cp.id and bal > 0}
@@ -213,8 +226,8 @@ def _forgive_target(repo: ReceivablesRepository, conn, ws: str,
         raise ValidationError("currency", {"currencies": ", ".join(sorted(owed))})
     if not owed:
         raise ValidationError("outstanding")
-    cur, bal = owed.popitem()
-    return cp, cur, repo.open_lines(conn, ws, cp.id, cur), bal
+    cur, _ = owed.popitem()
+    return cp, cur, repo.open_lines(conn, ws, cp.id, cur)
 
 
 # --- openings -----------------------------------------------------------------------
@@ -226,12 +239,15 @@ def _openings(repo: ReceivablesRepository, conn, ws: str, cp_id: str,
 
 
 def record_opening(repo: ReceivablesRepository, conn, ws: str, cp_id: str, currency: str,
-                   amount_minor: int, basis: Opening, note: str, now: datetime) -> LedgerEntry:
+                   amount_minor: int, basis: Opening, note: str, now: datetime, *,
+                   queue: PendingQueue | None = None) -> LedgerEntry:
     """An opening balance stated by the owner, with its provenance in ``note`` (required).
 
-    PERSON: signed as given (positive: they owe you). FUND: what you hold, stored negative.
-    Replaces any effective opening in that currency (REVERSAL + new entry) and sets the
-    counterparty's ``opening`` to ``basis`` (``APPROXIMATE`` or ``CONFIRMED``).
+    PERSON: signed as given (positive: they owe you, an open item; negative: a credit, R29).
+    FUND: what you hold, stored negative. Replaces any effective opening in that currency
+    (``release_opening`` + new entry) and sets the counterparty's ``opening`` to ``basis``
+    (``APPROXIMATE`` or ``CONFIRMED``). For a PERSON the credits are applied again
+    (``consume_credits``); a small EUR difference is closed only when ``queue`` is given.
     """
     cp = repo.get_counterparty(conn, ws, cp_id)
     if cp is None or cp.kind not in _DEBTORS:
@@ -249,11 +265,12 @@ def record_opening(repo: ReceivablesRepository, conn, ws: str, cp_id: str, curre
     if not note or not note.strip():
         raise ValidationError("note")
     for old in _openings(repo, conn, ws, cp_id, currency):
-        reverse_entry(repo, conn, ws, old, "replaced by a new opening", now)
+        release_opening(repo, conn, ws, old, "replaced by a new opening", now)
     amount = -amount_minor if cp.kind is CounterpartyKind.FUND else amount_minor
     entry = _write(repo, conn, ws, cp_id, currency, amount, EntryKind.OPENING, cp_id,
                    note.strip(), now, basis.value)
     repo.set_opening(conn, ws, cp_id, basis)
+    _settle(repo, conn, ws, [(cp_id, currency)], queue, now)  # PERSON only (consume_credits)
     return entry
 
 
@@ -336,11 +353,18 @@ def _reverse_entry(repo: ReceivablesRepository, conn, ws: str, ref: str, reason:
         raise ValidationError("entry")
     if entry.kind not in (EntryKind.OPENING, EntryKind.ADJUSTMENT, EntryKind.FORGIVE):
         raise ValidationError("entry", {"kind": entry.kind.value})
-    rev = reverse_entry(repo, conn, ws, entry, reason, now)
     if entry.kind is EntryKind.OPENING:
+        rev = release_opening(repo, conn, ws, entry, reason, now)
+        cp = repo.get_counterparty(conn, ws, entry.counterparty_id)
+        is_fund = cp is not None and cp.kind is CounterpartyKind.FUND
         left = _openings(repo, conn, ws, entry.counterparty_id)
-        basis = Opening(left[-1].basis) if left and left[-1].basis else Opening.UNKNOWN
+        if left and left[-1].basis:
+            basis: Opening | None = Opening(left[-1].basis)
+        else:  # nothing stated any more: a fund is UNKNOWN again, a person has no opening
+            basis = Opening.UNKNOWN if is_fund else None
         repo.set_opening(conn, ws, entry.counterparty_id, basis)
+    else:
+        rev = reverse_entry(repo, conn, ws, entry, reason, now)
     _settle(repo, conn, ws, [(entry.counterparty_id, entry.currency)], queue, now)
     return {"ok": True, "status": "reversed", "ref": f"E{entry.number}",
             "reversal_ref": f"E{rev.number}"}

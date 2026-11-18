@@ -7,10 +7,11 @@ from decimal import Decimal
 import pytest
 
 from app import domain
+from app.receivables.corrections import correct_exchange, forgive
 from app.receivables.funding import link_choice, reverse_funding, try_link
 from app.receivables.ledger import Evidence, LineInput, ValidationError, receivables_view, record_exchange
 from app.receivables.model import (
-    OWNER, Counterparty, CounterpartyKind, EntryKind, MovementRoleKind, ReceiptKind,
+    OWNER, Counterparty, CounterpartyKind, EntryKind, Funding, MovementRoleKind, ReceiptKind,
     Verification,
 )
 from app.receivables.pending import PendingQueue
@@ -118,7 +119,8 @@ def test_e2_prepayment_is_credit_then_consumed_at_funding(tmp_path):
         assert repo.balance(c, WS, "b", "EUR") == -5000
         assert allocs(c, r.id) == []
         n = repo.pending_by_dedupe(c, WS, "INFO:receipt_applied:R1")
-        assert (n.payload["exchanges"], n.payload["credit"]) == ([], "50.00")
+        assert (n.payload["exchanges"], n.payload["credit"], n.payload["balance_after"]) == (
+            [], "50.00", "-50.00")
         exchange(repo, c, D13)
         fund_all(repo, c, q, "m1", 27600)
         assert repo.balance(c, WS, "b", "EUR") == 2360
@@ -153,7 +155,11 @@ def test_e18_small_difference_closes(tmp_path):
         assert repo.balance(c, WS, "b", "EUR") == 0
         assert repo.open_lines(c, WS, "b", "EUR") == []
         assert [(e.amount_minor, e.source_ref) for e in adjustments(repo, c, "b")] == [(-60, line)]
-        assert repo.pending_by_dedupe(c, WS, f"INFO:small_difference_closed:{r.id}") is not None
+        [adj] = adjustments(repo, c, "b")
+        n = repo.pending_by_dedupe(c, WS, f"INFO:small_difference_closed:E{adj.number}").payload
+        assert n == {"entry_ref": f"E{adj.number}", "receipt_ref": f"R{r.number}",
+                     "currency": "EUR", "amount": "0.60", "direction": "they_owed",
+                     "text_key": f"small_difference_closed:E{adj.number}"}
 
 
 def test_e18_larger_difference_stays(tmp_path):
@@ -185,7 +191,8 @@ def test_prepaid_credit_meeting_charge_gets_small_difference_closed(tmp_path):
         assert repo.open_lines(c, WS, "b", "EUR") == []
         [adj] = adjustments(repo, c, "b")
         assert adj.amount_minor == -60 and adj.source_ref != r.id
-        assert repo.pending_by_dedupe(c, WS, f"INFO:small_difference_closed:{r.id}") is not None
+        n = repo.pending_by_dedupe(c, WS, f"INFO:small_difference_closed:E{adj.number}").payload
+        assert (n["receipt_ref"], n["direction"]) == (f"R{r.number}", "they_owed")
         consume_credits(repo, c, WS, "b", "EUR", queue=q, now=NOW)  # nothing left: no-op
         assert len(adjustments(repo, c, "b")) == 1
 
@@ -299,7 +306,9 @@ def test_fund_deposit_increases_what_you_hold(tmp_path):
         assert repo.balance(c, WS, "f", "USD") == before - 4000
         assert allocs(c, r.id) == []
         n = repo.pending_by_dedupe(c, WS, "INFO:receipt_applied:R1")
-        assert (n.payload["exchanges"], n.payload["credit"]) == ([], "40.00")
+        # the fund's opening is unknown: no balance or credit figure is shown (spec 6.5)
+        assert (n.payload["exchanges"], n.payload["credit"], n.payload["balance_after"]) == (
+            [], None, None)
         assert repo.movement_role(c, "m1") is MovementRoleKind.FUND_DEPOSIT
         [e] = [e for e in repo.entries(c, WS, "f") if e.kind is EntryKind.PAYMENT]
         assert (e.amount_minor, e.source_ref) == (-4000, r.id)
@@ -421,3 +430,101 @@ def test_reallocate_reverses_credit_write_off_first(tmp_path):
         assert adjustment_total(repo, c) == 0
         assert repo.balance(c, WS, "b", "EUR") == -40
         assert repo.receipt_remainders(c, WS, "b", "EUR") == [(r, 400)]
+
+
+def test_receipt_applied_reports_the_balance_after_the_small_difference(tmp_path):
+    repo, q = make(tmp_path)
+    with repo.tx() as c:
+        exchange(repo, c, D13)
+        fund_all(repo, c, q, "m1", 27600)
+        receipt(repo, c, q, "b", "EUR", 7400)  # 0.40 over the 73.60 line: written off
+
+        def applied(ref):
+            n = repo.pending_by_dedupe(c, WS, f"INFO:receipt_applied:{ref}").payload
+            return n["credit"], n["balance_after"]
+
+        assert applied("R1") == ("0.00", "0.00")
+        n = repo.pending_by_dedupe(c, WS, "INFO:receipt_applied:R1").payload
+        assert (n["exchanges"], n["opening"]) == (
+            [{"exchange_ref": "C1", "delivered_on": "2026-11-13", "amount": "73.60"}], None)
+        exchange(repo, c, D20, [LineInput("b", 1000)])
+        fund_all(repo, c, q, "m2", 920, D20)
+        receipt(repo, c, q, "b", "EUR", 500)
+        assert applied("R2") == ("0.00", "4.20")
+        receipt(repo, c, q, "b", "EUR", 2000)
+        assert applied("R3") == ("15.80", "-15.80")
+
+
+def test_usd_credit_is_consumed_when_an_exchange_is_registered(tmp_path):
+    repo, q = make(tmp_path)
+    with repo.tx() as c:
+        r = receipt(repo, c, q, "a", "USD", 5000, day=D13)  # paid ahead
+        ex = exchange(repo, c, D14, [LineInput("a", 12000)])
+        line = repo.current_lines(c, ex.id)[0].id
+        assert allocs(c, r.id) == [(line, 5000, "AUTO_FIFO")]
+        assert [o.outstanding_minor for o in repo.open_lines(c, WS, "a", "USD")] == [7000]
+        receipt(repo, c, q, "a", "USD", 7000, day=D20)
+        assert repo.open_lines(c, WS, "a", "USD") == []
+        assert repo.receipt_remainders(c, WS, "a", "USD") == []
+        with pytest.raises(ValidationError) as e:
+            forgive(repo, c, WS, "C1:Familiar A", None, "gift", NOW)
+        assert e.value.field == "outstanding"
+        assert repo.balance(c, WS, "a", "USD") == 0
+
+
+def test_small_difference_notice_is_one_per_adjustment(tmp_path):
+    repo, q = make(tmp_path)
+    with repo.tx() as c:
+        ex = exchange(repo, c, D13)
+        receipt(repo, c, q, "b", "EUR", 7400, day=D13)  # paid 74.00 ahead
+        fund_all(repo, c, q, "m1", 27600)  # charged 73.60: the 0.40 held is written off
+
+        def notice(entry):
+            n = repo.pending_by_dedupe(c, WS, f"INFO:small_difference_closed:E{entry.number}")
+            return {k: n.payload[k] for k in ("entry_ref", "receipt_ref", "currency", "amount",
+                                              "direction")}
+
+        [first] = adjustments(repo, c, "b")
+        assert notice(first) == {"entry_ref": f"E{first.number}", "receipt_ref": "R1",
+                                 "currency": "EUR", "amount": "0.40", "direction": "you_held"}
+        lines = [LineInput("a", 12000), LineInput("b", 8100), LineInput(OWNER, 3900),
+                 LineInput("f", 6000)]
+        correct_exchange(repo, c, WS, ex.id, lines, None, "b was 81", NOW, queue=q)
+        _, second = adjustments(repo, c, "b")  # the first one is reversed
+        assert notice(second) == {"entry_ref": f"E{second.number}", "receipt_ref": "R1",
+                                  "currency": "EUR", "amount": "0.52", "direction": "they_owed"}
+        assert repo.balance(c, WS, "b", "EUR") == 0
+
+
+def test_bank_receipt_must_match_its_movement(tmp_path):
+    repo, q = make(tmp_path)
+    with repo.tx() as c:
+        exchange(repo, c, D13)
+        fund_all(repo, c, q, "m1", 27600)  # outgoing, linked to F1
+        move(repo, c, "in1", 12000, D15, "USD")
+        move(repo, c, "in2", 12000, D15, "USD")
+        repo.insert_movement_role(c, WS, "in2", MovementRoleKind.NOT_EXCHANGE)
+        move(repo, c, "in3", 5000, D15, "USD")
+        repo.insert_funding(c, Funding("fx", WS, 99, ("in3",), (), 5000, 5000, NOW), {})
+        pending = domain.Movement("in-p", WS, "acc-eur", "tx-p", "fp-p",
+                                  domain.MovementStatus.PENDING, D15, D15, 12000, "USD", "X",
+                                  None, "t", None)
+        repo.base.insert_movement_in_tx(c, pending)
+        booked = domain.Movement("in-b", WS, "acc-eur", "tx-b", "fp-b",
+                                 domain.MovementStatus.BOOKED, D20, D20, 11000, "USD", "X",
+                                 None, "t", "in-p")
+        repo.base.insert_movement_in_tx(c, booked)
+        tables = ("receipt", "ledger_entry", "allocation", "movement_role", "ref_counter")
+        before = {t: count(c, t) for t in tables}
+        for payer, cur, amount, mid, reason in [
+                ("b", "EUR", 99999, "in1", "currency"), ("a", "USD", 11000, "in1", "amount"),
+                ("b", "EUR", 27600, "m1", "outgoing"), ("a", "USD", 12000, "in2", "classified"),
+                ("a", "USD", 5000, "in3", "funded"), ("a", "USD", 12000, "nope", "unknown"),
+                ("a", "USD", 12000, "in-p", "amount")]:  # the bank now says 110.00
+            with pytest.raises(ValidationError) as e:
+                receipt(repo, c, q, payer, cur, amount, kind=ReceiptKind.BANK, movement_id=mid)
+            assert (e.value.field, e.value.detail["reason"]) == ("movement", reason)
+        assert before == {t: count(c, t) for t in tables}
+        receipt(repo, c, q, "a", "USD", 11000, kind=ReceiptKind.BANK, movement_id="in-p")
+        receipt(repo, c, q, "a", "USD", 12000, kind=ReceiptKind.BANK, movement_id="in1")
+        assert repo.balance(c, WS, "a", "USD") == 12000 - 23000
