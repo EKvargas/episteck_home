@@ -471,6 +471,18 @@ class ReceivablesRepository:
         x = conn.execute("SELECT * FROM exchange WHERE id=?", (r["exchange_id"],)).fetchone()
         return _line(r), _exchange(x)
 
+    def effective_adjustments_for_lines(self, conn, ws: str,
+                                        line_ids: Sequence[str]) -> list[LedgerEntry]:
+        """Effective ADJUSTMENTs whose ``source_ref`` is one of ``line_ids``, oldest first."""
+        if not line_ids:
+            return []
+        marks = ",".join("?" * len(line_ids))
+        rows = conn.execute(
+            "SELECT l.* FROM ledger_entry l WHERE l.workspace_id=? AND l.kind='ADJUSTMENT' "
+            f"AND l.source_ref IN ({marks}) AND {_effective('l')} ORDER BY l.number",
+            (ws, *line_ids)).fetchall()
+        return [_entry(r) for r in rows]
+
     def effective_charges_for_exchange(self, conn, ws: str, exchange_id: str,
                                        currency: str) -> list[LedgerEntry]:
         """Effective CHARGEs in ``currency`` on any line version of one exchange, oldest first."""

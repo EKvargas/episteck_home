@@ -7,7 +7,7 @@ from decimal import Decimal
 import pytest
 
 from app import domain
-from app.receivables.funding import try_link
+from app.receivables.funding import link_choice, reverse_funding, try_link
 from app.receivables.ledger import Evidence, LineInput, ValidationError, receivables_view, record_exchange
 from app.receivables.model import (
     OWNER, Counterparty, CounterpartyKind, EntryKind, MovementRoleKind, ReceiptKind,
@@ -345,3 +345,43 @@ def test_reallocate_respects_invariants(tmp_path):
         f = receipt(repo, c, q, "f", "USD", 100)
         with pytest.raises(ValidationError):
             reallocate(repo, c, WS, f.id, [(la[0], 100)], NOW)
+
+
+def live_adjustment_sum(repo, c):
+    return sum(e.amount_minor for e in repo.effective_adjustments_for_lines(
+        c, WS, [r["line_id"] for r in c.execute(
+            "SELECT DISTINCT source_ref AS line_id FROM ledger_entry WHERE kind='ADJUSTMENT'")]))
+
+
+def test_reverse_funding_reverses_small_difference_with_its_charge(tmp_path):
+    repo, q = make(tmp_path)
+    with repo.tx() as c:
+        ex = exchange(repo, c, D13)
+        m = move(repo, c, "m1", -27600)
+        assert try_link(repo, c, WS, m, q, NOW) == "LINKED"
+        r = receipt(repo, c, q, "b", "EUR", 7300)
+        assert live_adjustment_sum(repo, c) == -60
+        reverse_funding(repo, c, WS, repo.live_funding_for_exchange(c, ex.id).id, "x", q, NOW)
+        assert live_adjustment_sum(repo, c) == 0
+        assert repo.balance(c, WS, "b", "EUR") == -7300
+        assert repo.receipt_remainders(c, WS, "b", "EUR") == [(r, 7300)]
+        assert repo.open_lines(c, WS, "b", "EUR") == []
+        assert try_link(repo, c, WS, m, q, NOW) == "LINKED"  # re-fund the same exchange
+        assert repo.balance(c, WS, "b", "EUR") == 0
+        assert live_adjustment_sum(repo, c) == -60  # not applied twice
+        assert repo.open_lines(c, WS, "b", "EUR") == []
+        assert repo.receipt_remainders(c, WS, "b", "EUR") == []
+
+
+def test_add_to_reverses_small_difference_before_recharging(tmp_path):
+    repo, q = make(tmp_path)
+    with repo.tx() as c:
+        exchange(repo, c, D13)
+        assert try_link(repo, c, WS, move(repo, c, "m1", -27600), q, NOW) == "LINKED"
+        receipt(repo, c, q, "b", "EUR", 7300)
+        assert live_adjustment_sum(repo, c) == -60
+        move(repo, c, "m2", -100, D15)
+        assert link_choice(repo, c, WS, "m2", "ADD_TO:C1", q, NOW)["ok"] is not False
+        assert repo.balance(c, WS, "b", "EUR") == 0  # 73.87 charged, 73.00 paid, 0.87 closed
+        assert live_adjustment_sum(repo, c) == -87
+        assert repo.open_lines(c, WS, "b", "EUR") == []

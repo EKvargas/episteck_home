@@ -267,8 +267,10 @@ def _undo(repo: ReceivablesRepository, conn, ws: str, funding: Funding, reason: 
     """Revokes a live funding with its shares and roles, reverses its EUR charges and revokes
     the allocations on those lines. Returns the payers whose charges were reversed."""
     payers: list[str] = []
+    lines: list[str] = []
     for eid in funding.exchange_ids:
         for entry in repo.effective_charges_for_exchange(conn, ws, eid, "EUR"):
+            lines.append(entry.source_ref)
             repo.insert_entry(conn, LedgerEntry(
                 _id(), ws, repo.next_number(conn, ws, "E"), entry.counterparty_id, "EUR",
                 -entry.amount_minor, EntryKind.REVERSAL, now.date(), entry.source_ref, reason,
@@ -276,6 +278,12 @@ def _undo(repo: ReceivablesRepository, conn, ws: str, funding: Funding, reason: 
             for aid in repo.live_allocation_ids_for_line(conn, ws, entry.source_ref):
                 repo.revoke(conn, ws, "allocation", aid, reason, now)
             payers.append(entry.counterparty_id)
+    for adj in repo.effective_adjustments_for_lines(conn, ws, lines):
+        # a small difference closed on a line goes with the charge it settled
+        repo.insert_entry(conn, LedgerEntry(
+            _id(), ws, repo.next_number(conn, ws, "E"), adj.counterparty_id, adj.currency,
+            -adj.amount_minor, EntryKind.REVERSAL, now.date(), adj.source_ref, reason,
+            reverses_id=adj.id))
     repo.replace_funding_shares(conn, ws, funding.id, {}, reason, now)  # revokes, adds none
     for root in funding.movement_ids:
         for role_id in repo.live_role_ids_for_movement(conn, root):
