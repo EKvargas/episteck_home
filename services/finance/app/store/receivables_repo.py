@@ -344,6 +344,22 @@ class ReceivablesRepository:
             self.revoke(conn, ws, "funding_share", r["id"], reason, at)
         self._insert_shares(conn, ws, funding_id, shares)
 
+    def funding_by_id(self, conn, ws: str, funding_id: str) -> Funding | None:
+        """The live funding; ``None`` if unknown, of another workspace or revoked."""
+        r = conn.execute(f"SELECT f.* FROM funding f WHERE f.workspace_id=? AND f.id=? "
+                         f"AND {_live('funding', 'f')}", (ws, funding_id)).fetchone()
+        return self._funding(conn, r)
+
+    def latest_funded_exchange(self, conn, ws: str, day: date) -> Exchange | None:
+        """The live exchange with a live funding delivered last on or before ``day``."""
+        r = conn.execute(
+            f"SELECT e.* FROM exchange e WHERE e.workspace_id=? AND e.delivered_on<=? "
+            f"AND {_live('exchange', 'e')} AND EXISTS (SELECT 1 FROM funding_exchange fe "
+            f"JOIN funding f ON f.id=fe.funding_id WHERE fe.exchange_id=e.id "
+            f"AND {_live('funding', 'f')}) ORDER BY e.delivered_on DESC, e.number DESC LIMIT 1",
+            (ws, day.isoformat())).fetchone()
+        return _exchange(r) if r else None
+
     # --- ledger and receipts -----------------------------------------------------
     def insert_entry(self, conn, e: LedgerEntry) -> None:
         """A ``REVERSAL`` must undo exactly one effective, non-REVERSAL entry (no double undo)."""
@@ -451,6 +467,21 @@ class ReceivablesRepository:
             return None
         x = conn.execute("SELECT * FROM exchange WHERE id=?", (r["exchange_id"],)).fetchone()
         return _line(r), _exchange(x)
+
+    def effective_charges_for_exchange(self, conn, ws: str, exchange_id: str,
+                                       currency: str) -> list[LedgerEntry]:
+        """Effective CHARGEs in ``currency`` on any line version of one exchange, oldest first."""
+        rows = conn.execute(
+            "SELECT l.* FROM ledger_entry l JOIN exchange_line el ON el.id=l.source_ref "
+            "WHERE l.workspace_id=? AND el.exchange_id=? AND l.currency=? AND l.kind='CHARGE' "
+            f"AND {_effective('l')} ORDER BY l.number", (ws, exchange_id, currency)).fetchall()
+        return [_entry(r) for r in rows]
+
+    def live_allocation_ids_for_line(self, conn, ws: str, line_id: str) -> list[str]:
+        rows = conn.execute(
+            f"SELECT a.id FROM allocation a WHERE a.workspace_id=? AND a.line_id=? "
+            f"AND {_live('allocation', 'a')} ORDER BY a.rowid", (ws, line_id)).fetchall()
+        return [r["id"] for r in rows]
 
     def line_charged(self, conn, ws: str, line_id: str) -> int:
         """Σ effective CHARGEs booked against one exchange line."""
@@ -596,6 +627,34 @@ class ReceivablesRepository:
                 return current
             seen.add(nxt)
             current = nxt
+
+    def movement_current(self, conn, ws: str, movement_id: str) -> domain.Movement | None:
+        """The latest version of a movement (follows BOOKED successors); ``None`` if unknown."""
+        r = conn.execute("SELECT * FROM movement WHERE workspace_id=? AND id=?",
+                         (ws, movement_id)).fetchone()
+        seen = set()
+        while r is not None and r["id"] not in seen:
+            seen.add(r["id"])
+            nxt = conn.execute("SELECT * FROM movement WHERE workspace_id=? AND supersedes_id=? "
+                               "ORDER BY rowid LIMIT 1", (ws, r["id"])).fetchone()
+            if nxt is None:
+                return _movement(r)
+            r = nxt
+        return _movement(r) if r is not None else None
+
+    def unlinked_partner_payments(self, conn, ws: str) -> list[domain.Movement]:
+        """Current outgoing EUR movements to a live partner IBAN whose root has no live role
+        and no live funding, oldest first. A superseded PENDING row shows as its successor."""
+        rows = conn.execute(
+            "SELECT m.* FROM movement m WHERE m.workspace_id=? AND m.currency='EUR' "
+            "AND m.amount_minor<0 AND NOT EXISTS (SELECT 1 FROM movement s "
+            "WHERE s.supersedes_id=m.id) AND EXISTS (SELECT 1 FROM partner_identifier p "
+            "WHERE p.workspace_id=m.workspace_id AND p.iban_hash=m.counterparty_iban_hash "
+            f"AND {_live('partner_identifier', 'p')}) ORDER BY m.booking_date, m.rowid",
+            (ws,)).fetchall()
+        return [m for m in map(_movement, rows)
+                if self.movement_role(conn, m.id) is None
+                and self.live_funding_for_movement(conn, m.id) is None]
 
     def movements_after(self, conn, ws: str, rowid: int) -> list[tuple[int, domain.Movement]]:
         rows = conn.execute("SELECT rowid AS rid, * FROM movement WHERE workspace_id=? "
