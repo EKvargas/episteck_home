@@ -110,19 +110,45 @@ def record_exchange(repo: ReceivablesRepository, conn, ws: str, *, partner_id: s
     ex = Exchange(
         _id(), ws, repo.next_number(conn, ws, "C"), partner_id, total_usd_minor, delivered, now,
         ev.ves_amount_minor, repo.hash_key(ev.ves_reference) if ev.ves_reference else None)
-    ex_lines = [
-        ExchangeLine(_id(), ex.id, 1, pos, ln.payer_id, ln.usd_minor, cur, ln.beneficiary_note,
-                     ln.eur_override_minor)
-        for pos, (ln, cur) in enumerate(resolved)]
+    ex_lines = new_lines(ex.id, 1, resolved)
     repo.insert_exchange(conn, ex, ex_lines)
-    for el in ex_lines:
+    charge_usd_lines(repo, conn, ws, ex_lines, delivered)
+    return ex
+
+
+def new_lines(exchange_id: str, version: int,
+              resolved: Sequence[tuple[LineInput, str]]) -> list[ExchangeLine]:
+    """One version of an exchange's lines from ``validate_lines`` output, in input order."""
+    return [ExchangeLine(_id(), exchange_id, version, pos, ln.payer_id, ln.usd_minor, cur,
+                         ln.beneficiary_note, ln.eur_override_minor)
+            for pos, (ln, cur) in enumerate(resolved)]
+
+
+def charge_usd_lines(repo: ReceivablesRepository, conn, ws: str, lines: Sequence[ExchangeLine],
+                     day: date) -> list[tuple[str, str]]:
+    """A USD CHARGE per USD line (PERSON or FUND), never for OWNER (R15). EUR lines are
+    charged only once the exchange is funded. Returns the (payer, "USD") pairs charged."""
+    charged: list[tuple[str, str]] = []
+    for el in lines:
         if el.payer_id == OWNER or el.debt_currency != "USD":
-            continue  # EUR lines are charged only once the exchange is funded
+            continue
         # source_ref = line id: open_lines joins CHARGEs to lines on it.
         repo.insert_entry(conn, LedgerEntry(
             _id(), ws, repo.next_number(conn, ws, "E"), el.payer_id, "USD", el.usd_minor,
-            EntryKind.CHARGE, delivered, el.id))
-    return ex
+            EntryKind.CHARGE, day, el.id))
+        charged.append((el.payer_id, "USD"))
+    return list(dict.fromkeys(charged))
+
+
+def reverse_entry(repo: ReceivablesRepository, conn, ws: str, entry: LedgerEntry, reason: str,
+                  now: datetime) -> LedgerEntry:
+    """Writes the ``REVERSAL`` that undoes one effective entry (same party, currency and
+    source; the negated amount). The repository refuses a double undo."""
+    rev = LedgerEntry(_id(), ws, repo.next_number(conn, ws, "E"), entry.counterparty_id,
+                      entry.currency, -entry.amount_minor, EntryKind.REVERSAL, now.date(),
+                      entry.source_ref, reason, reverses_id=entry.id)
+    repo.insert_entry(conn, rev)
+    return rev
 
 
 def _where(accounts: dict[str, str], settles_to: str | None) -> str | None:

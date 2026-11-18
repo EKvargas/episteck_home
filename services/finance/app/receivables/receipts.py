@@ -15,7 +15,7 @@ from datetime import date, datetime
 from ..money import format_minor
 from ..store.receivables_repo import DuplicateReceipt, ReceivablesRepository, _receipt
 from .allocation import plan_allocation
-from .ledger import ValidationError
+from .ledger import ValidationError, reverse_entry
 from .model import (
     EUR_ADJUST_TOLERANCE_MINOR, Allocation, AllocationMethod, CounterpartyKind, EntryKind,
     LedgerEntry, MovementRoleKind, Receipt, ReceiptKind, Verification,
@@ -202,10 +202,28 @@ def reverse_receipt_adjustments(repo: ReceivablesRepository, conn, ws: str,
     ``consume_credits`` applies the rule again.
     """
     for adj in repo.effective_adjustments_for_receipts(conn, ws, receipt_ids):
-        repo.insert_entry(conn, LedgerEntry(
-            _id(), ws, repo.next_number(conn, ws, "E"), adj.counterparty_id, adj.currency,
-            -adj.amount_minor, EntryKind.REVERSAL, now.date(), adj.source_ref, reason,
-            reverses_id=adj.id))
+        reverse_entry(repo, conn, ws, adj, reason, now)
+
+
+def release_charges(repo: ReceivablesRepository, conn, ws: str, charges: Sequence[LedgerEntry],
+                    reason: str, now: datetime) -> list[tuple[str, str]]:
+    """Undoes effective CHARGEs together with what settled their lines.
+
+    In one step: a ``REVERSAL`` of each charge and of the ADJUSTMENTs sourced to its line
+    (R26), revocation of the line's live allocations and reversal of those receipts'
+    write-offs (R27). A FORGIVE sourced to the line is left to the caller. Returns the
+    (payer, currency) pairs touched; the caller re-runs ``consume_credits`` for them.
+    """
+    lines = list(dict.fromkeys(e.source_ref for e in charges))
+    for entry in charges:
+        reverse_entry(repo, conn, ws, entry, reason, now)
+    allocations = repo.live_allocations_for_lines(conn, ws, lines)
+    for a in allocations:
+        repo.revoke(conn, ws, "allocation", a.id, reason, now)
+    for adj in repo.effective_adjustments_for_lines(conn, ws, lines):
+        reverse_entry(repo, conn, ws, adj, reason, now)
+    reverse_receipt_adjustments(repo, conn, ws, [a.receipt_id for a in allocations], reason, now)
+    return list(dict.fromkeys((e.counterparty_id, e.currency) for e in charges))
 
 
 def reallocate(repo: ReceivablesRepository, conn, ws: str, receipt_id: str,

@@ -8,11 +8,12 @@ are id-scoped and take no workspace: ``current_lines``, ``live_funding_for_excha
 workspace-scoped read.
 
 "Live" means no ``revocation`` row for ``(table_name, target_id)``. Readers of revocable
-tables return live rows only, except ``entries`` (full history, by design) and
-``exchange_by_ref(..., include_revoked=True)``. An "effective" ledger entry is live and not
-undone by a live ``REVERSAL`` (``_effective``). Movement ids in ``funding_movement``,
-``receipt`` and ``movement_role`` are ROOT ids (``movement_root``), so a PENDING movement
-and its BOOKED successor share one funding, receipt and role.
+tables return live rows only, except ``entries`` (full history, by design) and the ref
+lookups asked for history (``include_revoked=True`` / ``include_undone=True``). Human refs
+``C<n>``/``F<n>``/``R<n>``/``E<n>`` match case-insensitively. An "effective" ledger entry
+is live and not undone by a live ``REVERSAL`` (``_effective``). Movement ids in
+``funding_movement``, ``receipt`` and ``movement_role`` are ROOT ids (``movement_root``), so
+a PENDING movement and its BOOKED successor share one funding, receipt and role.
 """
 from __future__ import annotations
 
@@ -96,6 +97,16 @@ def _new_id() -> str:
     return uuid.uuid4().hex
 
 
+def _ref_number(ref: str, prefix: str) -> int | None:
+    """``"<prefix><n>"`` (case-insensitive, surrounding spaces ignored) -> n, else ``None``."""
+    text = ref.strip()
+    digits = text[1:]
+    if (len(text) < 2 or text[0].upper() != prefix or not digits.isascii()
+            or not digits.isdigit() or len(digits) > MAX_REF_DIGITS):
+        return None
+    return int(digits)
+
+
 def _code(code: str) -> str:
     """Pending codes are matched case-insensitively: " p3" finds "P3"."""
     return code.strip().upper()
@@ -133,6 +144,11 @@ def _receipt(r: sqlite3.Row) -> Receipt:
         r["id"], r["workspace_id"], r["number"], ReceiptKind(r["kind"]), r["payer_id"],
         r["currency"], r["amount_minor"], _d(r["received_on"]), Verification(r["verification"]),
         r["movement_id"], r["description"])
+
+
+def _allocation(r: sqlite3.Row) -> Allocation:
+    return Allocation(r["id"], r["workspace_id"], r["receipt_id"], r["line_id"],
+                      r["amount_minor"], AllocationMethod(r["method"]))
 
 
 def _pending(r: sqlite3.Row) -> PendingItem:
@@ -218,26 +234,41 @@ class ReceivablesRepository:
                             (ws,)).fetchall()
         return [_cp(r) for r in rows]
 
+    def set_opening(self, conn, ws: str, cp_id: str, opening: Opening | None) -> None:
+        """``counterparty`` is working state (mutable); the OPENING entries are the facts."""
+        conn.execute("UPDATE counterparty SET opening=? WHERE workspace_id=? AND id=?",
+                     (opening.value if opening else None, ws, cp_id))
+
     # --- exchanges and fundings --------------------------------------------------
     def insert_exchange(self, conn, ex: Exchange, lines: Sequence[ExchangeLine]) -> None:
-        for ln in lines:
-            if ln.exchange_id != ex.id:
-                raise ValueError("every line must belong to the exchange being inserted")
-            if not 0 <= ln.position <= MAX_LINE_POSITION:
-                raise ValueError(f"line position must be between 0 and {MAX_LINE_POSITION}")
+        self._check_lines(ex.id, lines)
         conn.execute(
             "INSERT INTO exchange(id,workspace_id,number,partner_id,total_usd_minor,delivered_on,"
             "created_at,ves_amount_minor,ves_reference_hash) VALUES(?,?,?,?,?,?,?,?,?)",
             (ex.id, ex.workspace_id, ex.number, ex.partner_id, ex.total_usd_minor,
              ex.delivered_on.isoformat(), _ts(ex.created_at), ex.ves_amount_minor,
              ex.ves_reference_hash))
+        self.insert_lines(conn, ex.workspace_id, ex.id, lines)
+
+    def insert_lines(self, conn, ws: str, exchange_id: str,
+                     lines: Sequence[ExchangeLine]) -> None:
+        """Lines of an exchange; a correction inserts a new ``version`` (§6.8)."""
+        self._check_lines(exchange_id, lines)
         for ln in lines:
             conn.execute(
                 "INSERT INTO exchange_line(id,workspace_id,exchange_id,version,position,payer_id,"
                 "usd_minor,debt_currency,beneficiary_note,eur_override_minor) "
                 "VALUES(?,?,?,?,?,?,?,?,?,?)",
-                (ln.id, ex.workspace_id, ln.exchange_id, ln.version, ln.position, ln.payer_id,
+                (ln.id, ws, ln.exchange_id, ln.version, ln.position, ln.payer_id,
                  ln.usd_minor, ln.debt_currency, ln.beneficiary_note, ln.eur_override_minor))
+
+    @staticmethod
+    def _check_lines(exchange_id: str, lines: Sequence[ExchangeLine]) -> None:
+        for ln in lines:
+            if ln.exchange_id != exchange_id:
+                raise ValueError("every line must belong to the exchange being inserted")
+            if not 0 <= ln.position <= MAX_LINE_POSITION:
+                raise ValueError(f"line position must be between 0 and {MAX_LINE_POSITION}")
 
     def current_lines(self, conn, exchange_id: str) -> list[ExchangeLine]:
         rows = conn.execute(
@@ -257,14 +288,18 @@ class ReceivablesRepository:
     def exchange_by_ref(self, conn, ws: str, ref: str, *,
                         include_revoked: bool = False) -> Exchange | None:
         """``C<n>`` -> the live exchange; ``include_revoked`` also finds a revoked one (history)."""
-        text = ref.strip()
-        digits = text[1:]
-        if (len(text) < 2 or text[0] not in "Cc" or not digits.isascii() or not digits.isdigit()
-                or len(digits) > MAX_REF_DIGITS):
+        number = _ref_number(ref, "C")
+        if number is None:
             return None
         live = "" if include_revoked else f" AND {_live('exchange', 'e')}"
         r = conn.execute(f"SELECT e.* FROM exchange e WHERE e.workspace_id=? AND e.number=?{live}",
-                         (ws, int(digits))).fetchone()
+                         (ws, number)).fetchone()
+        return _exchange(r) if r else None
+
+    def exchange_by_id(self, conn, ws: str, exchange_id: str) -> Exchange | None:
+        """The live exchange; ``None`` if unknown, of another workspace or revoked."""
+        r = conn.execute(f"SELECT e.* FROM exchange e WHERE e.workspace_id=? AND e.id=? "
+                         f"AND {_live('exchange', 'e')}", (ws, exchange_id)).fetchone()
         return _exchange(r) if r else None
 
     def exchange_by_ves_hash(self, conn, ws: str, h: str) -> Exchange | None:
@@ -350,6 +385,17 @@ class ReceivablesRepository:
                          f"AND {_live('funding', 'f')}", (ws, funding_id)).fetchone()
         return self._funding(conn, r)
 
+    def funding_by_ref(self, conn, ws: str, ref: str, *,
+                       include_revoked: bool = False) -> Funding | None:
+        """``F<n>`` -> the live funding; ``include_revoked`` also finds a revoked one."""
+        number = _ref_number(ref, "F")
+        if number is None:
+            return None
+        live = "" if include_revoked else f" AND {_live('funding', 'f')}"
+        r = conn.execute(f"SELECT f.* FROM funding f WHERE f.workspace_id=? AND f.number=?{live}",
+                         (ws, number)).fetchone()
+        return self._funding(conn, r)
+
     def latest_funded_exchange(self, conn, ws: str, day: date) -> Exchange | None:
         """The live exchange with a live funding delivered last on or before ``day``."""
         r = conn.execute(
@@ -379,12 +425,16 @@ class ReceivablesRepository:
         if e.reverses_id is None:
             raise ValueError("a REVERSAL must reference the entry it undoes")
         target = conn.execute(
-            f"SELECT l.kind FROM ledger_entry l WHERE l.workspace_id=? AND l.id=? "
-            f"AND {_effective('l')}", (e.workspace_id, e.reverses_id)).fetchone()
+            f"SELECT l.kind, l.counterparty_id, l.currency, l.amount_minor FROM ledger_entry l "
+            f"WHERE l.workspace_id=? AND l.id=? AND {_effective('l')}",
+            (e.workspace_id, e.reverses_id)).fetchone()
         if target is None:
             raise ValueError("the reversed entry is unknown, revoked or already reversed")
         if target["kind"] == EntryKind.REVERSAL.value:
             raise ValueError("a REVERSAL cannot itself be reversed")
+        if (target["counterparty_id"] != e.counterparty_id or target["currency"] != e.currency
+                or e.amount_minor != -target["amount_minor"]):
+            raise ValueError("a REVERSAL must negate its target for the same party and currency")
 
     def balance(self, conn, ws: str, cp_id: str, currency: str) -> int:
         return conn.execute(
@@ -404,6 +454,27 @@ class ReceivablesRepository:
             "SELECT * FROM ledger_entry WHERE workspace_id=? AND counterparty_id=? "
             "ORDER BY number", (ws, cp_id)).fetchall()
         return [_entry(r) for r in rows]
+
+    def entry_by_ref(self, conn, ws: str, ref: str, *,
+                     include_undone: bool = False) -> LedgerEntry | None:
+        """``E<n>`` -> the effective entry; ``include_undone`` also finds a revoked or
+        reversed one (history)."""
+        number = _ref_number(ref, "E")
+        if number is None:
+            return None
+        effective = "" if include_undone else f" AND {_effective('l')}"
+        r = conn.execute(f"SELECT l.* FROM ledger_entry l WHERE l.workspace_id=? "
+                         f"AND l.number=?{effective}", (ws, number)).fetchone()
+        return _entry(r) if r else None
+
+    def receipt_by_ref(self, conn, ws: str, ref: str) -> Receipt | None:
+        """``R<n>`` -> the live receipt."""
+        number = _ref_number(ref, "R")
+        if number is None:
+            return None
+        r = conn.execute(f"SELECT r.* FROM receipt r WHERE r.workspace_id=? AND r.number=? "
+                         f"AND {_live('receipt', 'r')}", (ws, number)).fetchone()
+        return _receipt(r) if r else None
 
     def insert_receipt(self, conn, r: Receipt) -> None:
         """Stores the ROOT movement id; raises ``DuplicateReceipt`` if that root already has a
@@ -435,7 +506,8 @@ class ReceivablesRepository:
             (a.id, a.workspace_id, a.receipt_id, a.line_id, a.amount_minor, a.method.value))
 
     def open_lines(self, conn, ws: str, payer_id: str, currency: str) -> list[OpenLine]:
-        """One row per line: Σ effective CHARGEs − Σ live allocations, kept when > 0.
+        """One row per line: Σ effective CHARGEs − Σ live allocations + Σ effective
+        ADJUSTMENT/FORGIVE entries sourced to the line, kept when > 0.
 
         A CHARGE undone by a live REVERSAL no longer counts, so a re-charged line (funding
         re-created) or a corrected exchange (new line version) is never counted twice.
@@ -446,7 +518,8 @@ class ReceivablesRepository:
             "  SELECT SUM(a.amount_minor) FROM allocation a WHERE a.workspace_id=? "
             f"  AND a.line_id=c.line_id AND {_live('allocation', 'a')}), 0)"
             " + COALESCE((SELECT SUM(j.amount_minor) FROM ledger_entry j WHERE j.workspace_id=?"
-            f"  AND j.kind='ADJUSTMENT' AND j.source_ref=c.line_id AND {_effective('j')}), 0)"
+            "  AND j.kind IN ('ADJUSTMENT','FORGIVE') AND j.source_ref=c.line_id"
+            f"  AND {_effective('j')}), 0)"
             " AS outstanding"
             " FROM (SELECT l.source_ref AS line_id, x.number * 100 + el.position AS ord,"
             "  MIN(l.number) AS first_number, SUM(l.amount_minor) AS charged"
@@ -485,14 +558,19 @@ class ReceivablesRepository:
                                        refs: Sequence[str]) -> list[LedgerEntry]:
         """Effective ADJUSTMENTs whose ``source_ref`` is one of ``refs`` (line or receipt ids,
         which are globally unique), oldest first."""
-        line_ids = list(dict.fromkeys(refs))
-        if not line_ids:
+        return self.effective_entries_for_refs(conn, ws, refs, (EntryKind.ADJUSTMENT,))
+
+    def effective_entries_for_refs(self, conn, ws: str, refs: Sequence[str],
+                                   kinds: Sequence[EntryKind]) -> list[LedgerEntry]:
+        """Effective entries of ``kinds`` whose ``source_ref`` is one of ``refs``, oldest first."""
+        ids, names = list(dict.fromkeys(refs)), [k.value for k in dict.fromkeys(kinds)]
+        if not ids or not names:
             return []
-        marks = ",".join("?" * len(line_ids))
         rows = conn.execute(
-            "SELECT l.* FROM ledger_entry l WHERE l.workspace_id=? AND l.kind='ADJUSTMENT' "
-            f"AND l.source_ref IN ({marks}) AND {_effective('l')} ORDER BY l.number",
-            (ws, *line_ids)).fetchall()
+            f"SELECT l.* FROM ledger_entry l WHERE l.workspace_id=? "
+            f"AND l.kind IN ({','.join('?' * len(names))}) "
+            f"AND l.source_ref IN ({','.join('?' * len(ids))}) AND {_effective('l')} "
+            "ORDER BY l.number", (ws, *names, *ids)).fetchall()
         return [_entry(r) for r in rows]
 
     def effective_charges_for_exchange(self, conn, ws: str, exchange_id: str,
@@ -505,10 +583,26 @@ class ReceivablesRepository:
         return [_entry(r) for r in rows]
 
     def live_allocation_ids_for_line(self, conn, ws: str, line_id: str) -> list[str]:
+        return [a.id for a in self.live_allocations_for_lines(conn, ws, [line_id])]
+
+    def live_allocations_for_lines(self, conn, ws: str,
+                                   line_ids: Sequence[str]) -> list[Allocation]:
+        """Live allocations on these lines, oldest first."""
+        ids = list(dict.fromkeys(line_ids))
+        if not ids:
+            return []
         rows = conn.execute(
-            f"SELECT a.id FROM allocation a WHERE a.workspace_id=? AND a.line_id=? "
-            f"AND {_live('allocation', 'a')} ORDER BY a.rowid", (ws, line_id)).fetchall()
-        return [r["id"] for r in rows]
+            f"SELECT a.* FROM allocation a WHERE a.workspace_id=? "
+            f"AND a.line_id IN ({','.join('?' * len(ids))}) AND {_live('allocation', 'a')} "
+            "ORDER BY a.rowid", (ws, *ids)).fetchall()
+        return [_allocation(r) for r in rows]
+
+    def live_allocations_for_receipt(self, conn, ws: str, receipt_id: str) -> list[Allocation]:
+        """Live allocations of one receipt, oldest first."""
+        rows = conn.execute(
+            f"SELECT a.* FROM allocation a WHERE a.workspace_id=? AND a.receipt_id=? "
+            f"AND {_live('allocation', 'a')} ORDER BY a.rowid", (ws, receipt_id)).fetchall()
+        return [_allocation(r) for r in rows]
 
     def line_charged(self, conn, ws: str, line_id: str) -> int:
         """Σ effective CHARGEs booked against one exchange line."""
@@ -576,6 +670,13 @@ class ReceivablesRepository:
         rows = conn.execute(
             f"SELECT p.id FROM payer_rule p WHERE p.workspace_id=? AND p.key_hash=? "
             f"AND {_live('payer_rule', 'p')} ORDER BY p.rowid", (ws, key_hash)).fetchall()
+        return [r["id"] for r in rows]
+
+    def live_rule_ids_for_counterparty(self, conn, ws: str, cp_id: str) -> list[str]:
+        """Live payer-rule ids that send a key to this counterparty, oldest first."""
+        rows = conn.execute(
+            f"SELECT p.id FROM payer_rule p WHERE p.workspace_id=? AND p.counterparty_id=? "
+            f"AND {_live('payer_rule', 'p')} ORDER BY p.rowid", (ws, cp_id)).fetchall()
         return [r["id"] for r in rows]
 
     def rule_for(self, conn, ws: str, key_hash: str) -> str | None:
