@@ -50,7 +50,9 @@ Details: [KAP-2 consolidation handoff](proposals/KNOWLEDGE_KAP2_CONSOLIDATION_HA
 | Synthetic conversational + latency validation | ✅ pass; see `G1_5_VALIDATION.md` |
 
 ## Deliberately NOT done
-Real family/health data (G2, blocked on approval). Knowledge tech install
+Real family/health onboarding (G2: user approval recorded 2026-11-15 for Ana's
+pregnancy nutrition; architecture, onboarding and scoped ConsentGrants not yet
+implemented or validated). Knowledge tech install
 (Mem0/Graphiti/RAGFlow/pgvector/Docling). FHIR, Device Gateway, Mind, Calendar,
 public UI, voice. (Finance I1 runs on the owner's own real data, decision P1.) `svc-home-core` (explicitly rejected — Frappe is the plane).
 
@@ -63,7 +65,8 @@ public UI, voice. (Finance I1 runs on the owner's own real data, decision P1.) `
 | G1.6 | ✅ **COMPLETE** — production closeout 2026-09-19 |
 
 Next: **Knowledge KAP-2 close-out** (the Technology Gate closed 2026-09-25), then
-KAP-3…KAP-10. **G2 / Health architecture** still needs explicit approval. No G1.7
+KAP-3…KAP-10. **G2** user approval for Ana's pregnancy nutrition is recorded;
+the concrete Health architecture and real onboarding remain to be delivered. No G1.7
 stage is created.
 
 ## G1.6 — trusted actor binding (COMPLETE)
@@ -121,13 +124,19 @@ design: ADR-0011, ADR-0012, ADR-0013 and ADR-0015.
 | B11 findings | ⏳ owner decision: F1 nft rule for API `:9935`, F2 image revision label, F3 Finance machine user limited to its own audience |
 | Trade Republic securities (I3) | ⏳ not in I1: PSD2 carries the cash account only. Holdings come from Trade Republic's CSV export (proposal R5) |
 
-## G2 blockers
+## G2 — approval recorded; onboarding not complete
 
 1. ✅ **Knowledge Technology Gate** closed 2026-09-25 (SQLite 3.41.2 selected; no
    runtime approved).
-2. Obtain explicit user approval for real family/health data.
-3. Approve the G2 / Health architecture, Real-Person onboarding, and real
-   ConsentGrants.
+2. ✅ **User approval, 2026-11-15:** "G2 es aprobado", in the Nutrition session.
+   Scope: Ana's pregnancy nutrition diary, simple text/audio/photo capture with
+   approximate portions, and source-backed dietary notices. This records project
+   authorization; it does not assert that Ana's authenticated sharing consent or
+   any runtime ConsentGrant already exists. No real health data was imported.
+3. Remaining delivery: concrete G2 / Health architecture, Real-Person onboarding,
+   and authenticated, scoped ConsentGrants with allow/revoke validation. The
+   approval itself must not be requested again for the same scope. Production
+   readiness and completion are not implied by this approval.
 
 Duplicate OIDC `sub` remediation is not a G1.6 or G2 actor-binding blocker because the
 live path does not consume `sub`. It remains mandatory before any native/public OIDC

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nutrición · registro sencillo · prototipo</title>
+<link rel="icon" href="data:,">
+<style>
+:root{--paper:#f1f5f8;--ink:#172f40;--muted:#506475;--accent:#24675f;--soft:#dfefea;--line:#c6d3db;--warn:#75431a;--warning:#fff0d8;--white:#fff}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 'Segoe UI',sans-serif}main{max-width:1120px;margin:auto;padding:30px 24px}h1{font-size:clamp(2rem,5vw,3rem);line-height:1.1;max-width:700px;letter-spacing:-1px;margin:18px 0}h2{font-size:1.4rem;margin:0 0 12px}h3{margin:12px 0 6px}p{max-width:75ch;margin:8px 0}a{color:var(--accent)}.intro{max-width:78ch}.note{padding:12px 16px;background:var(--soft);border-radius:6px}.layout{display:grid;grid-template-columns:1.1fr 1fr;gap:28px;margin:28px 0}.panel{background:var(--white);padding:24px;border-radius:12px}.stack{display:grid;gap:12px}.row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.muted,small{color:var(--muted)}small{font-size:.88rem}.tag{display:inline-block;font-size:.85rem;border:1px solid var(--line);padding:2px 9px;border-radius:20px}.tabs{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}button,input,textarea,select{font:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:7px;padding:9px 14px;color:var(--ink);background:white}button:hover{background:var(--paper)}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #368db1;outline-offset:3px}button[aria-selected=true],.primary{background:var(--accent);color:white;border-color:var(--accent)}button:disabled{opacity:.5;cursor:default}.primary:hover{background:#1c534c}textarea,input,select{width:100%;padding:10px;border:1px solid #8ba0ac;border-radius:6px;color:var(--ink);background:white}textarea{resize:vertical;min-height:95px}label{display:block;margin-top:8px}label small{display:block}.proposal{border-left:4px solid var(--accent);padding:0 0 0 16px;margin-top:20px}dl{margin:12px 0}dt{color:var(--muted);font-size:.9rem}dd{margin:0 0 8px;overflow-wrap:anywhere}.numbers{font-size:2rem;line-height:1.2;font-variant-numeric:tabular-nums}.warning{background:var(--warning);color:var(--warn);padding:12px;border-radius:6px}.entry{padding:14px 0;border-bottom:1px solid var(--line)}.entry p{margin:3px 0}.entry button{font-size:.85rem;padding:4px 10px}.bar{height:9px;border-radius:5px;background:var(--paper);overflow:hidden;margin:12px 0}.bar span{display:block;height:100%;background:var(--accent)}details{margin-top:16px}summary{cursor:pointer}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.85rem}footer{border-top:1px solid var(--line);padding-top:18px;margin-top:24px}.step{background:var(--soft);padding:18px;border-radius:8px}hr{border:0;border-top:1px solid var(--line);margin:20px 0}[hidden]{display:none!important}@media(max-width:760px){main{padding:20px 16px}.layout{grid-template-columns:1fr;gap:16px}.panel{padding:20px}h1{letter-spacing:-.5px}}
+</style>
+<main>
+<p class="note"><strong>Prototipo desechable · consumos sintéticos.</strong> No consulta servicios ni guarda datos. Audio y foto son ejemplos simulados; no se graba ni se sube ningún archivo.</p>
+<h1>Cuéntame qué tomaste.</h1>
+<p class="intro">Explora si una porción aproximada, una revisión breve y avisos que explican la incertidumbre hacen sencillo el registro. Las cantidades y recetas de demostración no son datos de Ana.</p>
+<div class="layout">
+<section class="panel" aria-labelledby="capture-title">
+<h2 id="capture-title">Añadir al diario</h2>
+<div class="tabs" role="tablist" aria-label="Forma de captura">
+<button id="text-tab" role="tab" aria-selected="true" aria-controls="capture" onclick="channel('Texto')">Texto</button>
+<button id="audio-tab" role="tab" aria-selected="false" aria-controls="capture" onclick="channel('Audio simulado')">Audio de ejemplo</button>
+<button id="photo-tab" role="tab" aria-selected="false" aria-controls="capture" onclick="channel('Foto simulada')">Foto de ejemplo</button>
+</div>
+<form id="capture" role="tabpanel" aria-labelledby="text-tab" onsubmit="event.preventDefault();propose()">
+<p id="channel-description" class="muted">Prueba los ejemplos o describe una bebida. Este prototipo reconoce Coca-Cola y chocolate caliente; otros alimentos quedan sin cálculo.</p>
+<label for="food-text">Lo que comiste o bebiste</label>
+<textarea id="food-text" placeholder="Un vaso pequeño de Coca-Cola Original">Un vaso pequeño de Coca-Cola Original</textarea>
+<div class="row" style="margin-top:12px"><button class="primary" type="submit">Revisar estimación</button><button type="button" onclick="load('Una taza de chocolate caliente')">Probar chocolate</button></div>
+</form>
+<div id="proposal" class="proposal" aria-live="polite"></div>
+</section>
+<section class="panel" aria-labelledby="today-title">
+<h2 id="today-title">Hoy, en lo registrado</h2>
+<p class="muted">Solo cuentan las entradas confirmadas. Confirmar una porción estimada conserva su condición de estimación.</p>
+<div id="daily" aria-live="polite"></div>
+<hr>
+<label for="reference">Comparar azúcares libres con</label>
+<select id="reference" onchange="reference=Number(this.value);renderDaily()">
+<option value="0">Sin referencia configurada</option>
+<option value="25">Referencia ilustrativa del 5%: 25 g/día</option>
+<option value="50">Referencia general del 10%: 50 g/día</option>
+</select>
+<p><small>Ejemplo calculado con 2.000 kcal/día: energía × porcentaje ÷ 4. El 5% es una recomendación condicional de la OMS. Estas cifras se refieren a azúcares libres; no son un límite clínico asignado a Ana ni certifican seguridad en el embarazo.</small></p>
+<div id="reference-state"></div>
+<p><a href="https://www.who.int/publications/i/item/9789241549028" target="_blank" rel="noreferrer">Referencia OMS</a> · <a href="https://www.efsa.europa.eu/en/plain-language-summary/tolerable-upper-intake-level-dietary-sugars" target="_blank" rel="noreferrer">Límites de la evidencia (EFSA)</a></p>
+<details><summary>Otros avisos durante el embarazo</summary>
+<p><strong>Cafeína:</strong> referencia de hasta 200 mg/día, sumando bebidas y alimentos. Esta demo no tiene datos de cafeína para sus ejemplos.</p>
+<p><strong>Alcohol:</strong> aviso para evitarlo. <strong>Crudos y no pasteurizados:</strong> comprobar ingredientes y preparación; el riesgo no se resuelve con un contador de azúcar.</p>
+<p>Una alergia o indicación profesional requiere una regla específica. Un alimento no se etiqueta globalmente como “malo”.</p>
+<a href="https://www.nhs.uk/pregnancy/keeping-well/foods-to-avoid/" target="_blank" rel="noreferrer">Fuente: NHS</a></details>
+</section>
+</div>
+<section class="panel" aria-labelledby="walk-title">
+<h2 id="walk-title">Prueba situaciones concretas</h2>
+<div class="tabs" role="tablist" aria-label="Recorridos de demostración">
+<button role="tab" aria-selected="true" aria-controls="walkthrough" id="walk-0" onclick="walk(0)">Vaso pequeño</button>
+<button role="tab" aria-selected="false" aria-controls="walkthrough" id="walk-1" onclick="walk(1)">150 ml exactos</button>
+<button role="tab" aria-selected="false" aria-controls="walkthrough" id="walk-2" onclick="walk(2)">Receta desconocida</button>
+<button role="tab" aria-selected="false" aria-controls="walkthrough" id="walk-3" onclick="walk(3)">Aviso de cantidad</button>
+</div>
+<div class="step" id="walkthrough" role="tabpanel" aria-labelledby="walk-0"><p id="walk-description"></p><button id="walk-step" onclick="stepWalk()">Preparar ejemplo</button></div>
+<details><summary>Cómo se obtiene la cifra y qué falta para el producto</summary>
+<p>La etiqueta de ejemplo de cola usa 10,6 g de azúcar por 100 ml, según <a href="https://www.coca-cola.com/de/de/brands/brand-coca-cola" target="_blank" rel="noreferrer">Coca-Cola Original en Alemania</a> (consulta: 15-11-2026). Esta demo clasifica ese azúcar como libre por sus ingredientes. El valor de etiqueta se escala por el volumen; no se supone que 1 ml equivalga a 1 g. El cero para Zero / Light es una ficha sintética, no una etiqueta verificada.</p>
+<p>“Vaso pequeño” se interpreta aquí como 150–200 ml, únicamente como supuesto editable de diseño. La taza se interpreta como 200–300 ml. No son tamaños universales ni intervalos estadísticos.</p>
+<p>Para probar el chocolate se ofrece una receta totalmente sintética de 9 g de azúcar total y 4 g de azúcar libre por 100 ml. Sin receta o etiqueta confirmada se conserva el alimento con nutrientes desconocidos.</p>
+<p>En producción: transcripción y análisis visual proponen alimento, producto, porción y preparación. El cálculo usa fuentes nutricionales verificables; la IA no inventa gramos de azúcar. La imagen no demuestra volumen, ingredientes o pasteurización por sí sola.</p>
+<p>Faltan integración multimodal real, catálogo verificado, instantáneas históricas, correcciones con revisión, autorización Home por persona y onboarding G2. El permiso del proyecto está registrado; este archivo no crea ConsentGrants.</p>
+</details>
+</section>
+<footer class="row"><span class="muted">Estado en memoria; recargar descarta las entradas de esta demo.</span><button onclick="resetDemo()">Reiniciar demo</button></footer>
+</main>
+<script id="intake-model">
+// Pure, bounded fixture model. No network, clinical inference or persistence.
+const IntakeModel = (() => {
+  function parse(text, source) {
+    const t=text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    const ml=t.match(/(?:^|\s)([+-]?\d+(?:[.,]\d+)?)\s*ml\b/);
+    const coke=/coca[ -]?cola/.test(t), chocolate=/chocolate/.test(t);
+    const quantity=ml?Number(ml[1].replace(',','.')):null;
+    const range=quantity!==null?[quantity,quantity]:coke&&/peque|peq\b/.test(t)?[150,200]:chocolate?[200,300]:null;
+    return {raw:text,source,kind:coke?'cola':chocolate?'chocolate':'unknown',
+      variant:coke?(/zero|light/.test(t)?'zero':/original|normal|clasica/.test(t)?'original':''):chocolate?'unknown':'unknown',
+      range,quantitySource:quantity!==null?'Cantidad indicada en ml':'Porción supuesta, editable',confirmed:false};
+  }
+  function nutrient(draft) {
+    if(!draft.range||draft.range.some(x=>!Number.isFinite(x)||x<=0||x>5000)) return null;
+    const facts=draft.kind==='cola'&&draft.variant==='original'?[10.6,10.6]:draft.kind==='cola'&&draft.variant==='zero'?[0,0]:draft.kind==='chocolate'&&draft.variant==='demo'?[9,4]:null;
+    return facts?{total:draft.range.map(v=>v*facts[0]/100),free:draft.range.map(v=>v*facts[1]/100),basis:facts}:null;
+  }
+  function summary(entries,reference) {
+    const known=entries.filter(e=>e.nutrients),unknown=entries.length-known.length;
+    const sum=key=>known.reduce((r,e)=>r.map((x,i)=>x+e.nutrients[key][i]),[0,0]);
+    const free=sum('free'),total=sum('total');
+    let status='Sin referencia configurada';
+    if(reference&&entries.length) status=free[0]>=reference?'Lo contabilizado alcanza o supera la referencia general.':free[1]>=reference?'El rango estimado cruza la referencia general.':unknown?'Faltan datos para comparar el total.':'Lo registrado queda por debajo de la referencia; no certifica seguridad.';
+    return {total,free,known:known.length,unknown,count:entries.length,status:entries.length?status:'Sin registros: no se puede evaluar.'};
+  }
+  return {parse,nutrient,summary};
+})();
+</script>
+<script>
+let entries=[],draft=null,source='Texto',reference=0,walkIndex=0,walkStep=0,nextId=0;
+const $=id=>document.getElementById(id),fmt=n=>new Intl.NumberFormat('es',{maximumFractionDigits:1}).format(n);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rangeText=r=>r?(r[0]===r[1]?fmt(r[0]):fmt(r[0])+'–'+fmt(r[1])):'Desconocido';
+function channel(name){source=name;['text','audio','photo'].forEach((id,i)=>$(id+'-tab').setAttribute('aria-selected',String(i===['Texto','Audio simulado','Foto simulada'].indexOf(name))));$('capture').setAttribute('aria-labelledby',name==='Texto'?'text-tab':name==='Audio simulado'?'audio-tab':'photo-tab');$('channel-description').textContent=name==='Texto'?'Catálogo limitado de demostración: cola y chocolate; otros alimentos quedan sin cálculo.':name==='Audio simulado'?'Transcripción de ejemplo, sin micrófono: «Un vaso pequeño de Coca-Cola Original».':'Lectura de foto simulada: una taza de chocolate. Volumen e ingredientes por confirmar.';if(name!=='Texto')load(name==='Audio simulado'?'Un vaso pequeño de Coca-Cola Original':'Una taza de chocolate caliente');}
+function load(text){$('food-text').value=text;propose();}
+function propose(){if(!$('food-text').value.trim())return;draft=IntakeModel.parse($('food-text').value.trim(),source);renderDraft();}
+function update(){if(!draft||draft.confirmed)return;draft.variant=$('variant').value;const value=$('ml').value.trim();if(value){const amount=Number(value);draft.range=[amount,amount];draft.quantitySource='Cantidad indicada en ml';}else{const original=IntakeModel.parse(draft.raw,draft.source);draft.range=original.range;draft.quantitySource=original.quantitySource;}const n=IntakeModel.nutrient(draft);$('quantity-preview').textContent=rangeText(draft.range)+(draft.range?' ml':'')+' · '+draft.quantitySource;$('total-preview').textContent=n?rangeText(n.total)+' g':'Desconocidos';$('free-preview').textContent=n?rangeText(n.free)+' g':'Desconocidos';$('source-preview').textContent=draft.source+' · '+(n?'Dato nutricional de demostración por 100 ml':'Sin receta o etiqueta suficiente');$('unknown-note').hidden=Boolean(n);$('confirm').disabled=draft.kind==='cola'&&!draft.variant;}
+function renderDraft(){
+ if(!draft){$('proposal').innerHTML='';return;}
+ const n=IntakeModel.nutrient(draft),version=draft.kind==='cola'?`<option value="">Elegir Original o Zero / Light</option><option value="original">Original (dato de ejemplo)</option><option value="zero">Zero / Light (cero de ejemplo)</option>`:draft.kind==='chocolate'?`<option value="unknown">No conozco receta ni etiqueta</option><option value="demo">Usar receta sintética de ejemplo</option>`:`<option value="unknown">Sin dato nutricional</option>`;
+ $('proposal').innerHTML=`<h3>${draft.confirmed?'Entrada confirmada':'Revisa antes de añadir'}</h3><p>${esc(draft.raw)}</p><label for="variant">Producto o receta</label><select id="variant" onchange="update()" ${draft.confirmed?'disabled':''}>${version}</select><label for="ml">Cantidad en ml, si la sabes <small>Opcional. Dejar en blanco conserva la aproximación disponible.</small></label><input id="ml" type="number" min="1" max="5000" step="any" placeholder="Ej. 150" value="${draft.quantitySource==='Cantidad indicada en ml'&&draft.range?draft.range[0]:''}" oninput="update()" ${draft.confirmed?'disabled':''}><dl><dt>Porción</dt><dd id="quantity-preview">${rangeText(draft.range)}${draft.range?' ml':''} · ${esc(draft.quantitySource)}</dd><dt>Azúcares totales</dt><dd id="total-preview">${n?rangeText(n.total)+' g':'Desconocidos'}</dd><dt>Azúcares libres (incluidos en el total)</dt><dd id="free-preview">${n?rangeText(n.free)+' g':'Desconocidos'}</dd><dt>Entrada y fuente</dt><dd id="source-preview">${esc(draft.source)} · ${n?'Dato nutricional de demostración por 100 ml':'Sin receta o etiqueta suficiente'}</dd></dl><p class="warning" id="unknown-note" ${n?'hidden':''}>Puedes registrar lo consumido; no se convertirá la falta de datos en cero.</p><button id="confirm" class="primary" onclick="confirmDraft()" ${draft.confirmed||(draft.kind==='cola'&&!draft.variant)?'disabled':''}>${draft.confirmed?'Añadido al diario':'Confirmar y añadir'}</button>`;
+ $('variant').value=draft.variant;
+}
+function confirmDraft(){if(!draft||draft.confirmed||(draft.kind==='cola'&&!draft.variant))return;if(draft.range&&draft.range.some(x=>!Number.isFinite(x)||x<=0||x>5000)){alert('Indica una cantidad entre 1 y 5.000 ml, o deja el campo vacío para estimar.');return;}draft.confirmed=true;entries.push({...structuredClone(draft),id:++nextId,nutrients:IntakeModel.nutrient(draft)});renderDraft();renderDaily();}
+function removeEntry(id){entries=entries.filter(e=>e.id!==id);renderDaily();}
+function renderDaily(){const s=IntakeModel.summary(entries,reference);$('daily').innerHTML=s.count?`<p class="tag">${s.unknown?'Datos parciales':'Datos disponibles para lo registrado'}</p><dl><dt>Azúcares totales contabilizados</dt><dd class="numbers">${s.known?rangeText(s.total)+' g':'Desconocidos'}</dd><dt>Azúcares libres contabilizados</dt><dd>${s.known?rangeText(s.free)+' g':'Desconocidos'}</dd><dt>Cobertura de datos</dt><dd>${s.known} de ${s.count} entradas con datos. ${s.unknown} sin dato nutricional.</dd></dl><p><small>El registro puede omitir comidas. “Datos disponibles” no significa día completo.</small></p>${entries.map(e=>`<article class="entry"><p><strong>${esc(e.raw)}</strong></p><p>${rangeText(e.range)}${e.range?' ml':''} · ${e.nutrients?rangeText(e.nutrients.total)+' g totales':'Azúcar desconocido'}</p><small>${esc(e.source)} · ${esc(e.quantitySource)}</small><div><button onclick="removeEntry(${e.id})" aria-label="Retirar ${esc(e.raw)} de esta demo">Retirar de la demo</button></div></article>`).join('')}`:'<p class="numbers">Sin registros</p><p>Escribe o prueba un ejemplo y confirma la propuesta.</p>';$('reference-state').innerHTML=`<p class="${reference?'warning':'muted'}">${s.status}</p>${reference&&s.known?`<div class="bar" aria-hidden="true"><span style="width:${Math.min(100,s.free[1]/reference*100)}%"></span></div>`:''}`;}
+const walks=[['“Vaso pequeño” no es una medida universal. Revisa el supuesto de 150–200 ml, cámbialo si quieres y confirma.','Un vaso pequeño de Coca-Cola Original'],['Una cantidad indicada elimina la estimación de volumen; el valor de la etiqueta sigue siendo un valor declarado.','150 ml de Coca-Cola Original'],['El chocolate necesita receta o etiqueta. Confirma sin dato y comprueba que el diario no muestra cero.','Una taza de chocolate caliente'],['Con 300 ml de cola de ejemplo se contabilizan 31,8 g de azúcar libre. Compáralos con la referencia ilustrativa de 25 g; no es un diagnóstico.','300 ml de Coca-Cola Original']];
+function walk(i){walkIndex=i;walkStep=0;entries=[];draft=null;reference=i===3?25:0;$('reference').value=String(reference);document.querySelectorAll('[role="tab"][id^="walk-"]').forEach((el,j)=>el.setAttribute('aria-selected',String(j===i)));$('walkthrough').setAttribute('aria-labelledby','walk-'+i);$('walk-description').textContent=walks[i][0];$('walk-step').textContent='Preparar ejemplo';$('walk-step').disabled=false;renderDraft();renderDaily();}
+function stepWalk(){if(walkStep===0){channel('Texto');load(walks[walkIndex][1]);walkStep=1;$('walk-step').textContent='Confirmar ejemplo en el diario';}else{confirmDraft();$('walk-step').textContent='Ejemplo confirmado · revisa el diario';$('walk-step').disabled=true;}}
+function resetDemo(){entries=[];draft=null;reference=0;$('reference').value='0';channel('Texto');walk(0);}
+walk(0);
+document.querySelectorAll('[role="tablist"]').forEach(list=>list.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const tabs=[...list.querySelectorAll('[role="tab"]')],i=tabs.indexOf(document.activeElement),index=e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;tabs[index].focus();tabs[index].click();}));
+</script>
+</html>
