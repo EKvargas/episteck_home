@@ -1,5 +1,6 @@
 """Shared singletons: repo, provider (chain or synthetic), mealie adapter, service."""
 from __future__ import annotations
+import logging
 import os
 from .store.sqlite_repo import SqliteNutritionRepository
 from .providers.synthetic import SyntheticFoodProvider
@@ -7,6 +8,8 @@ from .service import NutritionService
 from .home_control.client import HomeControlPlaneClient
 
 _DB = os.environ.get("NUTRITION_DB", "/data/nutrition.sqlite")
+_log = logging.getLogger(__name__)
+_WARNED_MISSING_BLS: set[str] = set()  # the service and the diary both build a provider
 
 
 def build_home_authorizer() -> HomeControlPlaneClient:
@@ -19,6 +22,17 @@ def _build_provider():
     mode = os.environ.get("FOOD_PROVIDER", "auto")
     if mode == "synthetic":
         return SyntheticFoodProvider()
+    bls_db = os.environ.get("BLS_DB")
+    if bls_db and not os.path.exists(bls_db) and bls_db not in _WARNED_MISSING_BLS:
+        _WARNED_MISSING_BLS.add(bls_db)
+        _log.warning("BLS_DB is set but the file is missing (%s); BLS lookups are disabled", bls_db)
+    if bls_db and os.path.exists(bls_db):
+        # BLS alone justifies the chain, even without a USDA key.
+        from .providers.bls import BlsFoodProvider
+        from .providers.usda import UsdaFoodProvider
+        from .providers.openfoodfacts import OpenFoodFactsProvider
+        from .providers.chain import ProviderChain
+        return ProviderChain([BlsFoodProvider(bls_db), OpenFoodFactsProvider(), UsdaFoodProvider()])
     if os.environ.get("USDA_API_KEY") or os.environ.get("OFF_BASE_URL") or mode == "chain":
         from .providers.usda import UsdaFoodProvider
         from .providers.openfoodfacts import OpenFoodFactsProvider
@@ -35,3 +49,21 @@ def build_service() -> NutritionService:
         from .mealie.adapter import MealieAdapter
         mealie = MealieAdapter()
     return NutritionService(repo, provider, mealie, authorizer=build_home_authorizer())
+
+
+def build_diary_service():
+    """Build the diary service. A bad DIARY_TZ fails here, at startup."""
+    from zoneinfo import ZoneInfo
+
+    from .diary.service import DiaryService
+    from .store.diary_sqlite import SqliteDiaryStore
+
+    tz = os.environ.get("DIARY_TZ", "Europe/Berlin")
+    ZoneInfo(tz)
+    return DiaryService(
+        SqliteDiaryStore(_DB),
+        _build_provider(),
+        SqliteNutritionRepository(_DB),
+        authorizer=build_home_authorizer(),
+        tz=tz,
+    )

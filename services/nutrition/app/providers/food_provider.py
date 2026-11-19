@@ -21,6 +21,9 @@ class FoodRecord:
     nutrients_per_100g: dict[str, Decimal]
     source: str            # provider label -> becomes FoodFact.source (provenance)
     provider_version: str
+    category: str | None = None
+    serving_g: Decimal | None = None
+    density_g_per_ml: Decimal | None = None
 
 
 class FoodProvider(ABC):

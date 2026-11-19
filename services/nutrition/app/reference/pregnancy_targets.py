@@ -10,6 +10,9 @@ Sources:
 - DGE folate + calcium update: https://www.ernaehrungs-umschau.de/print-artikel/10-07-2013-dge-aktualisierte-referenzwerte-fuer-folat-und-kalzium/
 - EFSA Dietary Reference Values (used where D-A-CH not specific): https://www.efsa.europa.eu/en/topics/topic/dietary-reference-values
 
+Values checked against DGE/EFSA on 2026-11-19. Not confirmable from the cited pages (kept as is):
+protein (DGE gives g/kg + 7/21 g), energy (DGE gives +250/+500 kcal), DHA (EFSA page has no value).
+
 Values are daily reference intakes for pregnancy (2nd/3rd trimester where DGE differentiates).
 Unknown/uncited nutrients are OMITTED (unknown != zero).
 """
@@ -20,16 +23,16 @@ from decimal import Decimal
 PREGNANCY_REFERENCE = {
     "energy_kcal":    (Decimal("2300"), "kcal", "DGE/D-A-CH", "Richtwert 2./3. Trimenon (approx, activity PAL 1.4)", "2nd/3rd trimester"),
     "protein_g":      (Decimal("58"),   "g",   "DGE/D-A-CH", "Referenzwert Protein Schwangerschaft ab 4. Monat", "from month 4"),
-    "calcium_mg":     (Decimal("1000"), "mg",  "DGE/D-A-CH", "Kalzium adults incl. pregnancy (unchanged)", "all"),
-    "iron_mg":        (Decimal("30"),   "mg",  "DGE/D-A-CH", "Eisen Schwangerschaft", "all"),
-    "folate_ug":      (Decimal("550"),  "ug",  "DGE/D-A-CH", "Folat-Äquivalente Schwangerschaft (2013 update)", "all"),
-    "vitamin_b12_ug": (Decimal("4.5"),  "ug",  "DGE/D-A-CH", "Vitamin B12 Schwangerschaft", "all"),
-    "vitamin_d_ug":   (Decimal("20"),   "ug",  "DGE/D-A-CH", "Vitamin D (bei fehlender Eigensynthese)", "all"),
-    "iodine_ug":      (Decimal("230"),  "ug",  "DGE/D-A-CH", "Jod Schwangerschaft", "all"),
-    "zinc_mg":        (Decimal("9"),    "mg",  "DGE/D-A-CH", "Zink Schwangerschaft ab 4. Monat (phytate-moderate)", "from month 4"),
-    "selenium_ug":    (Decimal("60"),   "ug",  "DGE/D-A-CH", "Selen Schwangerschaft", "all"),
+    "calcium_mg":     (Decimal("1000"), "mg",  "DGE/D-A-CH", "https://www.dge.de/wissenschaft/referenzwerte/calcium/ (Stand Ableitung 2013)", "all"),
+    "iron_mg":        (Decimal("27"),   "mg",  "DGE/D-A-CH", "https://www.dge.de/wissenschaft/referenzwerte/eisen/ (Stand Ableitung 2023)", "all"),
+    "folate_ug":      (Decimal("550"),  "ug",  "DGE/D-A-CH", "https://www.dge.de/wissenschaft/referenzwerte/folat/ (Stand Ableitung 2015)", "all"),
+    "vitamin_b12_ug": (Decimal("4.5"),  "ug",  "DGE/D-A-CH", "https://www.dge.de/wissenschaft/referenzwerte/vitamin-b12/ (Stand Ableitung 2018)", "all"),
+    "vitamin_d_ug":   (Decimal("20"),   "ug",  "DGE/D-A-CH", "https://www.dge.de/wissenschaft/referenzwerte/vitamin-d/ (Stand Ableitung 2012; bei fehlender Eigensynthese)", "all"),
+    "iodine_ug":      (Decimal("220"),  "ug",  "DGE/D-A-CH", "https://www.dge.de/wissenschaft/referenzwerte/jod/ (Stand Ableitung 2025)", "all"),
+    "zinc_mg":        (Decimal("11"),   "mg",  "DGE/D-A-CH", "https://www.dge.de/wissenschaft/referenzwerte/zink/ (Stand Ableitung 2019; mittlere Phytatzufuhr)", "2nd/3rd trimester"),
+    "selenium_ug":    (Decimal("60"),   "ug",  "DGE/D-A-CH", "https://www.dge.de/wissenschaft/referenzwerte/selen/ (Stand Ableitung 2015)", "all"),
     # choline: EFSA AI
-    "choline_mg":     (Decimal("480"),  "mg",  "EFSA", "Adequate Intake choline pregnancy", "all"),
+    "choline_mg":     (Decimal("480"),  "mg",  "EFSA", "https://efsa.onlinelibrary.wiley.com/doi/10.2903/j.efsa.2016.4484 (EFSA Journal 2016, AI pregnancy 480 mg)", "all"),
     # DHA: EFSA additional 100-200 mg/day DHA on top of adult 250 mg EPA+DHA -> record DHA target
     "dha_g":          (Decimal("0.2"),  "g",   "EFSA", "Additional DHA in pregnancy (EFSA)", "all"),
 }

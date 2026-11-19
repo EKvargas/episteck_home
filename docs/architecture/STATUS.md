@@ -27,7 +27,7 @@ Details: [KAP-2 consolidation handoff](proposals/KNOWLEDGE_KAP2_CONSOLIDATION_HA
 | Nuremberg node + Tailscale mesh | ✅ operational |
 | infra-agent / home-agent (Hermes) | ✅ operational, independent. `home-agent` answers on Telegram (`@EpisteckHome_bot`, owner allowlist) and runs on `openai-codex` / `gpt-5.6-sol` with no fallback since 2026-11-07 |
 | Mealie v3.26.0 | ✅ operational (loopback + tailnet) |
-| svc-nutrition (API + MCP) | ✅ operational; USDA prod key live; OFF live |
+| svc-nutrition (API + MCP) | ✅ operational; USDA prod key live; OFF live; food diary (drafts, confirm, day summary, BLS 4.0) merged to main (#136), not deployed |
 | Off-box restic backup | ✅ operational + restore validated; Finance SQLite included since 2026-11-07 (tag `finance`) |
 | home.episteck.com Frappe site | ✅ live (frappe+erpnext) |
 | episteck_home app on home.episteck.com | ✅ actor-aware Control Plane API live |

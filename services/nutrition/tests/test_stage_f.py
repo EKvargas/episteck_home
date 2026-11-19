@@ -70,7 +70,7 @@ def test_pregnancy_targets_have_reference_provenance():
     prof=s.create_pregnancy_profile("p2", "p2")
     d=prof["targets_detail"]
     assert d["folate_ug"]["value"]=="550" and d["folate_ug"]["source_org"].startswith("DGE")
-    assert d["iodine_ug"]["value"]=="230"
+    assert d["iodine_ug"]["value"]=="220"
     assert all(v["provenance"]=="REFERENCE_TARGET" for v in d.values())
 
 def test_gap_v2_marks_unknown_vs_known():
@@ -91,3 +91,9 @@ def test_ai_change_proposal_not_authoritative():
     s=_svc()
     prop=s.propose_change([{"food_id":"off:123","grams":100}])
     assert prop["provenance"]=="AI_PROPOSAL" and prop["requires_confirmation"] is True
+
+
+def test_reference_values_current():
+    from app.reference.pregnancy_targets import pregnancy_targets_map
+    m = pregnancy_targets_map()
+    assert m["iron_mg"] == Decimal("27") and m["iodine_ug"] == Decimal("220")

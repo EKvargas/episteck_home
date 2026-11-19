@@ -147,6 +147,18 @@ class NutritionService:
         self, delegation: str | None, subject_person_id: str, profile: dict
     ):
         self._require_access(delegation, subject_person_id, "UPDATE")
+        # Reading the stored profile is not a Home request. A PUT that omits the mode
+        # must not undo set_mode (the person confirms a mode switch explicitly).
+        stored = self.repo.get_profile(subject_person_id) or {}
+        profile = dict(profile)
+        incoming = profile.get("context")
+        if incoming is None:
+            profile["context"] = stored.get("context") or "GENERAL"
+        if incoming == "GENERAL":
+            if "due_date" in stored:
+                profile["due_date"] = None
+        elif "due_date" not in profile and stored.get("due_date") is not None:
+            profile["due_date"] = stored["due_date"]
         return self.repo.upsert_profile(subject_person_id, profile)
 
     # --- deterministic evaluation ---
