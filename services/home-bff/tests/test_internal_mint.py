@@ -84,15 +84,16 @@ def test_internal_openapi_contains_only_mint_routes_and_no_browser_routes(mint_c
         assert browser_path not in paths
 
 
-def test_internal_mint_declares_no_request_selected_inputs(mint_ctx):
+def test_internal_mint_declares_only_the_runtime_header_as_input(mint_ctx):
     _, _, app = mint_ctx
 
-    operation = app.openapi()["paths"]["/internal/mint"]["post"]
+    for path in ("/internal/mint", "/internal/mint_finance"):
+        operation = app.openapi()["paths"][path]["post"]
 
-    assert operation.get("parameters", []) == []
-    assert "requestBody" not in operation
-    assert "security" not in operation
-
+        parameters = operation.get("parameters", [])
+        assert [(p["in"], p["name"]) for p in parameters] == [("header", "X-Runtime-ID")]
+        assert "requestBody" not in operation
+        assert "security" not in operation
 
 def test_internal_mint_requires_a_live_runtime_binding(mint_ctx):
     http, _, _ = mint_ctx

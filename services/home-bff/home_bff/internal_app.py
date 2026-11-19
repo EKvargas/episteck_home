@@ -71,7 +71,7 @@ def create_internal_app(
     @app.post("/internal/mint", status_code=204)
     def mint_delegation(
         store: SessionStore = Depends(get_store),
-        runtime_id: str | None = Header(default=None, alias=RUNTIME_HEADER, include_in_schema=False),
+        runtime_id: str | None = Header(default=None, alias=RUNTIME_HEADER),
     ) -> Response:
         if runtime_id not in limiters:
             # Missing, empty or unknown: never defaults to the primary runtime, and the
@@ -115,7 +115,7 @@ def create_internal_app(
     @app.post("/internal/mint_finance", status_code=204)
     def mint_finance_delegation(
         store: SessionStore = Depends(get_store),
-        runtime_id: str | None = Header(default=None, alias=RUNTIME_HEADER, include_in_schema=False),
+        runtime_id: str | None = Header(default=None, alias=RUNTIME_HEADER),
     ) -> Response:
         # Finance is a separate audience on a separate gateway location. It is minted
         # ONLY from a runtime grant that names svc-finance: the legacy browser binding
