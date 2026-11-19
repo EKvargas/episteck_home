@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import PlainTextResponse
 
+from .receivables.service import ReceivablesService
 from .service import (
     AccessDenied, FeatureOff, FinanceService, PolicyUnavailable, SessionInvalid,
     UnsupportedValuation,
@@ -47,7 +48,8 @@ def _authorized(operation: Callable[[], Any]):
         raise HTTPException(400, "UNSUPPORTED_VALUATION_CURRENCY") from None
 
 
-def create_app(service: FinanceService, callback: CallbackHandler | None = None) -> FastAPI:
+def create_app(service: FinanceService, callback: CallbackHandler | None = None,
+               receivables: ReceivablesService | None = None) -> FastAPI:
     app = FastAPI(title="Episteck Finance", version="0.1.0")
 
     @app.get("/health")
@@ -58,6 +60,11 @@ def create_app(service: FinanceService, callback: CallbackHandler | None = None)
     def overview(valuation_currency: str | None = None,
                  delegation: str | None = Depends(human_session)):
         return _authorized(lambda: service.overview(delegation, valuation_currency))
+
+    if receivables is not None:
+        from .api_receivables import create_receivables_router
+
+        app.include_router(create_receivables_router(receivables))
 
     if callback is not None:
         @app.get("/connect/callback", response_class=PlainTextResponse)
