@@ -149,8 +149,50 @@ def test_every_mint_block_drops_client_headers():
 
 
 def test_listeners_are_loopback_only():
-    assert re.findall(r"^\s*listen\s+(\S+);", CONFIG, re.M) == [
+    # [^;]+ captures any listen options too, so an extra listener or flag is caught.
+    assert re.findall(r"^\s*listen\s+([^;]+);", CONFIG, re.M) == [
         "127.0.0.1:9934",
         "127.0.0.1:9937",
     ]
     assert "0.0.0.0" not in CONFIG
+
+
+def _location_body(server: str, spec: str) -> str:
+    """The body of exactly one location block (location blocks hold no nested braces)."""
+    found = re.findall(r"location\s+" + re.escape(spec) + r"\s*\{(.*?)\}", server, re.S)
+    assert len(found) == 1, spec
+    return found[0]
+
+
+def test_ana_server_blocks_equal_primary_blocks():
+    """9937 is 9934 minus Finance: same mint and routes, only the stamped runtime differs."""
+    for spec in ("= /__mint", "/gateway/home/", "/gateway/nutrition/"):
+        primary = _location_body(PRIMARY_SERVER, spec)
+        ana = _location_body(ANA_SERVER, spec)
+        assert ana == primary.replace('"home-agent-primary"', '"home-agent-ana"'), spec
+
+
+# The empty-header clears every 9934 mint block carries today.
+MINT_CLEARED_HEADERS = {
+    "Content-Length",
+    "Authorization",
+    "Cookie",
+    "X-Episteck-Delegation",
+    "X-Actor-ID",
+}
+
+
+def test_every_mint_block_is_internal_and_clears_credentials():
+    blocks = [
+        _location_body(server, spec)
+        for server in (PRIMARY_SERVER, ANA_SERVER)
+        for spec in ("= /__mint", "= /__mint_finance")
+        if re.search(r"location\s+" + re.escape(spec) + r"\s*\{", server)
+    ]
+    assert len(blocks) == 3  # 9934: mint + finance mint; 9937: mint only
+    for block in blocks:
+        assert "internal;" in block
+        cleared = set(re.findall(r'proxy_set_header\s+(\S+)\s+"";', block))
+        assert cleared == MINT_CLEARED_HEADERS
+        for header in MINT_CLEARED_HEADERS:
+            assert f'proxy_set_header {header} "";' in block

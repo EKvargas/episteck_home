@@ -83,3 +83,14 @@ def test_render_step_resolves_the_numeric_ana_uid():
     assert "id -u home-agent-ana" in RENDER
     assert "__HOME_AGENT_ANA_UID__" in RENDER
     assert "ana_uid" in RENDER and "not numeric" in RENDER
+
+
+def test_render_step_refuses_an_ana_uid_that_collides_with_a_reserved_uid():
+    """Ana's uid must never be root, Hermes (1003), the gateway or www-data."""
+    assert 'case "$ana_uid" in' in RENDER
+    assert '0|1003|"$gateway_uid"|"$www_data_uid")' in RENDER
+    assert "home-agent-ana uid collides with a reserved uid" in RENDER
+    # The collision check runs after the numeric checks and before anything is rendered.
+    numeric = RENDER.index("not numeric")
+    collision = RENDER.index("home-agent-ana uid collides with a reserved uid")
+    assert numeric < collision < RENDER.index("sed ")
