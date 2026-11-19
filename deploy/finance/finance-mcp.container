@@ -1,4 +1,5 @@
-# Quadlet unit: svc-finance MCP (finance_overview). NOT DEPLOYED.
+# Quadlet unit: svc-finance MCP: finance_overview and, since I2, the receivables tools (reads,
+# proposals that write only after the owner's "yes", pending answers). NOT DEPLOYED.
 # Install to: /home/svc-finance/.config/containers/systemd/finance-mcp.container
 #
 # Loopback only. Reached by Hermes through the delegation gateway in Phase B (H4); until

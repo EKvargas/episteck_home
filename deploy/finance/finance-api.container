@@ -1,5 +1,7 @@
-# Quadlet unit: svc-finance API (read-only overview). NOT DEPLOYED. See
-# docs/runbooks/finance-i1-nuremberg-bringup.md for the operator procedure.
+# Quadlet unit: svc-finance API: the overview and, since I2, the receivables routes (reads,
+# two-phase commands that write only after the owner's "yes", pending answers). NOT DEPLOYED.
+# See docs/runbooks/finance-i1-nuremberg-bringup.md (and finance-i2-exchanges.md for I2) for
+# the operator procedure.
 #
 # Install to: /home/svc-finance/.config/containers/systemd/finance-api.container
 # Owner:      svc-finance (unprivileged, rootless podman, no sudo)
