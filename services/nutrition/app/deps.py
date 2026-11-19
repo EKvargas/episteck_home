@@ -43,3 +43,21 @@ def build_service() -> NutritionService:
         from .mealie.adapter import MealieAdapter
         mealie = MealieAdapter()
     return NutritionService(repo, provider, mealie, authorizer=build_home_authorizer())
+
+
+def build_diary_service():
+    """Build the diary service. A bad DIARY_TZ fails here, at startup."""
+    from zoneinfo import ZoneInfo
+
+    from .diary.service import DiaryService
+    from .store.diary_sqlite import SqliteDiaryStore
+
+    tz = os.environ.get("DIARY_TZ", "Europe/Berlin")
+    ZoneInfo(tz)
+    return DiaryService(
+        SqliteDiaryStore(_DB),
+        _build_provider(),
+        SqliteNutritionRepository(_DB),
+        authorizer=build_home_authorizer(),
+        tz=tz,
+    )

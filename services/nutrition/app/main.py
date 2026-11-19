@@ -7,12 +7,14 @@ from typing import Any
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from .deps import build_service
+from .deps import build_diary_service, build_service
+from .diary.service import DraftExpired, DraftNotFound, EntryNotFound, ProviderUnavailable
 from .service import AccessDenied, PolicyUnavailable, SessionInvalid
 
 
 app = FastAPI(title="Episteck Nutrition", version="0.3.0")
 svc = build_service()
+diary = build_diary_service()
 
 DELEGATION_HEADER = "X-Episteck-Delegation"
 
@@ -237,4 +239,101 @@ def plan_menu(person_id: str, meals: list[MealIn], delegation: str | None = Depe
 def gap_v2(person_id: str, date: str, delegation: str | None = Depends(human_session)):
     return _authorized(
         lambda: svc.daily_gap_v2(delegation, person_id, date)
+    )
+
+
+# --------------------------------------------------------------------------
+# Food diary
+# --------------------------------------------------------------------------
+
+
+def _diary_call(operation: Callable[[], Any]):
+    """Run a diary operation: access refusals via ``_authorized``, diary errors here.
+
+    ``from None`` keeps internal messages (which may echo food text) out of responses.
+    """
+    try:
+        return _authorized(operation)
+    except (DraftNotFound, EntryNotFound):
+        raise HTTPException(404, "NOT_FOUND") from None
+    except DraftExpired:
+        raise HTTPException(409, "DRAFT_EXPIRED") from None
+    except ProviderUnavailable:
+        raise HTTPException(503, "PROVIDER_UNAVAILABLE") from None
+    except ValueError:
+        raise HTTPException(400, "INVALID_ITEM") from None
+
+
+class DiaryItemIn(BaseModel):
+    label: str
+    food_id: str | None = None
+    amount: str | int | float
+    unit: str
+    stated: bool = False
+    grams_estimate: str | int | float | None = None
+
+
+class ProposeIn(BaseModel):
+    items: list[DiaryItemIn]
+    consumed_at: str | None = None
+
+
+class CorrectIn(BaseModel):
+    items: list[DiaryItemIn]
+
+
+class ModeIn(BaseModel):
+    mode: str
+    due_date: str | None = None
+
+
+def _items(body) -> list[dict]:
+    return [item.model_dump() for item in body.items]
+
+
+@app.post("/diary/{person_id}/drafts")
+def diary_propose(person_id: str, body: ProposeIn, delegation: str | None = Depends(human_session)):
+    return _diary_call(
+        lambda: diary.propose_intake(delegation, person_id, _items(body), body.consumed_at)
+    )
+
+
+@app.post("/diary/{person_id}/drafts/{draft_id}/confirm")
+def diary_confirm(person_id: str, draft_id: str, delegation: str | None = Depends(human_session)):
+    return _diary_call(lambda: diary.confirm_intake(delegation, person_id, draft_id))
+
+
+@app.post("/diary/{person_id}/entries/{entry_id}/revisions")
+def diary_correct(
+    person_id: str, entry_id: str, body: CorrectIn, delegation: str | None = Depends(human_session)
+):
+    return _diary_call(
+        lambda: diary.correct_intake(delegation, person_id, entry_id, _items(body))
+    )
+
+
+@app.post("/diary/{person_id}/entries/{entry_id}/void")
+def diary_void(person_id: str, entry_id: str, delegation: str | None = Depends(human_session)):
+    return _diary_call(lambda: diary.void_intake(delegation, person_id, entry_id))
+
+
+@app.get("/diary/{person_id}/entries/{entry_id}")
+def diary_entry(person_id: str, entry_id: str, delegation: str | None = Depends(human_session)):
+    return _diary_call(lambda: diary.get_entry(delegation, person_id, entry_id))
+
+
+@app.get("/diary/{person_id}/days/{date}")
+def diary_day(person_id: str, date: str, delegation: str | None = Depends(human_session)):
+    return _diary_call(lambda: diary.get_day_summary(delegation, person_id, date))
+
+
+@app.post("/diary/{person_id}/days/{date}/close")
+def diary_close(person_id: str, date: str, delegation: str | None = Depends(human_session)):
+    return _diary_call(lambda: diary.close_day(delegation, person_id, date))
+
+
+@app.put("/profile/{person_id}/mode")
+def diary_mode(person_id: str, body: ModeIn, delegation: str | None = Depends(human_session)):
+    return _diary_call(
+        lambda: diary.set_mode(delegation, person_id, body.mode, body.due_date)
     )
