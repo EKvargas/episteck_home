@@ -5,6 +5,8 @@ Facts are append-only (immutability triggers). Undo is a ``revocation`` row and/
 """
 from __future__ import annotations
 
+import sqlite3
+
 FACT_TABLES = (
     "exchange", "exchange_line", "funding", "funding_movement", "funding_exchange",
     "funding_share", "ledger_entry", "receipt", "allocation", "held_cash_statement",
@@ -118,7 +120,7 @@ CREATE TABLE IF NOT EXISTS ref_counter(
     workspace_id TEXT NOT NULL, prefix TEXT NOT NULL, last INTEGER NOT NULL,
     PRIMARY KEY(workspace_id, prefix));
 CREATE TABLE IF NOT EXISTS matcher_cursor(
-    workspace_id TEXT PRIMARY KEY, movement_rowid INTEGER NOT NULL);
+    workspace_id TEXT PRIMARY KEY, movement_rowid INTEGER NOT NULL, start_rowid INTEGER);
 """
 
 _TRIGGERS = "\n".join(
@@ -130,3 +132,23 @@ _TRIGGERS = "\n".join(
 )
 
 SCHEMA_I2 = _TABLES + _TRIGGERS + "\n"
+
+
+def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    return {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+
+
+def upgrade_i2(conn: sqlite3.Connection) -> None:
+    """Brings I2 tables made by an earlier build up to date; idempotent, safe when several
+    processes open the file at once (R37).
+
+    ``matcher_cursor.start_rowid`` (the go-live mark): added when missing, and set to the
+    row's cursor where NULL, so movements the matcher already passed stay history.
+    """
+    if "start_rowid" not in _columns(conn, "matcher_cursor"):
+        try:
+            conn.execute("ALTER TABLE matcher_cursor ADD COLUMN start_rowid INTEGER")
+        except sqlite3.OperationalError:
+            if "start_rowid" not in _columns(conn, "matcher_cursor"):
+                raise  # not another process adding it first
+    conn.execute("UPDATE matcher_cursor SET start_rowid=movement_rowid WHERE start_rowid IS NULL")

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import base64
+import io
+import logging
 import os
 import stat
 import sys
@@ -12,6 +14,7 @@ import pytest
 from app import admin, domain
 from app.config import Settings
 from app.connectors.simplefin import SimpleFinConnector
+from app.store.receivables_repo import ReceivablesRepository
 from app.store.repo import FinanceRepository
 from app.sync import main as sync_main
 from app.wiring import build_connectors
@@ -210,3 +213,71 @@ def _bootstrap_secretless(env):
     _secret(env, "conn-1.simplefin")
     _cmd(env, "add-connection", "--id", "conn-1", "--provider", "simplefin", "--owner", "PSN-1")
     os.remove(os.path.join(env["FINANCE_SECRETS_DIR"], "conn-1.simplefin"))
+
+
+def test_the_timer_entrypoint_runs_the_matcher_even_when_a_connection_failed(env, monkeypatch,
+                                                                             caplog):
+    _cmd(env, "init-workspace", "--name", "Home", "--owner", "PSN-1")
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr("app.sync._default_ecb", lambda: None)
+    _bootstrap_secretless(env)
+    with caplog.at_level(logging.INFO, logger="finance.matcher"):
+        assert sync_main() == 1
+    assert raw_execute(_repo(env), "SELECT workspace_id FROM matcher_cursor") == [("ws-1",)]
+    assert "matcher run: linked=0 waiting=0 asked=0 receipts=0 ignored=0" in caplog.text
+
+
+# --- I2 operator commands -----------------------------------------------------------------
+SYNTHETIC_IBAN = "XX00 SYNTHETIC OWN 0003"
+
+
+def _own_hashes(env):
+    rr = ReceivablesRepository(_repo(env))
+    with rr.read() as c:
+        return rr.own_hashes(c, "ws-1")
+
+
+def test_admin_watch_account_turns_watching_on_and_off(env):
+    _bootstrap(env)
+    assert _cmd(env, *LINK) == 0
+    rr = ReceivablesRepository(_repo(env))
+
+    def watched():
+        with rr.read() as c:
+            return rr.watched_accounts(c, "ws-1")
+
+    for state, expected in (("on", {"acc-1"}), ("off", set()), ("on", {"acc-1"})):
+        assert _cmd(env, "watch-account", "acc-1", state) == 0
+        assert watched() == expected
+    assert _cmd(env, "watch-account", "acc-9", "on") != 0
+    assert _cmd(env, "watch-account", "acc-1", "maybe") != 0
+    assert watched() == {"acc-1"}
+
+
+def test_admin_own_iban_stores_hash_only(env, capsys, monkeypatch):
+    _bootstrap(env)
+    assert _cmd(env, *LINK) == 0
+    capsys.readouterr()
+    monkeypatch.setattr("sys.stdin", io.StringIO(SYNTHETIC_IBAN + "\n"))
+    assert _cmd(env, "own-iban", "acc-1") == 0
+    monkeypatch.setattr("sys.stdin", io.StringIO(SYNTHETIC_IBAN.lower() + "\n"))
+    assert _cmd(env, "own-iban", "acc-1") == 0  # the same IBAN again: one row
+    repo = _repo(env)
+    assert _own_hashes(env) == {repo.hash_iban(SYNTHETIC_IBAN)}
+    assert count_rows(repo, "own_identifier") == 1
+    captured = capsys.readouterr()
+    stored = repr(raw_execute(repo, "SELECT * FROM command_log")) + repr(
+        raw_execute(repo, "SELECT * FROM own_identifier"))
+    for text in (captured.out, captured.err, stored):
+        assert "SYNTHETIC" not in text.upper() and "XX00" not in text.upper()
+
+
+def test_admin_own_iban_refuses_an_unknown_account_or_a_malformed_iban(env, capsys, monkeypatch):
+    _bootstrap(env)
+    assert _cmd(env, *LINK) == 0
+    for account, line in (("acc-9", SYNTHETIC_IBAN), ("acc-1", "not an iban"), ("acc-1", "")):
+        monkeypatch.setattr("sys.stdin", io.StringIO(line + "\n"))
+        assert _cmd(env, "own-iban", account) != 0
+    assert _own_hashes(env) == set()
+    assert "not an iban" not in capsys.readouterr().err

@@ -44,6 +44,18 @@ def test_settings_load_from_env_and_never_print_secrets(tmp_path):
     assert "s3cret" not in repr(settings) and "s3cret" not in str(settings)
 
 
+def test_description_rules_flag_defaults_off_and_is_strict(tmp_path):
+    env = {"FINANCE_DB": str(tmp_path / "f.sqlite"), "FINANCE_WORKSPACE_ID": "ws-1",
+           "FINANCE_PEPPER_FILE": _secret(tmp_path)}
+    assert Settings.from_env(env).description_rules is False
+    for raw, expected in (("on", True), ("OFF", False), ("true", True), ("False", False),
+                          ("1", True), ("0", False), (" on ", True)):
+        settings = Settings.from_env({**env, "FINANCE_DESCRIPTION_RULES": raw})
+        assert settings.description_rules is expected, raw
+    with pytest.raises(ValueError):
+        Settings.from_env({**env, "FINANCE_DESCRIPTION_RULES": "maybe"})
+
+
 def test_missing_required_setting_fails_fast(tmp_path):
     with pytest.raises(KeyError):
         Settings.from_env({"FINANCE_DB": "x"})

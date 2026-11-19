@@ -7,8 +7,8 @@ Rules (proposal §5.1, §6.7, §6.8):
 * provider rate limits are a budget stop, not a failure, and are never retried in-run;
 * every run is audited (``sync_run``) as channel ``sync``.
 
-``python -m app.sync`` performs one pass and exits non-zero if any connection failed, so
-systemd records the failure.
+``python -m app.sync`` performs one pass, then runs the I2 matcher (even if a connection
+failed), and exits non-zero if any connection or the matcher failed, so systemd records it.
 """
 from __future__ import annotations
 
@@ -23,6 +23,9 @@ from datetime import date, datetime, timedelta, timezone
 from . import domain
 from .connectors.base import Connector, ConnectorError, ErrorKind, RawMovement
 from .connectors.ecb import refresh_rates
+from .receivables.matcher import Matcher
+from .receivables.pending import PendingQueue
+from .store.receivables_repo import ReceivablesRepository
 from .store.repo import FinanceRepository
 
 logger = logging.getLogger("finance.sync")
@@ -194,10 +197,30 @@ def main() -> int:
     engine = SyncEngine(repo, build_connectors(repo, settings.workspace_id, settings.secrets_dir,
                                            eb_access_cap=settings.eb_access_cap),
                         ecb=_default_ecb())
+    started = datetime.now(timezone.utc)
     report = engine.run(settings.workspace_id)
     for result in report.results:  # statuses only: no ids of people, no amounts
         logger.info("connection %s: %s", result.connection_id, result.status)
-    return 1 if report.any_failed else 0
+    matched = _run_matcher(repo, settings.workspace_id, settings.description_rules, started)
+    return 1 if report.any_failed or not matched else 0
+
+
+def _run_matcher(repo: FinanceRepository, workspace_id: str, description_rules: bool,
+                 started: datetime) -> bool:
+    """I2: links, receipts and questions for the new movements, also after a failed
+    connection (the others' movements still count). The matcher logs its counts; a failure is
+    logged by type only and fails the unit."""
+    def clock() -> datetime:
+        return datetime.now(timezone.utc)
+
+    receivables = ReceivablesRepository(repo)
+    try:
+        Matcher(receivables, PendingQueue(receivables, clock), clock,
+                description_rules).run(workspace_id, started)
+    except Exception as error:
+        logger.error("matcher failed: %s", type(error).__name__)
+        return False
+    return True
 
 
 if __name__ == "__main__":  # pragma: no cover

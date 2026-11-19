@@ -3,7 +3,8 @@
 Scoping: reads that take ``ws`` are workspace-scoped. Reads keyed by a globally unique id
 are id-scoped and take no workspace: ``current_lines``, ``live_funding_for_exchange``,
 ``live_funding_for_movement``, ``funding_shares``, ``live_receipt_for_movement``,
-``movement_role``, ``live_role_ids_for_movement``, ``movement_root`` and ``is_live``.
+``movement_role``, ``live_role_ids_for_movement``, ``movement_root``, ``movement_rowid`` and
+``is_live``.
 ``usd_per_eur_on`` reads the global ECB table. Callers pass only ids they obtained from a
 workspace-scoped read.
 
@@ -792,6 +793,14 @@ class ReceivablesRepository:
             (self.movement_root(conn, movement_id),)).fetchone()
         return MovementRoleKind(r["role"]) if r else None
 
+    def roots_with_role(self, conn, ws: str, role: MovementRoleKind) -> list[str]:
+        """Root movement ids whose latest live role is ``role``, oldest first."""
+        rows = conn.execute(
+            f"SELECT m.movement_id FROM movement_role m WHERE m.workspace_id=? AND m.role=? "
+            f"AND {_live('movement_role', 'm')} ORDER BY m.rowid", (ws, role.value)).fetchall()
+        return [mid for mid in dict.fromkeys(r["movement_id"] for r in rows)
+                if self.movement_role(conn, mid) is role]
+
     def live_role_ids_for_movement(self, conn, movement_id: str) -> list[str]:
         """Root-aware: ids of the live roles, oldest first (what a reversal must revoke)."""
         rows = conn.execute(
@@ -855,6 +864,44 @@ class ReceivablesRepository:
             "ON CONFLICT(workspace_id) DO UPDATE SET movement_rowid=excluded.movement_rowid",
             (ws, rowid))
 
+    def cursor_state(self, conn, ws: str) -> tuple[int, int] | None:
+        """``(cursor, start)``: ``start`` is the cursor the first matcher run set (go-live);
+        movements at or below it are history. ``None`` before the first run."""
+        r = conn.execute("SELECT movement_rowid, start_rowid FROM matcher_cursor "
+                         "WHERE workspace_id=?", (ws,)).fetchone()
+        if r is None:
+            return None
+        start = r["start_rowid"]  # NULL never reads as 0: that would make history new (R37)
+        return r["movement_rowid"], r["movement_rowid"] if start is None else start
+
+    def init_cursor(self, conn, ws: str, rowid: int) -> None:
+        conn.execute("INSERT INTO matcher_cursor(workspace_id,movement_rowid,start_rowid) "
+                     "VALUES(?,?,?)", (ws, rowid, rowid))
+
+    def max_movement_rowid(self, conn, ws: str) -> int:
+        return conn.execute("SELECT COALESCE(MAX(rowid),0) AS r FROM movement "
+                            "WHERE workspace_id=?", (ws,)).fetchone()["r"]
+
+    def movement_rowid(self, conn, movement_id: str) -> int | None:
+        r = conn.execute("SELECT rowid AS r FROM movement WHERE id=?", (movement_id,)).fetchone()
+        return r["r"] if r else None
+
+    def recent_outgoing(self, conn, ws: str, currency: str, since: date) -> list[domain.Movement]:
+        """Current (never superseded) outgoing movements in ``currency`` booked on or after
+        ``since``, newest first."""
+        rows = conn.execute(
+            "SELECT m.* FROM movement m WHERE m.workspace_id=? AND m.currency=? "
+            "AND m.amount_minor<0 AND COALESCE(m.booking_date, m.value_date)>=? "
+            "AND NOT EXISTS (SELECT 1 FROM movement s WHERE s.supersedes_id=m.id) "
+            "ORDER BY COALESCE(m.booking_date, m.value_date) DESC, m.rowid DESC",
+            (ws, currency, since.isoformat())).fetchall()
+        return [_movement(r) for r in rows]
+
+    def live_exchanges(self, conn, ws: str) -> list[Exchange]:
+        rows = conn.execute(f"SELECT e.* FROM exchange e WHERE e.workspace_id=? "
+                            f"AND {_live('exchange', 'e')} ORDER BY e.number", (ws,)).fetchall()
+        return [_exchange(r) for r in rows]
+
     # --- other -------------------------------------------------------------------
     def insert_held_cash(self, conn, ws: str, cp_id: str, currency: str, amount_minor: int,
                          stated_on: date) -> None:
@@ -913,6 +960,13 @@ class ReceivablesRepository:
             "ORDER BY resolved_at IS NULL DESC, rowid DESC LIMIT 1", (ws, key)).fetchone()
         return _pending(r) if r else None
 
+    def pending_by_prefix(self, conn, ws: str, prefix: str) -> list[PendingItem]:
+        """Every item (open or resolved) whose dedupe key starts with ``prefix``, oldest first."""
+        rows = conn.execute(
+            "SELECT * FROM pending_item WHERE workspace_id=? AND substr(dedupe_key,1,?)=? "
+            "ORDER BY rowid", (ws, len(prefix), prefix)).fetchall()
+        return [_pending(r) for r in rows]
+
     def pending_open(self, conn, ws: str) -> list[PendingItem]:
         rows = conn.execute("SELECT * FROM pending_item WHERE workspace_id=? "
                             "AND resolved_at IS NULL", (ws,)).fetchall()
@@ -936,6 +990,14 @@ class ReceivablesRepository:
                            "WHERE workspace_id=? AND code=? AND resolved_at IS NULL",
                            (_ts(at), resolution, ws, _code(code)))
         return cur.rowcount == 1
+
+    def refresh_pending(self, conn, ws: str, code: str, options: Sequence[str],
+                        payload: dict) -> None:
+        """Replaces the options and payload of an OPEN item (its facts changed); a resolved
+        item is never touched."""
+        conn.execute("UPDATE pending_item SET options=?, payload=? WHERE workspace_id=? "
+                     "AND code=? AND resolved_at IS NULL",
+                     (json.dumps(list(options)), json.dumps(payload), ws, _code(code)))
 
     def set_pending_snooze(self, conn, ws: str, code: str, until: datetime) -> None:
         conn.execute("UPDATE pending_item SET snooze_until=? WHERE workspace_id=? AND code=?",

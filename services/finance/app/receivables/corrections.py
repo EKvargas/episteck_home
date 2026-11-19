@@ -14,10 +14,10 @@ import uuid
 from collections.abc import Sequence
 from datetime import date, datetime
 
-from ..domain import Movement
 from ..money import format_minor
 from ..store.receivables_repo import MAX_LINE_POSITION, ReceivablesRepository
 from .allocation import OpenLine
+from .explain import ask_explain_incoming
 from .funding import FundingSplit, funding_day, reverse_funding, split_funding, write_eur_charges
 from .ledger import (
     DEBT_CURRENCIES, LineInput, ValidationError, charge_usd_lines, new_lines, reverse_entry,
@@ -25,7 +25,7 @@ from .ledger import (
 )
 from .model import (
     OWNER, Counterparty, CounterpartyKind, EntryKind, Exchange, ExchangeLine, Funding,
-    LedgerEntry, Opening, PendingItem, PendingKind, ReceiptKind,
+    LedgerEntry, Opening, Receipt, ReceiptKind,
 )
 from .pending import PendingQueue
 from .receipts import (
@@ -306,15 +306,25 @@ def _reverse_funding(repo: ReceivablesRepository, conn, ws: str, ref: str, reaso
 
 def _reverse_receipt(repo: ReceivablesRepository, conn, ws: str, ref: str, reason: str,
                      queue: PendingQueue, now: datetime) -> dict:
-    """Revokes the receipt with its allocations and movement role, reverses its PAYMENT and
-    write-offs, re-applies the payer's credits; a BANK receipt asks EXPLAIN_INCOMING again."""
+    """``undo_receipt``; a BANK receipt then asks EXPLAIN_INCOMING again, with its full
+    options (``explain.ask_explain_incoming``)."""
     rec = repo.receipt_by_ref(conn, ws, ref)
     if rec is None:
         raise ValidationError("receipt")
+    mv = repo.movement_current(conn, ws, rec.movement_id) if rec.movement_id else None
+    undo_receipt(repo, conn, ws, rec, reason, queue, now)
+    out = {"ok": True, "status": "reversed", "ref": f"R{rec.number}"}
+    if rec.kind is ReceiptKind.BANK and mv is not None:
+        out["question"] = ask_explain_incoming(repo, conn, ws, mv, queue).code
+    return out
+
+
+def undo_receipt(repo: ReceivablesRepository, conn, ws: str, rec: Receipt, reason: str,
+                 queue: PendingQueue, now: datetime) -> None:
+    """Revokes a live receipt with its allocations and movement role, reverses its PAYMENT and
+    write-offs, re-applies the payer's credits. Asks nothing."""
     payments = repo.effective_entries_for_refs(conn, ws, [rec.id], (EntryKind.PAYMENT,))
     allocations = repo.live_allocations_for_receipt(conn, ws, rec.id)
-    mv = repo.movement_current(conn, ws, rec.movement_id) if rec.movement_id else None
-
     for a in allocations:
         repo.revoke(conn, ws, "allocation", a.id, reason, now)
     reverse_receipt_adjustments(repo, conn, ws, [rec.id], reason, now)
@@ -328,22 +338,6 @@ def _reverse_receipt(repo: ReceivablesRepository, conn, ws: str, ref: str, reaso
             repo.revoke(conn, ws, "movement_role", role_id, reason, now)
     repo.revoke(conn, ws, "receipt", rec.id, reason, now)
     _settle(repo, conn, ws, [(rec.payer_id, rec.currency)], queue, now)
-    out = {"ok": True, "status": "reversed", "ref": f"R{rec.number}"}
-    if rec.kind is ReceiptKind.BANK and mv is not None:
-        out["question"] = _ask_explain_incoming(repo, conn, ws, mv, queue).code
-    return out
-
-
-def _ask_explain_incoming(repo: ReceivablesRepository, conn, ws: str, mv: Movement,
-                          queue: PendingQueue) -> PendingItem:
-    """Asks again who sent an incoming payment. Minimal options: the matcher (Task 9) owns
-    the full set. The payload names the movement, never an IBAN."""
-    root = repo.movement_root(conn, mv.id)
-    day = mv.booking_date or mv.value_date
-    payload = {"movement_id": root, "booking_date": day.isoformat() if day else None,
-               "currency": mv.currency, "amount": format_minor(mv.amount_minor, mv.currency)}
-    return queue.add(conn, ws, PendingKind.EXPLAIN_INCOMING, ["OTHER", "NOT_EXCHANGE"], payload,
-                     f"EXPLAIN_INCOMING:{root}")
 
 
 def _reverse_entry(repo: ReceivablesRepository, conn, ws: str, ref: str, reason: str,

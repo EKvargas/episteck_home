@@ -181,11 +181,12 @@ def _notify(conn, ws: str, funding: Funding, exchanges: Sequence[Exchange], rate
 
 
 def try_link(repo: ReceivablesRepository, conn, ws: str, movement: domain.Movement,
-             queue: PendingQueue, now: datetime) -> LinkResult:
+             queue: PendingQueue, now: datetime, *, ask: bool = True) -> LinkResult:
     """Spec §6.2 rules 1-5 for an outgoing EUR payment to a known partner IBAN.
 
     ``ALREADY_LINKED`` also covers a payment the owner already classified (any live role).
     A pool of unlinked partner payments that fits more than one exchange keeps waiting.
+    ``ask=False`` only links: AMBIGUOUS asks nothing (a payment whose question was answered).
     """
     mv = _payment(repo, conn, ws, movement.id)
     if mv is None:
@@ -198,7 +199,8 @@ def try_link(repo: ReceivablesRepository, conn, ws: str, movement: domain.Moveme
         create_funding(repo, conn, ws, [mv.id], [compatible[0].id], queue, now)
         return "LINKED"
     if compatible:
-        ask_link_funding(repo, conn, ws, mv.id, queue)
+        if ask:
+            ask_link_funding(repo, conn, ws, mv.id, queue)
         return "AMBIGUOUS"
     root, day = repo.movement_root(conn, mv.id), _day(mv)
     unlinked = [p for p in repo.unlinked_partner_payments(conn, ws)
@@ -311,6 +313,20 @@ def _undo(repo: ReceivablesRepository, conn, ws: str, funding: Funding, reason: 
             repo.revoke(conn, ws, "movement_role", role_id, reason, now)
     repo.revoke(conn, ws, "funding", funding.id, reason, now)
     return payers
+
+
+def redo_funding(repo: ReceivablesRepository, conn, ws: str, funding_id: str, reason: str,
+                 queue: PendingQueue, now: datetime) -> Funding:
+    """Undoes a live funding and creates it again over the same payments and exchanges with
+    their current amounts (a BOOKED successor that changed the EUR, R32)."""
+    old = repo.funding_by_id(conn, ws, funding_id)
+    if old is None:
+        raise ValidationError("funding")
+    released = _undo(repo, conn, ws, old, reason, now)
+    new = create_funding(repo, conn, ws, old.movement_ids, old.exchange_ids, queue, now)
+    for payer in released:
+        consume_credits(repo, conn, ws, payer, "EUR", queue=queue, now=now)
+    return new
 
 
 def reverse_funding(repo: ReceivablesRepository, conn, ws: str, funding_id: str, reason: str,

@@ -13,7 +13,7 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from .receivables_schema import SCHEMA_I2
+from .receivables_schema import SCHEMA_I2, upgrade_i2
 
 BUSY_TIMEOUT_MS = 10_000
 
@@ -135,6 +135,7 @@ def connect(path: str) -> sqlite3.Connection:
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
     conn.executescript(SCHEMA_I2)
+    upgrade_i2(conn)
 
 
 @contextmanager
