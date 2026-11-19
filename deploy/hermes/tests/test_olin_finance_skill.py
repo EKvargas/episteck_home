@@ -133,11 +133,12 @@ def test_skill_covers_every_receivables_tool_and_error_code():
     source = _receivables_source()
     codes = ("validation_error", "clarification_needed", "possible_duplicate",
              "idempotency_conflict", "already_linked", "unknown_choice", "unknown_pending",
-             "already_resolved", "internal_error", "options_changed", "changed", "stale")
+             "already_resolved", "internal_error", "options_changed", "changed", "stale",
+             "not_resolved", "unknown_movement")
     statuses = ("confirmation_required", "needs_amount", "needs_counterparty",
                 "needs_correction", "asked_again", "already_settled", "dismissed",
                 "not_recorded", "cancelled", "linked", "not_exchange", "needs_exchange",
-                "not_yet", "recorded", "confirmed", "snoozed")
+                "not_yet", "recorded", "confirmed", "snoozed", "reversed")
     for value in codes + statuses:
         assert f'"{value}"' in source, f"{value} is not something Finance returns"
         assert f"`{value}`" in body, value
@@ -172,7 +173,8 @@ def test_every_receivables_field_the_skill_relies_on_exists_in_finance():
               "candidates", "field", "detail", "question", "resolution", "balance_after",
               "credit", "direction", "rate", "reference_rate", "funding_ref", "receipt_ref",
               "exchange_refs", "booking_date", "sender", "held", "alert", "new_funding_ref",
-              "eur_before", "eur_after", "amount_before", "amount_after", "new_receipt_ref")
+              "eur_before", "eur_after", "amount_before", "amount_after", "new_receipt_ref",
+              "rules_revoked", "undo_ref", "shown", "created_at")
     body = _body()
     for field in fields:
         assert f'"{field}"' in source, f"{field} is not a receivables result field"
@@ -403,3 +405,163 @@ def test_i2_runbook_covers_upgrade_skill_cron_accounts_rules_and_rollback():
                  text.index("app.admin own-iban")]
     assert "podman run --rm -it" in block
     assert "finance-i2-exchanges.md" in RUNBOOK.read_text(encoding="utf-8")
+
+
+# --- fix round 1 (R55): the skill's money gaps ---------------------------------------------
+
+def _row(body: str, key: str) -> str:
+    """The markdown table row whose first cell is `key`."""
+    return next(line for line in body.splitlines() if line.startswith(f"| `{key}`"))
+
+
+def test_skill_answers_an_open_echo_before_proposing_again():
+    lowered = _flat(_body()).lower()
+    # A CONFIRM stays open (and the cron re-sends it): a later "sí" would record the old figure.
+    assert ("when the owner changes or drops an open echo, first answer its code with "
+            "`correct` (or `cancel`), then propose again") in lowered
+    assert "send the choice their words mean: `yes`, `correct` or `cancel`" in lowered
+    # possible_duplicate after "yes": re-proposing would return the same open code.
+    assert "cancel this code, then propose again" in lowered
+    cron = _flat(_section(_body(), "## Scheduled delivery")).lower()
+    assert "`created_at`" in cron
+
+
+def test_skill_asks_how_a_person_paid_and_never_records_a_bank_payment():
+    body = _body()
+    lowered = _flat(body).lower()
+    assert "¿en efectivo, en especie o por el banco?" in lowered
+    assert "never record a bank payment, not even as `cash` when the owner asks" in lowered
+    assert "propose `mcp__finance__finance_reverse` of its `r<n>`" in lowered
+    validation = _row(body, "validation_error").lower()
+    assert "never suggest recording it another way" in validation
+    assert "efectivo" not in validation
+
+
+def test_skill_teaches_the_opening_sign_per_counterparty_kind():
+    # The convention lives in Finance: a person's amount is signed, a fund's is what you hold.
+    proposals = (FINANCE / "receivables" / "proposals.py").read_text(encoding="utf-8")
+    corrections = (FINANCE / "receivables" / "corrections.py").read_text(encoding="utf-8")
+    assert 'shown = "held" if cp.kind is CounterpartyKind.FUND else "amount"' in proposals
+    assert "PERSON: signed as given (positive: they owe you" in corrections
+    assert "FUND: what you hold, stored negative" in corrections
+    section = _flat(_section(_body(), "## Exchanges: what to pass")).lower()
+    for phrase in ("a person: positive = te debe, negative = a su favor",
+                   "a fund: the amount you hold for it, positive",
+                   "a minus sign only for a person's credit"):
+        assert phrase in section, phrase
+    confirmations = _flat(_section(_body(), "## Confirmations")).lower()
+    for phrase in ('"te debe <amount>', '"a su favor <amount', '"guardas <held>'):
+        assert phrase in confirmations, phrase
+
+
+def test_cron_keeps_finance_option_numbers_and_duplicates_take_words():
+    cron = _flat(_section(_body(), "## Scheduled delivery")).lower()
+    assert "every option with its `n` exactly as returned" in cron
+    assert "never renumber, reorder or drop one" in cron
+    assert "«p<n> es otro» o «p<n> es el mismo»" in cron
+    prompt = _flat(re.search(r"^CRON_PROMPT='([^']*)'$", INSTALL.read_text(encoding="utf-8"),
+                             re.M | re.S).group(1)).lower()
+    for phrase in ("its number n exactly as returned", "never renumber, reorder or drop",
+                   "p<n> es otro", "created_at"):
+        assert phrase in prompt, phrase
+
+
+def test_skill_covers_reverse_forms_held_cash_and_partner_shape():
+    body = _body()
+    lowered = _flat(body).lower()
+    assert "`rule:<name>`" in body and "`mcp__finance__finance_explain`" in body
+    assert "`undo_ref` from `ignored`" in lowered
+    assert "undo its `f<n>` first" in _row(body, "already_linked").lower()
+    assert "`owed_to_partner` is an object" in lowered
+    assert "`opening`" in _row(body, "receipt_applied")
+    assert "`shown`" in _flat(_section(body, "## Exchanges: which tool"))
+    screenshot = _flat(_section(body, "## Exchanges: what to pass")).lower()
+    assert "`delivered_on`" in screenshot and "the format rules above still apply" in screenshot
+    assert '"cambio c<n> del <fecha>"' in _flat(_row(body, "LINK_FUNDING")).lower()
+
+
+# --- fix round 1: the install script ------------------------------------------------------
+
+def test_cron_step_refuses_a_skill_that_is_not_this_commits():
+    cron = _case(INSTALL.read_text(encoding="utf-8"), "cron")
+    assert "need_src" in cron
+    assert 'cmp -s "$SRC/home-agent/skills/olin-finance/SKILL.md" "$SKILL_DIR/SKILL.md"' in cron
+    assert "'^## Scheduled delivery'" in cron
+
+
+def test_cron_step_shows_the_id_line_and_warns_before_a_rerun():
+    text = INSTALL.read_text(encoding="utf-8")
+    start = text.index("cron_show() {")
+    show = text[start:text.index("\n}\n", start)]
+    assert re.search(r'grep -F -B \d -A \d "\$CRON_NAME"', show)
+    cron = _case(text, "cron")
+    assert 'created="$(as_agent "$HERMES" cron create' in cron
+    assert "a job may exist: remove it by id before re-running" in cron
+
+
+def test_cron_step_checks_the_hermes_timezone_setting():
+    text = INSTALL.read_text(encoding="utf-8")
+    assert 'c.get("timezone")' in text  # the one config value printed besides the finance keys
+    assert "hermes_tz" in _case(text, "preflight")
+    cron = _case(text, "cron")
+    assert "hermes_tz" in cron and "UTC" in cron
+
+
+def test_memory_scan_counts_cron_output_files_and_verify_counts_tools():
+    text = INSTALL.read_text(encoding="utf-8")
+    scan = _case(text, "memory-scan")
+    assert "$HHOME/cron/output" in scan and "wc -l" in scan
+    assert not re.search(r"\b(cat|less|head|tail)\b[^\n]*cron/output", text)  # counts only
+    verify = _case(text, "verify")
+    assert "tail -n 20" not in verify
+    assert "(expect 15)" in verify
+
+
+# --- fix round 1: the I2 runbook -----------------------------------------------------------
+
+def test_i2_runbook_first_load_follows_f8_and_watches_accounts_last():
+    text = RUNBOOK_I2.read_text(encoding="utf-8")
+    first_load = _section(text, "## 7. First load (F8) and go-live")
+    order = ("finance_setup_counterparty", "finance_record_opening", "screenshot",
+             "PREVIOUS_UNPAID", "watch-account <account-id> on")
+    positions = [first_load.index(step) for step in order]
+    assert positions == sorted(positions), "F8 order: counterparties, openings, exchange, IBAN, watch"
+    # No account is watched before the first load.
+    assert text.index("watch-account <account-id> on") > text.index("## 7. First load (F8)")
+    flat = _flat(first_load).lower()
+    for phrase in ("right after a sync", "as the bank showed them at the last sync",
+                   "before the next sync", "never asked about", "no es de intercambios",
+                   "undo_ref"):
+        assert phrase in flat, phrase
+
+
+def test_i2_runbook_has_a_read_only_schema_check_before_and_after_the_restart():
+    text = RUNBOOK_I2.read_text(encoding="utf-8")
+    for needle in ("mode=ro", "PRAGMA integrity_check", "start_rowid", "matcher_cursor"):
+        assert needle in text, needle
+    # The checked tables are exactly the ones the I2 schema creates.
+    schema = (FINANCE / "store" / "receivables_schema.py").read_text(encoding="utf-8")
+    created = re.findall(r"CREATE TABLE IF NOT EXISTS (\w+)\(", schema)
+    listed = re.findall(r'"(\w+)"', re.search(r"^I2 = \((.*?)\)$", text, re.M | re.S).group(1))
+    assert sorted(listed) == sorted(created) and len(created) == 22
+    step4 = _section(text, "## 4.")
+    assert step4.index("SCHEMA_CHECK") < step4.index('STEP install "$SHA"') \
+        < step4.rindex("SCHEMA_CHECK")
+
+
+def test_i2_runbook_rolls_back_everything_once_the_skill_is_installed():
+    text = RUNBOOK_I2.read_text(encoding="utf-8")
+    step4 = _flat(_section(text, "## 4."))
+    assert "Rollback (everything)" in step4 and "Hermes first" in step4
+    assert "requires_tools" in step4
+    rollback = _flat(_section(text, "## Rollback (everything)"))
+    assert "printed by" in rollback and "HSTEP rollback" in rollback
+
+
+def test_i2_runbook_has_the_pre_deploy_s1_and_go_live_checklist():
+    section = _flat(_section(RUNBOOK_I2.read_text(encoding="utf-8"),
+                             "## Pre-deploy S1 and go-live checklist"))
+    for needle in ("(a)", "(b)", "(c)", "(d)", "(e)", "(f)", "(g)", "/gateway/finance/",
+                   "/var/lib/episteck-mcp-gateway/access.log", "session_invalid", "cron/output",
+                   "[SILENT]", "private chat", "--skill", "hermes cron remove"):
+        assert needle in section, needle

@@ -26,7 +26,8 @@ MCP_URL=http://127.0.0.1:9934/gateway/finance/
 BACKUPS=/var/backups/episteck
 
 # I2 (spec F9): twice a day, 15 minutes after the finance-sync timer (06:20/18:20). Hermes
-# reads cron expressions in the node's time zone, which must be UTC (the cron step checks).
+# 0.21.2 has no `--timezone` for cron: it reads cron expressions in the system zone, unless
+# config.yaml sets `timezone`. Both must be UTC (the cron step checks).
 # `--deliver telegram` goes to home-agent's Telegram home channel: the owner's private chat.
 CRON_NAME=olin-finance-pending
 CRON_SCHEDULE='35 6,18 * * *'
@@ -36,8 +37,9 @@ CRON_PROMPT='Scheduled Olin Finance delivery. Follow the skill section "Schedule
 1. Call mcp__finance__finance_pending exactly once, with for_delivery=true. Call no other tool: do not answer, dismiss or record anything, and save nothing to memory.
 2. If it returns no items, your whole final response is exactly [SILENT] and nothing else.
 3. If it returns a refusal (ok false), reply with one short Spanish line from the skill refusal table and stop. Do not retry.
-4. Otherwise write ONE message in Spanish: questions first, then the confirmations ("pendiente de tu confirmación"), then the notices. For each item give its code (P<n>), the question, echo or notice with every figure copied exactly from the result, and its options numbered with their labels.
-5. End with how to answer: "Responde «P<n> <número>», «P<n> sí», «P<n> corregir» o «P<n> cancelar», o solo «P<n>» y te muestro los botones."'
+4. Otherwise write ONE message in Spanish: questions first, then the confirmations ("pendiente de tu confirmación", with the created_at date of each), then the notices. For each item give its code (P<n>), the question, echo or notice with every figure copied exactly from the result, and every option with its number n exactly as returned and its label: never renumber, reorder or drop one.
+5. A possible duplicate takes no number: tell the owner to answer «P<n> es otro» o «P<n> es el mismo».
+6. End with how to answer: "Responde «P<n> <número>», «P<n> sí», «P<n> corregir» o «P<n> cancelar», o solo «P<n>» y te muestro los botones."'
 
 as_agent() {  # stdin is /dev/null so no command can swallow the rest of this piped script
   local u; u="$(id -u "$AGENT")"
@@ -83,12 +85,19 @@ unexpected = [k for k in changed if k not in shown]
 print("UNEXPECTED keys changed: " + ", ".join(unexpected) if unexpected else "only the finance keys changed")
 PY
 }
+hermes_tz() {  # config.yaml's `timezone` only, no other value (empty when unset)
+  "$PY" -I - "$CONFIG" <<'PY'
+import sys, yaml
+c = yaml.safe_load(open(sys.argv[1])) or {}
+print(c.get("timezone") or "")
+PY
+}
 cron_count() {  # lines of `hermes cron list` naming the job; grep -c reads all (no SIGPIPE)
   as_agent "$HERMES" cron list 2>&1 | grep -cF "$CRON_NAME" || true
 }
-cron_show() {  # the job's own lines only: other home-agent jobs are none of this step's business
+cron_show() {  # the job's lines (with the ID line around the name); other jobs are not ours
   echo "== $CRON_NAME in 'hermes cron list' (lines naming it: $(cron_count))"
-  as_agent "$HERMES" cron list 2>&1 | grep -F -A 4 "$CRON_NAME" || echo "no $CRON_NAME job"
+  as_agent "$HERMES" cron list 2>&1 | grep -F -B 2 -A 5 "$CRON_NAME" || echo "no $CRON_NAME job"
 }
 cron_remove() {  # by name; when Hermes cannot remove it by name, stop and let a human pick the id
   [ "$(cron_count)" -gt 0 ] || { echo "no $CRON_NAME job to remove"; return 0; }
@@ -107,6 +116,7 @@ case "${1:-}" in
     finance_keys
     [ -e "$SKILL_DIR" ] && echo "note: $SKILL_DIR already exists" || echo "skill dir absent (expected)"
     echo "node time zone offset: $(date +%z) (the cron step needs +0000); $CRON_NAME lines: $(cron_count)"
+    echo "config.yaml timezone: '$(hermes_tz)' (the cron step needs empty or UTC)"
     ;;
 
   install)
@@ -131,12 +141,24 @@ case "${1:-}" in
   cron)
     # After install: the job loads the installed skill. Re-running replaces the job (same
     # name, current prompt), so there is never a second one. No config.yaml key changes.
+    need_src
     [ -f "$SKILL_DIR/SKILL.md" ] || { echo "run install first: the job loads $SKILL_DIR/SKILL.md" >&2; exit 2; }
+    cmp -s "$SRC/home-agent/skills/olin-finance/SKILL.md" "$SKILL_DIR/SKILL.md" \
+      || { echo "the installed skill is not this commit's: run install first" >&2; exit 2; }
+    grep -q '^## Scheduled delivery' "$SKILL_DIR/SKILL.md" \
+      || { echo "the installed skill has no 'Scheduled delivery' section (an I1 skill?)" >&2; exit 2; }
     [ "$(date +%z)" = "+0000" ] || { echo "node time zone is not UTC: '$CRON_SCHEDULE' would fire at the wrong hours" >&2; exit 1; }
+    tz="$(hermes_tz)"
+    if [ -n "$tz" ] && [ "$tz" != UTC ] && [ "$tz" != Etc/UTC ]; then
+      echo "config.yaml timezone is '$tz', not UTC: '$CRON_SCHEDULE' would fire at the wrong hours" >&2; exit 1
+    fi
     cron_remove
-    as_agent "$HERMES" cron create --name "$CRON_NAME" --deliver telegram --skill olin-finance \
-      "$CRON_SCHEDULE" "$CRON_PROMPT"
-    [ "$(cron_count)" -gt 0 ] || { echo "$CRON_NAME not listed after create" >&2; exit 1; }
+    created="$(as_agent "$HERMES" cron create --name "$CRON_NAME" --deliver telegram --skill olin-finance \
+      "$CRON_SCHEDULE" "$CRON_PROMPT" 2>&1)" \
+      || { printf '%s\n' "$created" >&2; echo "creating $CRON_NAME failed" >&2; exit 1; }
+    printf '%s\n' "$created"  # Hermes names the new job's id here
+    [ "$(cron_count)" -gt 0 ] || { echo "$CRON_NAME is not found by name in 'hermes cron list'," \
+      "so a job may exist: remove it by id before re-running (id in the create output above)" >&2; exit 1; }
     cron_show
     echo "rollback: rollback-cron (this job only) or rollback <backup-dir> (everything)"
     ;;
@@ -153,13 +175,17 @@ case "${1:-}" in
     echo "== skill as Hermes sees it"
     as_agent "$HERMES" skills list 2>&1 | grep -i 'olin-finance' || echo "olin-finance not in 'hermes skills list' (external skills may not be listed there)"
     echo "== finance MCP server (tool discovery; 401/502 means no runtime grant for svc-finance)"
-    as_agent "$HERMES" mcp test finance 2>&1 | tail -n 20 || true
+    mcp_out="$(as_agent "$HERMES" mcp test finance 2>&1 || true)"
+    printf '%s\n' "$mcp_out" | tail -n 40
+    echo "finance tools listed: $(printf '%s\n' "$mcp_out" | grep -oE 'finance_[a-z]+(_[a-z]+)*' | sort -u | wc -l) (expect 15)"
     echo "== scheduled delivery (I2): expect one job, '$CRON_SCHEDULE', telegram, skill olin-finance"
     cron_show
     ;;
 
   memory-scan)
     [ -f "$SCANNER" ] || { echo "run install first" >&2; exit 2; }
+    # Cron run outputs keep figures and names (even [SILENT] runs): a count, never their text.
+    echo "cron output files: $(find "$HHOME/cron/output" -type f 2>/dev/null | wc -l) under $HHOME/cron/output (retention is the owner's decision; runbook checklist (e))"
     as_agent "$PY" -I "$SCANNER" "$HHOME/memories" && echo "memory scan: clean" \
       || echo "memory scan: findings above (counts only). Review the memory entries yourself, in your own terminal."
     ;;
