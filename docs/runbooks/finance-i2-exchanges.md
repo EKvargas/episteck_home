@@ -21,18 +21,18 @@ ADMIN="cd /; U=\$(id -u svc-finance); sudo -n -u svc-finance env XDG_RUNTIME_DIR
   --env-file /srv/episteck/services/finance/config/finance.env \
   -e FINANCE_DB=/data/finance.sqlite -e FINANCE_SECRETS_DIR=/secrets -e FINANCE_PEPPER_FILE=/secrets/pepper \
   localhost/episteck-finance:$SHA python -m app.admin"
-# Read-only schema check: table names and counts only, through a read-only SQLite connection
-# (python's sqlite3 inside the image: the node may lack the sqlite3 CLI). It never imports the
-# app, so it never creates a table.
-SCHEMA_CHECK() { $SSH "cd /; U=\$(id -u svc-finance); sudo -n -u svc-finance env XDG_RUNTIME_DIR=/run/user/\$U podman run --rm -i \
-  -v /srv/episteck/services/finance/data:/data:z localhost/episteck-finance:$SHA python -I -" <<'PY'
-import sqlite3
+# Read-only schema check: table names and counts only. It runs on the host as svc-finance
+# with the system python3 (the node may lack the sqlite3 CLI), like spike S2 did on this WAL
+# database: no container, no bind mount, and a mode=ro SQLite URI, so it cannot write. It
+# never imports the app, so it never creates a table.
+SCHEMA_CHECK() { $SSH "cd /; sudo -n -u svc-finance python3 -I - /srv/episteck/services/finance/data/finance.sqlite" <<'PY'
+import sqlite3, sys
 I2 = ("counterparty", "counterparty_alias", "exchange", "exchange_line", "funding",
       "funding_movement", "funding_exchange", "funding_share", "ledger_entry", "receipt",
       "allocation", "held_cash_statement", "payer_rule", "movement_role", "revocation",
       "intervention_log", "partner_identifier", "own_identifier", "account_watch",
       "pending_item", "ref_counter", "matcher_cursor")
-db = sqlite3.connect("file:/data/finance.sqlite?mode=ro", uri=True)
+db = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)
 names = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
 missing = [t for t in I2 if t not in names]
 print(f"I2 tables present: {len(I2) - len(missing)}/{len(I2)}; missing: {', '.join(missing) or 'none'}")
@@ -54,7 +54,7 @@ What I2 changes: new tables in `finance.sqlite` (created when the new image open
 
 Each item once; record the results on the I2 board (`docs/architecture/FINANCE_I2_PROGRESS.md` §5), facts only.
 
-- **(a) Before step 6, the owner's S1 test `[! OK]`.** Two one-off jobs as `home-agent`, no figures in their prompts or replies:
+- **(a) Before step 6, the owner's S1 test `[! OK]`.** Two one-off jobs as `home-agent`, no figures in their prompts or replies. (Verified read-only on the node 2026-11-19: the operator may run `sudo -n -u home-agent`.)
   ```bash
   HAGENT="sudo -n -u home-agent -H env XDG_RUNTIME_DIR=/run/user/\$(id -u home-agent) /home/home-agent/.hermes/hermes-agent/venv/bin/hermes"
   $SSH "cd /; $HAGENT cron create --name i2-s1-a --deliver telegram 'in 2m' 'Prueba técnica S1a de Episteck. Llama una vez a mcp__finance__finance_overview sin argumentos. No escribas ninguna cifra, importe, saldo, banco ni nombre de cuenta. Escribe en español: Prueba S1a, el cron llamó a Finanzas: sí o no, y el código de error si lo hubo. Si puedes, ofrece dos botones A y B; si no, termina con: Responde P1 A o P1 B.'"
@@ -62,7 +62,7 @@ Each item once; record the results on the I2 board (`docs/architecture/FINANCE_I
   $SSH "cd /; $HAGENT cron list"
   ```
   Job A must arrive in your private chat. Note whether it shows buttons; tap one (or reply "P1 A") and check that your next chat with Olin receives it. Job B must send nothing (`[SILENT]`). Then remove both with `hermes cron remove` as `home-agent`: `$SSH "cd /; $HAGENT cron remove i2-s1-a; $HAGENT cron remove i2-s1-b; $HAGENT cron list"`. Verdict: `BUTTONS` changes only the skill's "Scheduled delivery (cron)" section and the job prompt, in a PR, before step 6; `CODE_REPLY` changes nothing.
-- **(b) After the first real 06:35 or 18:35 UTC run `[CLAUDE]`: the job called Finance.** The gateway access log records the path only (no query, no body):
+- **(b) After the first real 06:35 or 18:35 UTC run `[CLAUDE]`: the job called Finance.** The gateway access log records the path only (no query, no body). (Verified read-only on the node 2026-11-19: readable with `sudo -n`, it already holds `/gateway/finance/` paths, eight space-separated fields per line: address, time, zone, method, path, protocol, status, bytes.)
   ```bash
   $SSH "sudo -n grep -E ':(06|18):3[5-9]:[0-9]{2} .*/gateway/finance/' /var/lib/episteck-mcp-gateway/access.log | tail -n 10"
   ```

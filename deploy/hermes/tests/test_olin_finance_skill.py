@@ -447,7 +447,8 @@ def test_skill_teaches_the_opening_sign_per_counterparty_kind():
     section = _flat(_section(_body(), "## Exchanges: what to pass")).lower()
     for phrase in ("a person: positive = te debe, negative = a su favor",
                    "a fund: the amount you hold for it, positive",
-                   "a minus sign only for a person's credit"):
+                   "a minus sign only in `record_opening` (below): for a person's credit, "
+                   "or for a fund the owner says they are already advancing"):
         assert phrase in section, phrase
     confirmations = _flat(_section(_body(), "## Confirmations")).lower()
     for phrase in ('"te debe <amount>', '"a su favor <amount', '"guardas <held>'):
@@ -565,3 +566,32 @@ def test_i2_runbook_has_the_pre_deploy_s1_and_go_live_checklist():
                    "/var/lib/episteck-mcp-gateway/access.log", "session_invalid", "cron/output",
                    "[SILENT]", "private chat", "--skill", "hermes cron remove"):
         assert needle in section, needle
+
+
+# --- fix round 2 (R56) ---------------------------------------------------------------------
+
+def test_schema_check_runs_on_the_host_read_only_without_a_container():
+    text = RUNBOOK_I2.read_text(encoding="utf-8")
+    start = text.index("SCHEMA_CHECK() {")
+    helper = text[start:text.index("\nPY\n}", start)]
+    # A read-only check must not be able to write production: no container, no bind mount.
+    assert "podman" not in helper and "-v " not in helper and ":z" not in helper
+    assert '$SSH "cd /; sudo -n -u svc-finance python3 -I - ' \
+           '/srv/episteck/services/finance/data/finance.sqlite" <<\'PY\'' in helper
+    assert 'sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)' in helper
+    assert "print(" in helper and "SELECT name FROM sqlite_master" in helper
+
+
+def test_skill_teaches_a_negative_fund_opening_as_advancing():
+    what_to_pass = _flat(_section(_body(), "## Exchanges: what to pass")).lower()
+    assert ("negative only when the owner says they are already advancing the fund's costs"
+            in what_to_pass)
+    confirmations = _flat(_section(_body(), "## Confirmations")).lower()
+    assert '"guardas <held>' in confirmations
+    assert '"lo estás adelantando tú: <held>' in confirmations
+
+
+def test_checklist_marks_the_node_assumptions_as_verified():
+    section = _flat(_section(RUNBOOK_I2.read_text(encoding="utf-8"),
+                             "## Pre-deploy S1 and go-live checklist")).lower()
+    assert section.count("verified read-only on the node 2026-11-19") >= 2

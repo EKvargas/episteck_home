@@ -148,8 +148,8 @@ Only when you passed `valuation_currency="EUR"` and `valuation` is not null:
   - Never convert VES to USD or EUR, or USD to EUR: each figure keeps the currency it was
     written in. VES is only evidence of the exchange.
   - Finance refuses anything that is not a plain decimal (`validation_error`).
-  - Amounts are positive, with a minus sign only for a person's credit in `record_opening`
-    (below), or for a fund the owner says they are already advancing.
+  - Amounts are positive, with a minus sign only in `record_opening` (below): for a
+    person's credit, or for a fund the owner says they are already advancing.
 - **Dates** are `YYYY-MM-DD`. Omit a date when it is today.
 - **The partner's screenshot** (`record_exchange`): `total_usd`; one entry in `lines` per
   payer with `payer` and `usd`, and only when stated `debt_currency`, `beneficiary` (who it
@@ -173,8 +173,9 @@ Only when you passed `valuation_currency="EUR"` and `valuation` is not null:
   <fecha>"). The sign of `amount` depends on the counterparty:
   - a person: positive = te debe, negative = a su favor (money of theirs you hold, a
     prepayment);
-  - a fund: the amount you hold for it, positive. Finance stores it the other way round;
-    never flip the sign yourself.
+  - a fund: the amount you hold for it, positive; negative only when the owner says they
+    are already advancing the fund's costs. Finance stores it the other way round and
+    echoes it as `held`; never flip the sign yourself.
   - When the owner's words do not make the direction clear, ask before proposing.
 - Never type or ask for an IBAN.
 
@@ -197,8 +198,10 @@ Every tool that changes the exchange books (`record_exchange`, `record_receipt`,
    `eur_per_usd` when it undoes a funding; `reason`.
    A starting balance (`record_opening`): a person's `amount` above zero is "te debe
    <amount> <currency>"; below zero, "a su favor <amount> <currency>", the figure without
-   its minus sign (drop only the sign, never a digit). A fund's `held` is "guardas <held>
-   <currency> del fondo <counterparty>".
+   its minus sign (drop only the sign, never a digit). A fund's `held` above zero is
+   "guardas <held> <currency> del fondo <counterparty>"; below zero, "lo estás adelantando
+   tú: <held> <currency> del fondo <counterparty>", copied with its sign, as in the debts
+   view.
 2. Call `mcp__finance__finance_resolve_pending(code, <answer>)` only with the owner's own
    answer to that echo: their tap, or their words. Send the choice their words mean:
    `yes`, `correct` or `cancel`. Never send `yes` on the owner's behalf: not on a guess,
