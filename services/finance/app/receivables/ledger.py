@@ -27,9 +27,13 @@ class LineInput:
 
 @dataclass(frozen=True)
 class Evidence:
+    """``ves_reference_hash`` is the keyed hash of the reference when the caller already
+    hashed it (a proposal stores only the hash, §6.9); it wins over ``ves_reference``."""
+
     ves_amount_minor: int | None
     ves_reference: str | None
     delivered_on: date | None
+    ves_reference_hash: str | None = None
 
 
 class ValidationError(Exception):
@@ -107,9 +111,11 @@ def record_exchange(repo: ReceivablesRepository, conn, ws: str, *, partner_id: s
 
     ev = evidence or Evidence(None, None, None)
     delivered = ev.delivered_on or now.date()
+    ves_hash = ev.ves_reference_hash or (repo.hash_key(ev.ves_reference) if ev.ves_reference
+                                         else None)
     ex = Exchange(
         _id(), ws, repo.next_number(conn, ws, "C"), partner_id, total_usd_minor, delivered, now,
-        ev.ves_amount_minor, repo.hash_key(ev.ves_reference) if ev.ves_reference else None)
+        ev.ves_amount_minor, ves_hash)
     ex_lines = new_lines(ex.id, 1, resolved)
     repo.insert_exchange(conn, ex, ex_lines)
     from .receipts import consume_credits  # lazy: receipts imports ValidationError from here

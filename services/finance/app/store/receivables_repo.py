@@ -1,7 +1,8 @@
 """Receivables SQL. Every method takes an open connection first. Facts are never edited.
 
 Scoping: reads that take ``ws`` are workspace-scoped. Reads keyed by a globally unique id
-are id-scoped and take no workspace: ``current_lines``, ``live_funding_for_exchange``,
+are id-scoped and take no workspace: ``current_lines``, ``exchange_lines``,
+``live_funding_for_exchange``,
 ``live_funding_for_movement``, ``funding_shares``, ``live_receipt_for_movement``,
 ``movement_role``, ``live_role_ids_for_movement``, ``movement_root``, ``movement_rowid`` and
 ``is_live``.
@@ -230,6 +231,14 @@ class ReceivablesRepository:
             (ws, key)).fetchall()
         return [_cp(r) for r in rows]
 
+    def alias_names(self, conn, ws: str) -> dict[str, list[str]]:
+        """Normalised aliases per counterparty id (for partial-name candidates)."""
+        out: dict[str, list[str]] = {}
+        for r in conn.execute("SELECT alias, counterparty_id FROM counterparty_alias "
+                              "WHERE workspace_id=? ORDER BY rowid", (ws,)):
+            out.setdefault(r["counterparty_id"], []).append(r["alias"])
+        return out
+
     def get_counterparty(self, conn, ws: str, cp_id: str) -> Counterparty | None:
         r = conn.execute("SELECT * FROM counterparty WHERE workspace_id=? AND id=?",
                          (ws, cp_id)).fetchone()
@@ -302,11 +311,28 @@ class ReceivablesRepository:
                          (ws, number)).fetchone()
         return _exchange(r) if r else None
 
-    def exchange_by_id(self, conn, ws: str, exchange_id: str) -> Exchange | None:
-        """The live exchange; ``None`` if unknown, of another workspace or revoked."""
-        r = conn.execute(f"SELECT e.* FROM exchange e WHERE e.workspace_id=? AND e.id=? "
-                         f"AND {_live('exchange', 'e')}", (ws, exchange_id)).fetchone()
+    def exchange_by_id(self, conn, ws: str, exchange_id: str, *,
+                       include_revoked: bool = False) -> Exchange | None:
+        """The live exchange; ``None`` if unknown, of another workspace or revoked
+        (``include_revoked`` also finds a revoked one: history)."""
+        live = "" if include_revoked else f" AND {_live('exchange', 'e')}"
+        r = conn.execute(f"SELECT e.* FROM exchange e WHERE e.workspace_id=? AND e.id=?{live}",
+                         (ws, exchange_id)).fetchone()
         return _exchange(r) if r else None
+
+    def exchange_lines(self, conn, exchange_id: str) -> list[ExchangeLine]:
+        """Every version of an exchange's lines (history), by version then position."""
+        rows = conn.execute("SELECT * FROM exchange_line WHERE exchange_id=? "
+                            "ORDER BY version, position, rowid", (exchange_id,)).fetchall()
+        return [_line(r) for r in rows]
+
+    def fundings_for_exchange(self, conn, ws: str, exchange_id: str) -> list[Funding]:
+        """Every funding (live or revoked) that included this exchange, oldest first."""
+        rows = conn.execute(
+            "SELECT f.* FROM funding f JOIN funding_exchange fe ON fe.funding_id=f.id "
+            "WHERE f.workspace_id=? AND fe.exchange_id=? ORDER BY f.number",
+            (ws, exchange_id)).fetchall()
+        return [self._funding(conn, r) for r in rows]
 
     def exchange_by_ves_hash(self, conn, ws: str, h: str) -> Exchange | None:
         r = conn.execute(
@@ -473,13 +499,32 @@ class ReceivablesRepository:
                          f"AND l.number=?{effective}", (ws, number)).fetchone()
         return _entry(r) if r else None
 
-    def receipt_by_ref(self, conn, ws: str, ref: str) -> Receipt | None:
-        """``R<n>`` -> the live receipt."""
+    def entry_by_id(self, conn, ws: str, entry_id: str) -> LedgerEntry | None:
+        """Any entry of the workspace by id (history: revoked and reversed ones included)."""
+        r = conn.execute("SELECT * FROM ledger_entry WHERE workspace_id=? AND id=?",
+                         (ws, entry_id)).fetchone()
+        return _entry(r) if r else None
+
+    def entries_by_sources(self, conn, ws: str, refs: Sequence[str]) -> list[LedgerEntry]:
+        """Every entry (any kind, undone or not) whose ``source_ref`` is one of ``refs``."""
+        ids = list(dict.fromkeys(refs))
+        if not ids:
+            return []
+        rows = conn.execute(
+            f"SELECT * FROM ledger_entry WHERE workspace_id=? "
+            f"AND source_ref IN ({','.join('?' * len(ids))}) ORDER BY number",
+            (ws, *ids)).fetchall()
+        return [_entry(r) for r in rows]
+
+    def receipt_by_ref(self, conn, ws: str, ref: str, *,
+                       include_revoked: bool = False) -> Receipt | None:
+        """``R<n>`` -> the live receipt; ``include_revoked`` also finds a revoked one."""
         number = _ref_number(ref, "R")
         if number is None:
             return None
-        r = conn.execute(f"SELECT r.* FROM receipt r WHERE r.workspace_id=? AND r.number=? "
-                         f"AND {_live('receipt', 'r')}", (ws, number)).fetchone()
+        live = "" if include_revoked else f" AND {_live('receipt', 'r')}"
+        r = conn.execute(f"SELECT r.* FROM receipt r WHERE r.workspace_id=? AND r.number=?{live}",
+                         (ws, number)).fetchone()
         return _receipt(r) if r else None
 
     def receipt_by_id(self, conn, ws: str, receipt_id: str) -> Receipt | None:
@@ -931,6 +976,12 @@ class ReceivablesRepository:
         return conn.execute(
             "SELECT COUNT(*) AS n FROM intervention_log WHERE workspace_id=? "
             "AND substr(at,1,7)=?", (ws, f"{year:04d}-{month:02d}")).fetchone()["n"]
+
+    def command_result(self, conn, ws: str, key: str) -> dict | None:
+        """The stored result of a completed command (I1 ``command_log``, read only)."""
+        r = conn.execute("SELECT result_json FROM command_log WHERE workspace_id=? AND key=?",
+                         (ws, key)).fetchone()
+        return json.loads(r["result_json"]) if r else None
 
     def member_role(self, conn, ws: str, person_id: str) -> str | None:
         r = conn.execute("SELECT role FROM workspace_member WHERE workspace_id=? AND person_id=?",

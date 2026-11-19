@@ -30,7 +30,7 @@ from .pending import PendingQueue
 from .receipts import CURRENCIES, record_receipt
 
 __all__ = ["COUNT_KEYS", "Matcher", "ask_explain_incoming", "close_settled_questions",
-           "incoming_key", "reopen_explain", "resolve_explain_incoming"]
+           "incoming_key", "reopen_explain", "resolve_explain_incoming", "unhide"]
 
 logger = logging.getLogger("finance.matcher")
 
@@ -132,12 +132,12 @@ def reopen_explain(repo: ReceivablesRepository, conn, ws: str, code: str, queue:
         revoked = True
     if question is None:
         question = ask_explain_incoming(repo, conn, ws, mv, queue).code
-    also = _unhide(repo, conn, ws, key, mv.id, queue, now) if revoked and receipt is None else []
+    also = unhide(repo, conn, ws, key, mv.id, queue, now) if revoked and receipt is None else []
     return {"ok": True, "status": "reopened", "question": question, "also_asked": also}
 
 
-def _unhide(repo: ReceivablesRepository, conn, ws: str, key: str, movement_id: str,
-            queue: PendingQueue, now: datetime) -> list[str]:
+def unhide(repo: ReceivablesRepository, conn, ws: str, key: str, movement_id: str,
+           queue: PendingQueue, now: datetime) -> list[str]:
     """R36: the NOT_EXCHANGE roles a revoked IGNORE rule wrote on its own (incoming movements
     with the same key that never had an EXPLAIN_INCOMING question) are revoked, and each of
     those movements is asked about. Returns the question codes."""

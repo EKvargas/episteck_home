@@ -59,6 +59,11 @@ def _payment(repo: ReceivablesRepository, conn, ws: str,
     return mv
 
 
+def _delivered(exchanges: Sequence[Exchange]) -> dict[str, str]:
+    """``{"C<n>": ISO delivery date}``: every exchange ref an owner sees comes with its date."""
+    return {f"C{ex.number}": ex.delivered_on.isoformat() for ex in exchanges}
+
+
 def _usd(repo: ReceivablesRepository, conn, ex: Exchange) -> int:
     return sum(ln.usd_minor for ln in repo.current_lines(conn, ex.id))
 
@@ -172,6 +177,7 @@ def _notify(conn, ws: str, funding: Funding, exchanges: Sequence[Exchange], rate
             ecb: Decimal | None, queue: PendingQueue) -> None:
     ref = f"F{funding.number}"
     payload = {"funding_ref": ref, "exchange_refs": [f"C{ex.number}" for ex in exchanges],
+               "delivered_on": _delivered(exchanges),
                "rate": rate_text(rate), "eur": format_minor(funding.eur_minor, "EUR"),
                "usd": format_minor(funding.usd_minor, "USD")}
     queue.notice(conn, ws, f"funding_closed:{ref}", payload)
@@ -235,13 +241,15 @@ def ask_link_funding(repo: ReceivablesRepository, conn, ws: str, movement_id: st
     if mv is None:
         raise ValidationError("movement")
     root, day = repo.movement_root(conn, mv.id), _day(mv)
-    refs = [f"C{ex.number}" for ex in _candidates(repo, conn, ws, day)]
+    candidates = _candidates(repo, conn, ws, day)
+    refs = [f"C{ex.number}" for ex in candidates]
     options = refs + (["ALL"] if len(refs) > 1 else [])
     paid = repo.latest_funded_exchange(conn, ws, day)
     if paid is not None:
         options.append(f"ADD_TO:C{paid.number}")
     payload = {"movement_id": root, "booking_date": day.isoformat(),
-               "eur": format_minor(-mv.amount_minor, "EUR"), "candidates": refs}
+               "eur": format_minor(-mv.amount_minor, "EUR"), "candidates": refs,
+               "delivered_on": _delivered([*candidates, *([paid] if paid else [])])}
     return queue.add(conn, ws, PendingKind.LINK_FUNDING, [*options, "REGISTER", "NOT_EXCHANGE"],
                      payload, f"LINK_FUNDING:{root}")
 
