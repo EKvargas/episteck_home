@@ -3,7 +3,10 @@
 An effect runs inside ``FinanceRepository.run_command``, so its writes and the ``command_log``
 row commit in ONE transaction and an exception leaves neither (E14). Payloads hold ids and
 minor units that ``proposals`` validated; the domain functions validate again because the
-data may have changed between the proposal and the owner's "yes". A refusal that must leave
+data may have changed between the proposal and the owner's "yes". Where an effect would
+resolve something at "yes" (what to forgive, which rules, roles or receipt to undo), the
+payload holds what the owner was shown, and a different state now refuses with
+``changed()``: "yes" executes exactly what the echo showed (R42). A refusal that must leave
 no trace raises ``CommandRefused``. Results carry refs, labels and formatted amounts only.
 """
 from __future__ import annotations
@@ -18,16 +21,22 @@ from ..money import format_minor
 from ..store.receivables_repo import IGNORE, ReceivablesRepository
 from .corrections import correct_exchange, forgive_all, record_opening, reverse
 from .explain import ask_explain_incoming, incoming_key
+from .funding import ask_link_funding, try_link
 from .ledger import Evidence, LineInput, ValidationError, record_exchange
 from .matcher import close_settled_questions, reopen_explain, unhide
 from .model import (
-    Counterparty, CounterpartyKind, MovementRoleKind, Opening, Receipt, ReceiptKind,
+    Counterparty, CounterpartyKind, EntryKind, MovementRoleKind, Opening, Receipt, ReceiptKind,
     Verification,
 )
 from .pending import PendingQueue
 from .receipts import held_cash_shown, mark_held_cash, reallocate, record_receipt
 
 IGNORED_LOOKBACK = timedelta(days=60)
+
+
+def changed() -> ValidationError:
+    """What the owner was shown no longer holds; nothing is written (R42)."""
+    return ValidationError("target", {"reason": "changed"})
 
 
 class CommandRefused(Exception):
@@ -70,16 +79,30 @@ def undo_token(repo: ReceivablesRepository, root: str) -> str:
 
 def ignored_movements(repo: ReceivablesRepository, conn, ws: str,
                       now: datetime) -> list[tuple[str, str, domain.Movement]]:
-    """Incoming movements with a live NOT_EXCHANGE role from the last 60 days, newest first,
-    as ``(undo token, root id, current movement)``."""
-    since = now.date() - IGNORED_LOOKBACK
+    """Movements with a live NOT_EXCHANGE role from the last 60 days, newest first, as
+    ``(undo token, root id, current movement)``: incoming ones, and outgoing EUR payments to
+    a partner IBAN (a LINK_FUNDING answered "not an exchange", R45)."""
+    since, partners = now.date() - IGNORED_LOOKBACK, repo.partner_hashes(conn, ws)
     found = []
     for root in repo.roots_with_role(conn, ws, MovementRoleKind.NOT_EXCHANGE):
         mv = repo.movement_current(conn, ws, root)
         day = (mv.booking_date or mv.value_date) if mv else None
-        if mv is not None and mv.amount_minor > 0 and day is not None and day >= since:
+        if mv is None or day is None or day < since:
+            continue
+        if mv.amount_minor > 0 or (mv.currency == "EUR" and mv.amount_minor < 0
+                                   and mv.counterparty_iban_hash in partners):
             found.append((undo_token(repo, root), root, mv))
     return sorted(found, key=lambda t: t[2].booking_date or t[2].value_date, reverse=True)
+
+
+def answer_state(repo: ReceivablesRepository, conn, ws: str, mv: domain.Movement) -> dict:
+    """What undoing the answer about ``mv`` would undo: its live receipt, its live roles, and
+    whether the live payer rule for its key still says what the answer said."""
+    rec = repo.live_receipt_for_movement(conn, mv.id)
+    key = incoming_key(repo, mv, True) if mv.amount_minor > 0 else None
+    rule = bool(key) and repo.rule_for(conn, ws, key) == (rec.payer_id if rec else IGNORE)
+    return {"receipt_id": rec.id if rec else None,
+            "role_ids": repo.live_role_ids_for_movement(conn, mv.id), "rule": rule}
 
 
 def receipt_rule(repo: ReceivablesRepository, conn, ws: str, ref: str) -> str | None:
@@ -132,6 +155,11 @@ def _receipt(ctx: Ctx, conn, p: dict) -> dict:
 
 
 def _correction(ctx: Ctx, conn, p: dict) -> dict:
+    lines = ctx.repo.current_lines(conn, p["exchange_id"])
+    funding = ctx.repo.live_funding_for_exchange(conn, p["exchange_id"])
+    if (max((ln.version for ln in lines), default=0), funding.id if funding else None) != (
+            p["version"], p["funding_id"]):  # corrected or paid since the echo
+        raise changed()
     ex = correct_exchange(ctx.repo, conn, ctx.ws, p["exchange_id"], _lines(p["lines"]),
                           p["total_usd_minor"], p["reason"], ctx.now, queue=ctx.queue)
     usd = sum(ln.usd_minor for ln in ctx.repo.current_lines(conn, ex.id))
@@ -141,7 +169,7 @@ def _correction(ctx: Ctx, conn, p: dict) -> dict:
 
 def _forgive(ctx: Ctx, conn, p: dict) -> dict:
     written = forgive_all(ctx.repo, conn, ctx.ws, p["target_ref"], p["amount_minor"],
-                          p["reason"], ctx.now)
+                          p["reason"], ctx.now, expect=p["parts"])
     cur = written[0].currency
     return {"ok": True, "status": "forgiven", "currency": cur,
             "amount": format_minor(-sum(e.amount_minor for e in written), cur),
@@ -149,6 +177,10 @@ def _forgive(ctx: Ctx, conn, p: dict) -> dict:
 
 
 def _opening(ctx: Ctx, conn, p: dict) -> dict:
+    stated = [e.id for e in ctx.repo.effective_entries_for_refs(
+        conn, ctx.ws, [p["counterparty_id"]], (EntryKind.OPENING,)) if e.currency == p["currency"]]
+    if stated != p["replaces"]:  # the echo named the openings this one replaces
+        raise changed()
     entry = record_opening(ctx.repo, conn, ctx.ws, p["counterparty_id"], p["currency"],
                            p["amount_minor"], Opening(p["basis"]), p["note"], ctx.now,
                            queue=ctx.queue)
@@ -165,34 +197,80 @@ def _counterparty(ctx: Ctx, conn, p: dict) -> dict:
 
 
 def _reverse(ctx: Ctx, conn, p: dict) -> dict:
-    target, reason = p["target"], p["reason"]
+    repo, target, reason = ctx.repo, p["target"], p["reason"]
     if target == "reopen":  # undo the answer to an EXPLAIN_INCOMING
-        out = reopen_explain(ctx.repo, conn, ctx.ws, p["code"], ctx.queue, ctx.now)
+        item = repo.pending_by_code(conn, ctx.ws, p["code"])
+        mv = repo.movement_current(conn, ctx.ws, (item.payload.get("movement_id") or "")
+                                   if item else "")
+        if mv is not None and answer_state(repo, conn, ctx.ws, mv) != p["state"]:
+            raise changed()
+        out = reopen_explain(repo, conn, ctx.ws, p["code"], ctx.queue, ctx.now)
         if not out["ok"]:
             raise CommandRefused(out)
         return {**out, "ref": p["code"]}
+    if target == "relink":  # undo "not an exchange" answered to a LINK_FUNDING
+        return {**_relink(ctx, conn, p["movement_id"], p["role_ids"], reason), "ref": p["code"]}
     if target == "unignore":
-        return _unignore(ctx, conn, p["undo_ref"], reason)
-    key = receipt_rule(ctx.repo, conn, ctx.ws, p["ref"])
-    payer = ctx.repo.receipt_by_ref(conn, ctx.ws, p["ref"]).payer_id if key else None
-    out = reverse(ctx.repo, conn, ctx.ws, p["ref"], reason, ctx.queue, ctx.now)
+        return _unignore(ctx, conn, p, reason)
+    if target == "rules":
+        return _reverse_rules(ctx, conn, p["counterparty_id"], p["rule_ids"], reason)
+    key = receipt_rule(repo, conn, ctx.ws, p["ref"])
+    if "rule" in p and bool(key) != p["rule"]:  # the echo said whether a rule goes too
+        raise changed()
+    payer = repo.receipt_by_ref(conn, ctx.ws, p["ref"]).payer_id if key else None
+    out = reverse(repo, conn, ctx.ws, p["ref"], reason, ctx.queue, ctx.now)
     if key:  # the rule that recorded it would record the next one the same way
         out["rules_revoked"] = _revoke_rules(ctx, conn, key, payer, reason)
     return out
 
 
-def _unignore(ctx: Ctx, conn, token: str, reason: str) -> dict:
-    """Undoes a NOT_EXCHANGE role (and the IGNORE rule that wrote it, with the other roles
-    that rule wrote on its own, R36) and asks EXPLAIN_INCOMING again."""
+def _reverse_rules(ctx: Ctx, conn, cp_id: str, rule_ids: list[str], reason: str) -> dict:
+    """Revokes exactly the payer rules the owner was shown for that counterparty."""
+    if ctx.repo.live_rule_ids_for_counterparty(conn, ctx.ws, cp_id) != rule_ids:
+        raise changed()
+    for rule_id in rule_ids:
+        ctx.repo.revoke(conn, ctx.ws, "payer_rule", rule_id, reason, ctx.now)
+    return {"ok": True, "status": "reversed", "rules": len(rule_ids)}
+
+
+def _relink(ctx: Ctx, conn, root: str, role_ids: list[str], reason: str) -> dict:
+    """Undoes "not an exchange" on a partner payment (R45): revokes the roles the owner was
+    shown and links the payment again (``try_link``); when it fits several exchanges or none,
+    LINK_FUNDING asks again."""
+    repo = ctx.repo
+    if not role_ids or repo.live_role_ids_for_movement(conn, root) != role_ids:
+        raise changed()
+    for role_id in role_ids:
+        repo.revoke(conn, ctx.ws, "movement_role", role_id, reason, ctx.now)
+    mv = repo.movement_current(conn, ctx.ws, root)
+    if mv is None:
+        raise ValidationError("movement")
+    question = None
+    if try_link(repo, conn, ctx.ws, mv, ctx.queue, ctx.now) in ("AMBIGUOUS", "WAITING"):
+        question = ask_link_funding(repo, conn, ctx.ws, root, ctx.queue).code
+    funding = repo.live_funding_for_movement(conn, root)
+    return {"ok": True, "status": "reopened", "question": question, "also_asked": [],
+            "funding_ref": f"F{funding.number}" if funding else None}
+
+
+def _unignore(ctx: Ctx, conn, p: dict, reason: str) -> dict:
+    """Undoes a NOT_EXCHANGE role from the ignored list. An incoming payment: with the
+    IGNORE rule that wrote it and the other roles that rule wrote on its own (R36), then
+    EXPLAIN_INCOMING asks again. An outgoing partner payment: ``_relink`` (R45)."""
     repo = ctx.repo
     match = next(((root, mv) for t, root, mv in ignored_movements(repo, conn, ctx.ws, ctx.now)
-                  if t == token), None)
+                  if t == p["undo_ref"]), None)
     if match is None:
-        raise ValidationError("ref")
+        raise changed()
     root, mv = match
-    for role_id in repo.live_role_ids_for_movement(conn, root):
-        repo.revoke(conn, ctx.ws, "movement_role", role_id, reason, ctx.now)
+    if mv.amount_minor < 0:
+        return {**_relink(ctx, conn, root, p["role_ids"], reason), "rules_revoked": 0}
     key = incoming_key(repo, mv, True)
+    rule = bool(key) and repo.rule_for(conn, ctx.ws, key) == IGNORE
+    if repo.live_role_ids_for_movement(conn, root) != p["role_ids"] or rule != p["rule"]:
+        raise changed()
+    for role_id in p["role_ids"]:
+        repo.revoke(conn, ctx.ws, "movement_role", role_id, reason, ctx.now)
     revoked = _revoke_rules(ctx, conn, key, IGNORE, reason) if key else 0
     question = ask_explain_incoming(repo, conn, ctx.ws, mv, ctx.queue).code
     also = unhide(repo, conn, ctx.ws, key, mv.id, ctx.queue, ctx.now) if revoked else []
@@ -202,6 +280,9 @@ def _unignore(ctx: Ctx, conn, token: str, reason: str) -> dict:
 
 def _reallocate(ctx: Ctx, conn, p: dict) -> dict:
     repo = ctx.repo
+    if [a.id for a in repo.live_allocations_for_receipt(conn, ctx.ws, p["receipt_id"])] != \
+            p["before"]:  # the echo showed what is moved away
+        raise changed()
     try:
         reallocate(repo, conn, ctx.ws, p["receipt_id"], [tuple(x) for x in p["parts"]], ctx.now)
     except ValidationError as exc:  # name the item, never the line id

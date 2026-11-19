@@ -3,8 +3,10 @@
 Amounts enter only through ``parse_amount`` (a plain decimal string: "1.250,50" or "$275" is a
 ``validation_error`` naming the field) and leave through ``format_minor``. Names resolve
 through ``find_by_alias``; zero or several matches raise ``Clarify`` with candidate labels.
-Payloads hold ids and minor units (stored in the CONFIRM item, never shown); echoes hold
-refs, labels, dates and formatted amounts, never an id, an IBAN or a hash.
+Payloads hold ids and minor units (stored in the CONFIRM item, never shown) and every figure
+the effect would otherwise resolve at "yes" (R42); echoes hold refs, labels, dates and
+formatted amounts, never an id, an IBAN or a hash. Amounts are capped at ``MAX_MINOR``; dates
+in the future are refused.
 """
 from __future__ import annotations
 
@@ -15,8 +17,10 @@ from decimal import Decimal
 
 from ..money import format_minor, parse_amount
 from ..store.receivables_repo import IGNORE, MAX_LINE_POSITION
-from .commands import CommandRefused, Ctx, ignored_movements, item_ref, receipt_rule
-from .corrections import forgive_preview
+from .commands import (
+    CommandRefused, Ctx, answer_state, ignored_movements, item_ref, receipt_rule,
+)
+from .corrections import forgive_parts, forgive_preview
 from .explain import incoming_key, sender_text
 from .fx import implied_rate, rate_text
 from .ledger import DEBT_CURRENCIES, LineInput, ValidationError, validate_lines
@@ -30,6 +34,7 @@ PAYERS = (CounterpartyKind.PERSON, CounterpartyKind.FUND)
 ANY_KIND = tuple(CounterpartyKind)
 OWNER_WORDS = frozenset({"owner", "mio", "mia", "yo", "tuyo", "dueno"})
 PLAIN = {"expected": "a plain decimal such as 1250.50"}
+MAX_MINOR = 10 ** 12  # minor units; anything larger is a typo, and SQLite holds 64 bits
 _EXCHANGE_TARGET = re.compile(r"\s*(C\d{1,9})\s*:\s*(.+?)\s*", re.IGNORECASE | re.ASCII)
 _FACT = re.compile(r"[CFRE]\d{1,9}", re.IGNORECASE | re.ASCII)
 _PENDING = re.compile(r"P\d{1,9}", re.IGNORECASE | re.ASCII)
@@ -52,6 +57,7 @@ class Proposal:
     echo: dict
     high_value: bool = False
     duplicate_of: str | None = None  # a natural duplicate (the same VES reference)
+    defaults: tuple[str, ...] = ()  # payload keys filled in with today's date (m1)
 
 
 # --- small parsers -------------------------------------------------------------------
@@ -69,9 +75,12 @@ def money(value, currency: str, field: str) -> int:
     if not isinstance(value, str):  # a float is never read as money
         raise ValidationError(field, PLAIN)
     try:
-        return parse_amount(value, currency)
+        amount = parse_amount(value, currency)
     except ValueError:
         raise ValidationError(field, PLAIN) from None
+    if abs(amount) > MAX_MINOR:
+        raise ValidationError(field, {"max": format_minor(MAX_MINOR, currency)})
+    return amount
 
 
 def positive(value, currency: str, field: str) -> int:
@@ -95,6 +104,12 @@ def day(value, field: str) -> date | None:
         return date.fromisoformat(value.strip())
     except (AttributeError, ValueError):
         raise ValidationError(field, {"expected": "YYYY-MM-DD"}) from None
+
+
+def not_future(ctx: Ctx, value: date | None, field: str) -> date | None:
+    if value is not None and value > ctx.now.date():
+        raise ValidationError(field, {"reason": "future"})
+    return value
 
 
 def counterparty(ctx: Ctx, conn, name, field: str, kinds=PAYERS, *,
@@ -193,8 +208,10 @@ def exchange(ctx: Ctx, conn, total_usd, lines, evidence, delivered_on) -> Propos
     ves_minor = None if ves is None else positive(ves, "VES", "evidence.ves_amount")
     reference = text(ev.get("ves_reference"), "evidence.ves_reference", required=False)
     ves_hash = ctx.repo.hash_key(reference) if reference else None
-    delivered = (day(delivered_on, "delivered_on") or day(ev.get("date"), "evidence.date")
-                 or ctx.now.date())
+    stated = not_future(ctx, day(delivered_on, "delivered_on"), "delivered_on")
+    if stated is None:
+        stated = not_future(ctx, day(ev.get("date"), "evidence.date"), "evidence.date")
+    delivered = stated or ctx.now.date()
     same = ctx.repo.exchange_by_ves_hash(conn, ctx.ws, ves_hash) if ves_hash else None
     return Proposal("exchange", {
         "partner_id": partner.id, "total_usd_minor": total, "lines": payload_lines,
@@ -203,7 +220,8 @@ def exchange(ctx: Ctx, conn, total_usd, lines, evidence, delivered_on) -> Propos
         "type": "exchange", "total_usd": format_minor(total, "USD"),
         "delivered_on": delivered.isoformat(), "partner": partner.label,
         "ves": None if ves_minor is None else format_minor(ves_minor, "VES"),
-        "lines": echo_lines}, duplicate_of=f"C{same.number}" if same else None)
+        "lines": echo_lines}, duplicate_of=f"C{same.number}" if same else None,
+        defaults=() if stated else ("delivered_on",))
 
 
 def _partner(ctx: Ctx, conn, name) -> Counterparty:
@@ -240,8 +258,10 @@ def correction(ctx: Ctx, conn, exchange_ref, lines, total_usd, reason) -> Propos
     before = [line_echo(ctx, conn, ln.payer_id, ln.usd_minor,
                         None if ln.payer_id == OWNER else ln.debt_currency,
                         ln.eur_override_minor, ln.beneficiary_note) for ln in old]
-    return Proposal("correction", {
-        "exchange_id": ex.id, "lines": payload_lines, "total_usd_minor": total, "reason": why}, {
+    return Proposal("correction", {  # "version"/"funding_id": what "before" shows (R42)
+        "exchange_id": ex.id, "lines": payload_lines, "total_usd_minor": total, "reason": why,
+        "version": max((ln.version for ln in old), default=0),
+        "funding_id": funding.id if funding else None}, {
         "type": "correction", "exchange_ref": f"C{ex.number}",
         "delivered_on": ex.delivered_on.isoformat(),
         "funding_ref": f"F{funding.number}" if funding else None, "reason": why,
@@ -259,7 +279,8 @@ def receipt(ctx: Ctx, conn, payer, amount, cur, kind, received_on, description) 
         raise ValidationError("kind", {"allowed": "CASH, IN_KIND"})
     what = text(description, "description", required=name == ReceiptKind.IN_KIND.value) or ""
     cp = counterparty(ctx, conn, payer, "payer")
-    on = day(received_on, "received_on") or ctx.now.date()
+    stated = not_future(ctx, day(received_on, "received_on"), "received_on")
+    on = stated or ctx.now.date()
     balance = ctx.repo.balance(conn, ctx.ws, cp.id, cur)
     person = cp.kind is CounterpartyKind.PERSON
     return Proposal("receipt", {
@@ -270,7 +291,8 @@ def receipt(ctx: Ctx, conn, payer, amount, cur, kind, received_on, description) 
         "description": what or None,
         "balance": format_minor(balance, cur) if person else None,
         "balance_after": format_minor(balance - minor, cur) if person else None},
-        high_value=usd_equivalent_is_high(ctx, conn, minor, cur, on))
+        high_value=usd_equivalent_is_high(ctx, conn, minor, cur, on),
+        defaults=() if stated else ("received_on",))
 
 
 def held_cash(ctx: Ctx, conn, name, amount, cur) -> dict:
@@ -292,8 +314,10 @@ def forgive(ctx: Ctx, conn, target, amount, reason) -> Proposal:
     cur = forgive_preview(ctx.repo, conn, ctx.ws, ref, None)["currency"]
     minor = None if amount is None else positive(amount, cur, "amount")
     preview = forgive_preview(ctx.repo, conn, ctx.ws, ref, minor)
-    return Proposal("forgive", {"target_ref": ref, "amount_minor": minor, "reason": why},
-                    {"type": "forgive", **preview, "reason": why})
+    total, parts = forgive_parts(ctx.repo, conn, ctx.ws, ref, minor)
+    return Proposal("forgive", {  # "yes" forgives this amount over these items, or nothing
+        "target_ref": ref, "amount_minor": total, "parts": [list(x) for x in parts],
+        "reason": why}, {"type": "forgive", **preview, "reason": why})
 
 
 def opening(ctx: Ctx, conn, name, amount, cur, basis, note) -> Proposal:
@@ -304,14 +328,15 @@ def opening(ctx: Ctx, conn, name, amount, cur, basis, note) -> Proposal:
     if stated not in (Opening.APPROXIMATE.value, Opening.CONFIRMED.value):
         raise ValidationError("basis", {"allowed": "APPROXIMATE, CONFIRMED"})
     why = text(note, "note")
-    replaces = [f"E{e.number}" for e in ctx.repo.effective_entries_for_refs(
+    old = [e for e in ctx.repo.effective_entries_for_refs(
         conn, ctx.ws, [cp.id], (EntryKind.OPENING,)) if e.currency == cur]
+    shown = "held" if cp.kind is CounterpartyKind.FUND else "amount"  # a fund: what you hold
     return Proposal("opening", {
         "counterparty_id": cp.id, "currency": cur, "amount_minor": minor, "basis": stated,
-        "note": why}, {
+        "note": why, "replaces": [e.id for e in old]}, {
         "type": "opening", "counterparty": cp.label, "currency": cur,
-        "amount": format_minor(minor, cur), "basis": stated, "note": why,
-        "replaces": replaces})
+        shown: format_minor(minor, cur), "basis": stated, "note": why,
+        "replaces": [f"E{e.number}" for e in old]})
 
 
 # --- counterparties ------------------------------------------------------------------
@@ -327,7 +352,8 @@ def new_counterparty(ctx: Ctx, conn, label, kind, aliases, pay_currency, settles
         raise ValidationError("aliases")
     names = list(dict.fromkeys([name, *(a.strip() for a in aliases or [])]))
     taken = {a for used in ctx.repo.alias_names(conn, ctx.ws).values() for a in used}
-    for alias in names:  # the label is always an alias; an alias is unique in the workspace
+    taken |= {normalize_alias(cp.label) for cp in ctx.repo.list_counterparties(conn, ctx.ws)}
+    for alias in names:  # the label is always an alias; aliases and labels are unique (R41)
         key = normalize_alias(alias)
         if not key or key in taken:
             raise ValidationError("aliases", {"alias": alias})
@@ -394,7 +420,8 @@ def reversal(ctx: Ctx, conn, ref, reason) -> Proposal:
     rules = ctx.repo.live_rule_ids_for_counterparty(conn, ctx.ws, cp.id)
     if not rules:
         raise ValidationError("rule")
-    return Proposal("reverse", {"target": "fact", "ref": f"rule:{label.strip()}", "reason": why},
+    return Proposal("reverse", {"target": "rules", "counterparty_id": cp.id, "rule_ids": rules,
+                                "reason": why},
                     {"type": "reverse", "ref": f"{cp.label} rule", "what": "rule",
                      "counterparty": cp.label, "rules": len(rules), "reason": why},
                     high_value=True)
@@ -402,6 +429,7 @@ def reversal(ctx: Ctx, conn, ref, reason) -> Proposal:
 
 def _fact(ctx: Ctx, conn, ref: str, why: str) -> Proposal:
     repo, echo, high = ctx.repo, {"type": "reverse", "ref": ref, "reason": why}, False
+    payload = {"target": "fact", "ref": ref, "reason": why}
     if ref[0] == "C":
         ex = repo.exchange_by_ref(conn, ctx.ws, ref)
         if ex is None:
@@ -420,64 +448,98 @@ def _fact(ctx: Ctx, conn, ref: str, why: str) -> Proposal:
         usd = sum(ln.usd_minor for eid in f.exchange_ids for ln in repo.current_lines(conn, eid))
         echo.update(what="funding", exchanges=[f"C{ex.number}" for ex in exchanges if ex],
                     eur=format_minor(f.eur_minor, "EUR"), usd=format_minor(usd, "USD"),
-                    rate=rate_text(implied_rate(f.eur_minor, usd)))
+                    eur_per_usd=rate_text(implied_rate(f.eur_minor, usd)))
         high = True
     elif ref[0] == "R":
         rec = repo.receipt_by_ref(conn, ctx.ws, ref)
         if rec is None:
             raise ValidationError("receipt")
+        payload["rule"] = receipt_rule(repo, conn, ctx.ws, ref) is not None
         echo.update(what="receipt", receipt_kind=rec.kind.value,
                     payer=_label(ctx, conn, rec.payer_id), currency=rec.currency,
                     amount=format_minor(rec.amount_minor, rec.currency),
-                    received_on=rec.received_on.isoformat(),
-                    rule=receipt_rule(repo, conn, ctx.ws, ref) is not None)
+                    received_on=rec.received_on.isoformat(), rule=payload["rule"])
         high = rec.kind is ReceiptKind.BANK
     else:
         entry = repo.entry_by_ref(conn, ctx.ws, ref)
         if entry is None or entry.kind not in (EntryKind.OPENING, EntryKind.ADJUSTMENT,
                                                EntryKind.FORGIVE):
             raise ValidationError("entry", {"kind": entry.kind.value} if entry else {})
+        cp = repo.get_counterparty(conn, ctx.ws, entry.counterparty_id)
         echo.update(what="entry", entry_kind=entry.kind.value,
                     counterparty=_label(ctx, conn, entry.counterparty_id),
-                    currency=entry.currency,
-                    amount=format_minor(entry.amount_minor, entry.currency))
-    return Proposal("reverse", {"target": "fact", "ref": ref, "reason": why}, echo,
-                    high_value=high)
+                    currency=entry.currency)
+        if entry.kind is EntryKind.OPENING and cp and cp.kind is CounterpartyKind.FUND:
+            echo["held"] = format_minor(-entry.amount_minor, entry.currency)  # stored negative
+        else:
+            echo["amount"] = format_minor(entry.amount_minor, entry.currency)
+    return Proposal("reverse", payload, echo, high_value=high)
 
 
 def _reopen(ctx: Ctx, conn, code: str, why: str) -> Proposal:
-    """Undo the owner's answer to EXPLAIN_INCOMING ``P<n>`` (refusals as ``reopen_explain``)."""
+    """Undo the owner's answer to ``P<n>``: an EXPLAIN_INCOMING (refusals as
+    ``reopen_explain``), or a LINK_FUNDING / PREVIOUS_UNPAID answered "not an exchange"
+    (R45). The payload keeps what the answer left, so "yes" undoes exactly that (R42)."""
     repo = ctx.repo
     item = repo.pending_by_code(conn, ctx.ws, code)
-    if item is None or item.kind is not PendingKind.EXPLAIN_INCOMING:
+    if item is None or item.kind not in (PendingKind.EXPLAIN_INCOMING, PendingKind.LINK_FUNDING,
+                                         PendingKind.PREVIOUS_UNPAID):
         raise CommandRefused({"ok": False, "error": "unknown_pending"})
     if item.resolved_at is None:
         raise CommandRefused({"ok": False, "error": "not_resolved"})
+    if item.kind is not PendingKind.EXPLAIN_INCOMING:
+        return _relink(ctx, conn, item, why)
     mv = repo.movement_current(conn, ctx.ws, item.payload.get("movement_id") or "")
     if mv is None or mv.amount_minor <= 0:
         raise CommandRefused({"ok": False, "error": "unknown_movement"})
     if repo.live_funding_for_movement(conn, mv.id) is not None:
         raise CommandRefused({"ok": False, "error": "already_linked"})
     rec = repo.live_receipt_for_movement(conn, mv.id)
-    key = incoming_key(repo, mv, True)
-    rule = bool(key) and repo.rule_for(conn, ctx.ws, key) == (rec.payer_id if rec else IGNORE)
-    return Proposal("reverse", {"target": "reopen", "code": item.code, "reason": why}, {
+    state = answer_state(repo, conn, ctx.ws, mv)
+    return Proposal("reverse", {"target": "reopen", "code": item.code, "state": state,
+                                "reason": why}, {
         "type": "reverse", "ref": item.code, "what": "answer", "movement": movement_echo(mv),
         "receipt_ref": f"R{rec.number}" if rec else None,
         "not_exchange": repo.movement_role(conn, mv.id) is MovementRoleKind.NOT_EXCHANGE,
-        "rule": rule, "reason": why}, high_value=rec is not None or rule)
+        "rule": state["rule"], "reason": why}, high_value=rec is not None or state["rule"])
+
+
+def _relink(ctx: Ctx, conn, item, why: str) -> Proposal:
+    """A partner payment answered "not an exchange": "yes" revokes that role and links it
+    again (asking LINK_FUNDING when needed)."""
+    repo, answer = ctx.repo, item.resolution or ""
+    if item.kind is PendingKind.LINK_FUNDING:
+        mid = item.payload.get("movement_id") or ""
+    else:  # PREVIOUS_UNPAID: the payment the owner picked
+        mid = answer[2:] if answer.startswith("M:") else ""
+    mv = repo.movement_current(conn, ctx.ws, mid) if mid else None
+    if mv is not None and repo.live_funding_for_movement(conn, mv.id) is not None:
+        raise CommandRefused({"ok": False, "error": "already_linked"})  # undo its F<n>
+    if (answer != "NOT_EXCHANGE" or mv is None
+            or repo.movement_role(conn, mv.id) is not MovementRoleKind.NOT_EXCHANGE):
+        raise ValidationError("ref", {"reason": "nothing_to_undo"})
+    root = repo.movement_root(conn, mv.id)
+    return Proposal("reverse", {
+        "target": "relink", "code": item.code, "movement_id": root,
+        "role_ids": repo.live_role_ids_for_movement(conn, root), "reason": why}, {
+        "type": "reverse", "ref": item.code, "what": "answer", "movement": movement_echo(mv),
+        "not_exchange": True, "reason": why})
 
 
 def _unignore(ctx: Ctx, conn, token: str, why: str) -> Proposal:
-    match = next((mv for t, _, mv in ignored_movements(ctx.repo, conn, ctx.ws, ctx.now)
+    match = next(((root, mv) for t, root, mv in ignored_movements(ctx.repo, conn, ctx.ws, ctx.now)
                   if t == token), None)
     if match is None:
         raise ValidationError("ref")
-    key = incoming_key(ctx.repo, match, True)
+    root, mv = match
+    key = incoming_key(ctx.repo, mv, True) if mv.amount_minor > 0 else None
     rule = bool(key) and ctx.repo.rule_for(conn, ctx.ws, key) == IGNORE
-    return Proposal("reverse", {"target": "unignore", "undo_ref": token, "reason": why}, {
+    return Proposal("reverse", {
+        "target": "unignore", "undo_ref": token,
+        "role_ids": ctx.repo.live_role_ids_for_movement(conn, root), "rule": rule,
+        "reason": why}, {
         "type": "reverse", "ref": token, "what": "not_exchange",
-        "movement": movement_echo(match), "rule": rule, "reason": why}, high_value=rule)
+        "movement": movement_echo(mv), "rule": rule, "reason": why}, high_value=rule)
 
 
 def reallocation(ctx: Ctx, conn, receipt_ref, allocations) -> Proposal:
@@ -523,12 +585,13 @@ def reallocation(ctx: Ctx, conn, receipt_ref, allocations) -> Proposal:
     if total > rec.amount_minor:
         raise ValidationError("allocations", {"amount": format_minor(rec.amount_minor, cur),
                                               "total": format_minor(total, cur)})
-    return Proposal("reallocate", {"receipt_id": rec.id, "parts": parts}, {
+    return Proposal("reallocate", {"receipt_id": rec.id, "parts": parts,
+                                   "before": [a.id for a in current]}, {
         "type": "reallocate", "receipt_ref": f"R{rec.number}", "payer": payer.label,
         "currency": cur, "amount": format_minor(rec.amount_minor, cur),
         "before": [{"item": item_ref(repo, conn, ctx.ws, a.line_id),
                     "amount": format_minor(a.amount_minor, cur)} for a in current],
-        "after": after})
+        "after": after, "credit": format_minor(rec.amount_minor - total, cur)})
 
 
 def _items(ctx: Ctx, conn, rec, name: str) -> list[str]:

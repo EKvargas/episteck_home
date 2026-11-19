@@ -180,11 +180,30 @@ def forgive(repo: ReceivablesRepository, conn, ws: str, target_ref: str,
 
 
 def forgive_all(repo: ReceivablesRepository, conn, ws: str, target_ref: str,
-                amount_minor: int | None, reason: str, now: datetime) -> list[LedgerEntry]:
-    """``forgive``, returning every FORGIVE entry written (one per item), oldest item first."""
-    cp, cur, _, _, parts = _forgive_plan(repo, conn, ws, target_ref, amount_minor)
+                amount_minor: int | None, reason: str, now: datetime, *,
+                expect: Sequence[Sequence] | None = None) -> list[LedgerEntry]:
+    """``forgive``, returning every FORGIVE entry written (one per item), oldest item first.
+
+    ``expect`` is the plan the owner was shown (``forgive_parts``): if the items or parts
+    differ now, or forgiving that amount is no longer possible, nothing is written and
+    ``ValidationError("target", {"reason": "changed"})`` is raised (R42)."""
+    try:
+        cp, cur, _, _, parts = _forgive_plan(repo, conn, ws, target_ref, amount_minor)
+    except ValidationError:
+        if expect is None:
+            raise
+        raise ValidationError("target", {"reason": "changed"}) from None
+    if expect is not None and [tuple(p) for p in expect] != parts:
+        raise ValidationError("target", {"reason": "changed"})
     return [_write(repo, conn, ws, cp.id, cur, -part, EntryKind.FORGIVE, ref, reason, now)
             for ref, part in parts]
+
+
+def forgive_parts(repo: ReceivablesRepository, conn, ws: str, target_ref: str,
+                  amount_minor: int | None) -> tuple[int, list[tuple[str, int]]]:
+    """Read-only: ``(amount, [(item id, part)])`` that ``forgive`` would write."""
+    _, _, _, amount, parts = _forgive_plan(repo, conn, ws, target_ref, amount_minor)
+    return amount, parts
 
 
 def forgive_preview(repo: ReceivablesRepository, conn, ws: str, target_ref: str,

@@ -6,10 +6,11 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from app.receivables.model import PendingItem, PendingKind
+from app.receivables.model import PendingItem, PendingKind, options_digest
 from app.receivables.pending import AlreadyResolved, PendingQueue, UnknownPending
 from app.store.receivables_repo import ReceivablesRepository
-from tests.support import T0, make_repo, seed_workspace
+from app.store.repo import FinanceRepository
+from tests.support import PEPPER, T0, column_names, make_repo, raw_execute, seed_workspace
 
 WS = "ws-1"
 
@@ -93,6 +94,39 @@ def test_snooze_blocks_resurfacing_until_due(tmp_path):
         assert q.for_delivery(conn, WS) == []
         clock.now = T0 + timedelta(days=7, hours=1)
         assert [i.code for i in q.for_delivery(conn, WS)] == ["P1"]
+
+
+def test_snooze_holds_back_an_item_never_delivered(tmp_path):
+    repo, q, clock = make(tmp_path)
+    with repo.tx() as conn:
+        ask(q, conn)
+        q.snooze(conn, WS, "P1", T0 + timedelta(days=7))
+        assert q.for_delivery(conn, WS) == []
+        clock.now = T0 + timedelta(days=7, hours=1)
+        assert [i.code for i in q.for_delivery(conn, WS)] == ["P1"]
+
+
+def test_delivery_stores_the_options_digest_and_old_tables_gain_it(tmp_path):
+    repo, _, clock = make(tmp_path)
+    base = repo.base
+    raw_execute(base, "DROP TABLE pending_item")  # the table as an earlier build made it
+    raw_execute(base, "CREATE TABLE pending_item(workspace_id TEXT NOT NULL, "
+                      "code TEXT NOT NULL, kind TEXT NOT NULL, requires_answer INTEGER NOT NULL, "
+                      "options TEXT NOT NULL, payload TEXT NOT NULL, dedupe_key TEXT NOT NULL, "
+                      "created_at TEXT NOT NULL, delivered_at TEXT, resolved_at TEXT, "
+                      "resolution TEXT, snooze_until TEXT, PRIMARY KEY(workspace_id, code))")
+    upgraded = ReceivablesRepository(FinanceRepository(base.path, pepper=PEPPER))
+    assert column_names(base, "pending_item")[-1] == "shown_digest"
+    FinanceRepository(base.path, pepper=PEPPER)  # a second open changes nothing
+    q = PendingQueue(upgraded, clock)
+    with upgraded.tx() as conn:
+        ask(q, conn)
+        assert q.get(conn, WS, "P1").shown_digest is None
+        [item] = q.for_delivery(conn, WS)
+        assert item.shown_digest == options_digest(("yes", "no"))
+        assert not item.options_changed()
+        upgraded.refresh_pending(conn, WS, "P1", ["no", "yes"], {"ref": "X1"})
+        assert q.get(conn, WS, "P1").options_changed()
 
 
 def test_resolve_twice_raises_already_resolved_with_first_resolution(tmp_path):

@@ -23,14 +23,15 @@ from .funding import ask_link_funding, funding_day, redo_funding, reverse_fundin
 from .fx import deviation, implied_rate
 from .ledger import ValidationError
 from .model import (
-    FUND_ALERT_DEFAULT_MINOR, LINK_BAND, CounterpartyKind, EntryKind, MovementRoleKind,
-    Opening, PendingKind, ReceiptKind, Verification,
+    FUND_ALERT_DEFAULT_MINOR, LINK_BAND, CounterpartyKind, EntryKind, Exchange,
+    MovementRoleKind, Opening, PendingItem, PendingKind, ReceiptKind, Verification,
 )
 from .pending import PendingQueue
 from .receipts import CURRENCIES, record_receipt
 
-__all__ = ["COUNT_KEYS", "Matcher", "ask_explain_incoming", "close_settled_questions",
-           "incoming_key", "reopen_explain", "resolve_explain_incoming", "unhide"]
+__all__ = ["COUNT_KEYS", "Matcher", "ask_explain_incoming", "ask_previous_unpaid",
+           "close_settled_questions", "incoming_key", "reopen_explain", "resolve_explain_incoming",
+           "unhide"]
 
 logger = logging.getLogger("finance.matcher")
 
@@ -70,12 +71,13 @@ def _remember(repo: ReceivablesRepository, conn, ws: str, key: str | None,
 
 def resolve_explain_incoming(repo: ReceivablesRepository, conn, ws: str, movement_id: str,
                              choice: str, queue: PendingQueue, now: datetime, *,
-                             description_rules: bool = False) -> dict:
+                             description_rules: bool = False, remember: bool = True) -> dict:
     """Applies the owner's answer to EXPLAIN_INCOMING: ``CP:<id>`` records a BANK receipt for
     that person or fund, ``NOT_EXCHANGE`` the role; both write a payer rule (IGNORE for
     ``NOT_EXCHANGE``) when the movement has a key (``incoming_key``), so the next payment from
-    that sender needs no answer. ``OTHER`` writes nothing: the caller asks which counterparty
-    and answers again with ``CP:<id>``. Refusals write nothing; the caller resolves the item."""
+    that sender needs no answer; ``remember=False`` writes no rule. ``OTHER`` writes nothing:
+    the caller asks which counterparty and answers again with ``CP:<id>``. Refusals write
+    nothing; the caller resolves the item."""
     mv = repo.movement_current(conn, ws, movement_id or "")
     if mv is None or mv.amount_minor <= 0 or mv.currency not in CURRENCIES or _day(mv) is None:
         return _error("unknown_movement")
@@ -83,7 +85,8 @@ def resolve_explain_incoming(repo: ReceivablesRepository, conn, ws: str, movemen
             or repo.live_receipt_for_movement(conn, mv.id) is not None
             or repo.live_funding_for_movement(conn, mv.id) is not None):
         return _error("already_classified")
-    choice, key = choice.strip(), incoming_key(repo, mv, description_rules)
+    choice = choice.strip()
+    key = incoming_key(repo, mv, description_rules) if remember else None
     if choice == "OTHER":
         return {"ok": True, "status": "needs_counterparty"}
     if choice == "NOT_EXCHANGE":
@@ -159,7 +162,8 @@ def close_settled_questions(repo: ReceivablesRepository, conn, ws: str,
                             queue: PendingQueue) -> int:
     """Resolves (``human=False``) the open questions the data has answered since: a
     LINK_FUNDING or EXPLAIN_INCOMING whose movement is linked or classified, a PREVIOUS_UNPAID
-    whose exchange is paid or reversed. Call it after a link made elsewhere (R32)."""
+    whose exchange is paid or reversed, a REVIEW_OPENING whose counterparty's opening is
+    CONFIRMED (R46). Call it after a link made elsewhere (R32)."""
     closed = 0
     for item in repo.pending_open(conn, ws):
         if item.kind in (PendingKind.LINK_FUNDING, PendingKind.EXPLAIN_INCOMING):
@@ -169,12 +173,65 @@ def close_settled_questions(repo: ReceivablesRepository, conn, ws: str,
         elif item.kind is PendingKind.PREVIOUS_UNPAID:
             ex = repo.exchange_by_ref(conn, ws, item.payload.get("exchange_ref") or "")
             done = ex is None or repo.live_funding_for_exchange(conn, ex.id) is not None
+        elif item.kind is PendingKind.REVIEW_OPENING:  # REVIEW_OPENING:<counterparty id>:<week>
+            cp = repo.get_counterparty(conn, ws, item.dedupe_key.split(":")[1])
+            done = cp is None or cp.opening is Opening.CONFIRMED
         else:
             continue
         if done:
             queue.resolve(conn, ws, item.code, AUTO_RESOLUTION, human=False)
             closed += 1
     return closed
+
+
+def recent_payments(repo: ReceivablesRepository, conn, ws: str,
+                    now: datetime) -> list[tuple[str, domain.Movement]]:
+    """Unlinked outgoing EUR payments of the last 30 days (not to an own IBAN), newest
+    first, as ``(root id, current movement)``."""
+    own = repo.own_hashes(conn, ws)
+    pool = []
+    for mv in repo.recent_outgoing(conn, ws, "EUR", now.date() - LOOKBACK):
+        root = repo.movement_root(conn, mv.id)
+        if (mv.counterparty_iban_hash in own or repo.movement_role(conn, root) is not None
+                or repo.live_funding_for_movement(conn, root) is not None):
+            continue
+        pool.append((root, mv))
+    return pool
+
+
+def _ranked(repo: ReceivablesRepository, conn, pool: list[tuple[str, domain.Movement]],
+            usd: int) -> dict[str, str]:
+    """R35: up to 8 picks for an exchange of ``usd``, as ``M:<root id>`` -> label
+    ``dd/mm · amount · name[:20]``: first the payments whose EUR is within LINK_BAND of
+    it at the ECB rate, then those to an IBAN, then the rest (card payments), newest first
+    in each group."""
+    def group(mv: domain.Movement) -> int:
+        ecb = repo.usd_per_eur_on(conn, _day(mv))
+        if ecb is not None and deviation(implied_rate(-mv.amount_minor, usd), ecb) <= LINK_BAND:
+            return 0
+        return 1 if mv.counterparty_iban_hash else 2
+
+    labels: dict[str, str] = {}
+    for root, mv in sorted(pool, key=lambda p: group(p[1]))[:PICK_LIMIT]:
+        parts = (f"{_day(mv):%d/%m}", format_minor(-mv.amount_minor, "EUR"),
+                 mv.counterparty_name[:20])
+        labels[f"M:{root}"] = " · ".join(p for p in parts if p)
+    return labels
+
+
+def ask_previous_unpaid(repo: ReceivablesRepository, conn, ws: str, ex: Exchange,
+                        after_ref: str, queue: PendingQueue, now: datetime, *,
+                        pool: list[tuple[str, domain.Movement]] | None = None) -> PendingItem:
+    """Asks whether the open exchange ``ex`` was paid, with recent payments as picks (key
+    ``PREVIOUS_UNPAID:<exchange id>``; an open question for it is returned instead)."""
+    usd = sum(ln.usd_minor for ln in repo.current_lines(conn, ex.id))
+    if pool is None:
+        pool = recent_payments(repo, conn, ws, now)
+    labels = _ranked(repo, conn, pool, usd)
+    return queue.add(conn, ws, PendingKind.PREVIOUS_UNPAID, [*labels, "NOT_YET"], {
+        "exchange_ref": f"C{ex.number}", "delivered_on": ex.delivered_on.isoformat(),
+        "usd": format_minor(usd, "USD"), "after_ref": after_ref, "labels": labels},
+        f"PREVIOUS_UNPAID:{ex.id}")
 
 
 class Matcher:
@@ -339,7 +396,7 @@ class Matcher:
             return
         offered = {ref for p in repo.pending_open(conn, ws) if p.kind is PendingKind.LINK_FUNDING
                    for ref in p.payload.get("candidates", [])}
-        pool = self._recent_payments(conn, ws, now)
+        pool = recent_payments(repo, conn, ws, now)
         for ex in older:
             key = f"PREVIOUS_UNPAID:{ex.id}"
             last = repo.pending_by_dedupe(conn, ws, key, include_resolved=True)
@@ -347,49 +404,9 @@ class Matcher:
                     last.resolved_at is None
                     or last.payload.get("after_ref") == f"C{newest.number}")):
                 continue
-            usd = sum(ln.usd_minor for ln in repo.current_lines(conn, ex.id))
-            labels = self._ranked(conn, pool, usd)
-            self._queue.add(conn, ws, PendingKind.PREVIOUS_UNPAID, [*labels, "NOT_YET"], {
-                "exchange_ref": f"C{ex.number}", "delivered_on": ex.delivered_on.isoformat(),
-                "usd": format_minor(usd, "USD"), "after_ref": f"C{newest.number}",
-                "labels": labels}, key)
+            ask_previous_unpaid(repo, conn, ws, ex, f"C{newest.number}", self._queue, now,
+                                pool=pool)
             counts["asked"] += 1
-
-    def _recent_payments(self, conn, ws: str,
-                         now: datetime) -> list[tuple[str, domain.Movement]]:
-        """Unlinked outgoing EUR payments of the last 30 days (not to an own IBAN), newest
-        first, as ``(root id, current movement)``."""
-        repo = self._repo
-        own = repo.own_hashes(conn, ws)
-        pool = []
-        for mv in repo.recent_outgoing(conn, ws, "EUR", now.date() - LOOKBACK):
-            root = repo.movement_root(conn, mv.id)
-            if (mv.counterparty_iban_hash in own or repo.movement_role(conn, root) is not None
-                    or repo.live_funding_for_movement(conn, root) is not None):
-                continue
-            pool.append((root, mv))
-        return pool
-
-    def _ranked(self, conn, pool: list[tuple[str, domain.Movement]],
-                usd: int) -> dict[str, str]:
-        """R35: up to 8 picks for an exchange of ``usd``, as ``M:<root id>`` -> label
-        ``dd/mm · amount · name[:20]``: first the payments whose EUR is within LINK_BAND of
-        it at the ECB rate, then those to an IBAN, then the rest (card payments), newest first
-        in each group."""
-        repo = self._repo
-
-        def group(mv: domain.Movement) -> int:
-            ecb = repo.usd_per_eur_on(conn, _day(mv))
-            if ecb is not None and deviation(implied_rate(-mv.amount_minor, usd), ecb) <= LINK_BAND:
-                return 0
-            return 1 if mv.counterparty_iban_hash else 2
-
-        labels: dict[str, str] = {}
-        for root, mv in sorted(pool, key=lambda p: group(p[1]))[:PICK_LIMIT]:
-            parts = (f"{_day(mv):%d/%m}", format_minor(-mv.amount_minor, "EUR"),
-                     mv.counterparty_name[:20])
-            labels[f"M:{root}"] = " · ".join(p for p in parts if p)
-        return labels
 
     # --- step 5: payments still waiting -------------------------------------------
     def _waiting(self, conn, ws: str, start: int, cursor: int, now: datetime,

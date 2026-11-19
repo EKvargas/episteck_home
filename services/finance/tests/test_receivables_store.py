@@ -169,6 +169,17 @@ def test_duplicate_alias_is_rejected(tmp_path):
         assert rr.get_counterparty(c, WS, "cp-2") is None
 
 
+def test_label_is_always_an_alias(tmp_path):
+    _, rr = make(tmp_path)
+    with rr.tx() as c:
+        rr.insert_counterparty(c, cp(), ["Mamá"])
+    with rr.read() as c:
+        assert [x.id for x in rr.find_by_alias(c, WS, "familiar a")] == ["cp-1"]
+    with pytest.raises(DuplicateAlias):  # labels are unique (R41)
+        with rr.tx() as c:
+            rr.insert_counterparty(c, cp("cp-2", "FAMILIAR  Á"), ["otra"])
+
+
 @pytest.mark.parametrize("alias", ["--", "  ", "¿?"])
 def test_alias_that_normalises_to_empty_is_rejected(tmp_path, alias):
     _, rr = make(tmp_path)

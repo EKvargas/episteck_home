@@ -33,7 +33,7 @@ from ..receivables.allocation import OPENING_ORDER, OpenLine
 from ..receivables.model import (
     Allocation, AllocationMethod, Counterparty, CounterpartyKind, EntryKind, Exchange,
     ExchangeLine, Funding, LedgerEntry, MovementRoleKind, Opening, PendingItem, PendingKind,
-    Receipt, ReceiptKind, Verification,
+    Receipt, ReceiptKind, Verification, options_digest,
 )
 from ..receivables.text import normalize_alias
 from . import db
@@ -163,7 +163,7 @@ def _pending(r: sqlite3.Row) -> PendingItem:
         r["code"], r["workspace_id"], PendingKind(r["kind"]), bool(r["requires_answer"]),
         tuple(json.loads(r["options"])), json.loads(r["payload"]), r["dedupe_key"],
         _dt(r["created_at"]), _dt(r["delivered_at"]), _dt(r["resolved_at"]), r["resolution"],
-        _dt(r["snooze_until"]))
+        _dt(r["snooze_until"]), r["shown_digest"])
 
 
 def _movement(r: sqlite3.Row) -> domain.Movement:
@@ -201,7 +201,8 @@ class ReceivablesRepository:
 
     # --- counterparties ----------------------------------------------------------
     def insert_counterparty(self, conn, cp: Counterparty, aliases: Sequence[str]) -> None:
-        keys = [normalize_alias(a) for a in aliases]
+        """The label is always one of the aliases, so labels are unique too (R41)."""
+        keys = list(dict.fromkeys(normalize_alias(a) for a in (cp.label, *aliases)))
         if not all(keys):
             raise ValueError("an alias is empty once normalised")
         for key in keys:
@@ -1025,14 +1026,19 @@ class ReceivablesRepository:
 
     def mark_pending_delivered(self, conn, ws: str, code: str, at: datetime,
                                resolve: bool) -> None:
+        """Also stores the digest of the options delivered: a numbered answer is refused once
+        they are replaced (R44)."""
+        row = conn.execute("SELECT options FROM pending_item WHERE workspace_id=? AND code=?",
+                           (ws, _code(code))).fetchone()
+        shown = options_digest(json.loads(row["options"])) if row else None
         if resolve:
             conn.execute(
-                "UPDATE pending_item SET delivered_at=?, resolved_at=?, resolution='delivered' "
-                "WHERE workspace_id=? AND code=? AND resolved_at IS NULL",
-                (_ts(at), _ts(at), ws, _code(code)))
+                "UPDATE pending_item SET delivered_at=?, shown_digest=?, resolved_at=?, "
+                "resolution='delivered' WHERE workspace_id=? AND code=? AND resolved_at IS NULL",
+                (_ts(at), shown, _ts(at), ws, _code(code)))
         else:
-            conn.execute("UPDATE pending_item SET delivered_at=? WHERE workspace_id=? AND code=?",
-                         (_ts(at), ws, _code(code)))
+            conn.execute("UPDATE pending_item SET delivered_at=?, shown_digest=? "
+                         "WHERE workspace_id=? AND code=?", (_ts(at), shown, ws, _code(code)))
 
     def mark_pending_resolved(self, conn, ws: str, code: str, resolution: str,
                               at: datetime) -> bool:

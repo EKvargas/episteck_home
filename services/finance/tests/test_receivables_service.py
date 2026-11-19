@@ -386,8 +386,7 @@ def test_e14_effect_failure_leaves_no_partial_rows(tmp_path, monkeypatch):
         raise RuntimeError("process killed")  # ... and then the command dies
 
     monkeypatch.setitem(commands.EFFECTS, "exchange", broken)
-    with pytest.raises(RuntimeError):
-        env.svc.resolve(DELEG, out["code"], "yes")
+    assert env.svc.resolve(DELEG, out["code"], "yes") == {"ok": False, "error": "internal_error"}
     assert env.facts() == before  # no command_log row, no fact, no intervention
     assert env.item(out["code"]).resolved_at is None
     monkeypatch.setitem(commands.EFFECTS, "exchange", real)
@@ -406,7 +405,7 @@ def test_resolve_is_idempotent_by_code_and_choice(tmp_path):
     assert env.svc.resolve(DELEG, "P99", "yes") == {"ok": False, "error": "unknown_pending"}
     other = env.svc.propose_receipt(DELEG, "Familiar A", "60", "USD", "CASH")
     assert env.svc.resolve(DELEG, other["code"], "maybe") == {
-        "ok": False, "error": "unknown_choice"}
+        "ok": False, "error": "unknown_choice", "expected": ["yes", "correct", "cancel"]}
     assert env.svc.resolve(DELEG, other["code"], "Cancelar") == {
         "ok": True, "status": "cancelled", "code": other["code"]}
     fix = env.svc.propose_receipt(DELEG, "Familiar A", "70", "USD", "CASH")
@@ -430,8 +429,10 @@ def test_pending_hides_ids_and_numbered_choices_resolve(tmp_path):
     assert (rows[notice.code]["notice"], rows[notice.code]["details"]) == (
         "fund_low", {"counterparty": "Fondo F", "entry_ref": "E9"})
     explain = rows[item.code]
+    tokens = [o.pop("choice") for o in explain["options"][:2]]  # stable, opaque (R44)
+    assert all(re.fullmatch(r"O[0-9a-f]{8}", t) for t in tokens) and tokens[0] != tokens[1]
     assert explain["options"] == [
-        {"n": 1, "choice": "1", "label": "Familiar A"}, {"n": 2, "choice": "2", "label": "Fondo F"},
+        {"n": 1, "label": "Familiar A"}, {"n": 2, "label": "Fondo F"},
         {"n": 3, "choice": "OTHER", "label": "OTHER"},
         {"n": 4, "choice": "NOT_EXCHANGE", "label": "NOT_EXCHANGE"}]
     assert explain["suggested"] == 1
@@ -575,8 +576,11 @@ def test_review_opening_confirm_needs_amount_and_later(tmp_path):
         env.repo.insert_counterparty(c, Counterparty("g", WS, CounterpartyKind.FUND, "Fondo G",
                                                      "ACTIVE", opening=Opening.UNKNOWN),
                                      ["Fondo G"])
+        shown = {"a": [{"entry_ref": "E1", "currency": "USD", "amount": "30.00"}],
+                 "f": [{"entry_ref": "E2", "currency": "USD", "amount": "500.00"}], "g": []}
         items = {cp: env.q.add(c, WS, PendingKind.REVIEW_OPENING, ["CONFIRM", "LATER"],
-                               {"counterparty": cp}, f"REVIEW_OPENING:{cp}:2026-W47")
+                               {"counterparty": cp, "openings": shown[cp]},
+                               f"REVIEW_OPENING:{cp}:2026-W47")
                  for cp in ("a", "f", "g")}
     out = env.svc.resolve(DELEG, items["a"].code, "Confirmar")
     assert out["status"] == "confirmed" and len(out["entries"]) == 1
@@ -635,7 +639,8 @@ def test_reallocate_maps_exchange_refs_and_errors(tmp_path):
     assert out["echo"] == {
         "type": "reallocate", "receipt_ref": "R1", "payer": "Familiar A", "currency": "USD",
         "amount": "120.00", "before": [{"item": "C1", "amount": "120.00"}],
-        "after": [{"item": "C2", "amount": "50.00"}, {"item": "C1", "amount": "70.00"}]}
+        "after": [{"item": "C2", "amount": "50.00"}, {"item": "C1", "amount": "70.00"}],
+        "credit": "0.00"}
     assert env.svc.propose_reallocate(DELEG, "R1", [{"exchange": "C2", "amount": "80"}]) == {
         "ok": False, "error": "validation_error", "field": "allocations[0].amount",
         "detail": {"item": "C2", "outstanding": "50.00", "amount": "80.00"}}

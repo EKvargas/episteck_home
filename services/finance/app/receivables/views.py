@@ -2,13 +2,16 @@
 
 Rows name facts by ref (``C<n>``, ``F<n>``, ``R<n>``, ``E<n>``, ``P<n>``) with dates and
 current-line totals, never by id, IBAN or hash. Option values that hold an id (``CP:``,
-``M:``) are shown by their number, which ``resolve`` accepts.
+``M:``) are shown as a stable opaque token derived from the value (``choice_token``), never
+by position, so a refreshed question cannot turn a tap into another option (R44).
 """
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 
 from ..money import format_minor, parse_amount
+from ..store.receivables_repo import ReceivablesRepository
 from .commands import Ctx, allocation_rows, ignored_movements, item_ref
 from .fx import implied_rate, rate_text
 from .ledger import ValidationError
@@ -91,18 +94,29 @@ def exchanges(ctx: Ctx, conn, status, since) -> dict:
 
 
 # --- pending -------------------------------------------------------------------------
+def choice_token(repo: ReceivablesRepository, value: str) -> str:
+    """A private option's public handle: ``O`` + 8 hex of the keyed hash of its value. The
+    same value keeps its token when the question is refreshed; it never reveals the id."""
+    return "O" + repo.hash_key(f"choice:{value}")[:8].lower()
+
+
+def choice(value: str, token: Callable[[str], str]) -> str:
+    """What an owner taps or types for an option: the token of a private value, else the value."""
+    return token(value) if value.startswith(PRIVATE_OPTIONS) else value
+
+
 def public_resolution(resolution: str | None) -> str | None:
     if resolution and resolution.startswith(PRIVATE_OPTIONS):
         return "answered"
     return resolution
 
 
-def render_pending(item: PendingItem) -> dict:
+def render_pending(item: PendingItem, token: Callable[[str], str]) -> dict:
     labels = item.payload.get("labels") or {}
     options = []
     for n, value in enumerate(item.options, 1):
         private = value.startswith(PRIVATE_OPTIONS)
-        options.append({"n": n, "choice": str(n) if private else value,
+        options.append({"n": n, "choice": choice(value, token),
                         "label": labels.get(value) or (f"option {n}" if private else value)})
     out = {"code": item.code, "kind": item.kind.value, "requires_answer": item.requires_answer,
            "created_at": item.created_at.isoformat(), "delivered": item.delivered_at is not None,
@@ -247,7 +261,8 @@ def _pending(ctx: Ctx, conn, ref: str) -> dict:
     item = ctx.repo.pending_by_code(conn, ctx.ws, ref)
     if item is None:
         raise ValidationError("ref")
-    return {"ok": True, "ref": item.code, "kind": "pending", "pending": render_pending(item),
+    pending = render_pending(item, lambda value: choice_token(ctx.repo, value))
+    return {"ok": True, "ref": item.code, "kind": "pending", "pending": pending,
             "resolution": public_resolution(item.resolution),
             "resolved_at": item.resolved_at.isoformat() if item.resolved_at else None}
 

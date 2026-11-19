@@ -6,13 +6,22 @@
   workspace and the workspace must be ACTIVE. Any non-answer raises the I1 refusal
   (``SessionInvalid``, ``AccessDenied``, ``PolicyUnavailable``, ``FeatureOff``) and nothing is
   read or written.
-* Two phases (spec §8.1): a proposal writes only a CONFIRM pending item, keyed by the
-  sha256 of the command type, its canonical payload and the UTC date. ``resolve(code, "yes")``
-  runs the STORED payload through ``FinanceRepository.run_command`` with the human actor and
-  this process's machine caller and channel. The MCP process (Telegram via Hermes) and the
-  REST process (web) each build their own service: ``MCP_CALLER`` / ``API_CALLER``.
-* Domain refusals come back as ``{"ok": False, "error": <code>, ...}``.
-* Logs carry kinds and counts only: never labels, amounts or ``ValidationError.detail``.
+* Two phases (spec §8.1): a proposal writes only a CONFIRM pending item. Its command key is
+  the sha256 of the command type, its canonical payload and the UTC date (a command already
+  completed that day makes a new proposal a ``possible_duplicate``); the open CONFIRM is
+  found by the same content without the date, and without dates filled in by default, so an
+  agent retry across midnight returns it (m1). ``resolve(code, "yes")`` runs the STORED
+  payload through ``FinanceRepository.run_command`` with the human actor and this process's
+  machine caller and channel: "yes" executes exactly what the echo showed (R42), and a
+  possible duplicate runs only on an explicit "Es otro" (R43). The MCP process (Telegram via
+  Hermes) and the REST process (web) each build their own service: ``MCP_CALLER`` /
+  ``API_CALLER``. A REST ``Idempotency-Key`` is a proposal's ``client_key``.
+* A tap means exactly the option the owner saw: private options are stable tokens, and a
+  number is refused once the options changed since they were delivered (R44).
+* Domain refusals come back as ``{"ok": False, "error": <code>, ...}``; any other exception
+  as ``{"ok": False, "error": "internal_error"}`` with nothing committed.
+* Logs carry kinds and counts only: never labels, amounts, exception messages or
+  ``ValidationError.detail``.
 """
 from __future__ import annotations
 
@@ -32,11 +41,11 @@ from ..store.receivables_repo import (
 )
 from ..store.repo import FinanceRepository, IdempotencyConflict
 from . import commands, proposals, views
-from .commands import CommandRefused, Ctx
+from .commands import CommandRefused, Ctx, changed
 from .corrections import record_opening
 from .funding import AlreadyLinked, ask_link_funding, link_choice
 from .ledger import ValidationError, receivables_view
-from .matcher import close_settled_questions, resolve_explain_incoming
+from .matcher import ask_previous_unpaid, close_settled_questions, resolve_explain_incoming
 from .model import CounterpartyKind, EntryKind, Opening, PendingItem, PendingKind
 from .pending import AlreadyResolved, PendingQueue, UnknownPending
 from .proposals import Clarify, Proposal
@@ -46,15 +55,19 @@ logger = logging.getLogger("finance.receivables")
 
 OWNER_ROLE = "OWNER"
 SNOOZE = timedelta(days=7)
+CLIENT_KEY_CHARS = 200
 CONFIRM_OPTIONS = ("yes", "correct", "cancel")
 DUPLICATE_OPTIONS = ("other", "same")  # [Es otro] [Es el mismo]
-STALE_LINK = frozenset({"exchange_already_paid", "unknown_exchange", "already_linked"})
-_CONFIRM_WORDS = {
-    "yes": "yes", "y": "yes", "si": "yes", "ok": "yes", "confirm": "yes", "confirmar": "yes",
-    "other": "yes", "otro": "yes", "es otro": "yes",
-    "no": "cancel", "cancel": "cancel", "cancelar": "cancel",
-    "correct": "correct", "corregir": "correct",
-    "same": "same", "mismo": "same", "es el mismo": "same"}
+# answers the data overtook (m3): the item resolves as "stale" and is asked again if relevant
+STALE_LINK = frozenset({"exchange_already_paid", "unknown_exchange", "already_linked",
+                        "already_classified", "unknown_movement", "exchange_not_paid"})
+STALE_EXPLAIN = frozenset({"already_classified", "unknown_movement"})
+_CLOSE_WORDS = {"no": "cancel", "cancel": "cancel", "cancelar": "cancel",
+                "correct": "correct", "corregir": "correct"}
+_CONFIRM_WORDS = {"yes": "yes", "y": "yes", "si": "yes", "ok": "yes", "confirm": "yes",
+                  "confirmar": "yes", **_CLOSE_WORDS}
+_DUPLICATE_WORDS = {"other": "yes", "otro": "yes", "es otro": "yes",  # never "yes" (R43)
+                    "same": "same", "mismo": "same", "es el mismo": "same", **_CLOSE_WORDS}
 _CONFIRM_STATUS = {"cancel": "cancelled", "correct": "needs_correction", "same": "not_recorded"}
 _REVIEW_WORDS = {"confirm": "CONFIRM", "confirmar": "CONFIRM", "yes": "CONFIRM", "si": "CONFIRM",
                  "later": "LATER", "mas tarde": "LATER", "luego": "LATER"}
@@ -73,10 +86,25 @@ MCP_CALLER = Caller("finance-mcp", "telegram")
 API_CALLER = Caller("finance-api", "web")
 
 
-def content_key(command: str, payload: dict, now: datetime) -> str:
+def content_key(command: str, payload: dict, now: datetime | None) -> str:
+    """sha256 of the command, its canonical payload and the UTC date of ``now`` (none: undated)."""
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
-    day = now.astimezone(timezone.utc).date().isoformat()
+    day = "" if now is None else now.astimezone(timezone.utc).date().isoformat()
     return hashlib.sha256(f"{command}\n{canonical}\n{day}".encode()).hexdigest()
+
+
+def lookup_key(p: Proposal) -> str:
+    """The open-CONFIRM key: undated, and blind to dates filled in by default (m1)."""
+    stated = {k: None if k in p.defaults else v for k, v in p.payload.items()}
+    return content_key(p.command, stated, None)
+
+
+def _client_handle(value) -> str:
+    """A REST Idempotency-Key as part of a ``command_log`` key (hashed, never stored raw)."""
+    raw = proposals.text(value, "client_key")
+    if len(raw) > CLIENT_KEY_CHARS:
+        raise ValidationError("client_key", {"max": str(CLIENT_KEY_CHARS)})
+    return hashlib.sha256(raw.encode()).hexdigest()
 
 
 def _result_ref(result: dict) -> str | None:
@@ -92,30 +120,46 @@ def _confirm_view(item: PendingItem) -> dict:
             "high_value": p["high_value"], "options": list(item.options)}
 
 
-def _choose(item: PendingItem, choice: str) -> str | None:
-    """The option an answer means: its number ("2"), its value ("C3"), its label, or for a
-    CONFIRM / REVIEW_OPENING a plain word ("sí", "Es otro", "más tarde")."""
+def _unknown(item: PendingItem, token: Callable[[str], str],
+             reason: str | None = None) -> CommandRefused:
+    out = {"ok": False, "error": "unknown_choice"}
+    if reason:
+        out["reason"] = reason
+    out["expected"] = [views.choice(o, token) for o in item.options]
+    return CommandRefused(out)
+
+
+def _choose(item: PendingItem, choice: str, token: Callable[[str], str]) -> str:
+    """The option an answer means: its value or token ("C3", "O1a2b3c4d"), its label, a word
+    for a CONFIRM / REVIEW_OPENING ("sí", "Es otro", "más tarde"), or its number ("2") while
+    the options are still the ones the owner was shown (R44). A possible duplicate takes no
+    number and no "yes": only "Es otro" records it (R43). Else ``unknown_choice``."""
+    if item.kind is PendingKind.INFO:
+        return "dismissed"
     raw = choice.strip()
+    duplicate = (item.kind is PendingKind.CONFIRM
+                 and item.payload.get("status") == "possible_duplicate")
     if raw.isascii() and raw.isdigit():
+        if item.options_changed():
+            raise _unknown(item, token, "options_changed")
         n = int(raw)
-        if not 1 <= n <= len(item.options):
-            return None
+        if duplicate or not 1 <= n <= len(item.options):
+            raise _unknown(item, token)
         raw = item.options[n - 1]
     word = normalize_alias(raw)
     if item.kind is PendingKind.CONFIRM:
-        return _CONFIRM_WORDS.get(word)
-    if item.kind is PendingKind.REVIEW_OPENING:
-        return _REVIEW_WORDS.get(word)
-    if item.kind is PendingKind.INFO:
-        return "dismissed"
-    for option in item.options:
-        if raw == option or (not option.startswith(views.PRIVATE_OPTIONS)
-                             and raw.upper() == option.upper()):
-            return option
-    for option, label in (item.payload.get("labels") or {}).items():
-        if option in item.options and word == normalize_alias(label):
-            return option
-    return None
+        found = (_DUPLICATE_WORDS if duplicate else _CONFIRM_WORDS).get(word)
+    elif item.kind is PendingKind.REVIEW_OPENING:
+        found = _REVIEW_WORDS.get(word)
+    else:
+        found = next((o for o in item.options
+                      if raw == o or raw.upper() == views.choice(o, token).upper()), None)
+        labels = item.payload.get("labels") or {}
+        found = found or next((o for o, label in labels.items()
+                               if o in item.options and word == normalize_alias(label)), None)
+    if found is None:
+        raise _unknown(item, token)
+    return found
 
 
 class ReceivablesService:
@@ -159,8 +203,12 @@ class ReceivablesService:
     def _ctx(self) -> Ctx:
         return Ctx(self._rx, self._ws, self._queue, self._clock(), self._rules)
 
+    def _token(self, value: str) -> str:
+        return views.choice_token(self._rx, value)
+
     def _guard(self, call: Callable[[], dict]) -> dict:
-        """Domain refusals become result dicts; anything else propagates (nothing committed)."""
+        """Domain refusals become result dicts; any other exception (nothing committed)
+        becomes ``internal_error``, logged by its type only."""
         try:
             return call()
         except CommandRefused as exc:
@@ -189,9 +237,9 @@ class ReceivablesService:
                       "resolution": views.public_resolution(exc.resolution)}
         except AlreadyLinked:
             result = {"ok": False, "error": "already_linked"}
-        except Exception as exc:
+        except Exception as exc:  # never str(exc): it may hold labels or figures
             logger.error("receivables call failed: %s", type(exc).__name__)
-            raise
+            return {"ok": False, "error": "internal_error"}
         logger.info("receivables refused: error=%s field=%s", result["error"],
                     result.get("field"))
         return result
@@ -241,7 +289,7 @@ class ReceivablesService:
             logger.info("receivables pending: items=%d delivery=%s", len(items),
                         bool(for_delivery))
             return {"ok": True, "as_of": now.isoformat(),
-                    "items": [views.render_pending(i) for i in items]}
+                    "items": [views.render_pending(i, self._token) for i in items]}
         return self._guard(read)
 
     def explain(self, delegation: str | None, ref: str) -> dict:
@@ -254,97 +302,128 @@ class ReceivablesService:
 
     # --- proposals (two-phase) -----------------------------------------------------------
     def propose_exchange(self, delegation: str | None, total_usd: str, lines: list[dict],
-                         evidence: dict | None = None, delivered_on: str | None = None) -> dict:
-        self._authorize(delegation, "CREATE")
-        return self._propose(lambda ctx, conn: proposals.exchange(
-            ctx, conn, total_usd, lines, evidence, delivered_on))
+                         evidence: dict | None = None, delivered_on: str | None = None, *,
+                         client_key: str | None = None) -> dict:
+        actor = self._authorize(delegation, "CREATE")
+        return self._propose(actor, lambda ctx, conn: proposals.exchange(
+            ctx, conn, total_usd, lines, evidence, delivered_on), client_key)
 
     def propose_receipt(self, delegation: str | None, payer: str, amount: str, currency: str,
                         kind: str, received_on: str | None = None,
-                        description: str | None = None) -> dict:
-        self._authorize(delegation, "CREATE")
-        return self._propose(lambda ctx, conn: proposals.receipt(
-            ctx, conn, payer, amount, currency, kind, received_on, description))
+                        description: str | None = None, *,
+                        client_key: str | None = None) -> dict:
+        actor = self._authorize(delegation, "CREATE")
+        return self._propose(actor, lambda ctx, conn: proposals.receipt(
+            ctx, conn, payer, amount, currency, kind, received_on, description), client_key)
 
     def propose_correction(self, delegation: str | None, exchange_ref: str, lines: list[dict],
-                           total_usd: str | None = None, reason: str | None = None) -> dict:
-        self._authorize(delegation, "CREATE")
-        return self._propose(lambda ctx, conn: proposals.correction(
-            ctx, conn, exchange_ref, lines, total_usd, reason))
+                           total_usd: str | None = None, reason: str | None = None, *,
+                           client_key: str | None = None) -> dict:
+        actor = self._authorize(delegation, "CREATE")
+        return self._propose(actor, lambda ctx, conn: proposals.correction(
+            ctx, conn, exchange_ref, lines, total_usd, reason), client_key)
 
     def propose_forgive(self, delegation: str | None, target: str, amount: str | None = None,
-                        reason: str | None = None) -> dict:
-        self._authorize(delegation, "CREATE")
-        return self._propose(lambda ctx, conn: proposals.forgive(ctx, conn, target, amount,
-                                                                 reason))
+                        reason: str | None = None, *, client_key: str | None = None) -> dict:
+        actor = self._authorize(delegation, "CREATE")
+        return self._propose(actor, lambda ctx, conn: proposals.forgive(
+            ctx, conn, target, amount, reason), client_key)
 
     def propose_opening(self, delegation: str | None, counterparty: str, amount: str,
-                        currency: str, basis: str, note: str) -> dict:
-        self._authorize(delegation, "CREATE")
-        return self._propose(lambda ctx, conn: proposals.opening(
-            ctx, conn, counterparty, amount, currency, basis, note))
+                        currency: str, basis: str, note: str, *,
+                        client_key: str | None = None) -> dict:
+        actor = self._authorize(delegation, "CREATE")
+        return self._propose(actor, lambda ctx, conn: proposals.opening(
+            ctx, conn, counterparty, amount, currency, basis, note), client_key)
 
     def propose_counterparty(self, delegation: str | None, label: str, kind: str,
                              aliases: list[str] | None = None, pay_currency: str | None = None,
-                             settles_to: str | None = None,
-                             alert_below: str | None = None) -> dict:
-        self._authorize(delegation, "CREATE")
-        return self._propose(lambda ctx, conn: proposals.new_counterparty(
-            ctx, conn, label, kind, aliases, pay_currency, settles_to, alert_below))
+                             settles_to: str | None = None, alert_below: str | None = None, *,
+                             client_key: str | None = None) -> dict:
+        actor = self._authorize(delegation, "CREATE")
+        return self._propose(actor, lambda ctx, conn: proposals.new_counterparty(
+            ctx, conn, label, kind, aliases, pay_currency, settles_to, alert_below), client_key)
 
-    def propose_reverse(self, delegation: str | None, ref: str, reason: str) -> dict:
-        self._authorize(delegation, "CREATE")
-        return self._propose(lambda ctx, conn: proposals.reversal(ctx, conn, ref, reason))
+    def propose_reverse(self, delegation: str | None, ref: str, reason: str, *,
+                        client_key: str | None = None) -> dict:
+        actor = self._authorize(delegation, "CREATE")
+        return self._propose(actor, lambda ctx, conn: proposals.reversal(ctx, conn, ref, reason),
+                             client_key)
 
     def propose_reallocate(self, delegation: str | None, receipt_ref: str,
-                           allocations: list[dict]) -> dict:
-        self._authorize(delegation, "CREATE")
-        return self._propose(lambda ctx, conn: proposals.reallocation(
-            ctx, conn, receipt_ref, allocations))
+                           allocations: list[dict], *, client_key: str | None = None) -> dict:
+        actor = self._authorize(delegation, "CREATE")
+        return self._propose(actor, lambda ctx, conn: proposals.reallocation(
+            ctx, conn, receipt_ref, allocations), client_key)
 
-    def _propose(self, prepare: Callable[[Ctx, object], Proposal]) -> dict:
-        """Writes one CONFIRM (or returns the open one for the same content). A command
-        already completed with this key today, or an exchange with the same VES reference,
-        makes it a ``possible_duplicate`` whose payload carries a nonce ([Es otro])."""
+    def _propose(self, actor: str, prepare: Callable[[Ctx, object], Proposal],
+                 client_key: str | None) -> dict:
+        """One CONFIRM, or the open one for the same content. With ``client_key`` the answer
+        is also stored under that key: the same key with other content is
+        ``idempotency_conflict``."""
         def run() -> dict:
             ctx = self._ctx()
-            with self._rx.tx() as conn:
+            if client_key is None:
+                with self._rx.tx() as conn:
+                    return self._open_confirm(ctx, conn, prepare(ctx, conn))
+            handle = _client_handle(client_key)
+            with self._rx.read() as conn:
                 p = prepare(ctx, conn)
-                key = content_key(p.command, p.payload, ctx.now)
-                dedupe = f"CONFIRM:{key}"
-                item = self._rx.pending_by_dedupe(conn, self._ws, dedupe)
-                if item is None:
-                    done = self._rx.command_result(conn, self._ws, key)
-                    repeated = done is not None or p.duplicate_of is not None
-                    status = "possible_duplicate" if repeated else "confirmation_required"
-                    echo = p.echo if not repeated else {
-                        **p.echo, "duplicate_of": p.duplicate_of or _result_ref(done)}
-                    item = self._queue.add(
-                        conn, self._ws, PendingKind.CONFIRM,
-                        DUPLICATE_OPTIONS if repeated else CONFIRM_OPTIONS,
-                        {"command": p.command, "payload": p.payload, "key": key,
-                         "nonce": uuid.uuid4().hex[:12] if repeated else None,
-                         "status": status, "echo": echo, "high_value": p.high_value}, dedupe)
-                    # the proposal's answer shows it: the cron only re-sends it if unanswered
-                    self._rx.mark_pending_delivered(conn, self._ws, item.code, ctx.now,
-                                                    resolve=False)
-                    logger.info("receivables proposal: command=%s status=%s", p.command,
-                                status)
-            return _confirm_view(item)
+            return self._run(actor, f"propose:{handle}", "propose",
+                             {"command": p.command, "content": lookup_key(p)},
+                             lambda conn: self._open_confirm(ctx, conn, p))
         return self._guard(run)
+
+    def _open_confirm(self, ctx: Ctx, conn, p: Proposal) -> dict:
+        """A command already completed with this key today, an exchange with the same VES
+        reference, or an open exchange CONFIRM with it, makes the proposal a
+        ``possible_duplicate`` whose payload carries a nonce ([Es otro])."""
+        key = content_key(p.command, p.payload, ctx.now)
+        dedupe = f"CONFIRM:{lookup_key(p)}"
+        item = self._rx.pending_by_dedupe(conn, self._ws, dedupe)
+        if item is None:
+            done = self._rx.command_result(conn, self._ws, key)
+            duplicate_of = p.duplicate_of or self._open_ves_confirm(conn, p)
+            repeated = done is not None or duplicate_of is not None
+            status = "possible_duplicate" if repeated else "confirmation_required"
+            echo = p.echo if not repeated else {
+                **p.echo, "duplicate_of": duplicate_of or _result_ref(done)}
+            item = self._queue.add(
+                conn, self._ws, PendingKind.CONFIRM,
+                DUPLICATE_OPTIONS if repeated else CONFIRM_OPTIONS,
+                {"command": p.command, "payload": p.payload, "key": key,
+                 "nonce": uuid.uuid4().hex[:12] if repeated else None,
+                 "status": status, "echo": echo, "high_value": p.high_value}, dedupe)
+            # the proposal's answer shows it: the cron only re-sends it if unanswered
+            self._rx.mark_pending_delivered(conn, self._ws, item.code, ctx.now, resolve=False)
+            logger.info("receivables proposal: command=%s status=%s", p.command, status)
+        return _confirm_view(item)
+
+    def _open_ves_confirm(self, conn, p: Proposal) -> str | None:
+        """The code of an open exchange CONFIRM with the same VES reference (R43)."""
+        h = p.payload.get("ves_reference_hash") if p.command == "exchange" else None
+        if not h:
+            return None
+        return next((i.code for i in self._rx.pending_open(conn, self._ws)
+                     if i.kind is PendingKind.CONFIRM and i.payload.get("command") == "exchange"
+                     and i.payload["payload"].get("ves_reference_hash") == h), None)
 
     # --- direct (level 1) ----------------------------------------------------------------
     def mark_held_cash(self, delegation: str | None, counterparty: str, amount: str,
-                       currency: str) -> dict:
+                       currency: str, *, client_key: str | None = None) -> dict:
         """Display only (F5): no confirmation; audited in ``command_log``. Each statement is
-        new (the latest wins), so its key carries a nonce: repeating one is harmless."""
+        new (the latest wins), so its key carries a nonce: repeating one is harmless. With
+        ``client_key`` a retry returns the stored result instead."""
         actor = self._authorize(delegation, "CREATE")
 
         def run() -> dict:
             ctx = self._ctx()
             with self._rx.read() as conn:
                 payload = proposals.held_cash(ctx, conn, counterparty, amount, currency)
-            key = f"{content_key('held_cash', payload, ctx.now)}:{uuid.uuid4().hex[:12]}"
+            if client_key is None:
+                key = f"{content_key('held_cash', payload, ctx.now)}:{uuid.uuid4().hex[:12]}"
+            else:
+                key = f"held_cash:{_client_handle(client_key)}"
             return self._run(actor, key, "held_cash", payload,
                              lambda conn: commands.execute(ctx, conn, "held_cash", payload))
         return self._guard(run)
@@ -352,7 +431,9 @@ class ReceivablesService:
     def resolve(self, delegation: str | None, code: str, choice: str,
                 details: dict | None = None) -> dict:
         """Answers a pending item by code. Idempotent by (code, choice): the same answer again
-        returns the stored result; another answer to a resolved item is ``already_resolved``."""
+        returns the stored result; another answer to a resolved item is ``already_resolved``.
+        ``details``: ``counterparty`` (an EXPLAIN_INCOMING ``OTHER``), ``remember`` (False:
+        an EXPLAIN_INCOMING answer writes no payer rule)."""
         actor = self._authorize(delegation, "CREATE")
         return self._guard(lambda: self._resolve(actor, code, choice, details))
 
@@ -361,28 +442,31 @@ class ReceivablesService:
         choice_text = proposals.text(choice, "choice")
         if details is not None and not isinstance(details, dict):
             raise ValidationError("details")
+        remember = (details or {}).get("remember", True)
+        if not isinstance(remember, bool):
+            raise ValidationError("details", {"remember": "true or false"})
         ctx = self._ctx()
         with self._rx.read() as conn:
             item = self._queue.get(conn, self._ws, code_text)
             if item is None:
                 raise CommandRefused({"ok": False, "error": "unknown_pending"})
-            value = _choose(item, choice_text)
-            if value is None:
-                raise CommandRefused({"ok": False, "error": "unknown_choice"})
+            value = _choose(item, choice_text, self._token)
             named = (details or {}).get("counterparty")
             if item.kind is PendingKind.EXPLAIN_INCOMING and value == "OTHER" and named:
                 value = "CP:" + proposals.counterparty(ctx, conn, named, "counterparty").id
+        if item.kind is PendingKind.EXPLAIN_INCOMING:
+            return self._explain(ctx, actor, item, value, remember)
         handler = {
             PendingKind.CONFIRM: self._confirm, PendingKind.LINK_FUNDING: self._link,
-            PendingKind.PREVIOUS_UNPAID: self._link, PendingKind.EXPLAIN_INCOMING: self._explain,
-            PendingKind.REVIEW_OPENING: self._review, PendingKind.INFO: self._info,
+            PendingKind.PREVIOUS_UNPAID: self._link, PendingKind.REVIEW_OPENING: self._review,
+            PendingKind.INFO: self._info,
         }[item.kind]
         return handler(ctx, actor, item, value)
 
     def _answer(self, actor: str, item: PendingItem, value: str,
-                effect: Callable[[object], dict]) -> dict:
+                effect: Callable[[object], dict], extra: dict | None = None) -> dict:
         return self._run(actor, f"resolve:{item.code}:{value}", "resolve",
-                         {"code": item.code, "choice": value}, effect)
+                         {"code": item.code, "choice": value, **(extra or {})}, effect)
 
     def _still_open(self, conn, item: PendingItem) -> None:
         current = self._queue.get(conn, self._ws, item.code)
@@ -396,6 +480,8 @@ class ReceivablesService:
 
             def effect(conn) -> dict:
                 self._queue.resolve(conn, self._ws, item.code, "yes", human=True)
+                if not stored.get("nonce"):
+                    self._no_ves_duplicate(conn, stored)
                 return commands.execute(ctx, conn, stored["command"], stored["payload"])
 
             out = self._run(actor, key, stored["command"], stored["payload"], effect)
@@ -407,9 +493,20 @@ class ReceivablesService:
             return {"ok": True, "status": _CONFIRM_STATUS[value], "code": item.code}
         return self._answer(actor, item, value, close)
 
+    def _no_ves_duplicate(self, conn, stored: dict) -> None:
+        """At "yes", an exchange whose VES reference a live exchange already has is a
+        ``possible_duplicate``; the CONFIRM stays open (R43)."""
+        h = stored["payload"].get("ves_reference_hash") if stored["command"] == "exchange" \
+            else None
+        same = self._rx.exchange_by_ves_hash(conn, self._ws, h) if h else None
+        if same is not None:
+            raise CommandRefused({"ok": False, "error": "possible_duplicate",
+                                  "duplicate_of": f"C{same.number}"})
+
     def _link(self, ctx: Ctx, actor: str, item: PendingItem, value: str) -> dict:
         """LINK_FUNDING / PREVIOUS_UNPAID. A stale answer (the exchange was paid or reversed,
-        the payment linked meanwhile) resolves the item and asks again with fresh options."""
+        the payment linked or classified meanwhile) resolves the item and asks again with
+        fresh options."""
         rx, ws, queue = self._rx, self._ws, self._queue
 
         def effect(conn) -> dict:
@@ -430,20 +527,30 @@ class ReceivablesService:
         return self._answer(actor, item, value, effect)
 
     def _stale(self, ctx: Ctx, conn, item: PendingItem, value: str) -> dict:
+        """Resolves the item as "stale" (no intervention). A PREVIOUS_UNPAID whose exchange is
+        still unpaid is asked again; a payment still unlinked gets LINK_FUNDING again."""
         rx, ws, queue = self._rx, self._ws, self._queue
         queue.resolve(conn, ws, item.code, "stale", human=False)
-        if item.kind is PendingKind.LINK_FUNDING:
-            movement = item.payload.get("movement_id")
-        else:
+        if item.kind is PendingKind.PREVIOUS_UNPAID:
+            ex = rx.exchange_by_ref(conn, ws, item.payload.get("exchange_ref") or "")
+            if ex is not None and rx.live_funding_for_exchange(conn, ex.id) is None:
+                after = item.payload.get("after_ref") or f"C{ex.number}"
+                return {"ok": True, "status": "asked_again",
+                        "code": ask_previous_unpaid(rx, conn, ws, ex, after, queue, ctx.now).code}
             movement = value[2:] if value.startswith("M:") else None
-        if (not movement or rx.live_funding_for_movement(conn, movement) is not None
-                or rx.movement_role(conn, movement) is not None):
-            close_settled_questions(rx, conn, ws, queue)
-            return {"ok": True, "status": "already_settled"}
-        return {"ok": True, "status": "asked_again",
-                "code": ask_link_funding(rx, conn, ws, movement, queue).code}
+        else:
+            movement = item.payload.get("movement_id")
+        mv = rx.movement_current(conn, ws, movement) if movement else None
+        if (mv is not None and mv.currency == "EUR" and mv.amount_minor < 0
+                and rx.live_funding_for_movement(conn, mv.id) is None
+                and rx.movement_role(conn, mv.id) is None):
+            return {"ok": True, "status": "asked_again",
+                    "code": ask_link_funding(rx, conn, ws, mv.id, queue).code}
+        close_settled_questions(rx, conn, ws, queue)
+        return {"ok": True, "status": "already_settled"}
 
-    def _explain(self, ctx: Ctx, actor: str, item: PendingItem, value: str) -> dict:
+    def _explain(self, ctx: Ctx, actor: str, item: PendingItem, value: str,
+                 remember: bool) -> dict:
         if value == "OTHER":  # writes nothing: the owner names the counterparty next
             if item.resolved_at is not None:
                 raise AlreadyResolved(item.resolution)
@@ -454,17 +561,22 @@ class ReceivablesService:
             self._still_open(conn, item)
             out = resolve_explain_incoming(rx, conn, ws, item.payload.get("movement_id") or "",
                                            value, queue, ctx.now,
-                                           description_rules=self._rules)
+                                           description_rules=self._rules, remember=remember)
             if not out["ok"]:
+                if out["error"] in STALE_EXPLAIN:  # classified or gone meanwhile (m3)
+                    queue.resolve(conn, ws, item.code, "stale", human=False)
+                    close_settled_questions(rx, conn, ws, queue)
+                    return {"ok": True, "status": "already_settled"}
                 raise CommandRefused(out)
             queue.resolve(conn, ws, item.code, value, human=True)
             close_settled_questions(rx, conn, ws, queue)
             return {**out, "code": item.code}
-        return self._answer(actor, item, value, effect)
+        return self._answer(actor, item, value, effect, None if remember else {"remember": False})
 
     def _review(self, ctx: Ctx, actor: str, item: PendingItem, value: str) -> dict:
-        """REVIEW_OPENING: CONFIRM re-records an APPROXIMATE opening as CONFIRMED (REVERSAL +
-        new OPENING, same amount and note); an UNKNOWN fund needs an amount (nothing written);
+        """REVIEW_OPENING: CONFIRM re-records the APPROXIMATE openings it showed as CONFIRMED
+        (REVERSAL + new OPENING, same amount and note) and refuses ``changed`` when they are
+        no longer the effective ones (m4); an UNKNOWN fund needs an amount (nothing written);
         LATER snoozes the question for 7 days."""
         rx, ws, queue = self._rx, self._ws, self._queue
         if value == "LATER":
@@ -475,21 +587,28 @@ class ReceivablesService:
             return {"ok": True, "status": "snoozed", "until": until.date().isoformat(),
                     "code": item.code}
         cp_id = item.dedupe_key.split(":")[1]  # REVIEW_OPENING:<counterparty id>:<ISO week>
-        with rx.read() as conn:
-            cp = rx.get_counterparty(conn, ws, cp_id)
-            stated = rx.effective_entries_for_refs(conn, ws, [cp_id], (EntryKind.OPENING,))
-        if cp is None or cp.opening in (None, Opening.UNKNOWN) or not stated:
-            if item.resolved_at is not None:
-                raise AlreadyResolved(item.resolution)
-            return {"ok": True, "status": "needs_amount", "code": item.code}
+        shown = sorted(str(o.get("entry_ref")) for o in item.payload.get("openings") or []
+                       if isinstance(o, dict))
+
+        def stated(conn) -> list:
+            return rx.effective_entries_for_refs(conn, ws, [cp_id], (EntryKind.OPENING,))
+
+        if item.resolved_at is None:  # a repeated answer gets the stored result below
+            with rx.read() as conn:
+                cp, entries = rx.get_counterparty(conn, ws, cp_id), stated(conn)
+            if sorted(f"E{e.number}" for e in entries) != shown:
+                raise changed()
+            if cp is None or cp.opening in (None, Opening.UNKNOWN) or not entries:
+                return {"ok": True, "status": "needs_amount", "code": item.code}
 
         def effect(conn) -> dict:
             self._still_open(conn, item)
-            current = rx.get_counterparty(conn, ws, cp_id)
+            current, entries = rx.get_counterparty(conn, ws, cp_id), stated(conn)
+            if sorted(f"E{e.number}" for e in entries) != shown:
+                raise changed()
             written = []
             if current.opening is Opening.APPROXIMATE:
-                latest = {e.currency: e for e in rx.effective_entries_for_refs(
-                    conn, ws, [cp_id], (EntryKind.OPENING,))}
+                latest = {e.currency: e for e in entries}
                 for e in latest.values():  # a fund's opening is stated as what it holds
                     held = -e.amount_minor if current.kind is CounterpartyKind.FUND \
                         else e.amount_minor
@@ -502,8 +621,13 @@ class ReceivablesService:
         return self._answer(actor, item, "CONFIRM", effect)
 
     def _info(self, ctx: Ctx, actor: str, item: PendingItem, value: str) -> dict:
+        """Dismissing a notice is idempotent, also once its delivery resolved it (m7)."""
+        done = {"ok": True, "status": "dismissed", "code": item.code}
+        if item.resolved_at is not None:
+            return done
+
         def effect(conn) -> dict:
-            self._still_open(conn, item)
-            self._queue.resolve(conn, self._ws, item.code, "dismissed", human=False)
-            return {"ok": True, "status": "dismissed", "code": item.code}
+            if self._queue.get(conn, self._ws, item.code).resolved_at is None:
+                self._queue.resolve(conn, self._ws, item.code, "dismissed", human=False)
+            return done
         return self._answer(actor, item, "dismissed", effect)
