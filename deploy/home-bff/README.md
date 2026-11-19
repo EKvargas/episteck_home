@@ -217,13 +217,42 @@ Adds `home-agent-ana`, which acts only as Ana and never reaches Finance. Follow 
   `id home-agent-ana` and `id home-agent`. The `X-Runtime-ID` trust model needs `svc-home-gateway`
   to be the only client of that socket; otherwise an agent could call `/internal/mint` directly
   with a header of its choosing.
-- The nginx integration tests for 9937 (`deploy/gateway/tests/test_gateway_integration.py`) have
-  never run, because the dev machine has no nginx. Run them where nginx exists, before the new
-  gateway config is loaded. Plan 3 decides where.
-
 - The Linux user `home-agent-ana` exists (plan 3; Hermes and the Telegram bot are also plan 3).
-- The new gateway config passes `nginx -t`, and the new nft table is rendered (it needs
-  `home-agent-ana` to exist), both as in `deploy/gateway/README.md`.
+- The new gateway config is staged at `/etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.new`
+  and passes `nginx -t` at that staging path. It is **not** at the live path.
+- The nginx integration tests for 9937 (`deploy/gateway/tests/test_gateway_integration.py`) pass
+  on a host with nginx, before step 3.3. The dev machine has no nginx, so they have never run;
+  plan 3 decides where. They test the repository file, so run them on the commit you staged
+  from, and `cmp` must find the staged copy identical.
+- The new nft table is rendered into a boot file staged at
+  `/etc/episteck/nft/episteck-gateway.nft.new` and passes `nft --check`. It is not loaded. The
+  renderer needs `home-agent-ana` to exist and refuses a uid that collides with root, 1003, the
+  gateway or `www-data`.
+
+**Staging commands.** Each writes only a `.new` file that nothing loads:
+
+```bash
+# Gateway config: a staging copy, tested at the staging path.
+sudo install -m 0644 deploy/gateway/nginx-mcp-gateway.conf \
+  /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.new
+sudo nginx -t -c /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.new \
+  -p /etc/episteck/mcp-gateway/
+cmp deploy/gateway/nginx-mcp-gateway.conf \
+  /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.new   # silent = identical
+
+# nft: the boot file, with the delete-table prefix, checked but not loaded.
+./deploy/gateway/render-nft.sh deploy/gateway/episteck-gateway.nft \
+  /tmp/episteck-gateway-rendered.nft
+{ echo "table inet episteck_gateway"; echo "delete table inet episteck_gateway"; \
+  cat /tmp/episteck-gateway-rendered.nft; } > /tmp/episteck-gateway-boot.nft
+sudo install -m 0644 /tmp/episteck-gateway-boot.nft /etc/episteck/nft/episteck-gateway.nft.new
+sudo nft --check -f /etc/episteck/nft/episteck-gateway.nft.new
+```
+
+**Never put the new config at the live path before step 3.3.** The gateway service loads only
+`/etc/episteck/mcp-gateway/nginx-mcp-gateway.conf`, so any reload, restart or reboot would serve
+9937 in front of the old BFF, which mints `home-agent-primary` for anyone. Before step 3.1 no nft
+rule guards 9937 either, so any local uid could reach it.
 
 **Order matters, and every moment must fail closed.** The old gateway stamps no
 `X-Runtime-ID`, so the new BFF refuses its mints (401, never a fallback to the primary). The
@@ -242,27 +271,99 @@ BFF goes first, the gateway reload last, and the owner's bot is briefly refused 
      '{"home-agent-primary":["<owner user>"],"home-agent-ana":["<ana user>"]}'
    ```
 
+   Put exactly one user per runtime in `home_runtime_grantees_by_runtime`. The BFF keeps one
+   grant per runtime and refuses (409) to replace another person's live grant.
+
 3. Maintenance window, in exactly this order. Keep it short.
-   1. Load the new nft table. Port 9937 is locked to Ana's uid and has no listener yet.
+   1. Install the staged nft boot file and load it through its unit. Port 9937 is then locked
+      to Ana's uid and has no listener yet; the other rules are unchanged, so the owner's bot
+      keeps working. Never run `nft -f` by hand alone: it does not survive a reboot, and without
+      the delete-table prefix it appends duplicate rules.
+
+      ```bash
+      sudo install -m 0644 /etc/episteck/nft/episteck-gateway.nft.new \
+        /etc/episteck/nft/episteck-gateway.nft
+      sudo systemctl restart episteck-gateway-nft.service
+      sudo nft list table inet episteck_gateway
+      ```
+
+      Expected: one `tcp dport 9937` accept rule for Ana's uid, followed by `tcp dport 9937 drop`.
+      The 9934, `{ 9931, 9932, 9936 }` and 9935 rules are as before, each listed once.
    2. Build the BFF image and update both Quadlet units (`home-bff` and `home-bff-mint`) with
       `RUNTIME_IDS=home-agent-primary,home-agent-ana`; keep `RUNTIME_LEGACY_BINDING=off`
       (`on` with more than one runtime is a startup error). Restart `home-bff-mint` first.
       From here the owner's bot gets 401. That is fail closed.
-   3. Reload the gateway with the new config. 9934 now stamps `home-agent-primary`, so the
-      owner's bot works again. 9937 goes live for Ana's uid only and returns 401 until she grants.
+   3. Only now, install the staged gateway config at the live path and reload. Keep the old one
+      for rollback:
+
+      ```bash
+      sudo cp -p /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf \
+        /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.old
+      sudo install -m 0644 /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.new \
+        /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf
+      sudo nginx -t -c /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf \
+        -p /etc/episteck/mcp-gateway/
+      sudo systemctl reload episteck-mcp-gateway.service
+      ```
+
+      9934 now stamps `home-agent-primary`, so the owner's bot works again. 9937 goes live for
+      Ana's uid only and returns 401 until she grants.
 4. **Immediately, and mandatory:** the owner logs in and re-grants `home-agent-primary` at
-   `/runtime`. Grant rows from before this change have an empty `grantor_ref`: the mint still
-   honours them, but until the re-grant the owner's page says "no tiene permiso" and "Cerrar
-   sesión y revocar permiso" does not revoke that row.
-5. Verify:
-   - A mint request without `X-Runtime-ID` returns 401.
+   `/runtime`. A browser session from before the deploy has no person reference, so `/runtime`
+   first sends it to log in again. Grant rows from before this change have an empty
+   `grantor_ref`: the mint still honours them, but until the re-grant the owner's page says "no
+   tiene permiso" and "Cerrar sesión y revocar permiso" does not revoke that row.
+5. Verify on the node. Each command's expected outcome follows it.
    - The owner's bot still answers, including on Finance.
    - Ana grants at `/runtime`; her page lists only `home-agent-ana`.
-   - As `home-agent-ana`, `:9937/gateway/finance/` has no route and `:9934` is dropped.
+   - The mint refuses a request without `X-Runtime-ID` (the gateway user may use the socket):
+
+     ```bash
+     sudo -u svc-home-gateway curl -s -o /dev/null -w '%{http_code}\n' \
+       --unix-socket /run/episteck/home-bff-mint/mint.sock -X POST http://x/internal/mint
+     ```
+
+     Expected: `401`.
+   - The ports never cross. Each command is dropped by nft: no HTTP status, curl times out
+     (exit 28) after 3 s.
+
+     ```bash
+     sudo -u home-agent curl --max-time 3 http://127.0.0.1:9937/gateway/home/
+     sudo -u home-agent-ana curl --max-time 3 http://127.0.0.1:9934/gateway/home/
+     ```
+
+   - Ana's port has no Finance route:
+
+     ```bash
+     sudo -u home-agent-ana curl -s -o /dev/null -w '%{http_code}\n' --max-time 3 \
+       http://127.0.0.1:9937/gateway/finance/
+     ```
+
+     Expected: `404`.
+   - Neither agent can reach the mint socket, so neither can choose its own `X-Runtime-ID`:
+
+     ```bash
+     sudo -u home-agent-ana curl --unix-socket /run/episteck/home-bff-mint/mint.sock -X POST \
+       -H 'X-Runtime-ID: home-agent-primary' http://x/internal/mint
+     sudo -u home-agent curl --unix-socket /run/episteck/home-bff-mint/mint.sock -X POST \
+       -H 'X-Runtime-ID: home-agent-primary' http://x/internal/mint
+     ```
+
+     Expected for both: permission denied. curl cannot connect (exit 7) and gets no HTTP status.
 6. Rollback, in reverse order:
    1. Restore the old gateway config and reload. This removes 9937; the owner's bot gets 401
       until the next step.
+
+      ```bash
+      sudo install -m 0644 /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.old \
+        /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf
+      sudo systemctl reload episteck-mcp-gateway.service
+      ```
+
    2. Restore the old BFF image and Quadlets (`home-bff-mint` first).
+   3. The new nft table stays, boot file included. It is the old table plus one rule pair that
+      only restricts 9937, which has no listener after step 6.1; every other rule is unchanged.
+      Restoring the old boot file would only reopen 9937 to every local uid.
    Never serve 9937 in front of a BFF older than this change.
 
 Person references are keyed on `HOME_DELEGATION_SECRET`: after rotating it, every person must
@@ -274,7 +375,9 @@ re-grant.
 carry the same value). Only an explicit runtime grant lets the agent act; a browser
 login no longer claims the runtime. Live since 2026-10-13 (see the verification
 record below). To return to the transition behavior, set both units to `on` and
-restart `home-bff-mint` first, then `home-bff`.
+restart `home-bff-mint` first, then `home-bff`. Turning it back on is not a valid rollback
+once a second person can log in: any login could claim the primary binding. With more than one
+runtime in `RUNTIME_IDS`, `on` is also a startup error.
 
 ### Live verification (2026-10-13)
 

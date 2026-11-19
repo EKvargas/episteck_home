@@ -67,14 +67,14 @@ flowchart TB
   BFF -- confidential OAuth --> HOME
   user -- "Telegram (owner allowlist)" --> HA
   HA -- "model calls" --> OAI
-  HA -- "MCP via gateway :9934 (Ana's agent: :9937)<br/>(finance delegation, ADR-0015)" --> FMCP
+  HA -- "MCP via gateway :9934<br/>(finance delegation, ADR-0015)" --> FMCP
   FMCP -- "authorize_batch, once per operation<br/>(machine token + delegation)" --> HOME
   user -- "PSD2 bank redirect via nginx (ADR-0013)" --> FAPI
   FSYNC -- "read balances" --> BANKS
   FIN --> BKP
   BFF -- "short-lived delegation<br/>(opaque session id, no Person id)" --> HA
-  HA -- MCP --> HMCP
-  HA -- MCP --> NMCP
+  HA -- "MCP via gateway :9934<br/>Ana's agent: :9937 (no Finance)" --> HMCP
+  HA -- "MCP via gateway :9934<br/>Ana's agent: :9937 (no Finance)" --> NMCP
   HMCP -- "machine token + delegation<br/>(actor resolved server-side)" --> HOME
   NMCP --> NAPI
   NAPI -- adapter/token --> MEAL
