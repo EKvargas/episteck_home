@@ -98,7 +98,7 @@ Full runtime, provenance, network, rollback, and trust-boundary evidence is in
 | Item | State |
 | --- | --- |
 | Home: `open_runtime_grant`, `close_runtime_grant`, `get_runtime_grant_status` | ✅ merged (PR #75), deployed |
-| BFF: grant table, `/runtime`, mint precedence, `RUNTIME_LEGACY_BINDING` | ✅ merged (PRs #76, #77), deployed |
+| BFF: grant table, `/runtime`, mint precedence, `RUNTIME_LEGACY_BINDING` | ✅ merged (PRs #76, #77), deployed; per-person runtimes (home-agent-ana) merged, not deployed |
 | Live verification | ✅ 2026-10-13: grant carries Hermes with no browser session; Revoke stops it; re-grant restores it |
 | `RUNTIME_LEGACY_BINDING` | `off` in both units (grant only) |
 

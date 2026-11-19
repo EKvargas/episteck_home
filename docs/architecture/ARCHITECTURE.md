@@ -67,7 +67,7 @@ flowchart TB
   BFF -- confidential OAuth --> HOME
   user -- "Telegram (owner allowlist)" --> HA
   HA -- "model calls" --> OAI
-  HA -- "MCP via gateway :9934<br/>(finance delegation, ADR-0015)" --> FMCP
+  HA -- "MCP via gateway :9934 (Ana's agent: :9937)<br/>(finance delegation, ADR-0015)" --> FMCP
   FMCP -- "authorize_batch, once per operation<br/>(machine token + delegation)" --> HOME
   user -- "PSD2 bank redirect via nginx (ADR-0013)" --> FAPI
   FSYNC -- "read balances" --> BANKS
@@ -122,10 +122,17 @@ to a User via a `Home Delegated Session` record, so logout and revocation deny t
 next call. `Person.linked_user` is unique; ambiguity fails closed.
 
 **Agent runtime grant `[H5]`.** The agent no longer depends on a browser login: the owner
-grants `home-agent-primary` a revocable session of at most 90 days (self-service, human OAuth
+grants their own agent (`home-agent-primary`; per person since ADR-0017) a revocable session of at most 90 days (self-service, human OAuth
 token only, runtime and grantee allowlists in site config). Delegations are still 120 s,
 single use, without a Person id. See `adr/0009-trusted-actor-binding.md` and
 `adr/0010-agent-runtime-grant.md`.
+
+**Per-person agent runtimes.** A second agent, `home-agent-ana`, acts only as Ana. The runtime
+comes from the gateway port and the Linux uid, never from the caller: `:9934` (uid 1003) stamps
+`home-agent-primary`; `:9937` (only the `home-agent-ana` uid) stamps `home-agent-ana` and has no
+Finance route. The BFF reads `X-Runtime-ID` and returns 401 for a missing or unknown value.
+Grants carry an HMAC of the Home Person id, and each person can see and revoke only their own.
+Ana's grant never includes Finance. See `adr/0017-per-person-agent-runtimes.md`.
 
 The Nuremberg Home MCP is a thin business adapter only. It owns no identity, consent,
 or family data and exposes no consent mutation. It canonicalizes agent-supplied
@@ -162,7 +169,9 @@ Control Plane.
 10. **Agent runtime grant** `[H5]` — the owner explicitly grants `home-agent-primary` up to
     90 days of delegated access, revocable and independent of browser sessions. A grant is a
     long-lived `Home Delegated Session` (`client = agent-runtime:<id>`); the BFF keeps only a
-    pointer row with no OAuth tokens. → `adr/0010-agent-runtime-grant.md`
+    pointer row with no OAuth tokens. → `adr/0010-agent-runtime-grant.md`. Amended by
+    ADR-0017: one runtime per agent (`home-agent-primary`, `home-agent-ana`), each grant
+    owned by one person.
 11. **svc-finance is the Finance source of truth** — bank-first connectors, immutable
     facts, one balance authority per account, workspace-partitioned, authorization
     delegated to Home, read-only in v1. → `adr/0011-svc-finance-domain-service.md`

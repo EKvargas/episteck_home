@@ -23,6 +23,12 @@ The PID and nginx temporary paths live under the unit's
 `StateDirectory=/var/lib/episteck-mcp-gateway`. The standalone instance does not need
 write access to the public nginx prefix or default cache paths.
 
+A second listener, `127.0.0.1:9937`, serves Ana's agent (ADR-0017): only `/gateway/home/` and
+`/gateway/nutrition/`, no Finance route. Its mint stamps `X-Runtime-ID home-agent-ana`; port
+9934 stamps `home-agent-primary`. In nftables only the `home-agent-ana` uid reaches 9937 and uid
+`1003` stays on 9934 only; `render-nft.sh` resolves `id -u home-agent-ana` and fails if that
+user does not exist. The rollout order is in `deploy/home-bff/README.md`.
+
 ## Installation staging (no runtime switch)
 
 ```bash

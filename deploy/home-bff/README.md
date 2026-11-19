@@ -206,6 +206,51 @@ grep -E 'home_runtime' sites/home.episteck.com/site_config.json
 An absent or empty `home_runtime_grantees` denies every grant. Use exactly one
 grantee: the BFF keeps one grant per runtime.
 
+### Per-person runtimes rollout (ADR-0017, plan 3 executes)
+
+Adds `home-agent-ana`, which acts only as Ana and never reaches Finance. Follow in order.
+
+**Preconditions (verify before step 1):**
+
+- `home-agent-ana` and the owner's Hermes uid (1003) have **no access** to the mint socket
+  `/run/episteck/home-bff-mint/mint.sock`: neither is in group `episteck-gw`. Check
+  `id home-agent-ana` and `id home-agent`. The `X-Runtime-ID` trust model needs `svc-home-gateway`
+  to be the only client of that socket; otherwise an agent could call `/internal/mint` directly
+  with a header of its choosing.
+- The nginx integration tests for 9937 (`deploy/gateway/tests/test_gateway_integration.py`) have
+  never run, because the dev machine has no nginx. Run them where nginx exists, before the new
+  gateway config is loaded. Plan 3 decides where.
+
+**Steps:**
+
+1. Merge. Home's code deploys on merge and has no effect until the site config below is set.
+2. Create the Linux user `home-agent-ana` (plan 3; Hermes and the Telegram bot are also plan 3).
+3. Set the Home site config (no migrate; `-p` is required):
+
+   ```bash
+   bench --site home.episteck.com set-config -p home_runtime_ids '["home-agent-primary","home-agent-ana"]'
+   bench --site home.episteck.com set-config -p home_runtime_grantees_by_runtime \
+     '{"home-agent-primary":["<owner user>"],"home-agent-ana":["<ana user>"]}'
+   ```
+
+4. Build the BFF image and update both Quadlet units (`home-bff` and `home-bff-mint`) with
+   `RUNTIME_IDS=home-agent-primary,home-agent-ana`; keep `RUNTIME_LEGACY_BINDING=off`
+   (`on` with more than one runtime is a startup error). Restart `home-bff-mint` first.
+5. **Immediately, and mandatory:** the owner logs in and re-grants `home-agent-primary` at
+   `/runtime`. Grant rows from before this change have an empty `grantor_ref`: the mint still
+   honours them, but until the re-grant the owner's page says "no tiene permiso" and "Cerrar
+   sesión y revocar permiso" does not revoke that row.
+6. Deploy the gateway config, then render the nft table (it needs `home-agent-ana` to exist) and
+   load it, as in `deploy/gateway/README.md`.
+7. Verify:
+   - A mint request without `X-Runtime-ID` returns 401.
+   - The owner's bot still answers, including on Finance.
+   - Ana grants at `/runtime`; her page lists only `home-agent-ana`.
+   - As `home-agent-ana`, `:9937/gateway/finance/` has no route and `:9934` is dropped.
+
+Person references are keyed on `HOME_DELEGATION_SECRET`: after rotating it, every person must
+re-grant.
+
 ### Transition flag
 
 `RUNTIME_LEGACY_BINDING` is `off` in both Quadlet units (public app and mint must
