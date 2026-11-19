@@ -31,9 +31,11 @@ import sys
 import pytest
 from fastapi.testclient import TestClient
 
+from app.diary.service import DiaryService
 from app.home_control.client import AccessDecision
 from app.providers.synthetic import SyntheticFoodProvider
 from app.service import NutritionService
+from app.store.diary_sqlite import SqliteDiaryStore
 from app.store.sqlite_repo import SqliteNutritionRepository
 
 from tests.support import SESSION, AllowAllAuthorizer
@@ -96,6 +98,41 @@ def _seed_planned(service, repo):
     return seeding.record_planned(
         "seed-token", SUBJECT, DATE, [{"food_id": "syn-yogurt", "grams": 100}]
     )["id"]
+
+
+class ActionRecordingAuthorizer(AllowAllAuthorizer):
+    """AllowAll that also records WHICH actions each Home request asked about."""
+
+    def __init__(self):
+        super().__init__()
+        self.actions: list[str] = []
+
+    def check_access(self, subject, domain, action, delegation=None):
+        self.actions.append(action)
+        return super().check_access(subject, domain, action, delegation)
+
+    def check_access_many(self, subject, requirements, delegation=None):
+        self.actions.extend(action for _, action in requirements)
+        return super().check_access_many(subject, requirements, delegation)
+
+
+COLA = {"label": "cola", "food_id": "syn-cola", "amount": 1, "unit": "small_glass"}
+
+
+def _diary_service(db, authorizer):
+    return DiaryService(
+        SqliteDiaryStore(db), SyntheticFoodProvider(), SqliteNutritionRepository(db),
+        authorizer=authorizer,
+    )
+
+
+def _seed_diary(db) -> dict:
+    """A confirmed entry and a still-open draft, made outside the operation under test."""
+    seeding = _diary_service(db, AllowAllAuthorizer())
+    first = seeding.propose_intake("seed-token", SUBJECT, [COLA])
+    entry = seeding.confirm_intake("seed-token", SUBJECT, first["draft_id"])["entry"]["id"]
+    draft = seeding.propose_intake("seed-token", SUBJECT, [COLA])["draft_id"]
+    return {"entry": entry, "draft": draft}
 
 
 # ==========================================================================
@@ -181,6 +218,92 @@ def test_every_authorizing_service_method_is_covered():
     assert not stale, f"inventory lists methods that no longer authorize: {sorted(stale)}"
 
 
+# ==========================================================================
+# THE INVENTORY — every person-sensitive DIARY operation
+# ==========================================================================
+
+#: method -> (invocation, the exact actions its ONE Home request must ask about)
+DIARY_OPERATIONS = {
+    "propose_intake": (
+        lambda d, ids: d.propose_intake(SESSION, SUBJECT, [COLA]), ["CREATE", "VIEW"]),
+    "confirm_intake": (
+        lambda d, ids: d.confirm_intake(SESSION, SUBJECT, ids["draft"]), ["CREATE", "VIEW"]),
+    "correct_intake": (
+        lambda d, ids: d.correct_intake(SESSION, SUBJECT, ids["entry"], [COLA]),
+        ["UPDATE", "VIEW"]),
+    "void_intake": (
+        lambda d, ids: d.void_intake(SESSION, SUBJECT, ids["entry"]), ["UPDATE", "VIEW"]),
+    "get_entry": (
+        lambda d, ids: d.get_entry(SESSION, SUBJECT, ids["entry"]), ["VIEW"]),
+    "get_day_summary": (
+        lambda d, ids: d.get_day_summary(SESSION, SUBJECT, DATE), ["VIEW"]),
+    "close_day": (
+        lambda d, ids: d.close_day(SESSION, SUBJECT, DATE), ["UPDATE", "VIEW"]),
+    "set_mode": (
+        lambda d, ids: d.set_mode(SESSION, SUBJECT, "GENERAL"), ["UPDATE", "VIEW"]),
+}
+
+
+def _authorizing_diary_methods() -> set[str]:
+    """Public DiaryService methods that authorize, found in the SOURCE, not a list."""
+    import ast
+    import pathlib
+
+    from app.diary import service as diary_module
+
+    tree = ast.parse(pathlib.Path(diary_module.__file__).read_text(encoding="utf-8"))
+    cls = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "DiaryService"
+    )
+    return {
+        node.name
+        for node in cls.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and not node.name.startswith("_")
+        and any(
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and call.func.attr == "_authorize"
+            for call in ast.walk(node)
+        )
+    }
+
+
+def test_every_authorizing_diary_method_is_covered():
+    discovered = _authorizing_diary_methods()
+    assert discovered, "discovery found no authorizing diary methods — the walker is broken"
+    assert discovered == set(DIARY_OPERATIONS), (
+        f"diary inventory drifted: missing {sorted(discovered - set(DIARY_OPERATIONS))}, "
+        f"stale {sorted(set(DIARY_OPERATIONS) - discovered)}"
+    )
+
+
+@pytest.mark.parametrize("name", sorted(DIARY_OPERATIONS))
+def test_one_home_request_per_diary_operation_with_its_planned_actions(tmp_path, name):
+    db = str(tmp_path / "d.sqlite")
+    ids = _seed_diary(db)
+    authorizer = ActionRecordingAuthorizer()
+    invoke, planned = DIARY_OPERATIONS[name]
+
+    invoke(_diary_service(db, authorizer), ids)
+
+    assert authorizer.home_calls == 1, (name, authorizer.home_calls)
+    assert authorizer.actions == planned, (name, authorizer.actions)
+
+
+@pytest.mark.parametrize("name", sorted(DIARY_OPERATIONS))
+def test_every_diary_operation_survives_a_replay_aware_home(tmp_path, name):
+    db = str(tmp_path / "d.sqlite")
+    ids = _seed_diary(db)
+    authorizer = ReplayAwareAuthorizer(allow=True)
+
+    DIARY_OPERATIONS[name][0](_diary_service(db, authorizer), ids)  # must not raise
+
+    assert authorizer.home_calls == 1, name
+
+
 @pytest.mark.parametrize("name", sorted(SERVICE_OPERATIONS))
 def test_one_home_request_per_service_operation(repo, name):
     """THE REGRESSION: every operation, not a sample of four."""
@@ -264,6 +387,40 @@ ROUTE_OPERATIONS = {
         "get",
         {"url": f"/mealplan/{DATE}/{DATE}", "params": {"subject_person_id": SUBJECT}},
     ),
+    # ---- diary (ids in braces are filled from the seeded entry and draft) ----
+    "/diary/{person_id}/drafts": (
+        "post", {"url": f"/diary/{SUBJECT}/drafts", "json": {"items": [COLA]}}),
+    "/diary/{person_id}/drafts/{draft_id}/confirm": (
+        "post", {"url": f"/diary/{SUBJECT}/drafts/{{draft}}/confirm"}),
+    "/diary/{person_id}/entries/{entry_id}/revisions": (
+        "post",
+        {"url": f"/diary/{SUBJECT}/entries/{{entry}}/revisions", "json": {"items": [COLA]}}),
+    "/diary/{person_id}/entries/{entry_id}/void": (
+        "post", {"url": f"/diary/{SUBJECT}/entries/{{entry}}/void"}),
+    "/diary/{person_id}/entries/{entry_id}": (
+        "get", {"url": f"/diary/{SUBJECT}/entries/{{entry}}"}),
+    "/diary/{person_id}/days/{date}": ("get", {"url": f"/diary/{SUBJECT}/days/{DATE}"}),
+    "/diary/{person_id}/days/today": ("get", {"url": f"/diary/{SUBJECT}/days/today"}),
+    "/diary/{person_id}/days/{date}/close": (
+        "post", {"url": f"/diary/{SUBJECT}/days/{DATE}/close"}),
+    "/diary/{person_id}/days/today/close": (
+        "post", {"url": f"/diary/{SUBJECT}/days/today/close"}),
+    "/profile/{person_id}/mode": (
+        "put", {"url": f"/profile/{SUBJECT}/mode", "json": {"mode": "GENERAL"}}),
+}
+
+#: diary route -> the DiaryService method it must reach (its actions are in DIARY_OPERATIONS)
+DIARY_ROUTE_METHODS = {
+    "/diary/{person_id}/drafts": "propose_intake",
+    "/diary/{person_id}/drafts/{draft_id}/confirm": "confirm_intake",
+    "/diary/{person_id}/entries/{entry_id}/revisions": "correct_intake",
+    "/diary/{person_id}/entries/{entry_id}/void": "void_intake",
+    "/diary/{person_id}/entries/{entry_id}": "get_entry",
+    "/diary/{person_id}/days/{date}": "get_day_summary",
+    "/diary/{person_id}/days/today": "get_day_summary",
+    "/diary/{person_id}/days/{date}/close": "close_day",
+    "/diary/{person_id}/days/today/close": "close_day",
+    "/profile/{person_id}/mode": "set_mode",
 }
 
 
@@ -280,13 +437,16 @@ def http(monkeypatch, tmp_path):
     main = importlib.import_module("app.main")
 
     repository = SqliteNutritionRepository(str(tmp_path / "http.sqlite"))
-    authorizer = AllowAllAuthorizer()
+    authorizer = ActionRecordingAuthorizer()
     main.svc = NutritionService(
         repository, SyntheticFoodProvider(), authorizer=authorizer
     )
+    main.diary = _diary_service(str(tmp_path / "http.sqlite"), authorizer)
     planned_id = _seed_planned(main.svc, repository)
+    main.seeded_diary = _seed_diary(str(tmp_path / "http.sqlite"))
     authorizer.home_calls = 0  # seeding is setup, not the operation under test
     authorizer.delegations.clear()
+    authorizer.actions.clear()
     return main, authorizer, planned_id
 
 
@@ -297,7 +457,7 @@ def _person_sensitive_routes(app) -> set[str]:
 
     from app import main as main_module
 
-    authorizing = _authorizing_service_methods()
+    authorizing = _authorizing_service_methods() | _authorizing_diary_methods()
     tree = ast.parse(pathlib.Path(main_module.__file__).read_text(encoding="utf-8"))
     routes = set()
     for node in ast.walk(tree):
@@ -356,6 +516,8 @@ def test_one_home_request_per_http_request(http, name):
     kwargs = dict(kwargs)
     if kwargs.get("params", {}).get("planned_id") == "SEEDED":
         kwargs["params"] = {**kwargs["params"], "planned_id": planned_id}
+    if "{" in kwargs["url"]:
+        kwargs["url"] = kwargs["url"].format(**main.seeded_diary)
 
     client = TestClient(main.app, raise_server_exceptions=False)
     response = getattr(client, verb)(
@@ -367,6 +529,20 @@ def test_one_home_request_per_http_request(http, name):
         f"{name}: expected exactly 1 delegated Home request, "
         f"got {authorizer.home_calls}"
     )
+    if name in DIARY_ROUTE_METHODS:
+        assert response.status_code == 200, (name, response.status_code, response.text)
+        assert authorizer.actions == DIARY_OPERATIONS[DIARY_ROUTE_METHODS[name]][1], name
+
+
+def test_every_diary_route_maps_to_a_diary_operation(http):
+    main, _, _ = http
+    discovered = {
+        route.split(" ", 1)[1]
+        for route in _person_sensitive_routes(main.app)
+        if route.split(" ", 1)[1] in DIARY_ROUTE_METHODS
+    }
+    assert discovered == set(DIARY_ROUTE_METHODS), sorted(set(DIARY_ROUTE_METHODS) - discovered)
+    assert set(DIARY_ROUTE_METHODS.values()) == set(DIARY_OPERATIONS)
 
 
 # ==========================================================================
@@ -403,6 +579,27 @@ MCP_OPERATIONS = {
         SUBJECT, [{"label": "b", "foods": [{"food_id": "syn-yogurt", "grams": 40}]}]
     ),
     "get_meal_plan": lambda t, pid: t["get_meal_plan"](SUBJECT, DATE, DATE),
+    # ---- diary ----
+    "propose_intake": lambda t, pid: t["propose_intake"](SUBJECT, [COLA]),
+    "confirm_intake": lambda t, pid: t["confirm_intake"](SUBJECT, t["_ids"]["draft"]),
+    "correct_intake": lambda t, pid: t["correct_intake"](SUBJECT, t["_ids"]["entry"], [COLA]),
+    "void_intake": lambda t, pid: t["void_intake"](SUBJECT, t["_ids"]["entry"]),
+    "get_diary_entry": lambda t, pid: t["get_diary_entry"](SUBJECT, t["_ids"]["entry"]),
+    "get_day_summary": lambda t, pid: t["get_day_summary"](SUBJECT, DATE),
+    "close_day": lambda t, pid: t["close_day"](SUBJECT, DATE),
+    "set_nutrition_mode": lambda t, pid: t["set_nutrition_mode"](SUBJECT, "GENERAL"),
+}
+
+#: diary tool -> the DiaryService method it must reach
+DIARY_TOOL_METHODS = {
+    "propose_intake": "propose_intake",
+    "confirm_intake": "confirm_intake",
+    "correct_intake": "correct_intake",
+    "void_intake": "void_intake",
+    "get_diary_entry": "get_entry",
+    "get_day_summary": "get_day_summary",
+    "close_day": "close_day",
+    "set_nutrition_mode": "set_mode",
 }
 
 
@@ -419,19 +616,25 @@ def mcp(monkeypatch, tmp_path):
     session_module = importlib.import_module("app.session")
 
     repository = SqliteNutritionRepository(str(tmp_path / "mcp.sqlite"))
-    authorizer = AllowAllAuthorizer()
+    authorizer = ActionRecordingAuthorizer()
     mcp_server._svc = NutritionService(
         repository, SyntheticFoodProvider(), authorizer=authorizer
     )
+    mcp_server._diary = _diary_service(str(tmp_path / "mcp.sqlite"), authorizer)
     planned_id = _seed_planned(mcp_server._svc, repository)
+    diary_ids = _seed_diary(str(tmp_path / "mcp.sqlite"))
     authorizer.home_calls = 0
     authorizer.delegations.clear()
+    authorizer.actions.clear()
 
     # The delegated session arrives by transport; supply it the way the seam reads it.
     monkeypatch.setattr(
         session_module, "current_delegation", lambda: SESSION, raising=False
     )
-    return _mcp_tools(mcp_server), authorizer, planned_id
+    monkeypatch.setattr(mcp_server, "current_delegation", lambda: SESSION)
+    tools = _mcp_tools(mcp_server)
+    tools["_ids"] = diary_ids
+    return tools, authorizer, planned_id
 
 
 def test_every_person_sensitive_mcp_tool_is_covered(mcp):
@@ -441,7 +644,7 @@ def test_every_person_sensitive_mcp_tool_is_covered(mcp):
 
     from app.mcp import server as mcp_module
 
-    authorizing = _authorizing_service_methods()
+    authorizing = _authorizing_service_methods() | _authorizing_diary_methods()
     tree = ast.parse(pathlib.Path(mcp_module.__file__).read_text(encoding="utf-8"))
     discovered = set()
     for node in ast.walk(tree):
@@ -473,6 +676,14 @@ def test_one_home_request_per_mcp_tool_call(mcp, name):
         f"{name}: expected exactly 1 delegated Home request, "
         f"got {authorizer.home_calls}"
     )
+    if name in DIARY_TOOL_METHODS:
+        assert authorizer.actions == DIARY_OPERATIONS[DIARY_TOOL_METHODS[name]][1], name
+
+
+def test_every_diary_tool_maps_to_a_diary_operation(mcp):
+    tools, _, _ = mcp
+    assert set(DIARY_TOOL_METHODS) <= set(tools)
+    assert set(DIARY_TOOL_METHODS.values()) == set(DIARY_OPERATIONS)
 
 
 # ==========================================================================
