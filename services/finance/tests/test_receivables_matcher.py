@@ -1,6 +1,7 @@
 """Matcher after each sync: links, receipts, questions and notices (synthetic data only)."""
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 from datetime import date, datetime, timedelta, timezone
@@ -18,7 +19,11 @@ from app.receivables.model import (
 from app.receivables.pending import PendingQueue
 from app.receivables.receipts import record_receipt
 from app.store.receivables_repo import ReceivablesRepository
-from tests.support import count_rows, make_account, make_repo, seed_connection, seed_workspace
+from app.store.repo import FinanceRepository
+from tests.support import (
+    PEPPER, column_names, count_rows, make_account, make_repo, raw_execute, seed_connection,
+    seed_workspace,
+)
 
 WS = "ws-1"
 T0 = datetime(2026, 11, 20, 10, 0, tzinfo=timezone.utc)
@@ -94,7 +99,7 @@ class Env:
 
 def make(tmp_path, rules=False):
     env = Env(tmp_path, rules)
-    assert env.run() == counts()  # go-live: the first run only sets the cursor
+    assert env.run() == counts()  # go-live: no movement from before it is processed
     return env
 
 
@@ -130,7 +135,7 @@ def test_e6_unknown_credit_asks_then_rule_makes_next_automatic(tmp_path):
             PendingKind.EXPLAIN_INCOMING, ("CP:a", "OTHER", "NOT_EXCHANGE"))
         assert item.payload == {
             "movement_id": "in1", "booking_date": "2026-11-14", "currency": "USD",
-            "amount": "120.00", "sender": "ZELLE FROM FAMILIAR", "exact": "CP:a",
+            "amount": "120.00", "sender": "FAMILIAR A", "exact": "CP:a",
             "labels": {"CP:a": "Familiar A"}}
         assert resolve_explain_incoming(env.repo, c, WS, "in1", "CP:a", env.q, env.now,
                                         description_rules=True) == {
@@ -472,3 +477,183 @@ def test_matcher_logs_counts_only(tmp_path, caplog):
     for secret in ("Familiar", "Socio", "276", "120", "ZELLE", PARTNER_IBAN,
                    env.repo.hash_key(PARTNER_IBAN)):
         assert secret not in text
+
+
+# --- fix round 1 (R34-R37) ----------------------------------------------------------------
+def test_register_answer_then_registration_links_on_next_run(tmp_path):
+    env = make(tmp_path)
+    with env.repo.tx() as c:
+        env.move(c, "p1", -27600, D14)  # paid before its exchange is registered
+        env.move(c, "p2", -9200, D14)  # another one, whose question the owner leaves open
+    assert env.run() == counts(waiting=2)
+    assert env.run() == counts(asked=2)
+    with env.repo.tx() as c:
+        q1, q2 = env.item(c, "LINK_FUNDING:p1"), env.item(c, "LINK_FUNDING:p2")
+        assert link_choice(env.repo, c, WS, "p1", "REGISTER", env.q, env.now)["status"] == (
+            "needs_exchange")
+        env.q.resolve(c, WS, q1.code, "REGISTER", human=True)
+        c1 = env.exchange(c)  # 300 USD: fits p1 only
+        c2 = env.exchange(c, lines=[LineInput("a", 10000)])  # 100 USD: fits p2 only
+    env.now = T0 + timedelta(hours=12)
+    assert env.run(started=env.now) == counts(linked=2)
+    with env.repo.read() as c:
+        assert env.repo.live_funding_for_movement(c, "p1").exchange_ids == (c1.id,)
+        assert env.repo.live_funding_for_movement(c, "p2").exchange_ids == (c2.id,)
+        assert env.questions(c) == []
+        assert env.repo.pending_by_code(c, WS, q1.code).resolution == "REGISTER"
+        assert env.repo.pending_by_code(c, WS, q2.code).resolution == "auto:settled"
+    assert env.run(started=env.now) == counts()
+
+
+def test_answered_link_question_is_retried_link_only(tmp_path):
+    env = make(tmp_path)
+    with env.repo.tx() as c:
+        env.move(c, "p1", -27600, D14)
+    env.run()
+    assert env.run() == counts(asked=1)
+    with env.repo.tx() as c:
+        q1 = env.item(c, "LINK_FUNDING:p1")
+        env.q.resolve(c, WS, q1.code, "REGISTER", human=True)
+        c1 = env.exchange(c)
+        env.exchange(c)  # two compatible exchanges: a retry cannot choose
+    env.now = T0 + timedelta(hours=12)
+    assert env.run(started=env.now) == counts(asked=1)  # PREVIOUS_UNPAID for C1, no re-ask
+    with env.repo.read() as c:
+        [item] = env.questions(c)
+        assert item.dedupe_key == f"PREVIOUS_UNPAID:{c1.id}"
+        assert item.options[0] == "M:p1"
+        assert env.repo.live_funding_for_movement(c, "p1") is None
+    assert env.run(started=env.now) == counts()
+
+
+def test_out_of_order_split_payment_links_both_halves(tmp_path):
+    env = make(tmp_path)
+    with env.repo.tx() as c:
+        env.exchange(c)  # 300 USD delivered D13
+        env.move(c, "late", -12600, D15)  # the later-dated half arrives first
+    assert env.run() == counts(waiting=1)
+    with env.repo.tx() as c:
+        env.move(c, "early", -15000, D14)  # the earlier-dated half arrives next
+    assert env.run() == counts(linked=1, waiting=1)
+    with env.repo.read() as c:
+        f = env.repo.live_funding_for_movement(c, "late")
+        assert (f.movement_ids, f.eur_minor) == (("early", "late"), 27600)
+        assert env.questions(c) == []
+    assert env.run() == counts()
+
+
+def test_previous_unpaid_ranks_partner_like_payments_first(tmp_path):
+    env = make(tmp_path)
+    t1, t2 = T0 + timedelta(hours=1), T0 + timedelta(hours=2)
+    with env.repo.tx() as c:
+        c1 = env.exchange(c, at=t1)
+        env.move(c, "x1", -27600, D14, iban=NEW_IBAN)  # the partner payment, to a new IBAN
+        env.move(c, "y1", -4000, D14, iban=PAYER_IBAN, name="Alquiler")  # a transfer
+        for i in range(9):  # later card payments
+            env.move(c, f"card{i}", -(1000 + i), D15 + timedelta(days=i % 3), iban=None,
+                     name="Supermercado")
+        env.exchange(c, D15, [LineInput("a", 10000)], at=t2)
+    env.now = t2 + timedelta(hours=1)
+    assert env.run(started=t2 + timedelta(minutes=30)) == counts(asked=1)
+    with env.repo.read() as c:
+        item = env.item(c, f"PREVIOUS_UNPAID:{c1.id}")
+        assert item.options == ("M:x1", "M:y1", "M:card8", "M:card5", "M:card2", "M:card7",
+                                "M:card4", "M:card1", "NOT_YET")
+        assert list(item.payload["labels"]) == list(item.options[:-1])
+
+
+def test_previous_unpaid_skips_a_candidate_of_an_open_link_question(tmp_path):
+    env = make(tmp_path)
+    t1, t2 = T0 + timedelta(hours=1), T0 + timedelta(hours=2)
+    with env.repo.tx() as c:
+        env.exchange(c, D13, E1, at=t1)
+        env.move(c, "pN", -27600, D14)
+        env.exchange(c, D14, E1, at=t2)  # N+1 delivered the day N was paid
+    env.now = t2 + timedelta(hours=1)
+    assert env.run(started=t2 + timedelta(minutes=5)) == counts(asked=1)
+    with env.repo.read() as c:
+        assert [q.dedupe_key for q in env.questions(c)] == ["LINK_FUNDING:pN"]
+
+
+def test_reopen_ignore_rule_also_reasks_payments_it_hid(tmp_path):
+    env = make(tmp_path)
+    with env.repo.tx() as c:
+        env.exchange(c)
+        env.repo.insert_payer_rule(c, WS, env.repo.hash_key(EMPLOYER_IBAN), None)
+        env.move(c, "a1", 6000, acc="acc-usd", iban=PAYER_IBAN, name="Familiar A")
+    assert env.run() == counts(asked=1)
+    with env.repo.tx() as c:
+        item = env.item(c, "EXPLAIN_INCOMING:a1")
+        resolve_explain_incoming(env.repo, c, WS, "a1", "NOT_EXCHANGE", env.q, env.now)  # mistake
+        env.q.resolve(c, WS, item.code, "NOT_EXCHANGE", human=True)
+        env.move(c, "a2", 6000, D15, acc="acc-usd", iban=PAYER_IBAN, name="Familiar A")
+        env.move(c, "s1", 250000, D15, iban=EMPLOYER_IBAN, name="Empresa")
+    assert env.run() == counts(ignored=2)  # both hidden by their IGNORE rules
+    with env.repo.tx() as c:
+        out = reopen_explain(env.repo, c, WS, item.code, env.q, env.now)
+        a2 = env.item(c, "EXPLAIN_INCOMING:a2")
+        assert out == {"ok": True, "status": "reopened",
+                       "question": env.item(c, "EXPLAIN_INCOMING:a1").code,
+                       "also_asked": [a2.code]}
+        assert a2.resolved_at is None and a2.options[0] == "CP:a"
+        assert env.repo.movement_role(c, "a2") is None
+        assert env.repo.movement_role(c, "s1") is MovementRoleKind.NOT_EXCHANGE  # other sender
+        assert resolve_explain_incoming(env.repo, c, WS, "a2", "CP:a", env.q,
+                                        env.now)["status"] == "recorded"
+        assert env.repo.balance(c, WS, "a", "USD") == 12000 - 6000
+
+
+def test_booked_successor_refreshes_an_open_explain_question(tmp_path):
+    env = make(tmp_path)
+    with env.repo.tx() as c:
+        env.move(c, "i1", 12000, D14, acc="acc-usd", iban=PAYER_IBAN,
+                 status=domain.MovementStatus.PENDING)
+    assert env.run() == counts(asked=1)
+    with env.repo.tx() as c:
+        code = env.item(c, "EXPLAIN_INCOMING:i1").code
+        env.move(c, "i2", 11900, D15, acc="acc-usd", iban=PAYER_IBAN, supersedes="i1")
+    assert env.run() == counts()
+    with env.repo.read() as c:
+        item = env.item(c, "EXPLAIN_INCOMING:i1")
+        assert (item.code, item.payload["amount"], item.payload["booking_date"]) == (
+            code, "119.00", "2026-11-15")
+
+
+def test_sender_drops_the_payment_rail_and_keeps_forty_characters():
+    from app.receivables.explain import sender_text
+    assert sender_text("", ZELLE_1) == "FAMILIAR A"
+    assert sender_text("", "ZELLE PAYMENT FROM FAMILIAR B CONF# X9") == "FAMILIAR B"
+    assert sender_text("", "ONLINE BANKING TRANSFER FROM FAMILIAR C 12") == "FAMILIAR C"
+    assert sender_text("Familiar con un nombre compuesto muy largo y sintetico 4521", "x") == (
+        "FAMILIAR CON UN NOMBRE COMPUESTO MUY LAR")
+    assert sender_text("", "") == ""
+
+
+def test_explain_question_lives_in_its_own_module():
+    from app.receivables import corrections, explain, matcher
+    assert matcher.ask_explain_incoming is explain.ask_explain_incoming
+    assert ".matcher" not in inspect.getsource(corrections)
+
+
+def test_old_cursor_table_is_upgraded_and_asks_no_history(tmp_path):
+    env = Env(tmp_path)
+    with env.repo.tx() as c:
+        env.exchange(c)
+        env.move(c, "hist", -15000, D14)  # unlinked partner payment from before the upgrade
+        top = env.repo.max_movement_rowid(c, WS)
+    base = env.repo.base
+    raw_execute(base, "DROP TABLE matcher_cursor")
+    raw_execute(base, "CREATE TABLE matcher_cursor(workspace_id TEXT PRIMARY KEY, "
+                      "movement_rowid INTEGER NOT NULL)")
+    raw_execute(base, "INSERT INTO matcher_cursor VALUES(?,?)", (WS, top))
+    upgraded = FinanceRepository(base.path, pepper=PEPPER)  # opening the file upgrades it
+    assert column_names(upgraded, "matcher_cursor") == [
+        "workspace_id", "movement_rowid", "start_rowid"]
+    assert raw_execute(upgraded, "SELECT movement_rowid, start_rowid FROM matcher_cursor") == [
+        (top, top)]
+    FinanceRepository(base.path, pepper=PEPPER)  # a second open changes nothing
+    for _ in range(3):
+        assert env.run() == counts()
+    raw_execute(base, "UPDATE matcher_cursor SET start_rowid=NULL")
+    with env.repo.read() as c:  # NULL never reads as 0 (R37)
+        assert env.repo.cursor_state(c, WS) == (top, top)

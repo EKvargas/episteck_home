@@ -793,6 +793,14 @@ class ReceivablesRepository:
             (self.movement_root(conn, movement_id),)).fetchone()
         return MovementRoleKind(r["role"]) if r else None
 
+    def roots_with_role(self, conn, ws: str, role: MovementRoleKind) -> list[str]:
+        """Root movement ids whose latest live role is ``role``, oldest first."""
+        rows = conn.execute(
+            f"SELECT m.movement_id FROM movement_role m WHERE m.workspace_id=? AND m.role=? "
+            f"AND {_live('movement_role', 'm')} ORDER BY m.rowid", (ws, role.value)).fetchall()
+        return [mid for mid in dict.fromkeys(r["movement_id"] for r in rows)
+                if self.movement_role(conn, mid) is role]
+
     def live_role_ids_for_movement(self, conn, movement_id: str) -> list[str]:
         """Root-aware: ids of the live roles, oldest first (what a reversal must revoke)."""
         rows = conn.execute(
@@ -861,7 +869,10 @@ class ReceivablesRepository:
         movements at or below it are history. ``None`` before the first run."""
         r = conn.execute("SELECT movement_rowid, start_rowid FROM matcher_cursor "
                          "WHERE workspace_id=?", (ws,)).fetchone()
-        return (r["movement_rowid"], r["start_rowid"] or 0) if r else None
+        if r is None:
+            return None
+        start = r["start_rowid"]  # NULL never reads as 0: that would make history new (R37)
+        return r["movement_rowid"], r["movement_rowid"] if start is None else start
 
     def init_cursor(self, conn, ws: str, rowid: int) -> None:
         conn.execute("INSERT INTO matcher_cursor(workspace_id,movement_rowid,start_rowid) "
@@ -979,6 +990,14 @@ class ReceivablesRepository:
                            "WHERE workspace_id=? AND code=? AND resolved_at IS NULL",
                            (_ts(at), resolution, ws, _code(code)))
         return cur.rowcount == 1
+
+    def refresh_pending(self, conn, ws: str, code: str, options: Sequence[str],
+                        payload: dict) -> None:
+        """Replaces the options and payload of an OPEN item (its facts changed); a resolved
+        item is never touched."""
+        conn.execute("UPDATE pending_item SET options=?, payload=? WHERE workspace_id=? "
+                     "AND code=? AND resolved_at IS NULL",
+                     (json.dumps(list(options)), json.dumps(payload), ws, _code(code)))
 
     def set_pending_snooze(self, conn, ws: str, code: str, until: datetime) -> None:
         conn.execute("UPDATE pending_item SET snooze_until=? WHERE workspace_id=? AND code=?",

@@ -181,11 +181,12 @@ def _notify(conn, ws: str, funding: Funding, exchanges: Sequence[Exchange], rate
 
 
 def try_link(repo: ReceivablesRepository, conn, ws: str, movement: domain.Movement,
-             queue: PendingQueue, now: datetime) -> LinkResult:
+             queue: PendingQueue, now: datetime, *, ask: bool = True) -> LinkResult:
     """Spec §6.2 rules 1-5 for an outgoing EUR payment to a known partner IBAN.
 
     ``ALREADY_LINKED`` also covers a payment the owner already classified (any live role).
     A pool of unlinked partner payments that fits more than one exchange keeps waiting.
+    ``ask=False`` only links: AMBIGUOUS asks nothing (a payment whose question was answered).
     """
     mv = _payment(repo, conn, ws, movement.id)
     if mv is None:
@@ -198,7 +199,8 @@ def try_link(repo: ReceivablesRepository, conn, ws: str, movement: domain.Moveme
         create_funding(repo, conn, ws, [mv.id], [compatible[0].id], queue, now)
         return "LINKED"
     if compatible:
-        ask_link_funding(repo, conn, ws, mv.id, queue)
+        if ask:
+            ask_link_funding(repo, conn, ws, mv.id, queue)
         return "AMBIGUOUS"
     root, day = repo.movement_root(conn, mv.id), _day(mv)
     unlinked = [p for p in repo.unlinked_partner_payments(conn, ws)

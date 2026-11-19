@@ -17,18 +17,20 @@ from datetime import date, datetime, timedelta
 from .. import domain
 from ..money import format_minor
 from ..store.receivables_repo import IGNORE, ReceivablesRepository
-from .allocation import plan_allocation
 from .corrections import reverse, undo_receipt
+from .explain import PAYERS, ask_explain_incoming, incoming_key
 from .funding import ask_link_funding, funding_day, redo_funding, reverse_funding, try_link
 from .fx import deviation, implied_rate
 from .ledger import ValidationError
 from .model import (
-    FUND_ALERT_DEFAULT_MINOR, LINK_BAND, AllocationMethod, CounterpartyKind, EntryKind,
-    MovementRoleKind, Opening, PendingItem, PendingKind, ReceiptKind, Verification,
+    FUND_ALERT_DEFAULT_MINOR, LINK_BAND, CounterpartyKind, EntryKind, MovementRoleKind,
+    Opening, PendingKind, ReceiptKind, Verification,
 )
 from .pending import PendingQueue
 from .receipts import CURRENCIES, record_receipt
-from .text import description_key
+
+__all__ = ["COUNT_KEYS", "Matcher", "ask_explain_incoming", "close_settled_questions",
+           "incoming_key", "reopen_explain", "resolve_explain_incoming"]
 
 logger = logging.getLogger("finance.matcher")
 
@@ -37,7 +39,6 @@ LOOKBACK = timedelta(days=30)  # PREVIOUS_UNPAID lists payments of the last 30 d
 PICK_LIMIT = 8
 REVIEW_WINDOW = timedelta(weeks=4)
 AUTO_RESOLUTION = "auto:settled"
-_PAYERS = (CounterpartyKind.PERSON, CounterpartyKind.FUND)
 _KNOWN_OPENING = (Opening.APPROXIMATE, Opening.CONFIRMED)
 _REOPENED = "explain_reopened"
 _BOOKED_CHANGED = "booked_amount_changed"
@@ -55,55 +56,6 @@ def _aware(value: datetime, what: str) -> datetime:
 
 def _error(code: str) -> dict:
     return {"ok": False, "error": code}
-
-
-def incoming_key(repo: ReceivablesRepository, mv: domain.Movement,
-                 description_rules: bool) -> str | None:
-    """The payer-rule key of an incoming movement: its IBAN hash, else (only with
-    ``description_rules``) the hash of its normalised description; ``None`` when neither."""
-    if mv.counterparty_iban_hash:
-        return mv.counterparty_iban_hash
-    text = description_key(mv.remittance or "")
-    return repo.hash_key(text) if description_rules and text else None
-
-
-def _exact(repo: ReceivablesRepository, conn, ws: str, cp_id: str, currency: str,
-           amount: int) -> bool:
-    """The open items (a PERSON's opening included, R29), or an exact subset, equal ``amount``."""
-    items = repo.open_lines(conn, ws, cp_id, currency)
-    return bool(items) and (sum(i.outstanding_minor for i in items) == amount or
-                            plan_allocation(amount, items).method is AllocationMethod.AUTO_EXACT)
-
-
-def ask_explain_incoming(repo: ReceivablesRepository, conn, ws: str, movement: domain.Movement,
-                         queue: PendingQueue) -> PendingItem:
-    """Asks who sent an incoming payment (EXPLAIN_INCOMING), or returns the open question.
-
-    Options: the one PERSON whose open items or an exact subset of them equal the amount, then
-    every other PERSON or FUND with a balance in that currency, then ``OTHER`` and
-    ``NOT_EXCHANGE``. Key ``EXPLAIN_INCOMING:<root movement id>``.
-    """
-    mv = repo.movement_current(conn, ws, movement.id) or movement
-    if mv.amount_minor <= 0:
-        raise ValidationError("movement")
-    root, day = repo.movement_root(conn, mv.id), _day(mv)
-    found = [(cp, cp.kind is CounterpartyKind.PERSON
-              and _exact(repo, conn, ws, cp.id, mv.currency, mv.amount_minor))
-             for cp in repo.list_counterparties(conn, ws) if cp.kind in _PAYERS]
-    found = [(cp, hit) for cp, hit in found
-             if hit or repo.balance(conn, ws, cp.id, mv.currency) != 0]
-    exact = [cp for cp, hit in found if hit]
-    first = exact if len(exact) == 1 else []
-    ordered = first + [cp for cp, _ in found if cp not in first]
-    payload = {
-        "movement_id": root, "booking_date": day.isoformat() if day else None,
-        "currency": mv.currency, "amount": format_minor(mv.amount_minor, mv.currency),
-        "sender": description_key(mv.counterparty_name or mv.remittance or "")[:20].strip(),
-        "exact": f"CP:{first[0].id}" if first else None,
-        "labels": {f"CP:{cp.id}": cp.label for cp in ordered}}
-    options = [f"CP:{cp.id}" for cp in ordered] + ["OTHER", "NOT_EXCHANGE"]
-    return queue.add(conn, ws, PendingKind.EXPLAIN_INCOMING, options, payload,
-                     f"EXPLAIN_INCOMING:{root}")
 
 
 def _remember(repo: ReceivablesRepository, conn, ws: str, key: str | None,
@@ -141,7 +93,7 @@ def resolve_explain_incoming(repo: ReceivablesRepository, conn, ws: str, movemen
     if not choice.startswith("CP:"):
         return _error("unknown_choice")
     cp = repo.get_counterparty(conn, ws, choice[3:])
-    if cp is None or cp.kind not in _PAYERS:
+    if cp is None or cp.kind not in PAYERS:
         return _error("unknown_counterparty")
     rec = record_receipt(repo, conn, ws, kind=ReceiptKind.BANK, payer_id=cp.id,
                          currency=mv.currency, amount_minor=mv.amount_minor,
@@ -173,12 +125,34 @@ def reopen_explain(repo: ReceivablesRepository, conn, ws: str, code: str, queue:
     for role_id in repo.live_role_ids_for_movement(conn, mv.id):
         repo.revoke(conn, ws, "movement_role", role_id, _REOPENED, now)
     key = incoming_key(repo, mv, True)  # a description rule exists only if rules were on
-    rule_ids = repo.live_rule_ids(conn, ws, key) if key else []
-    if rule_ids and repo.rule_for(conn, ws, key) == (receipt.payer_id if receipt else IGNORE):
-        repo.revoke(conn, ws, "payer_rule", rule_ids[-1], _REOPENED, now)
+    target = receipt.payer_id if receipt else IGNORE
+    revoked = False
+    while key and repo.rule_for(conn, ws, key) == target:  # the newest rule says so
+        repo.revoke(conn, ws, "payer_rule", repo.live_rule_ids(conn, ws, key)[-1], _REOPENED, now)
+        revoked = True
     if question is None:
         question = ask_explain_incoming(repo, conn, ws, mv, queue).code
-    return {"ok": True, "status": "reopened", "question": question}
+    also = _unhide(repo, conn, ws, key, mv.id, queue, now) if revoked and receipt is None else []
+    return {"ok": True, "status": "reopened", "question": question, "also_asked": also}
+
+
+def _unhide(repo: ReceivablesRepository, conn, ws: str, key: str, movement_id: str,
+            queue: PendingQueue, now: datetime) -> list[str]:
+    """R36: the NOT_EXCHANGE roles a revoked IGNORE rule wrote on its own (incoming movements
+    with the same key that never had an EXPLAIN_INCOMING question) are revoked, and each of
+    those movements is asked about. Returns the question codes."""
+    root, codes = repo.movement_root(conn, movement_id), []
+    for other in repo.roots_with_role(conn, ws, MovementRoleKind.NOT_EXCHANGE):
+        mv = repo.movement_current(conn, ws, other)
+        if (other == root or mv is None or mv.amount_minor <= 0
+                or incoming_key(repo, mv, True) != key
+                or repo.pending_by_dedupe(conn, ws, f"EXPLAIN_INCOMING:{other}",
+                                          include_resolved=True) is not None):
+            continue
+        for role_id in repo.live_role_ids_for_movement(conn, other):
+            repo.revoke(conn, ws, "movement_role", role_id, _REOPENED, now)
+        codes.append(ask_explain_incoming(repo, conn, ws, mv, queue).code)
+    return codes
 
 
 def close_settled_questions(repo: ReceivablesRepository, conn, ws: str,
@@ -212,9 +186,12 @@ class Matcher:
         self._rules = description_rules
 
     def run(self, ws: str, sync_started_at: datetime) -> dict[str, int]:
-        """One pass over the movements after the cursor, then the periodic questions and
-        notices. The first run for a workspace only sets the cursor (history is never asked
-        about, R32). An inactive workspace is left alone."""
+        """One pass over the movements after the cursor, then the periodic steps: waiting
+        partner payments, PREVIOUS_UNPAID, fund_low and REVIEW_OPENING. The first run for a
+        workspace sets the cursor to the newest movement, so no movement from before go-live
+        is processed or asked about (R32); the periodic steps run on it as on any run, so
+        PREVIOUS_UNPAID, fund_low and REVIEW_OPENING may fire at go-live. An inactive
+        workspace is left alone."""
         started = _aware(sync_started_at, "sync_started_at")
         now = _aware(self._clock(), "clock")
         counts = dict.fromkeys(COUNT_KEYS, 0)
@@ -233,9 +210,9 @@ class Matcher:
             for rowid, mv in repo.movements_after(conn, ws, cursor):
                 self._movement(conn, ws, mv, now, counts)
                 last = rowid
-            close_settled_questions(repo, conn, ws, self._queue)
+            self._waiting(conn, ws, start, cursor, now, counts)
+            close_settled_questions(repo, conn, ws, self._queue)  # after every link of the run
             self._previous_unpaid(conn, ws, started, now, counts)
-            self._waiting(conn, ws, start, cursor, counts)
             self._funds(conn, ws)
             self._openings(conn, ws, now, counts)
             repo.set_cursor(conn, ws, last)
@@ -350,7 +327,8 @@ class Matcher:
     def _previous_unpaid(self, conn, ws: str, started: datetime, now: datetime,
                          counts: dict[str, int]) -> None:
         """Once a sync has run after an exchange was registered, every older exchange still
-        OPEN is asked about: once per newest exchange, never while its question is open."""
+        OPEN is asked about: once per newest exchange, never while its question is open, and
+        not while an open LINK_FUNDING already offers it (the same payment, asked twice)."""
         repo = self._repo
         registered = [ex for ex in repo.live_exchanges(conn, ws) if ex.created_at < started]
         if not registered:
@@ -359,56 +337,83 @@ class Matcher:
         older = [ex for ex in repo.open_exchanges(conn, ws) if ex.number < newest.number]
         if not older:
             return
-        options, labels = self._recent_payments(conn, ws, now)
+        offered = {ref for p in repo.pending_open(conn, ws) if p.kind is PendingKind.LINK_FUNDING
+                   for ref in p.payload.get("candidates", [])}
+        pool = self._recent_payments(conn, ws, now)
         for ex in older:
             key = f"PREVIOUS_UNPAID:{ex.id}"
             last = repo.pending_by_dedupe(conn, ws, key, include_resolved=True)
-            if last is not None and (last.resolved_at is None
-                                     or last.payload.get("after_ref") == f"C{newest.number}"):
+            if f"C{ex.number}" in offered or (last is not None and (
+                    last.resolved_at is None
+                    or last.payload.get("after_ref") == f"C{newest.number}")):
                 continue
             usd = sum(ln.usd_minor for ln in repo.current_lines(conn, ex.id))
-            self._queue.add(conn, ws, PendingKind.PREVIOUS_UNPAID, [*options, "NOT_YET"], {
+            labels = self._ranked(conn, pool, usd)
+            self._queue.add(conn, ws, PendingKind.PREVIOUS_UNPAID, [*labels, "NOT_YET"], {
                 "exchange_ref": f"C{ex.number}", "delivered_on": ex.delivered_on.isoformat(),
                 "usd": format_minor(usd, "USD"), "after_ref": f"C{newest.number}",
                 "labels": labels}, key)
             counts["asked"] += 1
 
-    def _recent_payments(self, conn, ws: str, now: datetime) -> tuple[list[str], dict]:
-        """Up to 8 unlinked outgoing EUR payments of the last 30 days (not to an own IBAN),
-        newest first: ``M:<root id>`` options with ``dd/mm · amount · name[:20]`` labels."""
+    def _recent_payments(self, conn, ws: str,
+                         now: datetime) -> list[tuple[str, domain.Movement]]:
+        """Unlinked outgoing EUR payments of the last 30 days (not to an own IBAN), newest
+        first, as ``(root id, current movement)``."""
         repo = self._repo
         own = repo.own_hashes(conn, ws)
-        options: list[str] = []
-        labels: dict[str, str] = {}
+        pool = []
         for mv in repo.recent_outgoing(conn, ws, "EUR", now.date() - LOOKBACK):
             root = repo.movement_root(conn, mv.id)
             if (mv.counterparty_iban_hash in own or repo.movement_role(conn, root) is not None
                     or repo.live_funding_for_movement(conn, root) is not None):
                 continue
-            options.append(f"M:{root}")
+            pool.append((root, mv))
+        return pool
+
+    def _ranked(self, conn, pool: list[tuple[str, domain.Movement]],
+                usd: int) -> dict[str, str]:
+        """R35: up to 8 picks for an exchange of ``usd``, as ``M:<root id>`` -> label
+        ``dd/mm · amount · name[:20]``: first the payments whose EUR is within LINK_BAND of
+        it at the ECB rate, then those to an IBAN, then the rest (card payments), newest first
+        in each group."""
+        repo = self._repo
+
+        def group(mv: domain.Movement) -> int:
+            ecb = repo.usd_per_eur_on(conn, _day(mv))
+            if ecb is not None and deviation(implied_rate(-mv.amount_minor, usd), ecb) <= LINK_BAND:
+                return 0
+            return 1 if mv.counterparty_iban_hash else 2
+
+        labels: dict[str, str] = {}
+        for root, mv in sorted(pool, key=lambda p: group(p[1]))[:PICK_LIMIT]:
             parts = (f"{_day(mv):%d/%m}", format_minor(-mv.amount_minor, "EUR"),
                      mv.counterparty_name[:20])
             labels[f"M:{root}"] = " · ".join(p for p in parts if p)
-            if len(options) == PICK_LIMIT:
-                break
-        return options, labels
+        return labels
 
     # --- step 5: payments still waiting -------------------------------------------
-    def _waiting(self, conn, ws: str, start: int, cursor: int, counts: dict[str, int]) -> None:
-        """A partner payment still unlinked after the run that first saw it becomes
-        LINK_FUNDING, once: an answer that wrote nothing (``REGISTER``) is not asked again,
-        the payment stays in PREVIOUS_UNPAID's pick list. One from before go-live
-        (``start``) is never asked about (R32)."""
+    def _waiting(self, conn, ws: str, start: int, cursor: int, now: datetime,
+                 counts: dict[str, int]) -> None:
+        """R34: every unlinked partner payment an earlier run saw (after go-live, ``start``)
+        is tried again, so a payment links once its exchange is registered or the rest of a
+        split payment arrives, whatever the order. Still waiting (or fitting several
+        exchanges) and never asked about: LINK_FUNDING. A payment whose question was answered
+        (``REGISTER``) is retried link-only and never asked again; an open question stays."""
         repo = self._repo
         for mv in repo.unlinked_partner_payments(conn, ws):
             root = repo.movement_root(conn, mv.id)
             seen = [repo.movement_rowid(conn, m) or 0 for m in (root, mv.id)]
-            key = f"LINK_FUNDING:{root}"
-            if (_day(mv) is None or not any(start < rid <= cursor for rid in seen)
-                    or repo.pending_by_dedupe(conn, ws, key, include_resolved=True) is not None):
+            if _day(mv) is None or not any(start < rid <= cursor for rid in seen):
                 continue
-            counts["asked"] += 1
-            ask_link_funding(repo, conn, ws, mv.id, self._queue)
+            last = repo.pending_by_dedupe(conn, ws, f"LINK_FUNDING:{root}", include_resolved=True)
+            answered = last is not None and last.resolved_at is not None
+            result = try_link(repo, conn, ws, mv, self._queue, now, ask=not answered)
+            if result == "LINKED":
+                counts["linked"] += 1
+            elif result in ("WAITING", "AMBIGUOUS") and last is None:
+                if result == "WAITING":
+                    ask_link_funding(repo, conn, ws, mv.id, self._queue)
+                counts["asked"] += 1  # AMBIGUOUS: try_link asked
 
     # --- step 6: funds below their alert ------------------------------------------
     def _funds(self, conn, ws: str) -> None:

@@ -17,6 +17,7 @@ from datetime import date, datetime
 from ..money import format_minor
 from ..store.receivables_repo import MAX_LINE_POSITION, ReceivablesRepository
 from .allocation import OpenLine
+from .explain import ask_explain_incoming
 from .funding import FundingSplit, funding_day, reverse_funding, split_funding, write_eur_charges
 from .ledger import (
     DEBT_CURRENCIES, LineInput, ValidationError, charge_usd_lines, new_lines, reverse_entry,
@@ -305,8 +306,8 @@ def _reverse_funding(repo: ReceivablesRepository, conn, ws: str, ref: str, reaso
 
 def _reverse_receipt(repo: ReceivablesRepository, conn, ws: str, ref: str, reason: str,
                      queue: PendingQueue, now: datetime) -> dict:
-    """``undo_receipt``; a BANK receipt then asks EXPLAIN_INCOMING again (the matcher's
-    question, with its full options)."""
+    """``undo_receipt``; a BANK receipt then asks EXPLAIN_INCOMING again, with its full
+    options (``explain.ask_explain_incoming``)."""
     rec = repo.receipt_by_ref(conn, ws, ref)
     if rec is None:
         raise ValidationError("receipt")
@@ -314,7 +315,6 @@ def _reverse_receipt(repo: ReceivablesRepository, conn, ws: str, ref: str, reaso
     undo_receipt(repo, conn, ws, rec, reason, queue, now)
     out = {"ok": True, "status": "reversed", "ref": f"R{rec.number}"}
     if rec.kind is ReceiptKind.BANK and mv is not None:
-        from .matcher import ask_explain_incoming  # lazy: the matcher imports this module
         out["question"] = ask_explain_incoming(repo, conn, ws, mv, queue).code
     return out
 
