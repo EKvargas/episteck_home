@@ -270,7 +270,8 @@ def test_reverse_funding_restores_open_state_and_asks_again(tmp_path):
         [again] = questions(repo, c)
         assert again.code != first.code and again.dedupe_key == "LINK_FUNDING:m1"
         assert again.options == ("C1", "C2", "ALL", "REGISTER", "NOT_EXCHANGE")
-        assert try_link(repo, c, WS, m, q, NOW) == "AMBIGUOUS"
+        # R57: the owner undid it, so only the owner's answer links it again
+        assert try_link(repo, c, WS, m, q, NOW) == "WAITING"
         assert questions(repo, c) == [again]
 
 

@@ -9,7 +9,7 @@ import pytest
 
 from app import domain
 from app.receivables.corrections import correct_exchange, forgive, record_opening, reverse
-from app.receivables.funding import create_funding, try_link
+from app.receivables.funding import create_funding, link_choice, try_link
 from app.receivables.ledger import (
     Evidence, LineInput, ValidationError, receivables_view, record_exchange,
 )
@@ -327,7 +327,7 @@ def test_reverse_funding_undoes_forgiveness_with_the_charge(tmp_path):
         assert repo.balance(c, WS, "b", "EUR") == 0  # no fake credit
         assert not [r for r in receivables_view(repo, c, WS, NOW)["held_for_others"]
                     if r["counterparty"] == "Familiar B"]
-        assert try_link(repo, c, WS, repo.movement_current(c, WS, "m1"), q, NOW) == "LINKED"
+        assert link_choice(repo, c, WS, "m1", "C1", q, NOW)["status"] == "linked"  # the owner's answer (R57)
         assert repo.balance(c, WS, "b", "EUR") == 7360  # charged in full again
         assert outstanding(repo, c, "b", "EUR") == [7360]
         again = forgive(repo, c, WS, "C1:Familiar B", None, "gift again", NOW)

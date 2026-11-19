@@ -224,7 +224,7 @@ def test_booked_successor_of_linked_pending_is_ignored(tmp_path):
     assert count_rows(env.repo.base, "funding") == 1
 
 
-def test_booked_successor_with_another_amount_relinks_rerecords_or_asks(tmp_path):
+def test_booked_successor_with_another_amount_relinks_or_asks(tmp_path):
     env = make(tmp_path)
     pending = domain.MovementStatus.PENDING
     with env.repo.tx() as c:
@@ -232,23 +232,21 @@ def test_booked_successor_with_another_amount_relinks_rerecords_or_asks(tmp_path
         env.move(c, "p1", -27600, D14, status=pending)
         env.repo.insert_payer_rule(c, WS, env.repo.hash_key(PAYER_IBAN), "a")
         env.move(c, "r1", 12000, D14, acc="acc-usd", iban=PAYER_IBAN, status=pending)
-    assert env.run() == counts(linked=1, receipts=1)
+    assert env.run() == counts(linked=1)  # a PENDING credit waits for its BOOKED row (R58)
     with env.repo.tx() as c:
         env.move(c, "p2", -27800, D15, supersedes="p1")  # 0.9267: still within LINK_BAND
         env.move(c, "r2", 11900, D15, acc="acc-usd", iban=PAYER_IBAN, supersedes="r1")
-    assert env.run() == counts()
+    assert env.run() == counts(receipts=1)
     with env.repo.read() as c:
         f = env.repo.live_funding_for_movement(c, "p2")
         assert (f.number, f.eur_minor, f.movement_ids) == (2, 27800, ("p1",))
         assert env.item(c, "INFO:booked_amount_changed:F1").payload == {
             "funding_ref": "F1", "new_funding_ref": "F2", "eur_before": "276.00",
             "eur_after": "278.00", "text_key": "booked_amount_changed:F1"}
-        rec = env.repo.live_receipt_for_movement(c, "r2")
-        assert (rec.number, rec.amount_minor, rec.payer_id) == (2, 11900, "a")
-        assert env.item(c, "INFO:booked_amount_changed:R1").payload == {
-            "receipt_ref": "R1", "new_receipt_ref": "R2", "currency": "USD",
-            "amount_before": "120.00", "amount_after": "119.00",
-            "text_key": "booked_amount_changed:R1"}
+        rec = env.repo.live_receipt_for_movement(c, "r2")  # recorded once, at the BOOKED amount
+        assert (rec.number, rec.amount_minor, rec.payer_id, rec.movement_id) == (
+            1, 11900, "a", "r1")
+        assert env.item(c, "INFO:booked_amount_changed:R1") is None
         assert env.repo.balance(c, WS, "a", "USD") == 100
         assert env.questions(c) == []
     with env.repo.tx() as c:
@@ -505,7 +503,7 @@ def test_register_answer_then_registration_links_on_next_run(tmp_path):
     assert env.run(started=env.now) == counts()
 
 
-def test_answered_link_question_is_retried_link_only(tmp_path):
+def test_answered_link_question_is_retried_then_asked_once_more(tmp_path):
     env = make(tmp_path)
     with env.repo.tx() as c:
         env.move(c, "p1", -27600, D14)
@@ -514,15 +512,18 @@ def test_answered_link_question_is_retried_link_only(tmp_path):
     with env.repo.tx() as c:
         q1 = env.item(c, "LINK_FUNDING:p1")
         env.q.resolve(c, WS, q1.code, "REGISTER", human=True)
-        c1 = env.exchange(c)
+        env.exchange(c)
         env.exchange(c)  # two compatible exchanges: a retry cannot choose
     env.now = T0 + timedelta(hours=12)
-    assert env.run(started=env.now) == counts(asked=1)  # PREVIOUS_UNPAID for C1, no re-ask
+    # R61: registered after "REGISTER" and still unlinked: LINK_FUNDING once more (it offers
+    # both, so PREVIOUS_UNPAID does not ask about C1 too)
+    assert env.run(started=env.now) == counts(asked=1)
     with env.repo.read() as c:
         [item] = env.questions(c)
-        assert item.dedupe_key == f"PREVIOUS_UNPAID:{c1.id}"
-        assert item.options[0] == "M:p1"
+        assert item.dedupe_key == "LINK_FUNDING:p1" and item.code != q1.code
+        assert item.options == ("C1", "C2", "ALL", "REGISTER", "NOT_EXCHANGE")
         assert env.repo.live_funding_for_movement(c, "p1") is None
+    assert env.run(started=env.now) == counts()
     assert env.run(started=env.now) == counts()
 
 
@@ -603,20 +604,21 @@ def test_reopen_ignore_rule_also_reasks_payments_it_hid(tmp_path):
         assert env.repo.balance(c, WS, "a", "USD") == 12000 - 6000
 
 
-def test_booked_successor_refreshes_an_open_explain_question(tmp_path):
+def test_pending_credit_is_asked_about_only_once_booked(tmp_path):
     env = make(tmp_path)
     with env.repo.tx() as c:
         env.move(c, "i1", 12000, D14, acc="acc-usd", iban=PAYER_IBAN,
                  status=domain.MovementStatus.PENDING)
-    assert env.run() == counts(asked=1)
+        env.move(c, "o1", 30000, D14, iban=OWN_IBAN, status=domain.MovementStatus.PENDING)
+    assert env.run() == counts()  # R58: nothing about a PENDING credit, not even "ignored"
     with env.repo.tx() as c:
-        code = env.item(c, "EXPLAIN_INCOMING:i1").code
+        assert env.item(c, "EXPLAIN_INCOMING:i1") is None
         env.move(c, "i2", 11900, D15, acc="acc-usd", iban=PAYER_IBAN, supersedes="i1")
-    assert env.run() == counts()
+    assert env.run() == counts(asked=1)
     with env.repo.read() as c:
-        item = env.item(c, "EXPLAIN_INCOMING:i1")
-        assert (item.code, item.payload["amount"], item.payload["booking_date"]) == (
-            code, "119.00", "2026-11-15")
+        item = env.item(c, "EXPLAIN_INCOMING:i1")  # keyed on the root, the BOOKED figures
+        assert (item.payload["movement_id"], item.payload["amount"],
+                item.payload["booking_date"]) == ("i1", "119.00", "2026-11-15")
 
 
 def test_sender_drops_the_payment_rail_and_keeps_forty_characters():

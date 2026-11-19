@@ -123,7 +123,8 @@ Only when you passed `valuation_currency="EUR"` and `valuation` is not null:
   especie o por el banco?" before proposing anything. Cash is `CASH`, goods are `IN_KIND`.
   Never record a bank payment, not even as `CASH` when the owner asks: Finance learns it
   from the bank sync, links it by itself and asks when it cannot. Say "lo registra el banco
-  solo; aparecerá tras la próxima sincronización y te preguntaré si hace falta." If a bank
+  solo; aparecerá tras la próxima sincronización y te preguntaré si hace falta." Finance
+  counts a bank payment once the bank posts it, never while it is pending. If a bank
   payment was recorded as cash by mistake, propose `mcp__finance__finance_reverse` of its
   `R<n>`.
 - First load (once): `mcp__finance__finance_setup_counterparty` for each person, fund and
@@ -194,14 +195,24 @@ Every tool that changes the exchange books (`record_exchange`, `record_receipt`,
    `debt_currency`, `eur`; `eur_pending` true → "por fijar: en EUR al pagar al socio";
    `note`); for a receipt `payer`, `amount`, `currency`, `kind`, `received_on` and
    `balance_after`; `before` and `after` (and `credit`) for corrections and reallocations;
-   `held` for a fund's starting balance; `replaces` when it replaces earlier ones;
-   `eur_per_usd` when it undoes a funding; `reason`.
+   `held` for a fund's starting balance, with `held_after`, `since`, `out_since` and
+   `in_since` (below); `replaces` when it replaces earlier ones; `eur_per_usd` and
+   `forgets_partner_iban` when it undoes a funding; `reason`. `forgets_partner_iban` true:
+   add "También olvidaré la cuenta del socio que aprendí con ese pago; sus pagos siguientes
+   no se tomarán por pagos al socio."
    A starting balance (`record_opening`): a person's `amount` above zero is "te debe
    <amount> <currency>"; below zero, "a su favor <amount> <currency>", the figure without
    its minus sign (drop only the sign, never a digit). A fund's `held` above zero is
    "guardas <held> <currency> del fondo <counterparty>"; below zero, "lo estás adelantando
    tú: <held> <currency> del fondo <counterparty>", copied with its sign, as in the debts
    view.
+   A fund's `held` is what it held on `since`, before `out_since` went out and `in_since`
+   came in; `held_after` is what it holds today once they count. When `since` is set, the
+   fund already has flows: unless the owner gave the figure for that very day, ask
+   "¿cuánto había el <since>?", and if the figure was today's, answer the echo `correct` and
+   propose again with the one for that day. Read back `held_after`: "Con eso, hoy guardas
+   <held_after> <currency> del fondo <counterparty>." When `since` is null there are no
+   flows yet and `held_after` is `held`.
 2. Call `mcp__finance__finance_resolve_pending(code, <answer>)` only with the owner's own
    answer to that echo: their tap, or their words. Send the choice their words mean:
    `yes`, `correct` or `cancel`. Never send `yes` on the owner's behalf: not on a guess,
@@ -225,6 +236,10 @@ Every tool that changes the exchange books (`record_exchange`, `record_receipt`,
      and, when undoing a bank receipt also revoked its payer rule, `rules_revoked`) and its
      references (`exchange_ref`, `receipt_ref`, `entry_ref`): say what was recorded,
      figures as returned.
+   - `reversed` of a funding (`F<n>`) also returns `questions`, one `P<n>` per payment it
+     linked, and `partner_ibans_forgotten`: show each of its `questions` right away
+     (explain the code and offer its options). That payment stays unlinked until the owner
+     answers: Finance never links it again by itself.
    - `cancelled`: "Cancelado; no registré nada."
    - `needs_correction`: ask what to change, then propose again with the corrected data (a
      new echo).
@@ -277,7 +292,7 @@ After an answer, say what happened from its `status`:
 | --- | --- |
 | `linked` | "Enlazado (<funding_ref>)." |
 | `not_exchange` | "Anotado: no es de intercambios." |
-| `needs_exchange` | "Falta registrar ese cambio: reenvíame la captura del socio." |
+| `needs_exchange` | "Falta registrar ese cambio: reenvíame la captura del socio. Cuando esté registrado te vuelvo a preguntar por ese pago." |
 | `not_yet` | "De acuerdo; lo vuelvo a preguntar más adelante." |
 | `recorded` | "Registrado (<receipt_ref>)." and whether the payer will be recognised next time. |
 | `needs_counterparty` | Ask "¿De quién es?" and answer the same code with `details` `counterparty`. |
@@ -299,7 +314,7 @@ returned:
 | `rate_outlier` | "El tipo de <funding_ref> (<rate>) se aleja del de referencia del BCE (<reference_rate>); revísalo." |
 | `receipt_applied` | "<receipt_ref>: recibí <amount> <currency>; cubre <cada exchange_ref del delivered_on: amount>. Queda: <balance_after>; a su favor: <credit>." When `opening` is set, add "y <opening.amount> del saldo inicial (<opening.entry_ref>)". When `balance_after` is null (a fund without a confirmed start), give no balance. |
 | `small_difference_closed` | `direction` `they_owed`: "Cerré una diferencia de <amount> <currency> que te debían (<entry_ref>)." `you_held`: "Cerré una diferencia de <amount> <currency> que guardabas de más (<entry_ref>)." |
-| `booked_amount_changed` | With a `funding_ref`: "El banco cambió el importe del pago de <funding_ref>: <eur_before> → <eur_after> EUR", then "lo enlacé de nuevo (<new_funding_ref>)", or when `new_funding_ref` is null "quedó sin enlazar; te preguntaré". With a `receipt_ref`: "<receipt_ref>: el banco cambió el importe, <amount_before> → <amount_after> <currency> (ahora <new_receipt_ref>)." |
+| `booked_amount_changed` | "El banco cambió el importe del pago de <funding_ref>: <eur_before> → <eur_after> EUR", then "lo enlacé de nuevo (<new_funding_ref>)", or when `new_funding_ref` is null "quedó sin enlazar; te preguntaré". |
 | `fund_low` | "El fondo <counterparty> bajó del aviso: guardas <held> USD (aviso en <alert>)." |
 
 The keys in `details`:
@@ -310,8 +325,7 @@ The keys in `details`:
   `delivered_on`, `amount`), `opening` (null, or the part that paid the starting balance:
   `entry_ref`, `amount`), `balance_after`, `credit`.
 - `small_difference_closed`: `entry_ref`, `amount`, `currency`, `direction`.
-- `booked_amount_changed`: `funding_ref`, `new_funding_ref`, `eur_before`, `eur_after`; or
-  `receipt_ref`, `new_receipt_ref`, `amount_before`, `amount_after`, `currency`.
+- `booked_amount_changed`: `funding_ref`, `new_funding_ref`, `eur_before`, `eur_after`.
 - `fund_low`: `counterparty`, `held`, `alert`, `entry_ref`.
 - Questions: `LINK_FUNDING` and `EXPLAIN_INCOMING` carry `booking_date`; `PREVIOUS_UNPAID`
   carries `exchange_ref`, `delivered_on` and `usd`.
@@ -418,7 +432,9 @@ data another way: a new call needs new input from the owner.
 | `unknown_pending` | "No encuentro ese código." Offer to list what is pending. |
 | `not_resolved` | "Esa pregunta todavía no está contestada; no hay nada que deshacer." |
 | `unknown_movement` | "Ya no encuentro ese movimiento del banco; quizá cambió en la última sincronización." Offer to list what is pending. |
-| `already_resolved` | "Ese código ya está contestado." Its `resolution` says how. |
+| `no_open_exchange` | "Ya no queda ningún cambio abierto para ese pago." Offer to list what is pending: the question comes back with current options. |
+| `unknown_counterparty` | "Esa persona o fondo ya no está entre las opciones." Explain the code again and offer its current options. |
+| `already_resolved` | "Ese código ya está contestado." Its `resolution` says how; `superseded`: "Esa confirmación la sustituyó una más reciente; contesta a la nueva." |
 | `internal_error` | "Finanzas tuvo un error interno; no se guardó nada. Prueba más tarde." |
 
 ## Memory and privacy

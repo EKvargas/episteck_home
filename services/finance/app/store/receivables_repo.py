@@ -788,11 +788,37 @@ class ReceivablesRepository:
             return None
         return r["counterparty_id"] if r["counterparty_id"] is not None else IGNORE
 
-    def add_partner_identifier(self, conn, ws: str, iban_hash: str, cp_id: str) -> str:
+    def add_partner_identifier(self, conn, ws: str, iban_hash: str, cp_id: str, *,
+                               funding_id: str | None = None) -> str:
+        """``funding_id``: the funding whose owner pick taught this IBAN (R60)."""
         identifier_id = _new_id()
-        conn.execute("INSERT INTO partner_identifier(id,workspace_id,iban_hash,counterparty_id) "
-                     "VALUES(?,?,?,?)", (identifier_id, ws, iban_hash, cp_id))
+        conn.execute("INSERT INTO partner_identifier(id,workspace_id,iban_hash,counterparty_id,"
+                     "funding_id) VALUES(?,?,?,?,?)",
+                     (identifier_id, ws, iban_hash, cp_id, funding_id))
         return identifier_id
+
+    def identifiers_taught_by(self, conn, ws: str, funding_id: str) -> list[str]:
+        """Live partner identifiers taught by this funding or by an earlier one over the same
+        payments (a funding redone with its payments keeps what they taught), oldest first."""
+        rows = conn.execute(
+            "SELECT p.id FROM partner_identifier p WHERE p.workspace_id=:ws "
+            f"AND {_live('partner_identifier', 'p')} AND (p.funding_id=:f OR p.funding_id IN ("
+            "SELECT b.funding_id FROM funding_movement a JOIN funding_movement b "
+            "ON b.movement_id=a.movement_id AND b.workspace_id=a.workspace_id "
+            "WHERE a.funding_id=:f AND a.workspace_id=:ws)) ORDER BY p.rowid",
+            {"ws": ws, "f": funding_id}).fetchall()
+        return [r["id"] for r in rows]
+
+    def unlinked_by_owner(self, conn, movement_id: str, system_reasons: Sequence[str]) -> bool:
+        """Root-aware: a funding of this movement was revoked for a reason other than
+        ``system_reasons`` (the owner undid it, R57)."""
+        reasons = list(dict.fromkeys(system_reasons)) or [""]
+        r = conn.execute(
+            "SELECT 1 FROM funding_movement fm JOIN revocation rv ON rv.table_name='funding' "
+            f"AND rv.target_id=fm.funding_id WHERE fm.movement_id=? AND rv.reason NOT IN "
+            f"({','.join('?' * len(reasons))}) LIMIT 1",
+            (self.movement_root(conn, movement_id), *reasons)).fetchone()
+        return r is not None
 
     def partner_hashes(self, conn, ws: str) -> dict[str, str]:
         rows = conn.execute(
@@ -866,6 +892,12 @@ class ReceivablesRepository:
             seen.add(nxt)
             current = nxt
 
+    def movement_by_id(self, conn, ws: str, movement_id: str) -> domain.Movement | None:
+        """That row itself (no successor followed); ``None`` if unknown."""
+        r = conn.execute("SELECT * FROM movement WHERE workspace_id=? AND id=?",
+                         (ws, movement_id)).fetchone()
+        return _movement(r) if r else None
+
     def movement_current(self, conn, ws: str, movement_id: str) -> domain.Movement | None:
         """The latest version of a movement (follows BOOKED successors); ``None`` if unknown."""
         r = conn.execute("SELECT * FROM movement WHERE workspace_id=? AND id=?",
@@ -919,6 +951,13 @@ class ReceivablesRepository:
             return None
         start = r["start_rowid"]  # NULL never reads as 0: that would make history new (R37)
         return r["movement_rowid"], r["movement_rowid"] if start is None else start
+
+    def go_live_rowid(self, conn, ws: str) -> int:
+        """The go-live mark (R59): movements at or below it are history (a later BOOKED row of
+        such a PENDING only when it posted it: ``funding.is_history``, R65). 0 before the first
+        matcher run (then nothing has been matched yet)."""
+        state = self.cursor_state(conn, ws)
+        return 0 if state is None else state[1]
 
     def init_cursor(self, conn, ws: str, rowid: int) -> None:
         conn.execute("INSERT INTO matcher_cursor(workspace_id,movement_rowid,start_rowid) "

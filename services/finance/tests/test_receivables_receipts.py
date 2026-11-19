@@ -376,7 +376,7 @@ def test_reverse_funding_reverses_small_difference_with_its_charge(tmp_path):
         assert repo.balance(c, WS, "b", "EUR") == -7300
         assert repo.receipt_remainders(c, WS, "b", "EUR") == [(r, 7300)]
         assert repo.open_lines(c, WS, "b", "EUR") == []
-        assert try_link(repo, c, WS, m, q, NOW) == "LINKED"  # re-fund the same exchange
+        assert link_choice(repo, c, WS, "m1", "C1", q, NOW)["status"] == "linked"  # the owner re-funds the same exchange (R57)
         assert repo.balance(c, WS, "b", "EUR") == 0
         assert adjustment_total(repo, c) == -60  # not applied twice
         assert repo.open_lines(c, WS, "b", "EUR") == []
@@ -409,7 +409,7 @@ def test_reverse_funding_reverses_receipt_side_write_off(tmp_path):
         assert adjustment_total(repo, c) == 0
         assert repo.balance(c, WS, "b", "EUR") == -7400
         assert repo.receipt_remainders(c, WS, "b", "EUR") == [(r, 7400)]
-        assert try_link(repo, c, WS, m, q, NOW) == "LINKED"  # the 0.40 is closed once
+        assert link_choice(repo, c, WS, "m1", "C1", q, NOW)["status"] == "linked"  # the 0.40 is closed once
         assert repo.balance(c, WS, "b", "EUR") == 0
         assert adjustment_total(repo, c) == 40
         assert repo.receipt_remainders(c, WS, "b", "EUR") == []

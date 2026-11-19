@@ -322,11 +322,12 @@ def test_review_opening_confirms_only_what_it_showed_and_closes_once_confirmed(t
             f"REVIEW_OPENING:{cp}:2026-W47")
             for cp, label, ref, cur, amount in (("a", "Familiar A", "E1", "USD", "30.00"),
                                                 ("b", "Familiar B", "E2", "EUR", "20.00"))}
+    # the owner's new opening for A closes A's question at once: it showed E1 (R64)
     env.yes(env.svc.propose_opening(DELEG, "Familiar A", "45", "USD", "APPROXIMATE", "n2"))
     before = env.facts()
     assert env.svc.resolve(DELEG, review["a"].code, "CONFIRM") == {
-        **CHANGED, "detail": {"reason": "changed", "question": "stale"}}
-    assert env.facts() == before and env.item(review["a"].code).resolution == "stale"
+        "ok": False, "error": "already_resolved", "resolution": "auto:settled"}
+    assert env.facts() == before and env.item(review["b"].code).resolved_at is None
     env.yes(env.svc.propose_opening(DELEG, "Familiar B", "20", "EUR", "CONFIRMED", "extracto"))
     assert env.item(review["b"].code).resolution == "auto:settled"
 
@@ -506,7 +507,9 @@ def test_review_opening_refused_changed_is_resolved_stale_and_asked_again(tmp_pa
         Matcher(env.repo, env.q, lambda: env.now, False)._openings(c, WS, env.now, {"asked": 0})
         [item] = [i for i in env.repo.pending_open(c, WS)
                   if i.dedupe_key.startswith("REVIEW_OPENING:a:")]
-    env.yes(env.svc.propose_opening(DELEG, "Familiar A", "45", "USD", "APPROXIMATE", "n2"))
+        # a write that does not close it (an owner command would, R64): refused "changed"
+        record_opening(env.repo, c, WS, "a", "USD", 4500, Opening.APPROXIMATE, "n2", NOW,
+                       queue=env.q)
     out = env.svc.resolve(DELEG, item.code, "CONFIRM")
     assert out == {"ok": False, "error": "validation_error", "field": "target",
                    "detail": {"reason": "changed", "question": "stale"}}
@@ -534,7 +537,9 @@ def test_an_old_open_confirm_with_a_defaulted_date_is_not_returned_days_later(tm
     assert new["code"] != old["code"]
     assert new["echo"]["received_on"] == env.now.date().isoformat()
     assert env.svc.propose_receipt(*args) == new  # the same day: the new one again
-    assert env.item(old["code"]).resolved_at is None  # the old one stays open
+    gone = env.item(old["code"])  # R63: replaced, so only one of them can record
+    assert (gone.resolution, gone.resolved_at is not None) == ("superseded", True)
+    assert count_rows(env.base, "intervention_log") == 0
     assert env.yes(new)["status"] == "recorded"
     assert raw_execute(env.base, "SELECT received_on FROM receipt") == [
         (env.now.date().isoformat(),)]
