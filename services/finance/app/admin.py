@@ -10,13 +10,18 @@ Secrets are only ever read from, or written to, mode-600 files; nothing secret i
     python -m app.admin provider-accounts --connection conn-1
     python -m app.admin link-account --id acc-1 --connection conn-1 --provider-ref ... ...
     python -m app.admin list
+    python -m app.admin watch-account acc-1 on        # I2: ask about credits on this account
+    python -m app.admin own-iban acc-1                 # I2: reads the IBAN, stores its hash
 """
 from __future__ import annotations
 
 import argparse
+import getpass
 import os
+import re
 import sqlite3
 import sys
+import uuid
 from collections.abc import Mapping, Sequence
 
 import httpx
@@ -25,6 +30,7 @@ from . import domain
 from .config import SecretFileError, Settings, read_secret_file
 from .connectors.base import ConnectorError
 from .connectors.simplefin import SimpleFinConnector, TokenAlreadyClaimed, claim
+from .store.receivables_repo import ReceivablesRepository
 from .store.repo import FinanceRepository, IdempotencyConflict
 from .wiring import load_eb_credentials, secret_path
 
@@ -32,6 +38,7 @@ MACHINE_CALLER = "svc-finance-admin"
 CHANNEL = "admin"
 _PROVIDERS = {"simplefin": domain.Provider.SIMPLEFIN,
               "enable_banking": domain.Provider.ENABLE_BANKING}
+_IBAN = re.compile(r"[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}")
 
 
 class AdminError(Exception):
@@ -76,6 +83,13 @@ def _parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("provider-accounts")
     p.add_argument("--connection", required=True)
+
+    p = sub.add_parser("watch-account")
+    p.add_argument("account_id")
+    p.add_argument("state", choices=("on", "off"))
+
+    p = sub.add_parser("own-iban")
+    p.add_argument("account_id")
     return parser
 
 
@@ -191,8 +205,57 @@ def _provider_accounts(repo, settings, args, transport, out) -> None:
         out(f"{account.ref} | {account.name} | {account.currency} | {account.institution}")
 
 
+def _account(repo, settings, account_id: str) -> domain.Account:
+    account = next((a for a in repo.list_accounts(settings.workspace_id)
+                    if a.id == account_id), None)
+    if account is None:
+        raise AdminError("unknown account")
+    return account
+
+
+def _watch_account(repo, settings, args) -> None:
+    """Credits on a watched account are matched to payers or asked about (I2)."""
+    _account(repo, settings, args.account_id)
+    receivables = ReceivablesRepository(repo)
+
+    def effect(conn):
+        receivables.set_watch(conn, settings.workspace_id, args.account_id, args.state == "on")
+        return {"account": args.account_id, "watch": args.state}
+
+    # A fresh key each time: on, off and on again must each take effect (and be audited).
+    _audited(repo, settings.workspace_id,
+             f"admin:watch-account:{args.account_id}:{uuid.uuid4().hex}", "watch-account",
+             {"account": args.account_id, "watch": args.state}, effect)
+
+
+def _read_iban(stdin) -> str:
+    """One IBAN: without echo from a terminal, else one line of stdin. Never printed."""
+    raw = getpass.getpass("IBAN: ") if stdin.isatty() else stdin.readline()
+    iban = "".join(raw.split()).upper()
+    if not _IBAN.fullmatch(iban):
+        raise AdminError("expected one IBAN")
+    return iban
+
+
+def _own_iban(repo, settings, args, stdin) -> None:
+    """Stores only the peppered hash of one of the owner's own IBANs: credits from it are
+    transfers between own accounts and are never asked about (I2)."""
+    _account(repo, settings, args.account_id)
+    iban_hash = repo.hash_iban(_read_iban(stdin))
+    receivables = ReceivablesRepository(repo)
+
+    def effect(conn):
+        if iban_hash not in receivables.own_hashes(conn, settings.workspace_id):
+            receivables.add_own_identifier(conn, settings.workspace_id, iban_hash)
+        return {"account": args.account_id}
+
+    _audited(repo, settings.workspace_id, f"admin:own-iban:{args.account_id}:{iban_hash}",
+             "own-iban",
+             {"account": args.account_id}, effect)
+
+
 def run(argv: Sequence[str], env: Mapping[str, str] | None = None, *,
-        transport: httpx.BaseTransport | None = None, out=print) -> int:
+        transport: httpx.BaseTransport | None = None, out=print, stdin=None) -> int:
     try:
         args = _parser().parse_args(argv)
     except SystemExit as exit_:
@@ -210,6 +273,10 @@ def run(argv: Sequence[str], env: Mapping[str, str] | None = None, *,
             _link_account(repo, settings, args)
         elif args.command == "provider-accounts":
             _provider_accounts(repo, settings, args, transport, out)
+        elif args.command == "watch-account":
+            _watch_account(repo, settings, args)
+        elif args.command == "own-iban":
+            _own_iban(repo, settings, args, stdin or sys.stdin)
         else:
             _list(repo, settings, out)
     except (AdminError, SecretFileError, TokenAlreadyClaimed, ConnectorError, ValueError,

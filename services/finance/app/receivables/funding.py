@@ -313,6 +313,20 @@ def _undo(repo: ReceivablesRepository, conn, ws: str, funding: Funding, reason: 
     return payers
 
 
+def redo_funding(repo: ReceivablesRepository, conn, ws: str, funding_id: str, reason: str,
+                 queue: PendingQueue, now: datetime) -> Funding:
+    """Undoes a live funding and creates it again over the same payments and exchanges with
+    their current amounts (a BOOKED successor that changed the EUR, R32)."""
+    old = repo.funding_by_id(conn, ws, funding_id)
+    if old is None:
+        raise ValidationError("funding")
+    released = _undo(repo, conn, ws, old, reason, now)
+    new = create_funding(repo, conn, ws, old.movement_ids, old.exchange_ids, queue, now)
+    for payer in released:
+        consume_credits(repo, conn, ws, payer, "EUR", queue=queue, now=now)
+    return new
+
+
 def reverse_funding(repo: ReceivablesRepository, conn, ws: str, funding_id: str, reason: str,
                     queue: PendingQueue, now: datetime) -> list[PendingItem]:
     """Undoes a live funding and asks LINK_FUNDING again for each of its payments (a new

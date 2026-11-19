@@ -118,7 +118,7 @@ CREATE TABLE IF NOT EXISTS ref_counter(
     workspace_id TEXT NOT NULL, prefix TEXT NOT NULL, last INTEGER NOT NULL,
     PRIMARY KEY(workspace_id, prefix));
 CREATE TABLE IF NOT EXISTS matcher_cursor(
-    workspace_id TEXT PRIMARY KEY, movement_rowid INTEGER NOT NULL);
+    workspace_id TEXT PRIMARY KEY, movement_rowid INTEGER NOT NULL, start_rowid INTEGER);
 """
 
 _TRIGGERS = "\n".join(

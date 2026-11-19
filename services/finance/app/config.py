@@ -35,6 +35,16 @@ def _access_cap(raw: str) -> int:
     return int(raw)
 
 
+_FLAGS = {"on": True, "true": True, "1": True, "off": False, "false": False, "0": False}
+
+
+def _flag(name: str, raw: str) -> bool:
+    try:
+        return _FLAGS[raw.strip().lower()]
+    except KeyError:
+        raise ValueError(f"{name} must be on or off") from None
+
+
 @dataclass(frozen=True)
 class Settings:
     db_path: str
@@ -42,6 +52,7 @@ class Settings:
     pepper: bytes = field(repr=False)
     secrets_dir: str | None = None
     eb_access_cap: int = 4
+    description_rules: bool = False  # I2: payer rules keyed by a bank description (spike S2)
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -52,4 +63,6 @@ class Settings:
             pepper=read_secret_file(env["FINANCE_PEPPER_FILE"]),
             secrets_dir=env.get("FINANCE_SECRETS_DIR"),
             eb_access_cap=_access_cap(env.get("FINANCE_EB_ACCESS_CAP", "4")),
+            description_rules=_flag("FINANCE_DESCRIPTION_RULES",
+                                    env.get("FINANCE_DESCRIPTION_RULES", "off")),
         )

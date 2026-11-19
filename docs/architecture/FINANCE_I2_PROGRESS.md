@@ -2,7 +2,7 @@
 
 > Board for I2 (family currency exchanges) inside svc-finance. Synthetic data only: this is a public repo, so no real names, amounts, IBANs, phone numbers or frequencies appear here. Roles are "el dueño", "socio de cambio", "Familiar A" and "Fondo F". The I1 board stays in `FINANCE_I1_PROGRESS.md`.
 
-Last updated: 2026-11-18 (design and plan approved; execution started: Tasks 1-2 in PR 1, Task 0 waiting on the owner).
+Last updated: 2026-11-18 (Tasks 1-8 merged in #128, #129, #130 and #132; Task 9 in review in PR 5; Task 0 S1 waiting on the owner).
 
 ## 0. How to work with this board
 
@@ -54,13 +54,13 @@ Task 0 runs on the node in parallel with PRs 1-6.
 | 0 | Two spikes on the node (owner-run, no repo code) | - | S2 done; S1 waiting on owner |
 | 1 | ADR-0016, documentation pointers and the I2 board | 1 | done (#128) |
 | 2 | Pure core: model, FX arithmetic, allocation, text keys | 1 | done (#128) |
-| 3 | Schema and repository | 2 | in review (PR 2) |
-| 4 | Pending queue and intervention log | 2 | in review (PR 2) |
-| 5 | Ledger: record an exchange and the receivables view | 3 | not started |
-| 6 | Funding: link partner payments, rate, EUR shares | 3 | not started |
-| 7 | Receipts, allocation, credits, held cash, small-difference adjustment | 4 | not started |
-| 8 | Corrections, forgiveness and generic reversal | 4 | not started |
-| 9 | Matcher after each sync, and operator commands | 5 | not started |
+| 3 | Schema and repository | 2 | done (#129) |
+| 4 | Pending queue and intervention log | 2 | done (#129) |
+| 5 | Ledger: record an exchange and the receivables view | 3 | done (#130) |
+| 6 | Funding: link partner payments, rate, EUR shares | 3 | done (#130) |
+| 7 | Receipts, allocation, credits, held cash, small-difference adjustment | 4 | done (#132) |
+| 8 | Corrections, forgiveness and generic reversal | 4 | done (#132) |
+| 9 | Matcher after each sync, and operator commands | 5 | in review (PR 5) |
 | 10 | Commands and `ReceivablesService` | 6 | not started |
 | 11 | MCP tools and REST routes | 6 | not started |
 | 12 | Hermes skill, cron and runbook (needs Task 0) | 7 | not started |
@@ -105,3 +105,4 @@ Counts and token-class templates only (letters to `A`, digits to `9`, a short li
 
 - 2026-11-18: design and plan approved; execution started (Tasks 1-2 in PR 1; Task 0 waiting on the owner). Nothing deployed.
 - 2026-11-18: PR 1 merged (#128); Tasks 3–4 implemented on feature/finance-i2-store.
+- 2026-11-18: PRs #129, #130, #132 merged; Task 9 on feature/finance-i2-matcher.
