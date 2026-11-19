@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.diary.service import DiaryService
 from app.providers.synthetic import SyntheticFoodProvider
+from app.service import NutritionService
 from app.store.diary_sqlite import SqliteDiaryStore
 from app.store.sqlite_repo import SqliteNutritionRepository
 from tests.support import AllowAllAuthorizer, DenyAllAuthorizer
@@ -50,6 +51,8 @@ def api(monkeypatch, tmp_path):
 
     main.diary = build()
     server._diary = main.diary
+    main.svc = NutritionService(SqliteNutritionRepository(db), SyntheticFoodProvider(),
+                                authorizer=AllowAllAuthorizer())
     main.build_test_diary = build
     return main, server, TestClient(main.app, raise_server_exceptions=False)
 
@@ -163,3 +166,25 @@ def test_mcp_unknown_draft_returns_error_code(api):
         assert out["items"]
     finally:
         session_module.get_http_headers = original
+
+
+def test_put_profile_without_context_keeps_mode_set_by_set_mode(api):
+    """R25: a PUT that sends only targets must not silently undo set_mode."""
+    _, _, client = api
+    r = client.put(f"/profile/{PERSON}/mode", json={"mode": "PREGNANCY", "due_date": "2027-03-01"}, headers=H)
+    assert r.status_code == 200
+    r = client.put(f"/profile/{PERSON}", json={"targets": {"protein_g": 70}}, headers=H)
+    assert r.status_code == 200
+    stored = client.get(f"/profile/{PERSON}", headers=H).json()
+    assert stored["context"] == "PREGNANCY" and stored["due_date"] == "2027-03-01"
+    assert stored["targets"] == {"protein_g": 70}
+    # an explicit GENERAL is a deliberate switch and clears the due date
+    client.put(f"/profile/{PERSON}", json={"context": "GENERAL"}, headers=H)
+    stored = client.get(f"/profile/{PERSON}", headers=H).json()
+    assert stored["context"] == "GENERAL" and stored["due_date"] is None
+
+
+def test_put_profile_for_a_new_person_defaults_to_general(api):
+    _, _, client = api
+    client.put("/profile/PSN-NEW", json={"targets": {}}, headers=H)
+    assert client.get("/profile/PSN-NEW", headers=H).json()["context"] == "GENERAL"

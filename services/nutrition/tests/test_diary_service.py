@@ -471,7 +471,11 @@ def test_set_mode_merges_profile_and_validates(env):
 def test_set_mode_creates_profile(env):
     svc, profiles = env[0], env[5]
     svc.set_mode(S, "p9", "PREGNANCY")
-    assert profiles.get_profile("p9") == {"context": "PREGNANCY", "due_date": None}
+    prof = profiles.get_profile("p9")
+    # The Hub profile view rejects a profile without targets or target_source.
+    assert prof["targets"] == {} and prof["target_source"] == "USER_CONFIGURED"
+    assert prof["context"] == "PREGNANCY" and prof["due_date"] is None
+    assert prof["preferences"] is None and prof["dislikes"] is None and prof["intolerances"] is None
 
 
 def test_bls_item_adds_attribution(env):

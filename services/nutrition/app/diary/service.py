@@ -370,7 +370,13 @@ class DiaryService:
             if mode != "PREGNANCY":
                 raise ValueError("due_date is only allowed with PREGNANCY")
             due = _parse_day(due_date, "due_date")
-        profile = {**self._profile(subject_person_id), "context": mode,
+        stored = self._profile(subject_person_id)
+        if not stored:
+            # Same shape ProfileIn gives; the Hub profile view rejects a profile without
+            # targets or target_source.
+            stored = {"preferences": None, "dislikes": None, "intolerances": None,
+                      "targets": {}, "target_source": "USER_CONFIGURED"}
+        profile = {**stored, "context": mode,
                    "due_date": due.isoformat() if due else None}
         self._profiles.upsert_profile(subject_person_id, profile)
         return {"mode": mode, "due_date": profile["due_date"],

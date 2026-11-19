@@ -49,7 +49,9 @@ class FoodItem(BaseModel):
 
 
 class ProfileIn(BaseModel):
-    context: str = "GENERAL"
+    # None keeps the stored mode (so a PUT never silently undoes set_mode); see
+    # NutritionService.upsert_profile.
+    context: str | None = None
     preferences: str | None = None
     dislikes: str | None = None
     intolerances: str | None = None
