@@ -99,6 +99,22 @@ n = db.execute(
 print(f"PENDING outgoing payments older than 5 days with a live funding: {n}")
 PY
 }
+# STALE_PENDING_CHECK, go-live check (j): PENDING rows never posted (no BOOKED row links to them)
+# and older than about 5 days, counted per account and direction. Movement table only (I1).
+STALE_PENDING_CHECK() { $SSH "cd /; sudo -n -u svc-finance python3 -I - /srv/episteck/services/finance/data/finance.sqlite" <<'PY'
+import sqlite3, sys
+db = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)
+rows = db.execute(
+    "SELECT m.account_id, a.currency, CASE WHEN m.amount_minor>0 THEN 'in' ELSE 'out' END AS d, "
+    "COUNT(*) FROM movement m JOIN account a ON a.id=m.account_id WHERE m.status='PENDING' "
+    "AND NOT EXISTS (SELECT 1 FROM movement s WHERE s.supersedes_id=m.id) "
+    "AND COALESCE(m.booking_date, m.value_date) < date('now', '-5 days') "
+    "GROUP BY m.account_id, a.currency, d ORDER BY m.account_id, d").fetchall()
+for account, currency, direction, n in rows:
+    print(f"account {account} ({currency}) {direction}: {n}")
+print(f"open PENDING rows older than 5 days: {sum(r[3] for r in rows)}")
+PY
+}
 ```
 
 What I2 changes: new tables in `finance.sqlite` (created when the new image opens the file, `CREATE TABLE IF NOT EXISTS`; I1 tables are never altered), the receivables tools on the MCP, the receivables routes on the API (loopback, only `www-data` reaches `:9935`), the matcher at the end of each sync, the Olin skill, and one Hermes cron job. **Never `VACUUM` `finance.sqlite`:** the matcher's cursor uses SQLite's implicit `rowid`, which `VACUUM` may renumber.
@@ -135,6 +151,11 @@ Each item once; record the results on the I2 board (`docs/architecture/FINANCE_I
   PENDING_CHECK
   ```
   Expect `0`. Anything else: ask Olin "¿qué cambios están pagados?" and compare with the bank; if the bank shows no such payment, undo that funding in the chat (`finance_reverse` of its `F<n>`): Olin then asks about the payment again.
+- **(j) Before step 4 (go-live): old PENDING rows that never posted `[CLAUDE]`.** Run it in step 1, and again just before step 4 if days passed. I1 links a posted (BOOKED) row to the only open PENDING row of the same amount on its account, however old, so a PENDING row from before go-live that never posted (a cancelled pending, a card hold, a payment posted under another id) can take the place of the next movement of exactly that amount. I2 treats that movement as new (a question or a link, never silent history) unless it carries the PENDING row's id or was booked within 7 days of it (R65). `STALE_PENDING_CHECK` (helpers above) prints counts per account and direction only:
+  ```bash
+  STALE_PENDING_CHECK
+  ```
+  Expect `open PENDING rows older than 5 days: 0`. Anything else: nothing to undo; write the counts on the board. During the first weeks, Olin may ask about a credit or a partner payment of the same amount on that account: answer it as usual. If it is money you already counted in a starting balance (a pending that posted late under another id), answer "no es de intercambios" and say not to remember the sender. A movement booked within 7 days of such a row is read as its posting and is not asked about: during go-live week, compare the bank with Olin's balances for those accounts, and tell the developer if a family payment or a partner payment is missing (Olin cannot record a bank payment by hand).
 
 ## 1. Pre-check `[! OK]`
 

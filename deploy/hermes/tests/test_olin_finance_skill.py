@@ -631,3 +631,22 @@ def test_i2_runbook_checks_description_keys_and_old_pending_fundings_read_only()
         assert '$SSH "cd /; sudo -n -u svc-finance python3 -I - ' in body
         assert "mode=ro" in body and "podman" not in body and "-v " not in body
         assert "print(" in body and "SELECT" in body and "INSERT" not in body
+
+
+# --- final review, round 2 (R65) -------------------------------------------------------------
+
+def test_i2_runbook_counts_old_open_pending_rows_before_go_live_read_only():
+    text = RUNBOOK_I2.read_text(encoding="utf-8")
+    section = _section(text, "## Pre-deploy S1 and go-live checklist")
+    flat = _flat(section).lower()
+    # A PENDING row from before go-live that never posted can take the place of a later
+    # movement of the same amount; R65 makes that movement a question, not history.
+    assert "(j)" in flat and "before step 4" in flat and "within 7 days" in flat
+    assert "  STALE_PENDING_CHECK\n" in section  # run from the checklist
+    start = text.index("STALE_PENDING_CHECK() {")  # defined with the other helpers
+    body = text[start:text.index("\nPY\n}", start)]
+    assert '$SSH "cd /; sudo -n -u svc-finance python3 -I - ' in body
+    assert "mode=ro" in body and "podman" not in body and "-v " not in body
+    assert "print(" in body and "INSERT" not in body and "amount_minor," not in body
+    assert "status='PENDING'" in body and "supersedes_id" in body and "-5 days" in body
+    assert "GROUP BY" in body  # per account and direction

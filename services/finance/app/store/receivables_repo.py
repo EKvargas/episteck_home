@@ -892,6 +892,12 @@ class ReceivablesRepository:
             seen.add(nxt)
             current = nxt
 
+    def movement_by_id(self, conn, ws: str, movement_id: str) -> domain.Movement | None:
+        """That row itself (no successor followed); ``None`` if unknown."""
+        r = conn.execute("SELECT * FROM movement WHERE workspace_id=? AND id=?",
+                         (ws, movement_id)).fetchone()
+        return _movement(r) if r else None
+
     def movement_current(self, conn, ws: str, movement_id: str) -> domain.Movement | None:
         """The latest version of a movement (follows BOOKED successors); ``None`` if unknown."""
         r = conn.execute("SELECT * FROM movement WHERE workspace_id=? AND id=?",
@@ -947,7 +953,8 @@ class ReceivablesRepository:
         return r["movement_rowid"], r["movement_rowid"] if start is None else start
 
     def go_live_rowid(self, conn, ws: str) -> int:
-        """The go-live mark (R59): movements at or below it are history. 0 before the first
+        """The go-live mark (R59): movements at or below it are history (a later BOOKED row of
+        such a PENDING only when it posted it: ``funding.is_history``, R65). 0 before the first
         matcher run (then nothing has been matched yet)."""
         state = self.cursor_state(conn, ws)
         return 0 if state is None else state[1]

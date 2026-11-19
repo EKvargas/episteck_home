@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from fractions import Fraction
 from typing import Literal
@@ -33,6 +33,9 @@ ADD_TO = "add_to"  # revocation reason: ADD_TO remakes a funding with one more p
 # other reason, the owner undid it, and only the owner's answer links its payments again (R57).
 # "booked_amount_changed" is the matcher's reason (``matcher._BOOKED_CHANGED``).
 SYSTEM_UNLINKS = (ADD_TO, "booked_amount_changed")
+# R65: a bank posts a PENDING row within days. A BOOKED row with another provider id booked a
+# week or more after a PENDING from before go-live is a new movement that took its place.
+POSTING_WINDOW = timedelta(days=7)
 
 
 class AlreadyLinked(Exception):
@@ -77,20 +80,41 @@ def _candidates(repo: ReceivablesRepository, conn, ws: str, day: date) -> list[E
     return [ex for ex in repo.open_exchanges(conn, ws) if ex.delivered_on <= day]
 
 
-def register_answered_at(repo: ReceivablesRepository, conn, ws: str,
-                         root: str) -> datetime | None:
-    """When the owner last answered this payment's LINK_FUNDING with ``REGISTER``."""
+def is_history(repo: ReceivablesRepository, conn, ws: str, root: str, start: int) -> bool:
+    """R59/R65: a movement (its ROOT id) from before go-live (``start``, the go-live rowid).
+    True when its root and its current row are at or below the mark, or when its current
+    BOOKED row is the posting of the pre-go-live PENDING root: the same provider id, or booked
+    less than 7 days from it. Otherwise the BOOKED row only took the place of a stale PENDING
+    of the same amount (I1 links the single open PENDING of that amount, however old) and is
+    a new movement: if that is wrong, the owner gets a question, not a hidden balance."""
+    if (repo.movement_rowid(conn, root) or 0) > start:
+        return False
+    current = repo.movement_current(conn, ws, root)
+    if current is None or (repo.movement_rowid(conn, current.id) or 0) <= start:
+        return True
+    pending = repo.movement_by_id(conn, ws, root)
+    if pending.provider_tx_id and pending.provider_tx_id == current.provider_tx_id:
+        return True
+    then = pending.booking_date or pending.value_date
+    posted = current.booking_date or current.value_date
+    return then is not None and posted is not None and abs(posted - then) < POSTING_WINDOW
+
+
+def register_asked_at(repo: ReceivablesRepository, conn, ws: str, root: str) -> datetime | None:
+    """When the latest LINK_FUNDING of this payment that the owner answered ``REGISTER`` was
+    asked: an exchange registered from then on was never among its options (R61, R65)."""
     key = f"LINK_FUNDING:{root}"
-    return max((p.resolved_at for p in repo.pending_by_prefix(conn, ws, key)
+    return max((p.created_at for p in repo.pending_by_prefix(conn, ws, key)
                 if p.dedupe_key == key and p.resolution == "REGISTER" and p.resolved_at),
                default=None)
 
 
 def _offered(repo: ReceivablesRepository, conn, ws: str, root: str, day: date) -> list[Exchange]:
     """The exchanges LINK_FUNDING offers for a payment: the open ones delivered by its day
-    (rule 1) and, once the owner answered ``REGISTER``, the open ones registered since then
-    (R61: one registered without its date is delivered "today", after the payment)."""
-    since = register_answered_at(repo, conn, ws, root)
+    (rule 1) and, once the owner answered ``REGISTER``, the open ones registered since the
+    question so answered was asked (R61, R65: one registered without its date is delivered
+    "today", after the payment; one registered before the owner answered is offered too)."""
+    since = register_asked_at(repo, conn, ws, root)
     return [ex for ex in repo.open_exchanges(conn, ws)
             if ex.delivered_on <= day or (since is not None and ex.created_at >= since)]
 
@@ -229,7 +253,7 @@ def try_link(repo: ReceivablesRepository, conn, ws: str, movement: domain.Moveme
     ``ask=False`` only links: AMBIGUOUS asks nothing (a payment whose question was answered).
     A payment whose funding the owner undid stays ``WAITING`` and asks nothing here: its
     question was asked again when the funding was undone (R57). A pool takes only payments
-    from after go-live (R59) that the owner did not unlink.
+    that are not history (``is_history``, R59/R65) and that the owner did not unlink.
     """
     mv = _payment(repo, conn, ws, movement.id)
     if mv is None:
@@ -252,7 +276,7 @@ def try_link(repo: ReceivablesRepository, conn, ws: str, movement: domain.Moveme
     unlinked = []
     for p in repo.unlinked_partner_payments(conn, ws):
         other = repo.movement_root(conn, p.id)
-        if (other != root and (repo.movement_rowid(conn, other) or 0) > start
+        if (other != root and not is_history(repo, conn, ws, other, start)
                 and not held_by_owner(repo, conn, other)):
             unlinked.append(p)
     ecb = repo.usd_per_eur_on(conn, day)
@@ -278,9 +302,9 @@ def ask_link_funding(repo: ReceivablesRepository, conn, ws: str, movement_id: st
     """Raises the LINK_FUNDING question for a payment (or returns the open one).
 
     One button per open exchange delivered on or before the payment (and, after a
-    ``REGISTER`` answer, per open exchange registered since: R61), ``ALL`` when there are
-    several, ``ADD_TO:C<n>`` for the latest paid exchange delivered by then, then
-    ``REGISTER`` and ``NOT_EXCHANGE``.
+    ``REGISTER`` answer, per open exchange registered since the question so answered was
+    asked: R61, R65), ``ALL`` when there are several, ``ADD_TO:C<n>`` for the latest paid
+    exchange delivered by then, then ``REGISTER`` and ``NOT_EXCHANGE``.
     """
     mv = _payment(repo, conn, ws, movement_id)
     if mv is None:

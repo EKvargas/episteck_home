@@ -132,6 +132,11 @@ class World:
         with self.rx.read() as c:
             return self.rx.live_funding_for_movement(c, movement.id)
 
+    def root(self, movement):
+        """The row I1 linked this one to (its PENDING), else the movement itself."""
+        with self.rx.read() as c:
+            return self.rx.movement_root(c, movement.id)
+
     def paid(self, ref):
         with self.rx.read() as c:
             ex = self.rx.exchange_by_ref(c, WS, ref)
@@ -272,6 +277,106 @@ def test_previous_unpaid_picks_skip_history_to_a_known_partner_iban(tmp_path):
     assert labels == ["18/11 · 276.00 · Otro banco", "NOT_YET"]  # F8 may learn from this one
 
 
+# --- R65: history only when the BOOKED row posted the pre-go-live PENDING -------------------
+# I1 links a BOOKED row to the single open PENDING of the same amount, at any age, so a PENDING
+# from before go-live that never posted can take a later, unrelated movement as its posting.
+def test_a_stale_pre_go_live_pending_credit_does_not_hide_a_later_credit(tmp_path):
+    w = World(tmp_path)
+    stale = w.mv("acc-usd", 12000, D(11, 18), text=ZELLE_A, status="PENDING", tx="sf-stale")
+    w.go_live(stale)  # A's PENDING credit never posts
+    w.exchange("120", [("Familiar C", "120")], "2026-11-19")
+    paid = w.mv("acc-usd", 12000, D(12, 5), text=ZELLE_C, tx="sf-c")
+    assert w.sync(paid, at=utc(12, 5, 18, 20)) == counts(asked=1)
+    assert w.root(paid) == stale.id  # I1 took C's credit for the stale PENDING's posting
+    [item] = w.items("EXPLAIN_INCOMING")
+    w.now = utc(12, 5, 19, 0)
+    assert w.answer(item["code"], "Familiar C")["status"] == "recorded"
+    assert w.balance("c", "USD") == 0
+    assert w.sync(at=utc(12, 6, 6, 20)) == NOTHING
+
+
+def test_a_stale_pre_go_live_pending_payment_does_not_hide_a_later_partner_payment(tmp_path):
+    w = World(tmp_path)
+    stale = w.mv("acc-eur", -27600, D(11, 18), iban="partner", name="Socio SL",
+                 status="PENDING", tx="eb-stale")
+    w.go_live(stale)  # never posts
+    w.now = utc(11, 24, 9, 0)
+    w.exchange("300", E1, "2026-11-24")
+    paid = w.mv("acc-eur", -27600, D(11, 25), iban="partner", name="Socio SL", tx="eb-new")
+    assert w.sync(paid, at=utc(11, 25, 18, 20)) == counts(linked=1)  # 7 days after the PENDING
+    assert w.root(paid) == stale.id
+    assert w.funding_of(paid) is not None and w.paid("C1")
+    assert w.balance("b", "EUR") == 7360
+
+
+def test_a_captured_partner_payment_waits_is_asked_and_offered_as_a_pick(tmp_path):
+    w = World(tmp_path)
+    stale = w.mv("acc-eur", -27600, D(11, 10), iban="partner", name="Socio SL",
+                 status="PENDING", tx="eb-stale")
+    w.go_live(stale)
+    paid = w.mv("acc-eur", -27600, D(11, 20), iban="partner", name="Socio SL", tx="eb-new")
+    assert w.sync(paid, at=utc(11, 20, 18, 20)) == counts(waiting=1)  # no exchange yet
+    assert w.root(paid) == stale.id
+    assert w.sync(at=utc(11, 21, 6, 20)) == counts(asked=1)  # R34: it keeps waiting, asked
+    [link] = w.items("LINK_FUNDING")
+    assert [o["choice"] for o in link["options"]] == ["REGISTER", "NOT_EXCHANGE"]
+    w.now = utc(11, 21, 9, 0)
+    w.exchange("300", E1)  # C1 and C2 delivered today, after the payment
+    w.now = utc(11, 21, 10, 0)
+    w.exchange("100", [("Familiar A", "100")])
+    assert w.sync(at=utc(11, 21, 18, 20)) == counts(asked=1)
+    [pick] = w.items("PREVIOUS_UNPAID")
+    assert [o["label"] for o in pick["options"]] == ["20/11 · 276.00 · Socio SL", "NOT_YET"]
+    w.now = utc(11, 21, 19, 0)
+    assert w.answer(pick["code"], "20/11 · 276.00 · Socio SL")["status"] == "linked"
+    assert w.paid("C1") and w.balance("b", "EUR") == 7360
+
+
+def test_a_captured_partner_payment_joins_a_split_pool(tmp_path):
+    w = World(tmp_path)
+    stale = w.mv("acc-eur", -15000, D(11, 11), iban="partner", name="Socio SL",
+                 status="PENDING", tx="eb-stale")
+    w.go_live(stale)
+    w.exchange("300", E1, "2026-11-17")
+    half = w.mv("acc-eur", -15000, D(11, 20), iban="partner", name="Socio SL", tx="eb-half")
+    assert w.sync(half, at=utc(11, 20, 18, 20)) == counts(waiting=1)
+    assert w.root(half) == stale.id
+    rest = w.mv("acc-eur", -12600, D(11, 21), iban="partner", name="Socio SL")
+    assert w.sync(rest, at=utc(11, 21, 18, 20)) == counts(linked=1)
+    funding = w.funding_of(rest)
+    assert (funding.movement_ids, funding.eur_minor) == ((stale.id, rest.id), 27600)
+    assert w.balance("b", "EUR") == 7360
+
+
+def test_a_pre_go_live_pending_posted_weeks_later_under_its_own_id_stays_history(tmp_path):
+    w = World(tmp_path)
+    w.go_live(w.mv("acc-usd", 5000, D(11, 18), text=ZELLE_C, status="PENDING", tx="sf-p"),
+              w.mv("acc-eur", -27600, D(11, 18), iban="partner", name="Socio SL",
+                   status="PENDING", tx="eb-p"))
+    w.exchange("300", E1, "2026-11-17")
+    assert w.sync(w.mv("acc-usd", 5000, D(12, 9), text=ZELLE_C, tx="sf-p"),
+                  w.mv("acc-eur", -27600, D(12, 9), iban="partner", name="Socio SL", tx="eb-p"),
+                  at=utc(12, 9, 18, 20)) == NOTHING
+    assert w.sync(at=utc(12, 10, 6, 20)) == NOTHING
+    assert w.items("EXPLAIN_INCOMING") == w.items("LINK_FUNDING") == []
+    assert not w.paid("C1")
+
+
+def test_a_pre_go_live_pending_posted_within_the_week_under_a_new_id_stays_history(tmp_path):
+    w = World(tmp_path)
+    w.go_live(w.mv("acc-usd", 5000, D(11, 18), text=ZELLE_C, status="PENDING", tx="sf-p"),
+              w.mv("acc-eur", -27600, D(11, 18), iban="partner", name="Socio SL",
+                   status="PENDING", tx="eb-p"))
+    w.exchange("300", E1, "2026-11-17")
+    credit = w.mv("acc-usd", 5000, D(11, 24), text=ZELLE_C, tx="sf-posted")  # 6 days later
+    payment = w.mv("acc-eur", -27600, D(11, 24), iban="partner", name="Socio SL", tx="eb-posted")
+    assert w.sync(credit, payment, at=utc(11, 24, 18, 20)) == NOTHING
+    assert w.sync(at=utc(11, 25, 6, 20)) == NOTHING
+    assert w.root(credit) != credit.id and w.root(payment) != payment.id
+    assert w.items("EXPLAIN_INCOMING") == w.items("LINK_FUNDING") == []
+    assert not w.paid("C1")
+
+
 # --- I4 (R60): reversing the funding a pick made also forgets the IBAN it taught ------------
 def test_reversing_a_wrong_pick_forgets_the_partner_iban_it_taught(tmp_path):
     w = World(tmp_path)
@@ -361,6 +466,55 @@ def test_register_again_waits_for_the_next_registered_exchange(tmp_path):
     assert [o["choice"] for o in third["options"]] == ["C2", "REGISTER", "NOT_EXCHANGE"]
     w.now = utc(11, 22, 19, 0)
     assert w.svc.resolve(DELEG, third["code"], "C2")["status"] == "linked"
+
+
+def test_register_again_offers_the_exchange_registered_while_the_question_was_open(tmp_path):
+    """R65: "registered since" counts from when the latest LINK_FUNDING was asked, so an
+    exchange registered before the owner answers REGISTER again is still offered."""
+    w = World(tmp_path)
+    w.go_live()
+    pay = w.mv("acc-eur", -27600, D(11, 20), iban="partner", name="Socio SL")
+    w.sync(pay, at=utc(11, 20, 18, 20))
+    w.sync(at=utc(11, 21, 6, 20))
+    [first] = w.items("LINK_FUNDING")
+    w.now = utc(11, 21, 9, 0)
+    w.svc.resolve(DELEG, first["code"], "REGISTER")
+    w.exchange("100", [("Familiar A", "100")])  # C1: not this payment's exchange
+    assert w.sync(at=utc(11, 21, 18, 20)) == counts(asked=1)
+    [second] = w.items("LINK_FUNDING")
+    assert [o["choice"] for o in second["options"]] == ["C1", "REGISTER", "NOT_EXCHANGE"]
+    w.now = utc(11, 22, 8, 0)
+    assert w.exchange("300", E1) == "C2"  # the right one, registered while `second` is open
+    w.now = utc(11, 22, 9, 0)
+    assert w.svc.resolve(DELEG, second["code"], "REGISTER")["status"] == "needs_exchange"
+    # C2 is offered; C1, still open and not offered, gets its PREVIOUS_UNPAID
+    assert w.sync(at=utc(11, 22, 18, 20)) == counts(asked=2)
+    [third] = w.items("LINK_FUNDING")
+    assert [o["choice"] for o in third["options"]] == ["C2", "REGISTER", "NOT_EXCHANGE"]
+    assert w.sync(at=utc(11, 23, 6, 20)) == NOTHING  # once per newly registered exchange
+    w.now = utc(11, 23, 9, 0)
+    assert w.svc.resolve(DELEG, third["code"], "C2")["status"] == "linked"
+    assert w.paid("C2") and w.balance("b", "EUR") == 7360
+
+
+def test_all_after_register_takes_the_exchanges_the_question_offered(tmp_path):
+    w = World(tmp_path)
+    w.go_live()
+    w.sync(w.mv("acc-eur", -27600, D(11, 20), iban="partner", name="Socio SL"),
+           at=utc(11, 20, 18, 20))
+    w.sync(at=utc(11, 21, 6, 20))
+    [first] = w.items("LINK_FUNDING")
+    w.now = utc(11, 21, 9, 0)
+    w.svc.resolve(DELEG, first["code"], "REGISTER")
+    w.exchange("150", [("Familiar A", "120"), ("owner", "30")])
+    w.exchange("150", [("Familiar B", "80"), ("owner", "70")])
+    assert w.sync(at=utc(11, 21, 18, 20)) == counts(asked=1)
+    [again] = w.items("LINK_FUNDING")
+    assert [o["choice"] for o in again["options"]] == [
+        "C1", "C2", "ALL", "REGISTER", "NOT_EXCHANGE"]
+    w.now = utc(11, 21, 19, 0)
+    assert w.svc.resolve(DELEG, again["code"], "ALL")["status"] == "linked"
+    assert w.paid("C1") and w.paid("C2") and w.balance("b", "EUR") == 7360
 
 
 # --- I6 (R62): a fund's opening echo shows the flows and what it holds after them ----------
