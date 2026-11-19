@@ -165,13 +165,24 @@ def test_unknown_food_is_uncounted(env):
     assert day["free_sugars_known_g"] is None
 
 
-def test_known_food_without_sugar_value_is_partial_never_zero(env):
+def test_unclassified_food_is_partial_never_zero(env):
     svc = env[0]
     d = svc.propose_intake(S, "p1", [gram_item("syn-bread", 50)], consumed_at=T)
     assert d["items"][0]["free_sugar_class"] == "UNKNOWN" and d["items"][0]["free_sugars_g"] is None
     svc.confirm_intake(S, "p1", d["draft_id"])
     day = svc.get_day_summary(S, "p1", "2026-11-20")
     assert (day["sugar_status"], day["items_uncounted"]) == ("PARTIAL", 1)
+
+
+def test_free_food_with_no_sugar_value_is_partial_never_zero(env):
+    rec = FoodRecord("f", "Fizz", {"protein_g": Decimal("1")}, "SYNTHETIC", "v1", category="en:sodas")
+    svc = with_provider(env, FakeProvider({"f": rec}))
+    d = svc.propose_intake(S, "p1", [gram_item("f", 100)], consumed_at=T)
+    item = d["items"][0]
+    assert item["free_sugar_class"] == "FREE" and item["free_sugars_g"] is None
+    svc.confirm_intake(S, "p1", d["draft_id"])
+    day = svc.get_day_summary(S, "p1", "2026-11-20")
+    assert (day["sugar_status"], day["items_uncounted"], day["free_sugars_known_g"]) == ("PARTIAL", 1, None)
 
 
 def test_not_free_food_counts_zero(env):
@@ -277,11 +288,11 @@ def test_close_future_day_rejected(env):
     svc = env[0]
     with pytest.raises(ValueError):
         svc.close_day(S, "p1", "2026-11-20")  # today in Berlin is 2026-11-19
-    assert svc.get_day_summary(S, "p1", "2026-11-20")["day_status"] == "NO_ENTRIES"
+    assert env[4].is_day_closed("p1", "2026-11-20") is False
     assert svc.close_day(S, "p1", "2026-11-19")["day_status"] == "NO_ENTRIES"
 
 
-@pytest.mark.parametrize("bad", ["2026-13-01", "20-11-2026", "", "tomorrow", None])
+@pytest.mark.parametrize("bad", ["20261120", "2026-W47-5", "2026-13-01", "20-11-2026", "", "tomorrow", None])
 def test_bad_day_rejected(env, bad):
     with pytest.raises(ValueError):
         env[0].get_day_summary(S, "p1", bad)
@@ -309,6 +320,16 @@ def test_consumed_at_defaults_to_now(env):
     assert env[0].propose_intake(S, "p1", [cola()])["day"]["date"] == "2026-11-19"
 
 
+def test_stated_must_be_a_real_boolean(env):
+    for bad in ("false", "true", 1, None):
+        with pytest.raises(ValueError):
+            env[0].propose_intake(S, "p1", [cola(stated=bad)], consumed_at=T)
+    d = env[0].propose_intake(S, "p1", [gram_item("syn-cola", 100)], consumed_at=T)
+    assert d["items"][0]["conversion"]["method"] == "USER_STATED"
+    d = env[0].propose_intake(S, "p1", [{k: v for k, v in cola().items() if k != "stated"}], consumed_at=T)
+    assert d["items"][0]["conversion"]["method"] == "PRESET"
+
+
 def test_bad_consumed_at(env):
     with pytest.raises(ValueError):
         env[0].propose_intake(S, "p1", [cola()], consumed_at="not a time")
@@ -330,6 +351,7 @@ def test_provider_outage_stores_no_draft(env):
     svc = with_provider(env, prov)
     req = httpx.Request("GET", "http://food.invalid")
     for err in (httpx.ConnectError("down"), httpx.ReadTimeout("slow"),
+                httpx.DecodingError("bad body"), httpx.TooManyRedirects("loop"),
                 httpx.HTTPStatusError("e", request=req, response=httpx.Response(503, request=req)),
                 httpx.HTTPStatusError("e", request=req, response=httpx.Response(429, request=req))):
         prov.error = err
@@ -442,6 +464,8 @@ def test_set_mode_merges_profile_and_validates(env):
                  ("pregnancy", None)]:
         with pytest.raises(ValueError):
             svc.set_mode(S, "p1", *args)
+    with pytest.raises(ValueError):
+        svc.set_mode(S, "p1", "PREGNANCY", "20270520")
 
 
 def test_set_mode_creates_profile(env):

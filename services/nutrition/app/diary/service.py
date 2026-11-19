@@ -7,6 +7,7 @@ Logging, if added, must carry ids and statuses only, never food text.
 """
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -34,7 +35,7 @@ class DraftNotFound(LookupError):
 
 
 class EntryNotFound(LookupError):
-    """No such entry for this person, or the entry is voided."""
+    """No such entry for this person, or a voided entry was corrected."""
 
 
 class DraftExpired(Exception):
@@ -65,11 +66,17 @@ def _decimal(value: Any, field: str) -> Decimal:
     return d
 
 
-def _parse_day(day: Any) -> date:
+_DAY_FORMAT = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _parse_day(day: Any, field: str = "day") -> date:
+    """Strict YYYY-MM-DD (date.fromisoformat alone also accepts 20261120 and week dates)."""
+    if not isinstance(day, str) or not _DAY_FORMAT.match(day):
+        raise ValueError(f"{field} must be YYYY-MM-DD")
     try:
         return date.fromisoformat(day)
-    except (TypeError, ValueError):
-        raise ValueError("day must be YYYY-MM-DD") from None
+    except ValueError:
+        raise ValueError(f"{field} must be YYYY-MM-DD") from None
 
 
 def _parse_item(raw: Any) -> dict:
@@ -84,13 +91,16 @@ def _parse_item(raw: Any) -> dict:
     food_id = raw.get("food_id")
     if food_id is not None and (not isinstance(food_id, str) or not food_id.strip()):
         raise ValueError("food_id must be text or null")
+    stated = raw.get("stated", False)
+    if not isinstance(stated, bool):
+        raise ValueError("stated must be true or false")
     estimate = raw.get("grams_estimate")
     return {
         "label": label.strip(),
         "food_id": food_id,
         "amount": _decimal(raw.get("amount"), "amount"),
         "unit": unit,
-        "stated": bool(raw.get("stated", False)),
+        "stated": stated,
         "grams_estimate": None if estimate is None else _decimal(estimate, "grams_estimate"),
     }
 
@@ -161,7 +171,7 @@ class DiaryService:
             if e.response.status_code == 404:
                 raise ValueError("unknown food_id") from None
             raise ProviderUnavailable("food provider unavailable") from None
-        except httpx.TransportError:
+        except httpx.RequestError:  # transport, decoding, redirect loops
             raise ProviderUnavailable("food provider unavailable") from None
 
     def _facts_for(self, food_id: str) -> tuple[str, dict]:
@@ -180,8 +190,8 @@ class DiaryService:
     def _freeze(self, item: dict, food_name: str | None, facts: dict | None) -> dict:
         conv = to_grams(
             item["amount"], item["unit"], stated=item["stated"],
-            serving_g=_opt_dec(facts and facts["serving_g"]),
-            density_g_per_ml=_opt_dec(facts and facts["density_g_per_ml"]),
+            serving_g=_opt_dec(facts.get("serving_g") if facts is not None else None),
+            density_g_per_ml=_opt_dec(facts.get("density_g_per_ml") if facts is not None else None),
             grams_estimate=item["grams_estimate"],
         )
         cls, sugars = FreeSugarClass.UNKNOWN, None
@@ -359,10 +369,7 @@ class DiaryService:
         if due_date is not None:
             if mode != "PREGNANCY":
                 raise ValueError("due_date is only allowed with PREGNANCY")
-            try:
-                due = date.fromisoformat(due_date)
-            except (TypeError, ValueError):
-                raise ValueError("due_date must be YYYY-MM-DD") from None
+            due = _parse_day(due_date, "due_date")
         profile = {**self._profile(subject_person_id), "context": mode,
                    "due_date": due.isoformat() if due else None}
         self._profiles.upsert_profile(subject_person_id, profile)
