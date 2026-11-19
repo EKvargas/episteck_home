@@ -91,6 +91,9 @@ class FakeClient:
             raise self.whoami_error
         return self.whoami_payload
 
+    def list_grantable_runtimes(self, access_token):
+        return ["home-agent-primary"]
+
 
 @pytest.fixture
 def ctx(tmp_path):
