@@ -2,7 +2,7 @@
 
 > Board for I2 (family currency exchanges) inside svc-finance. Synthetic data only: this is a public repo, so no real names, amounts, IBANs, phone numbers or frequencies appear here. Roles are "el dueño", "socio de cambio", "Familiar A" and "Fondo F". The I1 board stays in `FINANCE_I1_PROGRESS.md`.
 
-Last updated: 2026-11-18 (Tasks 1-8 merged in #128, #129, #130 and #132; Task 9 in review in PR 5; Task 0 S1 waiting on the owner).
+Last updated: 2026-11-19 (Tasks 1-12 merged in #128, #129, #130, #132, #133, #134, #135 and #137; final-review fixes R57-R64 on `feature/finance-i2-final-fixes`, not merged; Task 13 next; Task 0 S1 waiting on the owner).
 
 ## 0. How to work with this board
 
@@ -60,12 +60,12 @@ Task 0 runs on the node in parallel with PRs 1-6.
 | 6 | Funding: link partner payments, rate, EUR shares | 3 | done (#130) |
 | 7 | Receipts, allocation, credits, held cash, small-difference adjustment | 4 | done (#132) |
 | 8 | Corrections, forgiveness and generic reversal | 4 | done (#132) |
-| 9 | Matcher after each sync, and operator commands | 5 | in review (PR 5) |
-| 10 | Commands and `ReceivablesService` | 6 | not started |
-| 11 | MCP tools and REST routes | 6 | not started |
-| 12 | Hermes skill, cron and runbook (needs Task 0) | 7 | not started |
-| 13 | Deploy, live check and initial load (owner-run) | - | not started |
-| 14 | Fund reconstruction from the chat export (optional) | 8 | not started |
+| 9 | Matcher after each sync, and operator commands | 5 | done (#133) |
+| 10 | Commands and `ReceivablesService` | 6 | done (#134) |
+| 11 | MCP tools and REST routes | 6 | done (#135) |
+| 12 | Hermes skill, cron and runbook (needs Task 0) | 7 | done (#137) |
+| 13 | Deploy, live check and initial load (owner-run) | - | not started (next, after the final-review fixes merge) |
+| 14 | Fund reconstruction from the chat export (optional) | 8 | not started (optional) |
 
 ## 5. Spikes (Task 0, owner-run on the node)
 
@@ -106,3 +106,4 @@ Counts and token-class templates only (letters to `A`, digits to `9`, a short li
 - 2026-11-18: design and plan approved; execution started (Tasks 1-2 in PR 1; Task 0 waiting on the owner). Nothing deployed.
 - 2026-11-18: PR 1 merged (#128); Tasks 3–4 implemented on feature/finance-i2-store.
 - 2026-11-18: PRs #129, #130, #132 merged; Task 9 on feature/finance-i2-matcher.
+- 2026-11-19: PRs #133, #134, #135 and #137 merged (Tasks 9-12). The final whole-I2 review over a realistic month found 1 Critical and 6 Important defects between the PRs; fixed on `feature/finance-i2-final-fixes` (rulings R57-R64: owner-reversed fundings wait for the owner, credits count once BOOKED, go-live history, partner IBANs forgotten with the funding that taught them, re-ask after "register it", fund opening echo with flows, superseded echoes) plus two read-only go-live checks in the runbook. Nothing deployed. Next: Task 13.
