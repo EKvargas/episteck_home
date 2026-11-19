@@ -200,6 +200,13 @@ class PendingItem:
         """The options were replaced since the owner was last shown them (R44)."""
         return self.shown_digest is not None and self.shown_digest != options_digest(self.options)
 
+    def numbers_unsafe(self, private: tuple[str, ...]) -> bool:
+        """A bare number must not be taken: the options changed since they were shown, or
+        they hold a private option the owner was never shown (R44, R49)."""
+        if self.options_changed():
+            return True
+        return self.shown_digest is None and any(o.startswith(private) for o in self.options)
+
 
 def options_digest(options: Sequence[str]) -> str:
     """A digest of an item's options in their order: what a numbered answer refers to."""

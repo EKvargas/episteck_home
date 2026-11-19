@@ -480,6 +480,7 @@ def test_answers_close_settled_questions_and_payloads_carry_delivery_dates(tmp_p
             "after_ref": "C2", "labels": {"M:m1": "14/11 · 276.00 · X"}},
             f"PREVIOUS_UNPAID:{c1.id}")
     assert link.payload["delivered_on"] == {"C1": "2026-11-13", "C2": "2026-11-13"}
+    env.svc.pending(DELEG)  # shown to the owner: a number now means what it showed
     assert env.svc.resolve(DELEG, prev.code, "1") == {
         "ok": True, "status": "linked", "funding_ref": "F1", "code": prev.code}
     assert env.item(link.code).resolution == "auto:settled"
@@ -515,6 +516,7 @@ def test_reversing_a_rule_made_bank_receipt_revokes_the_rule(tmp_path):
         env.exchange(c)
         mv = env.move(c, "in1", 12000, currency="USD", acc="acc-usd", iban=PAYER_IBAN)
         item = ask_explain_incoming(env.repo, c, WS, mv, env.q)
+    env.svc.pending(DELEG)  # shown to the owner: a number now means what it showed
     assert env.svc.resolve(DELEG, item.code, "1")["receipt_ref"] == "R1"
     out = env.svc.propose_reverse(DELEG, "R1", "no era de A")
     assert out["high_value"] is True and out["echo"]["rule"] is True

@@ -1040,6 +1040,17 @@ class ReceivablesRepository:
             conn.execute("UPDATE pending_item SET delivered_at=?, shown_digest=? "
                          "WHERE workspace_id=? AND code=?", (_ts(at), shown, ws, _code(code)))
 
+    def bind_shown(self, conn, ws: str, code: str) -> None:
+        """Records that the owner is being shown this open item's current options (R49): a
+        numbered answer then means them until they change. Any read that returns private
+        options calls it inside the transaction that read them."""
+        row = conn.execute("SELECT options FROM pending_item WHERE workspace_id=? AND code=? "
+                           "AND resolved_at IS NULL", (ws, _code(code))).fetchone()
+        if row:
+            conn.execute("UPDATE pending_item SET shown_digest=? WHERE workspace_id=? "
+                         "AND code=?", (options_digest(json.loads(row["options"])), ws,
+                                        _code(code)))
+
     def mark_pending_resolved(self, conn, ws: str, code: str, resolution: str,
                               at: datetime) -> bool:
         """True if this call resolved the item; an earlier resolution is never overwritten."""

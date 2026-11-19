@@ -114,6 +114,20 @@ def _result_ref(result: dict) -> str | None:
     return (result.get("entries") or [None])[0]
 
 
+def _current_defaults(item: PendingItem, p: Proposal, now: datetime) -> bool:
+    """The stored CONFIRM's dates that were filled in by default are within 1 day of today
+    (UTC), so "yes" would not record a stale date (R49)."""
+    today = now.astimezone(timezone.utc).date()
+    for key in p.defaults:
+        try:
+            stored = datetime.fromisoformat(str(item.payload["payload"][key])).date()
+        except (KeyError, TypeError, ValueError):
+            return False
+        if abs((stored - today).days) > 1:
+            return False
+    return True
+
+
 def _confirm_view(item: PendingItem) -> dict:
     p = item.payload
     return {"ok": True, "status": p["status"], "code": item.code, "echo": p["echo"],
@@ -140,7 +154,7 @@ def _choose(item: PendingItem, choice: str, token: Callable[[str], str]) -> str:
     duplicate = (item.kind is PendingKind.CONFIRM
                  and item.payload.get("status") == "possible_duplicate")
     if raw.isascii() and raw.isdigit():
-        if item.options_changed():
+        if item.numbers_unsafe(views.PRIVATE_OPTIONS):
             raise _unknown(item, token, "options_changed")
         n = int(raw)
         if duplicate or not 1 <= n <= len(item.options):
@@ -284,8 +298,10 @@ class ReceivablesService:
                 with self._rx.tx() as conn:
                     items = self._queue.for_delivery(conn, self._ws)
             else:
-                with self._rx.read() as conn:
+                with self._rx.tx() as conn:  # showing private options binds them (R49)
                     items = self._queue.open_items(conn, self._ws)
+                    for i in items:
+                        self._rx.bind_shown(conn, self._ws, i.code)
             logger.info("receivables pending: items=%d delivery=%s", len(items),
                         bool(for_delivery))
             return {"ok": True, "as_of": now.isoformat(),
@@ -296,8 +312,11 @@ class ReceivablesService:
         self._authorize(delegation, "VIEW")
 
         def read() -> dict:
-            with self._rx.read() as conn:
-                return views.explain(self._ctx(), conn, ref)
+            with self._rx.tx() as conn:  # explaining a P-code shows its options: bind them
+                out = views.explain(self._ctx(), conn, ref)
+                if out.get("kind") == "pending" and out["resolved_at"] is None:
+                    self._rx.bind_shown(conn, self._ws, out["ref"])
+                return out
         return self._guard(read)
 
     # --- proposals (two-phase) -----------------------------------------------------------
@@ -381,6 +400,10 @@ class ReceivablesService:
         key = content_key(p.command, p.payload, ctx.now)
         dedupe = f"CONFIRM:{lookup_key(p)}"
         item = self._rx.pending_by_dedupe(conn, self._ws, dedupe)
+        if item is not None and not _current_defaults(item, p, ctx.now):
+            # an old unanswered CONFIRM with an old defaulted date stays open; this one is new
+            dedupe = f"{dedupe}:{ctx.now.astimezone(timezone.utc).date().isoformat()}"
+            item = self._rx.pending_by_dedupe(conn, self._ws, dedupe)
         if item is None:
             done = self._rx.command_result(conn, self._ws, key)
             duplicate_of = p.duplicate_of or self._open_ves_confirm(conn, p)
@@ -576,7 +599,7 @@ class ReceivablesService:
     def _review(self, ctx: Ctx, actor: str, item: PendingItem, value: str) -> dict:
         """REVIEW_OPENING: CONFIRM re-records the APPROXIMATE openings it showed as CONFIRMED
         (REVERSAL + new OPENING, same amount and note) and refuses ``changed`` when they are
-        no longer the effective ones (m4); an UNKNOWN fund needs an amount (nothing written);
+        no longer the effective ones (m4) and closes the question as stale so the matcher asks again (R49); an UNKNOWN fund needs an amount (nothing written);
         LATER snoozes the question for 7 days."""
         rx, ws, queue = self._rx, self._ws, self._queue
         if value == "LATER":
@@ -597,7 +620,12 @@ class ReceivablesService:
             with rx.read() as conn:
                 cp, entries = rx.get_counterparty(conn, ws, cp_id), stated(conn)
             if sorted(f"E{e.number}" for e in entries) != shown:
-                raise changed()
+                with rx.tx() as conn:  # close it, so the matcher asks again with today's figures
+                    if queue.get(conn, ws, item.code).resolved_at is None:
+                        queue.resolve(conn, ws, item.code, "stale", human=False)
+                raise CommandRefused({"ok": False, "error": "validation_error",
+                                      "field": "target",
+                                      "detail": {"reason": "changed", "question": "stale"}})
             if cp is None or cp.opening in (None, Opening.UNKNOWN) or not entries:
                 return {"ok": True, "status": "needs_amount", "code": item.code}
 

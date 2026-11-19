@@ -7,13 +7,14 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.receivables import commands
 from app.receivables.corrections import correct_exchange, record_opening, reverse
 from app.receivables.explain import ask_explain_incoming
 from app.receivables.funding import try_link
 from app.receivables.ledger import LineInput
+from app.receivables.matcher import Matcher
 from app.receivables.model import MovementRoleKind, Opening, PendingKind, ReceiptKind, Verification
 from app.receivables.receipts import record_receipt
 from tests.support import count_rows, raw_execute
@@ -191,12 +192,12 @@ def test_private_choices_are_stable_tokens_and_numbers_after_a_refresh_are_refus
     with env.repo.tx() as c:  # Familiar A pays cash; the refreshed question drops A
         cash(env, c, "a", 2000)
         ask_explain_incoming(env.repo, c, WS, mv, env.q)
-    now = env.svc.pending(DELEG)["items"][0]
-    assert [o["label"] for o in now["options"]] == ["Familiar B", "OTHER", "NOT_EXCHANGE"]
-    assert now["options"][0]["choice"] == tokens["Familiar B"]  # same value, same token
     assert env.svc.resolve(DELEG, item.code, "1") == {
         "ok": False, "error": "unknown_choice", "reason": "options_changed",
         "expected": [tokens["Familiar B"], "OTHER", "NOT_EXCHANGE"]}
+    now = env.svc.pending(DELEG)["items"][0]  # the owner is shown the new options
+    assert [o["label"] for o in now["options"]] == ["Familiar B", "OTHER", "NOT_EXCHANGE"]
+    assert now["options"][0]["choice"] == tokens["Familiar B"]  # same value, same token
     assert env.svc.resolve(DELEG, item.code, tokens["Familiar A"])["error"] == "unknown_choice"
     assert count_rows(env.base, "receipt") == 1
     out = env.svc.resolve(DELEG, item.code, tokens["Familiar B"].lower())
@@ -277,6 +278,7 @@ def test_classified_or_vanished_answers_are_stale(tmp_path):  # m3
             f"PREVIOUS_UNPAID:{c1.id}")
         env.repo.insert_movement_role(c, WS, "m1", MovementRoleKind.NOT_EXCHANGE)
         env.move(c, "m2", -27500, day=D15)
+    env.svc.pending(DELEG)  # the owner is shown the question
     out = env.svc.resolve(DELEG, prev.code, "1")  # m1 was classified meanwhile; C1 still open
     assert out["status"] == "asked_again" and out["code"] != prev.code
     assert env.item(prev.code).resolution == "stale"
@@ -322,11 +324,11 @@ def test_review_opening_confirms_only_what_it_showed_and_closes_once_confirmed(t
                                                 ("b", "Familiar B", "E2", "EUR", "20.00"))}
     env.yes(env.svc.propose_opening(DELEG, "Familiar A", "45", "USD", "APPROXIMATE", "n2"))
     before = env.facts()
-    assert env.svc.resolve(DELEG, review["a"].code, "CONFIRM") == CHANGED
-    assert env.facts() == before and env.item(review["a"].code).resolved_at is None
+    assert env.svc.resolve(DELEG, review["a"].code, "CONFIRM") == {
+        **CHANGED, "detail": {"reason": "changed", "question": "stale"}}
+    assert env.facts() == before and env.item(review["a"].code).resolution == "stale"
     env.yes(env.svc.propose_opening(DELEG, "Familiar B", "20", "EUR", "CONFIRMED", "extracto"))
     assert env.item(review["b"].code).resolution == "auto:settled"
-    assert env.item(review["a"].code).resolved_at is None
 
 
 def test_label_is_unique_even_when_it_is_not_an_alias(tmp_path):  # m6
@@ -435,3 +437,104 @@ def test_an_unexpected_error_is_a_generic_refusal(tmp_path, monkeypatch, caplog)
     text = " ".join(r.getMessage() for r in caplog.records)
     assert "RuntimeError" in text and "Familiar" not in text and "50.00" not in text
     assert env.item(out["code"]).resolved_at is None and count_rows(env.base, "receipt") == 0
+
+
+# --- R49 / R44 residual: every read that shows private options binds them -----------------
+def _explain_question(env):
+    with env.repo.tx() as c:
+        env.exchange(c, [LineInput("a", 2000), LineInput("b", 3000, "USD")])
+        mv = env.move(c, "in1", 7000, currency="USD", acc="acc-usd", iban=PAYER_IBAN)
+        return ask_explain_incoming(env.repo, c, WS, mv, env.q), mv
+
+
+def _refresh_without_a(env, mv):
+    with env.repo.tx() as c:  # Familiar A pays cash; the refreshed question drops A
+        cash(env, c, "a", 2000)
+        ask_explain_incoming(env.repo, c, WS, mv, env.q)
+
+
+def _payers(env):
+    return raw_execute(env.base, "SELECT payer_id FROM receipt ORDER BY number")
+
+
+def test_a_number_on_private_options_never_shown_is_refused_but_tokens_work(tmp_path):
+    env = Env(tmp_path)
+    item, _ = _explain_question(env)
+    out = env.svc.resolve(DELEG, item.code, "1")
+    assert (out["error"], out["reason"]) == ("unknown_choice", "options_changed")
+    assert all(TOKEN.fullmatch(t) for t in out["expected"][:2])
+    assert count_rows(env.base, "receipt") == 0
+    token = out["expected"][1]  # Familiar B
+    assert env.svc.resolve(DELEG, item.code, token)["status"] == "recorded"
+    assert _payers(env) == [("b",)]
+
+
+def test_pending_binds_the_options_it_shows(tmp_path):
+    env = Env(tmp_path)
+    item, mv = _explain_question(env)
+    [shown] = [i for i in env.svc.pending(DELEG)["items"] if i["code"] == item.code]
+    assert shown["options"][0]["label"] == "Familiar A"
+    _refresh_without_a(env, mv)
+    out = env.svc.resolve(DELEG, item.code, "1")
+    assert (out["error"], out["reason"]) == ("unknown_choice", "options_changed")
+    assert count_rows(env.base, "receipt") == 1  # only the cash receipt: no wrong payer
+    [now] = [i for i in env.svc.pending(DELEG)["items"] if i["code"] == item.code]
+    assert now["options"][0]["label"] == "Familiar B"
+    assert env.svc.resolve(DELEG, item.code, "1")["status"] == "recorded"
+    assert _payers(env) == [("a",), ("b",)]
+
+
+def test_explain_binds_the_options_it_shows(tmp_path):
+    env = Env(tmp_path)
+    item, mv = _explain_question(env)
+    shown = env.svc.explain(DELEG, item.code)["pending"]
+    assert shown["options"][0]["label"] == "Familiar A"
+    _refresh_without_a(env, mv)
+    assert env.svc.resolve(DELEG, item.code, "1")["reason"] == "options_changed"
+    again = env.svc.explain(DELEG, item.code.lower())["pending"]
+    assert again["options"][0]["label"] == "Familiar B"
+    assert env.svc.resolve(DELEG, item.code, "1")["status"] == "recorded"
+    assert _payers(env) == [("a",), ("b",)]
+
+
+# --- R49: a REVIEW_OPENING refused "changed" is closed so the matcher asks again --------------
+def test_review_opening_refused_changed_is_resolved_stale_and_asked_again(tmp_path):
+    env = Env(tmp_path)
+    with env.repo.tx() as c:
+        record_opening(env.repo, c, WS, "a", "USD", 3000, Opening.APPROXIMATE, "n", NOW,
+                       queue=env.q)  # E1
+        Matcher(env.repo, env.q, lambda: env.now, False)._openings(c, WS, env.now, {"asked": 0})
+        [item] = [i for i in env.repo.pending_open(c, WS)
+                  if i.dedupe_key.startswith("REVIEW_OPENING:a:")]
+    env.yes(env.svc.propose_opening(DELEG, "Familiar A", "45", "USD", "APPROXIMATE", "n2"))
+    out = env.svc.resolve(DELEG, item.code, "CONFIRM")
+    assert out == {"ok": False, "error": "validation_error", "field": "target",
+                   "detail": {"reason": "changed", "question": "stale"}}
+    stale = env.item(item.code)
+    assert stale.resolution == "stale" and stale.resolved_at is not None
+    assert env.svc.resolve(DELEG, item.code, "CONFIRM")["error"] == "already_resolved"
+    env.now = env.now + timedelta(days=8)
+    counts = {"asked": 0}
+    with env.repo.tx() as c:
+        Matcher(env.repo, env.q, lambda: env.now, False)._openings(c, WS, env.now, counts)
+        [new] = [i for i in env.repo.pending_open(c, WS)
+                 if i.dedupe_key.startswith("REVIEW_OPENING:a:")]
+    assert counts == {"asked": 1} and new.code != item.code
+    assert new.payload["openings"][0]["amount"] == "45.00"
+    assert env.svc.resolve(DELEG, new.code, "CONFIRM")["status"] == "confirmed"
+
+
+# --- R49: the open CONFIRM is matched only while its defaulted date is current ---------------
+def test_an_old_open_confirm_with_a_defaulted_date_is_not_returned_days_later(tmp_path):
+    env = Env(tmp_path)
+    args = (DELEG, "Familiar A", "50", "USD", "CASH")
+    old = env.svc.propose_receipt(*args)
+    env.now = env.now + timedelta(days=5)
+    new = env.svc.propose_receipt(*args)
+    assert new["code"] != old["code"]
+    assert new["echo"]["received_on"] == env.now.date().isoformat()
+    assert env.svc.propose_receipt(*args) == new  # the same day: the new one again
+    assert env.item(old["code"]).resolved_at is None  # the old one stays open
+    assert env.yes(new)["status"] == "recorded"
+    assert raw_execute(env.base, "SELECT received_on FROM receipt") == [
+        (env.now.date().isoformat(),)]
