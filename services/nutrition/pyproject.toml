@@ -21,6 +21,8 @@ dependencies = [
     "httpx>=0.27",
     "fastmcp==4.0.3",
     "nutrition-domain",
+    # Windows and slim containers ship no system tz database; zoneinfo needs this.
+    "tzdata",
 ]
 [build-system]
 requires = ["setuptools>=68"]
