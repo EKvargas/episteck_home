@@ -146,6 +146,19 @@ def usd_equivalent_is_high(ctx: Ctx, conn, amount_minor: int, cur: str, on: date
     return rate is None or Decimal(amount_minor) * rate >= HIGH_VALUE_USD_MINOR
 
 
+def known_keys(item: dict, allowed: tuple[str, ...], field: str) -> None:
+    """Refuse a key the contract does not name (a misspelt key must never be ignored)."""
+    for key in item:
+        if key not in allowed:
+            raise ValidationError(f"{field}.{key}", {"reason": "unknown_key"})
+
+
+LINE_KEYS = ("payer", "usd", "debt_currency", "beneficiary", "eur")
+EVIDENCE_KEYS = ("partner", "ves_amount", "ves_reference", "date")
+ALLOCATION_KEYS = ("exchange", "amount")
+DETAIL_KEYS = ("counterparty", "remember")
+
+
 # --- exchanges -----------------------------------------------------------------------
 def _line_inputs(ctx: Ctx, conn, lines) -> list[LineInput]:
     if not isinstance(lines, list) or not lines:
@@ -157,6 +170,7 @@ def _line_inputs(ctx: Ctx, conn, lines) -> list[LineInput]:
         f = f"lines[{i}]"
         if not isinstance(ln, dict):
             raise ValidationError(f)
+        known_keys(ln, LINE_KEYS, f)
         name = text(ln.get("payer"), f"{f}.payer")
         payer = OWNER if normalize_alias(name) in OWNER_WORDS else \
             counterparty(ctx, conn, name, f"{f}.payer").id
@@ -201,6 +215,7 @@ def exchange(ctx: Ctx, conn, total_usd, lines, evidence, delivered_on) -> Propos
     if evidence is not None and not isinstance(evidence, dict):
         raise ValidationError("evidence")
     ev = evidence or {}
+    known_keys(ev, EVIDENCE_KEYS, "evidence")
     payload_lines, echo_lines = _resolved_lines(ctx, conn, lines)
     if _usd_total(payload_lines) != total:
         raise ValidationError("lines_total", {"total": format_minor(total, "USD"),
@@ -565,6 +580,7 @@ def reallocation(ctx: Ctx, conn, receipt_ref, allocations) -> Proposal:
         f = f"allocations[{i}]"
         if not isinstance(item, dict):
             raise ValidationError(f)
+        known_keys(item, ALLOCATION_KEYS, f)
         name = text(item.get("exchange"), f"{f}.exchange")
         ids = _items(ctx, conn, rec, name)
         if not ids:

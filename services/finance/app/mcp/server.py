@@ -9,22 +9,17 @@ import os
 
 from fastmcp import FastMCP
 
-from ..service import (
-    AccessDenied, FeatureOff, FinanceService, PolicyUnavailable, SessionInvalid,
-    UnsupportedValuation,
-)
+from ..receivables.service import ReceivablesService
+from ..service import FinanceService
 from ..session import current_delegation
-
-_REFUSALS = (
-    (SessionInvalid, "session_invalid"),
-    (AccessDenied, "access_denied"),
-    (PolicyUnavailable, "service_unavailable"),
-    (FeatureOff, "feature_off"),
-    (UnsupportedValuation, "unsupported_valuation_currency"),
+from .receivables_tools import (
+    quiet_invalid_arguments, refusal_code, register_receivables_tools,
 )
 
 
-def create_mcp(service: FinanceService) -> FastMCP:
+def create_mcp(service: FinanceService,
+               receivables: ReceivablesService | None = None) -> FastMCP:
+    quiet_invalid_arguments()
     mcp = FastMCP("episteck-finance")
 
     @mcp.tool
@@ -34,15 +29,19 @@ def create_mcp(service: FinanceService) -> FastMCP:
         Every figure you state must come from this tool's result in this turn."""
         try:
             return service.overview(current_delegation(), valuation_currency)
-        except tuple(exc for exc, _ in _REFUSALS) as error:
-            code = next(code for exc, code in _REFUSALS if isinstance(error, exc))
+        except Exception as error:
+            code = refusal_code(error)
+            if code is None:
+                raise
             return {"ok": False, "error": code}
 
+    if receivables is not None:
+        register_receivables_tools(mcp, receivables)
     return mcp
 
 
 if __name__ == "__main__":  # pragma: no cover - container entrypoint
-    from ..deps import build_service
+    from ..deps import build_receivables_service, build_service
 
-    create_mcp(build_service()).run(
+    create_mcp(build_service(), build_receivables_service()).run(
         transport="http", host="0.0.0.0", port=int(os.environ.get("MCP_PORT", "9936")))
