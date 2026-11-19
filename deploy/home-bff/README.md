@@ -210,7 +210,7 @@ grantee: the BFF keeps one grant per runtime.
 
 Adds `home-agent-ana`, which acts only as Ana and never reaches Finance. Follow in order.
 
-**Preconditions (verify before step 1):**
+**Preconditions (all done before the window):**
 
 - `home-agent-ana` and the owner's Hermes uid (1003) have **no access** to the mint socket
   `/run/episteck/home-bff-mint/mint.sock`: neither is in group `episteck-gw`. Check
@@ -221,11 +221,20 @@ Adds `home-agent-ana`, which acts only as Ana and never reaches Finance. Follow 
   never run, because the dev machine has no nginx. Run them where nginx exists, before the new
   gateway config is loaded. Plan 3 decides where.
 
+- The Linux user `home-agent-ana` exists (plan 3; Hermes and the Telegram bot are also plan 3).
+- The new gateway config passes `nginx -t`, and the new nft table is rendered (it needs
+  `home-agent-ana` to exist), both as in `deploy/gateway/README.md`.
+
+**Order matters, and every moment must fail closed.** The old gateway stamps no
+`X-Runtime-ID`, so the new BFF refuses its mints (401, never a fallback to the primary). The
+old BFF ignores `X-Runtime-ID` and always mints for `home-agent-primary`, so **never serve 9937
+in front of a BFF older than this change**: Ana's uid would get the owner's identity. Hence the
+BFF goes first, the gateway reload last, and the owner's bot is briefly refused in between.
+
 **Steps:**
 
 1. Merge. Home's code deploys on merge and has no effect until the site config below is set.
-2. Create the Linux user `home-agent-ana` (plan 3; Hermes and the Telegram bot are also plan 3).
-3. Set the Home site config (no migrate; `-p` is required):
+2. Set the Home site config (no migrate; `-p` is required):
 
    ```bash
    bench --site home.episteck.com set-config -p home_runtime_ids '["home-agent-primary","home-agent-ana"]'
@@ -233,20 +242,28 @@ Adds `home-agent-ana`, which acts only as Ana and never reaches Finance. Follow 
      '{"home-agent-primary":["<owner user>"],"home-agent-ana":["<ana user>"]}'
    ```
 
-4. Build the BFF image and update both Quadlet units (`home-bff` and `home-bff-mint`) with
-   `RUNTIME_IDS=home-agent-primary,home-agent-ana`; keep `RUNTIME_LEGACY_BINDING=off`
-   (`on` with more than one runtime is a startup error). Restart `home-bff-mint` first.
-5. **Immediately, and mandatory:** the owner logs in and re-grants `home-agent-primary` at
+3. Maintenance window, in exactly this order. Keep it short.
+   1. Load the new nft table. Port 9937 is locked to Ana's uid and has no listener yet.
+   2. Build the BFF image and update both Quadlet units (`home-bff` and `home-bff-mint`) with
+      `RUNTIME_IDS=home-agent-primary,home-agent-ana`; keep `RUNTIME_LEGACY_BINDING=off`
+      (`on` with more than one runtime is a startup error). Restart `home-bff-mint` first.
+      From here the owner's bot gets 401. That is fail closed.
+   3. Reload the gateway with the new config. 9934 now stamps `home-agent-primary`, so the
+      owner's bot works again. 9937 goes live for Ana's uid only and returns 401 until she grants.
+4. **Immediately, and mandatory:** the owner logs in and re-grants `home-agent-primary` at
    `/runtime`. Grant rows from before this change have an empty `grantor_ref`: the mint still
    honours them, but until the re-grant the owner's page says "no tiene permiso" and "Cerrar
    sesión y revocar permiso" does not revoke that row.
-6. Deploy the gateway config, then render the nft table (it needs `home-agent-ana` to exist) and
-   load it, as in `deploy/gateway/README.md`.
-7. Verify:
+5. Verify:
    - A mint request without `X-Runtime-ID` returns 401.
    - The owner's bot still answers, including on Finance.
    - Ana grants at `/runtime`; her page lists only `home-agent-ana`.
    - As `home-agent-ana`, `:9937/gateway/finance/` has no route and `:9934` is dropped.
+6. Rollback, in reverse order:
+   1. Restore the old gateway config and reload. This removes 9937; the owner's bot gets 401
+      until the next step.
+   2. Restore the old BFF image and Quadlets (`home-bff-mint` first).
+   Never serve 9937 in front of a BFF older than this change.
 
 Person references are keyed on `HOME_DELEGATION_SECRET`: after rotating it, every person must
 re-grant.

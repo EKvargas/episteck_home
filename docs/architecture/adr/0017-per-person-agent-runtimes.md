@@ -69,6 +69,8 @@ neither person can revoke, replace or see the other's grant, even during a Home 
 Negative / accepted: the owner must re-grant once at rollout; a delegation-secret rotation forces
 every person to re-grant; the BFF has two near-duplicate gateway server blocks to keep in sync;
 security depends on only `svc-home-gateway` reaching the mint socket (rollout precondition).
+Deploy order matters: never serve 9937 in front of a BFF older than this change; the BFF goes
+first and the owner's bot is briefly refused (fail closed) until the gateway reload.
 
 ## Alternatives Considered
 
