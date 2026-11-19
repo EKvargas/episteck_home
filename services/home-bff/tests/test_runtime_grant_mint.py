@@ -39,7 +39,7 @@ def clock(monkeypatch):
 def build(tmp_path, clock, **settings):
     store = SessionStore(str(tmp_path / "bff.sqlite"))
     app = create_internal_app(make_settings(**settings), store=store, clock=clock)
-    return TestClient(app), store
+    return TestClient(app, headers={"X-Runtime-ID": RUNTIME_ID}), store
 
 
 def _sid(response) -> str:

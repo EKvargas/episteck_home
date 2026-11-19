@@ -28,7 +28,7 @@ from episteck_home.identity.delegation import verify  # noqa: E402
 def mint_ctx(tmp_path):
     store = SessionStore(str(tmp_path / "bff.sqlite"))
     app = create_internal_app(make_settings(), store=store)
-    with TestClient(app) as http:
+    with TestClient(app, headers={"X-Runtime-ID": RUNTIME_ID}) as http:
         yield http, store, app
 
 

@@ -346,7 +346,7 @@ def test_logout_all_with_an_expired_token_does_not_log_out_and_asks_to_login(ctx
 
 def _mint(store):
     app = create_internal_app(make_settings(), store=store)  # legacy flag defaults to on
-    with TestClient(app) as mint:
+    with TestClient(app, headers={"X-Runtime-ID": RUNTIME_ID}) as mint:
         return mint.post("/internal/mint").status_code
 
 
