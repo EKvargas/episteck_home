@@ -8,7 +8,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from .deps import build_diary_service, build_service
-from .diary.service import DraftExpired, DraftNotFound, EntryNotFound, ProviderUnavailable
+from .diary.service import BLS_ATTRIBUTION, DraftExpired, DraftNotFound, EntryNotFound, ProviderUnavailable
 from .service import AccessDenied, PolicyUnavailable, SessionInvalid
 
 
@@ -215,6 +215,7 @@ def food_detail(food_id: str):
             for nutrient, value in record.nutrients_per_100g.items()
         },
         "known_nutrients": sorted(record.nutrients_per_100g),
+        "attribution": [BLS_ATTRIBUTION] if record.source == "BLS" else [],
     }
 
 

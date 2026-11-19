@@ -188,3 +188,44 @@ def test_put_profile_for_a_new_person_defaults_to_general(api):
     _, _, client = api
     client.put("/profile/PSN-NEW", json={"targets": {}}, headers=H)
     assert client.get("/profile/PSN-NEW", headers=H).json()["context"] == "GENERAL"
+
+
+# ---- final-review fixes: attribution and tool descriptions ----------------
+
+BLS_TEXT = "Datos: Max Rubner-Institut, BLS 4.0"
+
+
+class _OneFoodProvider(SyntheticFoodProvider):
+    def __init__(self, source):
+        super().__init__()
+        self.source = source
+
+    def get_food(self, food_id):
+        from decimal import Decimal
+
+        from app.providers.food_provider import FoodRecord
+        return FoodRecord(food_id, "Zuckerwasser", {"sugars_total_g": Decimal("10")},
+                          self.source, "v1", category="S")
+
+
+@pytest.mark.parametrize("source,expected", [("BLS", [BLS_TEXT]), ("USDA", [])])
+def test_food_detail_carries_bls_attribution_on_rest_and_mcp(api, source, expected):
+    main, server, client = api
+    main.svc.provider = _OneFoodProvider(source)
+    server._svc = main.svc
+    rest = client.get("/food/bls:S1").json()
+    assert rest["attribution"] == expected
+    assert _tool(server, "get_food_detail")("bls:S1")["attribution"] == expected
+
+
+def test_diary_tool_descriptions_guide_the_agent(api):
+    import asyncio
+    _, server, _ = api
+    tools = {t.name: (t.description or "") for t in asyncio.run(server.mcp.list_tools())}
+    for name in ("propose_intake", "correct_intake"):
+        text = tools[name]
+        for needle in ("small_glass", "large_glass", "tablespoon", "teaspoon", "slice", "plate",
+                       "grams_estimate", "never count", "food_id", "stated", "label"):
+            assert needle in text, (name, needle)
+    assert "propose_intake again" in tools["propose_intake"]
+    assert "voided" in tools["confirm_intake"] and "guardado" in tools["confirm_intake"]

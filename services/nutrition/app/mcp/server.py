@@ -13,7 +13,7 @@ from typing import Any
 from fastmcp import FastMCP
 
 from ..deps import build_diary_service, build_service
-from ..diary.service import DraftExpired, DraftNotFound, EntryNotFound, ProviderUnavailable
+from ..diary.service import BLS_ATTRIBUTION, DraftExpired, DraftNotFound, EntryNotFound, ProviderUnavailable
 from ..session import NO_SESSION, current_delegation
 
 
@@ -149,6 +149,7 @@ def get_food_detail(food_id: str) -> dict:
             for nutrient, value in record.nutrients_per_100g.items()
         },
         "known_nutrients": sorted(record.nutrients_per_100g),
+        "attribution": [BLS_ATTRIBUTION] if record.source == "BLS" else [],
     }
 
 
@@ -187,22 +188,40 @@ def _diary_call(operation: Callable[[], Any]):
         return {"error": "INVALID_ITEM"}
 
 
-@mcp.tool
+_ITEM_GUIDE = """Each item is an object with these fields:
+      label: what the person called it (text, 1 to 120 characters).
+      food_id: the id from search_foods, or null for a food no source knows.
+      amount: a number (or numeric text) of the unit.
+      unit: one of these exact, case-sensitive tokens. Anything else (grams, G,
+        Glass, ...) is rejected with INVALID_ITEM.
+        g, ml, serving;
+        small_glass (150 ml), glass (200), large_glass (300), cup (250), can (330),
+        tablespoon (15), teaspoon (5);
+        piece, slice, plate, portion: these four REQUIRE grams_estimate.
+      stated: a real boolean, true only when the person gave the exact amount.
+      grams_estimate: your estimate of the TOTAL grams of the item (not per unit);
+        required for piece, slice, plate and portion, optional otherwise."""
+
+
+_PROPOSE_DOC = """Draft what the person says they ate or drank. Drafts never count in the day totals.
+
+    Call this first whenever the person reports food. """ + _ITEM_GUIDE + """
+
+    consumed_at is an ISO time and defaults to now (a time in the future is rejected).
+    The returned ``day`` does NOT include this draft, because drafts never count: do
+    not report the food as included in the day. Show the person the returned items and
+    the free-sugars figure, then call confirm_intake only after they say yes. To change
+    a draft before confirming, call propose_intake again with the corrected items (an
+    unconfirmed draft never counts, so the old one is simply left behind). Unknown sugar
+    is null, never 0: free_sugars_known_g is the known sum and items_uncounted says how
+    many items could not be counted. Show the returned attribution text.
+    """
+
+
+@mcp.tool(description=_PROPOSE_DOC)
 def propose_intake(
     subject_person_id: str, items: list[dict], consumed_at: str | None = None
 ) -> dict:
-    """Draft what the person says they ate or drank. A draft never counts in the day totals.
-
-    Call this first whenever the person reports food. Each item needs label, amount
-    (a number or text) and unit (a gram or ml unit, or a portion name such as
-    small_glass, glass, large_glass, cup, can, tablespoon, teaspoon). Add food_id when you
-    know it from search_foods. Set stated=true only if the person gave the amount
-    themselves, and grams_estimate if you must guess the weight. consumed_at is an
-    ISO time and defaults to now. Show the person the returned items and the
-    free-sugars figure, then call confirm_intake only after they say yes. Unknown
-    sugar is null, never 0: free_sugars_known_g is the known sum and items_uncounted
-    says how many items could not be counted. Show the returned attribution text.
-    """
     return _diary_call(
         lambda: _diary.propose_intake(_session(), subject_person_id, items, consumed_at)
     )
@@ -214,19 +233,24 @@ def confirm_intake(subject_person_id: str, draft_id: str) -> dict:
 
     Call this only after the person has clearly said yes to the draft. Repeating it
     for the same draft is safe. Drafts expire after 24 hours (error DRAFT_EXPIRED);
-    propose again in that case.
+    propose again in that case. The result may show entry.voided == true if the entry
+    was voided since; then do not say "guardado" (saved), tell the person it was removed.
     """
     return _diary_call(lambda: _diary.confirm_intake(_session(), subject_person_id, draft_id))
 
 
-@mcp.tool
-def correct_intake(subject_person_id: str, entry_id: str, items: list[dict]) -> dict:
-    """Replace the items of a confirmed entry when the person corrects what they ate.
+_CORRECT_DOC = """Replace the items of a confirmed entry when the person corrects what they ate.
 
-    Send the full corrected item list, in the same format as propose_intake. The
-    earlier version is kept in the history; the day totals use the new one. Cannot
-    correct an entry that was voided.
+    Send the full corrected item list. """ + _ITEM_GUIDE + """
+
+    The earlier version is kept in the history; the day totals use the new one. Cannot
+    correct an entry that was voided. The returned ``day`` is the day after the
+    correction. Drafts never count; this change applies to the confirmed entry at once.
     """
+
+
+@mcp.tool(description=_CORRECT_DOC)
+def correct_intake(subject_person_id: str, entry_id: str, items: list[dict]) -> dict:
     return _diary_call(
         lambda: _diary.correct_intake(_session(), subject_person_id, entry_id, items)
     )
