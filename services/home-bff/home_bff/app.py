@@ -204,6 +204,21 @@ def create_app(
             )
             return _failure(400, "authorization could not be completed")
 
+        # Who logged in, asked BEFORE a Home session exists so a failure here leaves
+        # nothing behind. Only the opaque reference is kept; the Person id is not.
+        try:
+            who = client.whoami(tokens.access_token)
+        except ControlPlaneUnreachable:
+            logger.warning("whoami unreachable at login")
+            return _failure(503, "login could not be completed")
+        except SessionOpenError as whoami_error:
+            logger.warning("whoami refused at login (%s)", type(whoami_error).__name__)
+            return _failure(403, "this account is not linked to a Home person")
+        person_id = who.get("actor_person_id") if isinstance(who, dict) else None
+        if not isinstance(person_id, str) or not person_id:
+            logger.warning("whoami returned no person at login")
+            return _failure(403, "this account is not linked to a Home person")
+        login_person_ref = sessions.person_ref(person_id, settings.delegation_secret)
         # 6-9. The Control Plane resolves the User from the token and maps it to a
         # Person. Zero links, two links, or a disabled user all surface here as a
         # refusal — we never inspect or second-guess that decision.
@@ -226,6 +241,7 @@ def create_app(
                     access_token=tokens.access_token,
                     refresh_token=tokens.refresh_token,
                     runtime_id=RUNTIME_ID,
+                    person_ref=login_person_ref,
                 )
                 # ALREADY_BOUND is still success: the Home Hub session is valid, and
                 # agent binding is orthogonal. `binding` is logged only as its static
@@ -237,6 +253,7 @@ def create_app(
                     home_session_id=home_session_id,
                     access_token=tokens.access_token,
                     refresh_token=tokens.refresh_token,
+                    person_ref=login_person_ref,
                 )
         except (ValueError, StoreUnavailableError):
             return _failure(503, "runtime binding could not be completed")

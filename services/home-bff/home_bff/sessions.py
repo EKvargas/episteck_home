@@ -142,6 +142,26 @@ def mint_delegation(
     )
 
 
+# Opaque reference to the Home Person who logged in. Lets the BFF recognise "the same
+# person" without ever holding or showing the Person id. Hex HMAC-SHA256 under the
+# delegation secret; the label separates it from every other use of that secret.
+PERSON_REF_LABEL = b"episteck-person-ref\x00"
+
+
+def person_ref(person_id: str, secret: str) -> str:
+    if not person_id:
+        raise ValueError("person id is required")
+    return hmac.new(
+        secret.encode(), PERSON_REF_LABEL + person_id.encode(), hashlib.sha256
+    ).hexdigest()
+
+
+def refs_match(a: str, b: str) -> bool:
+    """An empty reference never matches anything, not even another empty one."""
+    if not a or not b:
+        return False
+    return hmac.compare_digest(a, b)
+
 def redact(value: str | None) -> str:
     """Render a credential safe for logs. Never log the token itself."""
     if not value:

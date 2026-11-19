@@ -95,3 +95,48 @@ def test_close_with_a_rejected_token_raises_instead_of_claiming_not_owner(status
 def test_access_refused_is_a_session_open_error_for_existing_handlers():
     assert issubclass(AccessRefused, SessionOpenError)
     assert not issubclass(AccessRefused, ControlPlaneUnreachable)
+
+
+# ------------------------------------------------- list_grantable_runtimes (Task 5)
+
+GRANTABLE = "/api/method/episteck_home.identity.session.get_grantable_runtimes"
+
+
+def test_grantable_returns_the_list_via_bare_get():
+    seen = {}
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["path"] = request.url.path
+        seen["query"] = request.url.query
+        seen["body"] = request.content
+        seen["auth"] = request.headers["Authorization"]
+        return httpx.Response(200, json={"message": {"runtime_ids": ["home-agent-ana"]}})
+
+    assert _client(handle).list_grantable_runtimes("tok") == ["home-agent-ana"]
+    assert seen == {
+        "method": "GET", "path": GRANTABLE, "query": b"", "body": b"", "auth": "Bearer tok",
+    }
+
+
+def test_grantable_malformed_bodies_are_none():
+    for message in ({"runtime_ids": "x"}, {"runtime_ids": [1]}, {}, ["a"], None):
+        client = _client(lambda r, m=message: httpx.Response(200, json={"message": m}))
+        assert client.list_grantable_runtimes("tok") is None
+    assert _client(lambda r: httpx.Response(200, content=b"nope")).list_grantable_runtimes("tok") is None
+
+
+def test_grantable_unreachable_and_missing_method_are_none():
+    def boom(request):
+        raise httpx.ConnectError("down")
+
+    assert _client(boom).list_grantable_runtimes("tok") is None
+    assert _client(lambda r: httpx.Response(500)).list_grantable_runtimes("tok") is None
+    assert _client(lambda r: httpx.Response(404)).list_grantable_runtimes("tok") is None
+    assert _client(lambda r: httpx.Response(417)).list_grantable_runtimes("tok") is None
+
+
+def test_grantable_refusal_raises_access_refused():
+    for status in (401, 403):
+        with pytest.raises(AccessRefused):
+            _client(lambda r, s=status: httpx.Response(s)).list_grantable_runtimes("tok")
