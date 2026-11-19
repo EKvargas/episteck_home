@@ -553,6 +553,10 @@ def create_app(
         session = store.get_session(session_id)
         if session is None:
             return RedirectResponse("/login?next=/runtime", status_code=303)
+        if not session.person_ref:
+            # A session from before person references cannot tell whose grants are
+            # whose: a fresh login always records the reference.
+            return RedirectResponse("/login?next=/runtime", status_code=303)
         try:
             agents, home_unreachable = _visible_agents(session, store, client)
         except AccessRefused:
@@ -580,6 +584,25 @@ def create_app(
         if int(time.time()) - session.created_at > sessions.RECENT_LOGIN_SECONDS:
             # Granting 90 days of authority needs a recent login, not just a cookie.
             return RedirectResponse("/login?next=/runtime", status_code=303)
+        try:
+            existing = store.resolve_runtime_grant(agent)
+        except (StoreUnavailableError, sqlite3.DatabaseError):
+            logger.warning("runtime grant could not be checked")
+            return _page(
+                session, store, client, status_code=503,
+                message="No se pudo guardar el permiso. Intentalo de nuevo.",
+            )
+        if (
+            existing is not None
+            and existing.grantor_ref
+            and not sessions.refs_match(existing.grantor_ref, session.person_ref)
+        ):
+            # Another person's live grant is never replaced, even if Home would allow
+            # it. A legacy row (no grantor) stays replaceable for the owner's re-grant.
+            return _page(
+                session, store, client, status_code=409,
+                message="Este asistente ya tiene el permiso de otra persona.",
+            )
         try:
             home_session_id = client.open_runtime_grant(
                 session.access_token, agent, settings.runtime_grant_days
@@ -629,6 +652,10 @@ def create_app(
         agent = _form_agent(form)
         if agent is None:
             return _unknown_agent()
+        if not session.person_ref:
+            # Without a reference this session matches no grant, not even its own:
+            # log in again so the revoke can find it.
+            return RedirectResponse("/login?next=/runtime", status_code=303)
         try:
             outcome = _revoke_grant(session, store, client, agent)
         except AccessRefused:
@@ -662,6 +689,10 @@ def create_app(
         session, _form, error = await _guard(request, session_id, store)
         if error is not None:
             return error
+        if not session.person_ref:
+            # Do not log out leaving this person's grant alive: without a reference
+            # none of their grants can be found. Log in again, then log out everywhere.
+            return RedirectResponse("/login?next=/runtime", status_code=303)
         # Revoke the grants while the token is still valid, then tear the session down.
         outcomes = set()
         for runtime_id in settings.runtime_ids:

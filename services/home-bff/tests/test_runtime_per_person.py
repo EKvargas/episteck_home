@@ -16,7 +16,7 @@ from home_bff.app import create_app
 from home_bff.frappe_client import AccessRefused, SessionOpenError
 from home_bff.runtime import PRIMARY_GRANT_AUDIENCES, PRIMARY_RUNTIME_ID
 from home_bff.sessions import person_ref
-from home_bff.store import SessionStore
+from home_bff.store import SessionStore, StoreUnavailableError
 from tests.test_app import DELEGATION_SECRET, make_settings
 from tests.test_runtime_routes import ORIGIN, GrantClient, login
 
@@ -212,6 +212,52 @@ def test_session_without_person_ref_must_log_in_again_to_grant(ctx):
     assert store.resolve_runtime_grant(PRIMARY_RUNTIME_ID) is None
 
 
+def test_grant_never_replaces_another_persons_live_grant(ctx):
+    http, store, client = ctx
+    before = owner_grant(store)
+    cookie = as_ana(http, client)
+    client.grantable = [PRIMARY_RUNTIME_ID]  # Home misconfigured: lets Ana grant his agent
+    response = send(http, "/runtime/grant", cookie, agent=PRIMARY_RUNTIME_ID)
+    assert response.status_code == 409
+    assert "Este asistente ya tiene el permiso de otra persona." in response.text
+    assert client.open_calls == []
+    assert store.resolve_runtime_grant(PRIMARY_RUNTIME_ID) == before
+    assert date_of(before.expires_at) not in response.text
+
+
+def test_grant_check_store_failure_is_503_without_calling_home(ctx, monkeypatch):
+    http, store, client = ctx
+    cookie = as_ana(http, client)
+    real = store.resolve_runtime_grant
+    failures = []
+
+    def fail_once(runtime_id):
+        if not failures:
+            failures.append(runtime_id)
+            raise StoreUnavailableError("runtime store unavailable")
+        return real(runtime_id)
+
+    monkeypatch.setattr(store, "resolve_runtime_grant", fail_once)
+    response = send(http, "/runtime/grant", cookie, agent=ANA_RUNTIME)
+    assert response.status_code == 503
+    assert "No se pudo guardar el permiso. Intentalo de nuevo." in response.text
+    assert failures == [ANA_RUNTIME]
+    assert client.open_calls == []
+    assert real(ANA_RUNTIME) is None
+
+
+def test_owner_regrant_replaces_a_legacy_row(ctx):
+    http, store, client = ctx
+    owner_grant(store, "HDS-LEGACY", grantor="")
+    cookie = as_owner(http, client)
+    response = send(http, "/runtime/grant", cookie, agent=PRIMARY_RUNTIME_ID)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/runtime"
+    grant = store.resolve_runtime_grant(PRIMARY_RUNTIME_ID)
+    assert grant.grantor_ref == REF_OWNER
+    assert grant.home_session_id == "HDS-GRANT-SECRET"
+
+
 def test_home_refusal_for_the_wrong_person_stores_nothing(ctx):
     http, store, client = ctx
     cookie = as_ana(http, client)
@@ -300,3 +346,48 @@ def test_home_down_logout_all_by_ana_keeps_the_owners_grant(ctx):
     assert store.resolve_runtime_grant(ANA_RUNTIME) is None
     assert store.resolve_runtime_grant(PRIMARY_RUNTIME_ID) == before
     assert store.get_session(cookie) is None
+
+
+# ------------------------------------------- sessions from before person references
+
+
+def ref_less_session(http, store):
+    """A browser session created before the deploy: it has no person reference."""
+    old = store.create_session(
+        home_session_id="HDS-OLD", access_token="at-old", refresh_token=None, person_ref=""
+    )
+    http.cookies.set(sessions.COOKIE_NAME, old.session_id, domain="bff.invalid")
+    return old.session_id
+
+
+def test_empty_ref_session_page_asks_for_login(ctx):
+    http, store, client = ctx
+    owner_grant(store)
+    ref_less_session(http, store)
+    response = http.get("/runtime", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login?next=/runtime"
+    assert client.grantable_calls == 0
+
+
+def test_empty_ref_session_revoke_asks_for_login(ctx):
+    http, store, client = ctx
+    before = owner_grant(store)
+    cookie = ref_less_session(http, store)
+    response = send(http, "/runtime/revoke", cookie, agent=PRIMARY_RUNTIME_ID)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login?next=/runtime"
+    assert client.close_calls == []
+    assert store.resolve_runtime_grant(PRIMARY_RUNTIME_ID) == before
+
+
+def test_empty_ref_session_logout_all_asks_for_login(ctx):
+    http, store, client = ctx
+    before = owner_grant(store)
+    cookie = ref_less_session(http, store)
+    response = send(http, "/logout/all", cookie)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login?next=/runtime"
+    assert client.close_calls == [] and client.revoked == []
+    assert store.resolve_runtime_grant(PRIMARY_RUNTIME_ID) == before
+    assert store.get_session(cookie) is not None
