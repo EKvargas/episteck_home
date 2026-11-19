@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from ..money import format_minor, parse_amount
@@ -35,6 +35,7 @@ ANY_KIND = tuple(CounterpartyKind)
 OWNER_WORDS = frozenset({"owner", "mio", "mia", "yo", "tuyo", "dueno"})
 PLAIN = {"expected": "a plain decimal such as 1250.50"}
 MAX_MINOR = 10 ** 12  # minor units; anything larger is a typo, and SQLite holds 64 bits
+LOCAL_TODAY_SLACK = timedelta(days=1)
 _EXCHANGE_TARGET = re.compile(r"\s*(C\d{1,9})\s*:\s*(.+?)\s*", re.IGNORECASE | re.ASCII)
 _FACT = re.compile(r"[CFRE]\d{1,9}", re.IGNORECASE | re.ASCII)
 _PENDING = re.compile(r"P\d{1,9}", re.IGNORECASE | re.ASCII)
@@ -107,7 +108,9 @@ def day(value, field: str) -> date | None:
 
 
 def not_future(ctx: Ctx, value: date | None, field: str) -> date | None:
-    if value is not None and value > ctx.now.date():
+    """Refuses a date later than the UTC date + 1 day: the owner (Europe) and the family
+    (Venezuela) live on both sides of UTC, so their "today" may be tomorrow in UTC (R48)."""
+    if value is not None and value > ctx.now.date() + LOCAL_TODAY_SLACK:
         raise ValidationError(field, {"reason": "future"})
     return value
 

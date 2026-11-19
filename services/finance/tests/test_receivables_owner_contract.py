@@ -371,16 +371,19 @@ def test_echoes_show_a_fund_opening_as_held_and_name_the_rate(tmp_path):  # m9
     assert funding["echo"]["eur_per_usd"] == "0.9200" and "rate" not in funding["echo"]
 
 
-def test_future_dates_are_refused(tmp_path):  # m10
+def test_future_dates_are_refused_beyond_the_owners_local_today(tmp_path):  # m10, R48
     env = Env(tmp_path)
-    tomorrow = "2026-11-21"
-    assert env.svc.propose_receipt(DELEG, "Familiar A", "50", "USD", "CASH", tomorrow)[
-        "field"] == "received_on"
-    assert env.svc.propose_exchange(DELEG, "300", E1, None, tomorrow)["field"] == "delivered_on"
-    assert env.svc.propose_exchange(DELEG, "300", E1, {**EVIDENCE, "date": tomorrow})[
+    env.now = datetime(2026, 11, 20, 23, 30, tzinfo=timezone.utc)  # already the 21st in Europe
+    tomorrow, later = "2026-11-21", "2026-11-22"
+    assert env.svc.propose_receipt(DELEG, "Familiar A", "50", "USD", "CASH", tomorrow)["ok"]
+    assert env.svc.propose_exchange(DELEG, "300", E1, None, tomorrow)["ok"]
+    assert env.svc.propose_receipt(DELEG, "Familiar A", "50", "USD", "CASH", later) == {
+        "ok": False, "error": "validation_error", "field": "received_on",
+        "detail": {"reason": "future"}}
+    assert env.svc.propose_exchange(DELEG, "300", E1, None, later)["field"] == "delivered_on"
+    assert env.svc.propose_exchange(DELEG, "300", E1, {**EVIDENCE, "date": later})[
         "field"] == "evidence.date"
-    assert env.svc.propose_receipt(DELEG, "Familiar A", "50", "USD", "CASH", "2026-11-20")["ok"]
-    assert count_rows(env.base, "pending_item") == 1
+    assert count_rows(env.base, "pending_item") == 2
 
 
 def test_an_explain_answer_can_skip_the_payer_rule(tmp_path):
