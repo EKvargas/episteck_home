@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 
@@ -6,8 +7,13 @@ CONFIG = (ROOT / "nginx-mcp-gateway.conf").read_text(encoding="utf-8")
 SERVICE = (ROOT / "episteck-mcp-gateway.service").read_text(encoding="utf-8")
 
 
+_SERVERS = CONFIG.split("server {")[1:]
+assert len(_SERVERS) == 2
+PRIMARY_SERVER, ANA_SERVER = _SERVERS
+
 REQUIRED = (
     "listen 127.0.0.1:9934;",
+    "listen 127.0.0.1:9937;",
     "pid /run/episteck-mcp-gateway/nginx.pid;",
     "proxy_pass http://unix:/run/episteck/home-bff-mint/mint.sock:/internal/mint;",
     "proxy_method POST;",
@@ -43,11 +49,11 @@ def test_standalone_gateway_identity_and_listener():
 
 
 def test_all_paths_require_mint_and_use_the_fixed_audience_mint_seam():
-    assert CONFIG.count("auth_request /__mint;") == 2
+    assert CONFIG.count("auth_request /__mint;") == 4
     assert CONFIG.count("auth_request /__mint_finance;") == 1
-    assert CONFIG.count("auth_request_set $mint_delegation") == 3
-    assert CONFIG.count("proxy_set_header X-Episteck-Delegation $mint_delegation;") == 3
-    assert CONFIG.count("proxy_hide_header X-Episteck-Delegation;") == 3
+    assert CONFIG.count("auth_request_set $mint_delegation") == 5
+    assert CONFIG.count("proxy_set_header X-Episteck-Delegation $mint_delegation;") == 5
+    assert CONFIG.count("proxy_hide_header X-Episteck-Delegation;") == 5
     assert "svc-nutrition" not in CONFIG
     assert "svc-finance" not in CONFIG
     for directive in REQUIRED:
@@ -70,13 +76,16 @@ def test_mint_subrequest_cannot_receive_client_credentials_or_body():
     assert 'proxy_set_header Cookie "";' in mint_block
     assert 'proxy_set_header X-Episteck-Delegation "";' in mint_block
     assert 'proxy_set_header X-Actor-ID "";' in mint_block
-    assert 'proxy_set_header X-Runtime-ID "";' in mint_block
+    assert 'proxy_set_header X-Runtime-ID "home-agent-primary";' in mint_block
+    ana_block = ANA_SERVER.split("location = /__mint {", 1)[1].split("}", 1)[0]
+    assert 'proxy_set_header X-Runtime-ID "home-agent-ana";' in ana_block
+    assert 'proxy_set_header X-Runtime-ID ""' not in CONFIG
 
 
 def test_security_controls_have_negative_mutation_proof():
-    assert CONFIG.count("proxy_next_upstream off;") == 3
+    assert CONFIG.count("proxy_next_upstream off;") == 5
     mutated = CONFIG.replace("proxy_next_upstream off;", "", 1)
-    assert mutated.count("proxy_next_upstream off;") == 2
+    assert mutated.count("proxy_next_upstream off;") == 4
     assert CONFIG.count("proxy_next_upstream off;") > mutated.count(
         "proxy_next_upstream off;"
     )
@@ -110,5 +119,38 @@ def test_finance_mint_subrequest_cannot_receive_client_credentials_or_body():
     assert "proxy_pass http://unix:/run/episteck/home-bff-mint/mint.sock:/internal/mint_finance;" in block
     assert "proxy_pass_request_headers off;" in block
     assert "proxy_pass_request_body off;" in block
-    for header in ("Authorization", "Cookie", "X-Episteck-Delegation", "X-Actor-ID", "X-Runtime-ID"):
+    for header in ("Authorization", "Cookie", "X-Episteck-Delegation", "X-Actor-ID"):
         assert f'proxy_set_header {header} "";' in block
+    assert 'proxy_set_header X-Runtime-ID "home-agent-primary";' in block
+
+
+def test_each_server_stamps_its_own_runtime_on_the_mint():
+    assert "listen 127.0.0.1:9934;" in PRIMARY_SERVER
+    assert PRIMARY_SERVER.count('X-Runtime-ID "home-agent-primary"') == 2
+    assert "home-agent-ana" not in PRIMARY_SERVER
+    assert "listen 127.0.0.1:9937;" in ANA_SERVER
+    assert ANA_SERVER.count('X-Runtime-ID "home-agent-ana"') == 1
+    assert "home-agent-primary" not in ANA_SERVER
+
+
+def test_ana_server_has_no_finance_route_or_mint():
+    assert "finance" not in ANA_SERVER.lower()
+    assert "9936" not in ANA_SERVER
+    assert "/gateway/home/" in ANA_SERVER
+    assert "/gateway/nutrition/" in ANA_SERVER
+
+
+def test_every_mint_block_drops_client_headers():
+    blocks = re.findall(r"location = /__mint(?:_finance)? \{(.*?)\}", CONFIG, re.S)
+    assert len(blocks) == 3
+    for block in blocks:
+        assert "proxy_pass_request_headers off;" in block
+        assert "proxy_pass_request_body off;" in block
+
+
+def test_listeners_are_loopback_only():
+    assert re.findall(r"^\s*listen\s+(\S+);", CONFIG, re.M) == [
+        "127.0.0.1:9934",
+        "127.0.0.1:9937",
+    ]
+    assert "0.0.0.0" not in CONFIG
