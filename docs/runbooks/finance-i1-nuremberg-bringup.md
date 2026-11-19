@@ -6,6 +6,8 @@
 
 One-sentence summary: create the `svc-finance` user and directories, build one image from the merged commit, start the API and MCP on loopback, place secrets yourself, then enable the sync timer and add the backup block.
 
+**I2 (family exchanges)** is an upgrade on top of this runbook: [finance-i2-exchanges.md](finance-i2-exchanges.md) (new image, description rules, watched accounts and own IBANs, the new Olin skill and its scheduled delivery job).
+
 ## Who runs what
 
 | Marker | Meaning |
@@ -272,6 +274,8 @@ HSTEP install     # backs up config.yaml to /var/backups/episteck/hermes-b9-<UTC
 ```
 
 The install output must end its key report with `only the finance keys changed`.
+
+I2 adds `HSTEP cron` (the scheduled delivery job) and `HSTEP rollback-cron`, and `rollback` also removes that job: see [finance-i2-exchanges.md](finance-i2-exchanges.md), step 6.
 
 **Verify (`[CLAUDE]`):** `HSTEP verify` shows the skill `644 root`, `home-agent cannot write the skill (expected)`, `mcp_servers.finance` at `http://127.0.0.1:9934/gateway/finance/`, the gateway `active`, and `hermes mcp test finance` listing `finance_overview` (401 or 502 there means the runtime grant lacks `svc-finance`). After B7/B8, ask "¿cuánto tenemos y dónde?": the reply cites source and date per account, and the Finance logs show one overview call.
 
