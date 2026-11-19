@@ -7,7 +7,9 @@ Logging, if added, must carry ids and statuses only, never food text.
 """
 from __future__ import annotations
 
+import json
 import re
+import sqlite3
 from collections.abc import Callable
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -27,7 +29,16 @@ MODES = ("GENERAL", "PREGNANCY")
 BLS_ATTRIBUTION = "Datos: Max Rubner-Institut, BLS 4.0"
 MAX_ITEMS = 30
 MAX_LABEL = 120
+MAX_FUTURE = timedelta(minutes=10)  # clock skew allowance for consumed_at
 _ONE_DECIMAL = Decimal("0.1")
+
+
+class InvalidField(ValueError):
+    """Input the person or agent can fix. Carries the field NAME only, never food text."""
+
+    def __init__(self, field: str, message: str | None = None):
+        super().__init__(message or f"{field} is not valid")
+        self.field = field
 
 
 class DraftNotFound(LookupError):
@@ -56,13 +67,13 @@ def _one_decimal(value: Decimal) -> Decimal:
 
 def _decimal(value: Any, field: str) -> Decimal:
     if isinstance(value, bool):
-        raise ValueError(f"{field} must be a number")
+        raise InvalidField(field, f"{field} must be a number")
     try:
         d = Decimal(str(value))
     except InvalidOperation:
-        raise ValueError(f"{field} must be a number") from None
+        raise InvalidField(field, f"{field} must be a number") from None
     if not d.is_finite():
-        raise ValueError(f"{field} must be a finite number")
+        raise InvalidField(field, f"{field} must be a finite number")
     return d
 
 
@@ -72,28 +83,28 @@ _DAY_FORMAT = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 def _parse_day(day: Any, field: str = "day") -> date:
     """Strict YYYY-MM-DD (date.fromisoformat alone also accepts 20261120 and week dates)."""
     if not isinstance(day, str) or not _DAY_FORMAT.match(day):
-        raise ValueError(f"{field} must be YYYY-MM-DD")
+        raise InvalidField(field, f"{field} must be YYYY-MM-DD")
     try:
         return date.fromisoformat(day)
     except ValueError:
-        raise ValueError(f"{field} must be YYYY-MM-DD") from None
+        raise InvalidField(field, f"{field} must be YYYY-MM-DD") from None
 
 
 def _parse_item(raw: Any) -> dict:
     if not isinstance(raw, dict):
-        raise ValueError("each item must be an object")
+        raise InvalidField("items", "each item must be an object")
     label = raw.get("label")
     if not isinstance(label, str) or not label.strip() or len(label.strip()) > MAX_LABEL:
-        raise ValueError(f"label must be 1 to {MAX_LABEL} characters")
+        raise InvalidField("label", f"label must be 1 to {MAX_LABEL} characters")
     unit = raw.get("unit")
     if not isinstance(unit, str):
-        raise ValueError("unit must be text")
+        raise InvalidField("unit", "unit must be text")
     food_id = raw.get("food_id")
     if food_id is not None and (not isinstance(food_id, str) or not food_id.strip()):
-        raise ValueError("food_id must be text or null")
+        raise InvalidField("food_id", "food_id must be text or null")
     stated = raw.get("stated", False)
     if not isinstance(stated, bool):
-        raise ValueError("stated must be true or false")
+        raise InvalidField("stated", "stated must be true or false")
     estimate = raw.get("grams_estimate")
     return {
         "label": label.strip(),
@@ -166,12 +177,16 @@ class DiaryService:
         try:
             return self._provider.get_food(food_id)
         except LookupError:  # KeyError included
-            raise ValueError("unknown food_id") from None
+            raise InvalidField("food_id", "unknown food_id") from None
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
-                raise ValueError("unknown food_id") from None
+                raise InvalidField("food_id", "unknown food_id") from None
             raise ProviderUnavailable("food provider unavailable") from None
         except httpx.RequestError:  # transport, decoding, redirect loops
+            raise ProviderUnavailable("food provider unavailable") from None
+        except (json.JSONDecodeError, sqlite3.OperationalError):
+            # A non-JSON body (JSONDecodeError is a ValueError, so it must be caught
+            # before the generic input handling) or an unreadable BLS database.
             raise ProviderUnavailable("food provider unavailable") from None
 
     def _facts_for(self, food_id: str) -> tuple[str, dict]:
@@ -217,7 +232,7 @@ class DiaryService:
 
     def _freeze_items(self, raw_items: Any, known: dict[str, tuple[str, dict]] | None = None) -> list[dict]:
         if not isinstance(raw_items, list) or not 1 <= len(raw_items) <= MAX_ITEMS:
-            raise ValueError(f"items must be a list of 1 to {MAX_ITEMS}")
+            raise InvalidField("items", f"items must be a list of 1 to {MAX_ITEMS}")
         items = [_parse_item(r) for r in raw_items]
         cache: dict[str, tuple[str, dict]] = dict(known or {})
         frozen = []
@@ -239,9 +254,11 @@ class DiaryService:
         try:
             dt = datetime.fromisoformat(consumed_at)
         except (TypeError, ValueError):
-            raise ValueError("consumed_at must be an ISO 8601 date and time") from None
+            raise InvalidField("consumed_at", "consumed_at must be an ISO 8601 date and time") from None
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=self._tz)
+        if dt > self._clock() + MAX_FUTURE:
+            raise InvalidField("consumed_at", "consumed_at cannot be in the future")
         return dt
 
     # ---- day summary ---------------------------------------------------
@@ -348,15 +365,19 @@ class DiaryService:
             raise EntryNotFound("entry not found")
         return entry
 
-    def get_day_summary(self, delegation, subject_person_id: str, day: str) -> dict:
-        self._authorize(delegation, subject_person_id, ["VIEW"])
-        return self._day(subject_person_id, _parse_day(day))
+    def _day_or_today(self, day: str | None) -> date:
+        """None means today in DIARY_TZ, so the agent never works out the local date."""
+        return self._today() if day is None else _parse_day(day)
 
-    def close_day(self, delegation, subject_person_id: str, day: str) -> dict:
+    def get_day_summary(self, delegation, subject_person_id: str, day: str | None = None) -> dict:
+        self._authorize(delegation, subject_person_id, ["VIEW"])
+        return self._day(subject_person_id, self._day_or_today(day))
+
+    def close_day(self, delegation, subject_person_id: str, day: str | None = None) -> dict:
         self._authorize(delegation, subject_person_id, ["UPDATE", "VIEW"])
-        d = _parse_day(day)
+        d = self._day_or_today(day)
         if d > self._today():
-            raise ValueError("a day that has not started cannot be closed")
+            raise InvalidField("day", "a day that has not started cannot be closed")
         self._store.close_day(subject_person_id, d.isoformat(), self._clock())
         return self._day(subject_person_id, d)
 
@@ -364,11 +385,11 @@ class DiaryService:
                  due_date: str | None = None) -> dict:
         self._authorize(delegation, subject_person_id, ["UPDATE", "VIEW"])
         if mode not in MODES:
-            raise ValueError("mode must be GENERAL or PREGNANCY")
+            raise InvalidField("mode", "mode must be GENERAL or PREGNANCY")
         due = None
         if due_date is not None:
             if mode != "PREGNANCY":
-                raise ValueError("due_date is only allowed with PREGNANCY")
+                raise InvalidField("due_date", "due_date is only allowed with PREGNANCY")
             due = _parse_day(due_date, "due_date")
         stored = self._profile(subject_person_id)
         if not stored:

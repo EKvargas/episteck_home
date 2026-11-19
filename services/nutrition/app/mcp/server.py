@@ -184,8 +184,8 @@ def _diary_call(operation: Callable[[], Any]):
         return {"error": "DRAFT_EXPIRED"}
     except ProviderUnavailable:
         return {"error": "PROVIDER_UNAVAILABLE"}
-    except ValueError:
-        return {"error": "INVALID_ITEM"}
+    except ValueError as error:
+        return {"error": "INVALID_ITEM", "field": getattr(error, "field", None)}
 
 
 _ITEM_GUIDE = """Each item is an object with these fields:
@@ -272,8 +272,11 @@ def get_diary_entry(subject_person_id: str, entry_id: str) -> dict:
 
 
 @mcp.tool
-def get_day_summary(subject_person_id: str, date: str) -> dict:
-    """Read one day (YYYY-MM-DD, local date) with the confirmed entries and free sugars.
+def get_day_summary(subject_person_id: str, date: str | None = None) -> dict:
+    """Read one day with the confirmed entries and free sugars.
+
+    date is YYYY-MM-DD (local date); leave it out for today in the diary's own timezone,
+    so you never have to work out the date yourself.
 
     Only confirmed entries count; drafts never do. free_sugars_known_g is the known
     sum against the daily limit; items_uncounted says how many items could not be
@@ -283,8 +286,10 @@ def get_day_summary(subject_person_id: str, date: str) -> dict:
 
 
 @mcp.tool
-def close_day(subject_person_id: str, date: str) -> dict:
-    """Mark a day (YYYY-MM-DD) as finished and return its final summary.
+def close_day(subject_person_id: str, date: str | None = None) -> dict:
+    """Mark a day as finished and return its final summary.
+
+    date is YYYY-MM-DD; leave it out for today in the diary's own timezone.
 
     Call it only when the person says the day is done. A day that has not started
     yet cannot be closed.

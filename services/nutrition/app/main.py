@@ -263,8 +263,11 @@ def _diary_call(operation: Callable[[], Any]):
         raise HTTPException(409, "DRAFT_EXPIRED") from None
     except ProviderUnavailable:
         raise HTTPException(503, "PROVIDER_UNAVAILABLE") from None
-    except ValueError:
-        raise HTTPException(400, "INVALID_ITEM") from None
+    except ValueError as error:
+        # The field NAME only, never food text.
+        raise HTTPException(
+            400, {"error": "INVALID_ITEM", "field": getattr(error, "field", None)}
+        ) from None
 
 
 class DiaryItemIn(BaseModel):
@@ -323,6 +326,17 @@ def diary_void(person_id: str, entry_id: str, delegation: str | None = Depends(h
 @app.get("/diary/{person_id}/entries/{entry_id}")
 def diary_entry(person_id: str, entry_id: str, delegation: str | None = Depends(human_session)):
     return _diary_call(lambda: diary.get_entry(delegation, person_id, entry_id))
+
+
+@app.get("/diary/{person_id}/days/today")
+def diary_today(person_id: str, delegation: str | None = Depends(human_session)):
+    """Today in DIARY_TZ, so the caller never works out the local date itself."""
+    return _diary_call(lambda: diary.get_day_summary(delegation, person_id))
+
+
+@app.post("/diary/{person_id}/days/today/close")
+def diary_close_today(person_id: str, delegation: str | None = Depends(human_session)):
+    return _diary_call(lambda: diary.close_day(delegation, person_id))
 
 
 @app.get("/diary/{person_id}/days/{date}")

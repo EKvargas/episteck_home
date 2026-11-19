@@ -115,8 +115,11 @@ def test_invalid_item_is_400(api):
     _, _, client = api
     bad = {"label": "Cola", "food_id": "syn-cola", "amount": 1, "unit": "bucket"}
     r = client.post(f"/diary/{PERSON}/drafts", json={"items": [bad]}, headers=H)
-    assert (r.status_code, r.json()) == (400, {"detail": "INVALID_ITEM"})
-    assert client.get(f"/diary/{PERSON}/days/not-a-date", headers=H).status_code == 400
+    assert (r.status_code, r.json()) == (400, {"detail": {"error": "INVALID_ITEM", "field": None}})
+    r = client.get(f"/diary/{PERSON}/days/not-a-date", headers=H)
+    assert (r.status_code, r.json()) == (400, {"detail": {"error": "INVALID_ITEM", "field": "day"}})
+    r = client.post(f"/diary/{PERSON}/drafts", json={"items": [{**COLA, "amount": "lots"}]}, headers=H)
+    assert r.json() == {"detail": {"error": "INVALID_ITEM", "field": "amount"}}
 
 
 def test_body_failing_schema_stays_422(api):
@@ -229,3 +232,30 @@ def test_diary_tool_descriptions_guide_the_agent(api):
             assert needle in text, (name, needle)
     assert "propose_intake again" in tools["propose_intake"]
     assert "voided" in tools["confirm_intake"] and "guardado" in tools["confirm_intake"]
+
+
+def test_today_routes_default_to_the_diary_timezone(api):
+    main, _, client = api
+    from datetime import datetime, timezone
+    main.diary._clock = lambda: datetime(2026, 11, 19, 23, 30, tzinfo=timezone.utc)
+    r = client.get(f"/diary/{PERSON}/days/today", headers=H)
+    assert (r.status_code, r.json()["date"]) == (200, "2026-11-20")  # Berlin is already the 20th
+    r = client.post(f"/diary/{PERSON}/days/today/close", headers=H)
+    assert (r.status_code, r.json()["date"]) == (200, "2026-11-20")
+    assert main.diary._store.is_day_closed(PERSON, "2026-11-20") is True
+
+
+def test_mcp_date_is_optional_and_errors_name_the_field(api):
+    main, server, _ = api
+    import app.session as session_module
+    original = session_module.get_http_headers
+    session_module.get_http_headers = lambda: {session_module.DELEGATION_HEADER.lower(): SESSION}
+    try:
+        assert _tool(server, "get_day_summary")(PERSON)["date"] == _today(main)
+        assert _tool(server, "close_day")(PERSON)["date"] == _today(main)
+        bad = _tool(server, "propose_intake")(PERSON, [{**COLA, "label": ""}])
+        assert bad == {"error": "INVALID_ITEM", "field": "label"}
+        bucket = _tool(server, "propose_intake")(PERSON, [{**COLA, "unit": "bucket"}])
+        assert bucket == {"error": "INVALID_ITEM", "field": None}
+    finally:
+        session_module.get_http_headers = original

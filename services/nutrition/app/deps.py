@@ -1,5 +1,6 @@
 """Shared singletons: repo, provider (chain or synthetic), mealie adapter, service."""
 from __future__ import annotations
+import logging
 import os
 from .store.sqlite_repo import SqliteNutritionRepository
 from .providers.synthetic import SyntheticFoodProvider
@@ -7,6 +8,8 @@ from .service import NutritionService
 from .home_control.client import HomeControlPlaneClient
 
 _DB = os.environ.get("NUTRITION_DB", "/data/nutrition.sqlite")
+_log = logging.getLogger(__name__)
+_WARNED_MISSING_BLS: set[str] = set()  # the service and the diary both build a provider
 
 
 def build_home_authorizer() -> HomeControlPlaneClient:
@@ -20,6 +23,9 @@ def _build_provider():
     if mode == "synthetic":
         return SyntheticFoodProvider()
     bls_db = os.environ.get("BLS_DB")
+    if bls_db and not os.path.exists(bls_db) and bls_db not in _WARNED_MISSING_BLS:
+        _WARNED_MISSING_BLS.add(bls_db)
+        _log.warning("BLS_DB is set but the file is missing (%s); BLS lookups are disabled", bls_db)
     if bls_db and os.path.exists(bls_db):
         # BLS alone justifies the chain, even without a USDA key.
         from .providers.bls import BlsFoodProvider

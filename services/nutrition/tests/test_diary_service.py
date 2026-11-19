@@ -17,7 +17,7 @@ from tests.support import AllowAllAuthorizer, DenyAllAuthorizer, RecordingAuthor
 
 S = "delegation-token"
 BLS_TEXT = "Datos: Max Rubner-Institut, BLS 4.0"
-T = "2026-11-20T16:00:00+01:00"
+T = "2026-11-19T10:30:00+01:00"  # a little before the fixture clock (10:00Z)
 
 
 class Clock:
@@ -115,7 +115,7 @@ def test_draft_expires(env):
     clock.now += timedelta(hours=25)
     with pytest.raises(DraftExpired):
         svc.confirm_intake(S, "p1", d["draft_id"])
-    assert store.list_entries("p1", "2026-11-20") == []
+    assert store.list_entries("p1", "2026-11-19") == []
 
 
 def test_expired_but_confirmed_draft_stays_idempotent(env):
@@ -129,7 +129,7 @@ def test_expired_but_confirmed_draft_stays_idempotent(env):
 def test_draft_never_counts_until_confirmed(env):
     svc = env[0]
     svc.propose_intake(S, "p1", [cola()], consumed_at=T)
-    assert svc.get_day_summary(S, "p1", "2026-11-20")["day_status"] == "NO_ENTRIES"
+    assert svc.get_day_summary(S, "p1", "2026-11-19")["day_status"] == "NO_ENTRIES"
 
 
 def test_frozen_facts_survive_provider_change(env):
@@ -138,7 +138,7 @@ def test_frozen_facts_survive_provider_change(env):
     confirm(svc, [gram_item("f", 100)])
     prov.records["f"] = fizz("99")
     calls = len(prov.calls)
-    assert svc.get_day_summary(S, "p1", "2026-11-20")["free_sugars_known_g"] == "10.0"
+    assert svc.get_day_summary(S, "p1", "2026-11-19")["free_sugars_known_g"] == "10.0"
     assert len(prov.calls) == calls
 
 
@@ -160,7 +160,7 @@ def test_unknown_food_is_uncounted(env):
         None, None, "UNKNOWN", None)
     assert item["grams"] == "120"
     svc.confirm_intake(S, "p1", d["draft_id"])
-    day = svc.get_day_summary(S, "p1", "2026-11-20")
+    day = svc.get_day_summary(S, "p1", "2026-11-19")
     assert (day["sugar_status"], day["items_uncounted"]) == ("PARTIAL", 1)
     assert day["free_sugars_known_g"] is None
 
@@ -170,7 +170,7 @@ def test_unclassified_food_is_partial_never_zero(env):
     d = svc.propose_intake(S, "p1", [gram_item("syn-bread", 50)], consumed_at=T)
     assert d["items"][0]["free_sugar_class"] == "UNKNOWN" and d["items"][0]["free_sugars_g"] is None
     svc.confirm_intake(S, "p1", d["draft_id"])
-    day = svc.get_day_summary(S, "p1", "2026-11-20")
+    day = svc.get_day_summary(S, "p1", "2026-11-19")
     assert (day["sugar_status"], day["items_uncounted"]) == ("PARTIAL", 1)
 
 
@@ -181,7 +181,7 @@ def test_free_food_with_no_sugar_value_is_partial_never_zero(env):
     item = d["items"][0]
     assert item["free_sugar_class"] == "FREE" and item["free_sugars_g"] is None
     svc.confirm_intake(S, "p1", d["draft_id"])
-    day = svc.get_day_summary(S, "p1", "2026-11-20")
+    day = svc.get_day_summary(S, "p1", "2026-11-19")
     assert (day["sugar_status"], day["items_uncounted"], day["free_sugars_known_g"]) == ("PARTIAL", 1, None)
 
 
@@ -190,7 +190,7 @@ def test_not_free_food_counts_zero(env):
     d = svc.propose_intake(S, "p1", [gram_item("syn-apple", 150)], consumed_at=T)
     assert d["items"][0]["free_sugars_g"] == "0.0"
     svc.confirm_intake(S, "p1", d["draft_id"])
-    assert svc.get_day_summary(S, "p1", "2026-11-20")["sugar_status"] == "KNOWN"
+    assert svc.get_day_summary(S, "p1", "2026-11-19")["sugar_status"] == "KNOWN"
 
 
 def test_day_total_is_sum_of_rounded_items(env):
@@ -199,7 +199,7 @@ def test_day_total_is_sum_of_rounded_items(env):
     d = svc.propose_intake(S, "p1", [a, a, a], consumed_at=T)
     assert [i["free_sugars_g"] for i in d["items"]] == ["8.4"] * 3
     svc.confirm_intake(S, "p1", d["draft_id"])
-    assert svc.get_day_summary(S, "p1", "2026-11-20")["free_sugars_known_g"] == "25.2"
+    assert svc.get_day_summary(S, "p1", "2026-11-19")["free_sugars_known_g"] == "25.2"
 
 
 def test_item_rounding_half_up(env):
@@ -218,7 +218,7 @@ def test_correction_keeps_revision(env):
     out = svc.correct_intake(S, "p1", e["id"], [cola(1, "large_glass")])
     assert out["day"]["free_sugars_known_g"] == "31.8"
     entry = svc.get_entry(S, "p1", e["id"])
-    assert entry["rev"] == 2 and entry["day"] == "2026-11-20" and entry["consumed_at"] == T
+    assert entry["rev"] == 2 and entry["day"] == "2026-11-19" and entry["consumed_at"] == T
     assert entry["mode"] == "GENERAL" and out["entry"]["rev"] == 2
 
 
@@ -267,7 +267,7 @@ def test_void_excludes_entry(env):
     out = svc.void_intake(S, "p1", e["id"])
     assert out["entry"]["voided"] is True and out["day"]["day_status"] == "NO_ENTRIES"
     assert svc.void_intake(S, "p1", e["id"])["entry"]["voided"] is True
-    assert svc.get_day_summary(S, "p1", "2026-11-20")["entries"] == []
+    assert svc.get_day_summary(S, "p1", "2026-11-19")["entries"] == []
 
 
 def test_get_entry_missing(env):
@@ -279,9 +279,9 @@ def test_close_day_marks_complete(env):
     svc, _, clock, *_ = env
     confirm(svc, [cola()])
     clock.now = datetime(2026, 11, 21, 8, 0, tzinfo=timezone.utc)
-    assert svc.get_day_summary(S, "p1", "2026-11-20")["day_status"] == "OPEN"
-    assert svc.close_day(S, "p1", "2026-11-20")["day_status"] == "COMPLETE"
-    assert svc.get_day_summary(S, "p1", "2026-11-20")["day_status"] == "COMPLETE"
+    assert svc.get_day_summary(S, "p1", "2026-11-19")["day_status"] == "OPEN"
+    assert svc.close_day(S, "p1", "2026-11-19")["day_status"] == "COMPLETE"
+    assert svc.get_day_summary(S, "p1", "2026-11-19")["day_status"] == "COMPLETE"
 
 
 def test_close_future_day_rejected(env):
@@ -292,7 +292,7 @@ def test_close_future_day_rejected(env):
     assert svc.close_day(S, "p1", "2026-11-19")["day_status"] == "NO_ENTRIES"
 
 
-@pytest.mark.parametrize("bad", ["20261120", "2026-W47-5", "2026-13-01", "20-11-2026", "", "tomorrow", None])
+@pytest.mark.parametrize("bad", ["20261120", "2026-W47-5", "2026-13-01", "20-11-2026", "", "tomorrow"])  # None means today
 def test_bad_day_rejected(env, bad):
     with pytest.raises(ValueError):
         env[0].get_day_summary(S, "p1", bad)
@@ -342,7 +342,7 @@ def test_other_person_cannot_confirm(env):
         svc.confirm_intake(S, "p2", d["draft_id"])
     with pytest.raises(DraftNotFound):
         svc.confirm_intake(S, "p1", "no-such-draft")
-    assert store.list_entries("p1", "2026-11-20") == []
+    assert store.list_entries("p1", "2026-11-19") == []
 
 
 def test_provider_outage_stores_no_draft(env):
@@ -436,7 +436,7 @@ def test_mode_stamp_and_trimester(env):
     svc = env[0]
     out = svc.set_mode(S, "p1", "PREGNANCY", "2027-05-20")
     assert out == {"mode": "PREGNANCY", "due_date": "2027-05-20", "trimester": 2}
-    e = confirm(svc, [cola()], consumed_at="2026-11-19T12:00:00+01:00")
+    e = confirm(svc, [cola()], consumed_at="2026-11-19T10:00:00+01:00")
     assert e["entry"]["mode"] == "PREGNANCY"
     assert e["day"]["trimester"] == 2 and e["day"]["mode"] == "PREGNANCY"
     assert e["day"]["limit"]["value_g"] == "50"
@@ -486,16 +486,16 @@ def test_bls_item_adds_attribution(env):
     assert d["attribution"] == [BLS_TEXT]
     day = svc.confirm_intake(S, "p1", d["draft_id"])["day"]
     assert day["attribution"] == [BLS_TEXT]
-    assert svc.get_day_summary(S, "p1", "2026-11-19")["attribution"] == []
+    assert svc.get_day_summary(S, "p1", "2026-11-20")["attribution"] == []
 
 
 def test_day_entries_shape_and_order(env):
     svc = env[0]
-    for t in ("2026-11-20T18:00:00+01:00", "2026-11-20T08:00:00+01:00"):
+    for t in ("2026-11-19T10:00:00+01:00", "2026-11-19T08:00:00+01:00"):
         confirm(svc, [cola()], consumed_at=t)
-    day = svc.get_day_summary(S, "p1", "2026-11-20")
+    day = svc.get_day_summary(S, "p1", "2026-11-19")
     assert [e["consumed_at"] for e in day["entries"]] == [
-        "2026-11-20T08:00:00+01:00", "2026-11-20T18:00:00+01:00"]
+        "2026-11-19T08:00:00+01:00", "2026-11-19T10:00:00+01:00"]
     assert set(day["entries"][0]) == {"id", "consumed_at", "items"}
     assert day["items_total"] == 2 and day["free_sugars_known_g"] == "31.8"
 
@@ -508,3 +508,81 @@ def test_zero_source_serving_never_books_a_false_zero(env):
         svc.propose_intake(S, "p1", [item], T)
     out = svc.propose_intake(S, "p1", [{**item, "grams_estimate": 330}], T)
     assert out["items"][0]["grams"] == "330"
+
+
+# ---- final-review minors ----------------------------------------------------
+
+def test_consumed_at_in_the_future_is_rejected(env):
+    from app.diary.service import InvalidField
+    svc, clock = env[0], env[2]
+    now = clock.now
+    ok = (now + timedelta(minutes=9)).isoformat()
+    assert svc.propose_intake(S, "p1", [cola()], consumed_at=ok)["items"]
+    late = (now + timedelta(minutes=11)).isoformat()
+    with pytest.raises(InvalidField) as e:
+        svc.propose_intake(S, "p1", [cola()], consumed_at=late)
+    assert e.value.field == "consumed_at"
+    with pytest.raises(ValueError):
+        svc.propose_intake(S, "p1", [cola()], consumed_at="2026-11-20T10:00:00+01:00")
+
+
+def test_non_json_provider_body_is_provider_unavailable(env):
+    import json
+    prov = FakeProvider()
+    prov.error = json.JSONDecodeError("Expecting value", "<html>", 0)
+    svc = with_provider(env, prov)
+    with pytest.raises(ProviderUnavailable):
+        svc.propose_intake(S, "p1", [gram_item("f", 1)], consumed_at=T)
+
+
+def test_bls_database_error_is_provider_unavailable(env):
+    prov = FakeProvider()
+    prov.error = sqlite3.OperationalError("unable to open database file")
+    svc = with_provider(env, prov)
+    with pytest.raises(ProviderUnavailable):
+        svc.propose_intake(S, "p1", [gram_item("f", 1)], consumed_at=T)
+
+
+def test_day_defaults_to_today_in_the_diary_timezone(env):
+    svc, clock = env[0], env[2]
+    # 23:30Z on the 19th is already the 20th in Berlin
+    clock.now = datetime(2026, 11, 19, 23, 30, tzinfo=timezone.utc)
+    assert svc.get_day_summary(S, "p1")["date"] == "2026-11-20"
+    assert svc.get_day_summary(S, "p1", None)["date"] == "2026-11-20"
+    assert svc.close_day(S, "p1")["date"] == "2026-11-20"
+    assert env[4].is_day_closed("p1", "2026-11-20") is True
+
+
+def test_validation_errors_name_the_field_only(env):
+    from app.diary.service import InvalidField
+    svc = env[0]
+    cases = [
+        ({**cola(), "label": ""}, "label"),
+        ({**cola(), "unit": 5}, "unit"),
+        ({**cola(), "food_id": ""}, "food_id"),
+        ({**cola(), "stated": "yes"}, "stated"),
+        ({**cola(), "amount": "lots"}, "amount"),
+        ({**cola(), "grams_estimate": "x"}, "grams_estimate"),
+        ({**cola(), "food_id": "no-such-food"}, "food_id"),
+    ]
+    for item, field in cases:
+        with pytest.raises(InvalidField) as e:
+            svc.propose_intake(S, "p1", [item], consumed_at=T)
+        assert e.value.field == field, item
+        assert "cola" not in str(e.value).lower() or field == "label"
+    with pytest.raises(InvalidField) as e:
+        svc.get_day_summary(S, "p1", "not-a-date")
+    assert e.value.field == "day"
+    with pytest.raises(InvalidField) as e:
+        svc.set_mode(S, "p1", "PREGNANCY", "soon")
+    assert e.value.field == "due_date"
+    with pytest.raises(InvalidField) as e:
+        svc.set_mode(S, "p1", "LACTATION")
+    assert e.value.field == "mode"
+    with pytest.raises(InvalidField) as e:
+        svc.propose_intake(S, "p1", "nope", consumed_at=T)
+    assert e.value.field == "items"
+    # a unit the table does not know is a plain portion error: no field
+    with pytest.raises(ValueError) as e:
+        svc.propose_intake(S, "p1", [cola(unit="bucket")], consumed_at=T)
+    assert getattr(e.value, "field", None) is None
