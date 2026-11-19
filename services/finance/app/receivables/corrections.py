@@ -346,12 +346,18 @@ def reverse(repo: ReceivablesRepository, conn, ws: str, ref: str, reason: str,
 
 def _reverse_funding(repo: ReceivablesRepository, conn, ws: str, ref: str, reason: str,
                      queue: PendingQueue, now: datetime) -> dict:
+    """The owner undoes a funding: its payments are asked about again (``questions``) and
+    only the owner's answer links them (R57); a partner IBAN that the owner's pick of one of
+    them taught is forgotten too (R60)."""
     funding = repo.funding_by_ref(conn, ws, ref)
     if funding is None:
         raise ValidationError("funding")
+    taught = repo.identifiers_taught_by(conn, ws, funding.id)
     asked = reverse_funding(repo, conn, ws, funding.id, reason, queue, now)
+    for identifier in taught:
+        repo.revoke(conn, ws, "partner_identifier", identifier, reason, now)
     return {"ok": True, "status": "reversed", "ref": f"F{funding.number}",
-            "questions": [p.code for p in asked]}
+            "questions": [p.code for p in asked], "partner_ibans_forgotten": len(taught)}
 
 
 def _reverse_receipt(repo: ReceivablesRepository, conn, ws: str, ref: str, reason: str,

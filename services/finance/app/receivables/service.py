@@ -58,9 +58,11 @@ SNOOZE = timedelta(days=7)
 CLIENT_KEY_CHARS = 200
 CONFIRM_OPTIONS = ("yes", "correct", "cancel")
 DUPLICATE_OPTIONS = ("other", "same")  # [Es otro] [Es el mismo]
+SUPERSEDED = "superseded"  # an old echo replaced by its re-proposal (R63)
 # answers the data overtook (m3): the item resolves as "stale" and is asked again if relevant
 STALE_LINK = frozenset({"exchange_already_paid", "unknown_exchange", "already_linked",
-                        "already_classified", "unknown_movement", "exchange_not_paid"})
+                        "already_classified", "unknown_movement", "exchange_not_paid",
+                        "no_open_exchange"})
 STALE_EXPLAIN = frozenset({"already_classified", "unknown_movement"})
 _CLOSE_WORDS = {"no": "cancel", "cancel": "cancel", "cancelar": "cancel",
                 "correct": "correct", "corregir": "correct"}
@@ -396,14 +398,16 @@ class ReceivablesService:
     def _open_confirm(self, ctx: Ctx, conn, p: Proposal) -> dict:
         """A command already completed with this key today, an exchange with the same VES
         reference, or an open exchange CONFIRM with it, makes the proposal a
-        ``possible_duplicate`` whose payload carries a nonce ([Es otro])."""
+        ``possible_duplicate`` whose payload carries a nonce ([Es otro]). An open CONFIRM for
+        the same content whose defaulted date is stale is resolved ``superseded`` (no
+        intervention) and replaced by this one, so only one of them can record (R63)."""
         key = content_key(p.command, p.payload, ctx.now)
         dedupe = f"CONFIRM:{lookup_key(p)}"
         item = self._rx.pending_by_dedupe(conn, self._ws, dedupe)
         if item is not None and not _current_defaults(item, p, ctx.now):
-            # an old unanswered CONFIRM with an old defaulted date stays open; this one is new
-            dedupe = f"{dedupe}:{ctx.now.astimezone(timezone.utc).date().isoformat()}"
-            item = self._rx.pending_by_dedupe(conn, self._ws, dedupe)
+            self._queue.resolve(conn, self._ws, item.code, SUPERSEDED, human=False)
+            logger.info("receivables proposal superseded: command=%s", p.command)
+            item = None
         if item is None:
             done = self._rx.command_result(conn, self._ws, key)
             duplicate_of = p.duplicate_of or self._open_ves_confirm(conn, p)

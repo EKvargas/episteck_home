@@ -44,6 +44,59 @@ if "matcher_cursor" in names:
              .fetchone()[0] if has else "n/a")
     print(f"matcher_cursor.start_rowid column: {has}; cursor rows: {rows}; "
           f"rows without a go-live mark: {unset}")
+if "partner_identifier" in names:
+    taught = "funding_id" in {r[1] for r in db.execute("PRAGMA table_info(partner_identifier)")}
+    print(f"partner_identifier.funding_id column: {taught}")
+PY
+}
+# Go-live checks (h) and (i) below: counts only, read-only, same pattern as SCHEMA_CHECK.
+# KEY_CHECK copies description_key (it never imports the app): description keys that kept no
+# sender word, and keys whose bank receipts name several payers.
+KEY_CHECK() { $SSH "cd /; sudo -n -u svc-finance python3 -I - /srv/episteck/services/finance/data/finance.sqlite" <<'PY'
+import sqlite3, sys
+from collections import defaultdict
+RAILS = {"ZELLE", "FROM", "PAYMENT", "TRANSFER", "ONLINE", "BANKING", "CONF#", "REF", "ID", "TO"}
+def key(text):  # app.receivables.text.description_key
+    kept, skip = [], False
+    for tok in (text or "").upper().split():
+        if skip:
+            skip = False
+            continue
+        if tok.endswith("#"):
+            skip = True
+        if not any(c.isdigit() for c in tok):
+            kept.append(tok)
+    return " ".join(kept)
+db = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)
+texts = [r[0] for r in db.execute(
+    "SELECT m.remittance FROM movement m JOIN account a ON a.id=m.account_id "
+    "WHERE a.currency='USD' AND m.amount_minor>0 AND m.status='BOOKED'")]
+keys = {key(t) for t in texts} - {""}
+bare = [k for k in keys if not set(k.split()) - RAILS]
+print(f"USD credits: {len(texts)}; description keys: {len(keys)}; keys with no sender word left: {len(bare)}")
+if "receipt" in {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}:
+    payers = defaultdict(set)
+    for payer, text in db.execute(
+            "SELECT r.payer_id, m.remittance FROM receipt r JOIN movement m ON m.id=r.movement_id "
+            "WHERE r.kind='BANK' AND NOT EXISTS (SELECT 1 FROM revocation v "
+            "WHERE v.table_name='receipt' AND v.target_id=r.id)"):
+        payers[key(text)].add(payer)
+    print(f"keys shared by several senders (bank receipts of several payers): "
+          f"{sum(len(p) > 1 for p in payers.values())}")
+PY
+}
+# PENDING_CHECK: PENDING outgoing payments older than about 5 days that still carry a live funding.
+PENDING_CHECK() { $SSH "cd /; sudo -n -u svc-finance python3 -I - /srv/episteck/services/finance/data/finance.sqlite" <<'PY'
+import sqlite3, sys
+db = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)
+n = db.execute(
+    "SELECT COUNT(*) FROM movement m WHERE m.status='PENDING' AND m.amount_minor<0 "
+    "AND NOT EXISTS (SELECT 1 FROM movement s WHERE s.supersedes_id=m.id) "
+    "AND COALESCE(m.booking_date, m.value_date) < date('now', '-5 days') "
+    "AND EXISTS (SELECT 1 FROM funding_movement fm WHERE fm.movement_id=m.id "
+    "AND NOT EXISTS (SELECT 1 FROM revocation v WHERE v.table_name='funding' "
+    "AND v.target_id=fm.funding_id))").fetchone()[0]
+print(f"PENDING outgoing payments older than 5 days with a live funding: {n}")
 PY
 }
 ```
@@ -72,6 +125,16 @@ Each item once; record the results on the I2 board (`docs/architecture/FINANCE_I
 - **(e) Cron output retention (owner decision).** Hermes keeps every cron run's output under `/home/home-agent/.hermes/cron/output`, figures and names included, even for `[SILENT]` runs. `HSTEP memory-scan` prints how many files there are. Keeping them is your decision; if you choose to prune, a suggested command (deletes files older than 14 days, prints nothing): `$SSH "sudo -n find /home/home-agent/.hermes/cron/output -type f -mtime +14 -delete"`.
 - **(f) Before `HSTEP cron`: `--deliver telegram` targets your private chat.** It goes to `home-agent`'s Telegram home channel (set in B7). The S1 job A arriving in your private chat with the bot proves it; the skill allows figures only in a private chat with the owner.
 - **(g) At step 6 and the first fire: the `cron list` format and `--skill`.** `HSTEP cron` must print the job's lines (its id, name and schedule) and a count of at least 1. If `hermes cron list` does not show the job name, the step stops after creating the job ("a job may exist"): remove it by id before re-running. At the first fire, the message follows the skill's format (codes, options numbered as Finance returned them), which shows that `--skill olin-finance` resolved from `/etc/episteck/hermes/skills`.
+- **(h) No description key is shared by several senders `[CLAUDE]`.** Before step 3 (description rules on), then once a week during the first month. A payer rule keyed by a description that lost its sender's name would send one person's payment to another payer. `KEY_CHECK` (helpers above) prints counts only:
+  ```bash
+  KEY_CHECK
+  ```
+  Expect `keys with no sender word left: 0` and, once I2 runs, `keys shared by several senders (bank receipts of several payers): 0`. Anything else: turn description rules off (step 3 rollback) and stop until the developer has looked at the counts.
+- **(i) No PENDING outgoing payment stays linked for long `[CLAUDE]`.** Once a week during the first month. A partner payment links while PENDING; a PENDING row older than about 5 days that still carries a funding may have been cancelled, or posted under another id. `PENDING_CHECK` (helpers above) prints one count:
+  ```bash
+  PENDING_CHECK
+  ```
+  Expect `0`. Anything else: ask Olin "¿qué cambios están pagados?" and compare with the bank; if the bank shows no such payment, undo that funding in the chat (`finance_reverse` of its `F<n>`): Olin then asks about the payment again.
 
 ## 1. Pre-check `[! OK]`
 
@@ -115,7 +178,8 @@ $SSH "sudo -n -u svc-finance bash -c 'f=/srv/episteck/services/finance/config/fi
 SCHEMA_CHECK          # before: "I2 tables present: 0/22" and "PRAGMA integrity_check: ok"
 STEP install "$SHA"
 STEP verify
-SCHEMA_CHECK          # after: "22/22; missing: none", "ok", "start_rowid column: True; cursor rows: 0"
+SCHEMA_CHECK          # after: "22/22; missing: none", "ok", "start_rowid column: True; cursor rows: 0",
+                      #        "partner_identifier.funding_id column: True"
 ```
 
 `install` rewrites the three units for `SHA` and restarts `finance-api` and `finance-mcp`; opening the file creates the I2 tables. `finance-sync.timer` is unchanged (about 06:20 and 18:20 UTC); its next run uses the new image, runs the matcher after the providers, and its first matcher run sets the go-live mark.

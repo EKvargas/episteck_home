@@ -9,7 +9,7 @@ import pytest
 
 from app import domain
 from app.receivables.corrections import correct_exchange, forgive, record_opening, reverse
-from app.receivables.funding import AlreadyLinked, create_funding, try_link
+from app.receivables.funding import AlreadyLinked, create_funding, link_choice, try_link
 from app.receivables.ledger import (
     Evidence, LineInput, ValidationError, receivables_view, record_exchange,
 )
@@ -288,7 +288,7 @@ def _negative_opening_funding(repo, c, q):
     yield
     reverse(repo, c, WS, f"E{op.number}", "x", q, NOW)
     yield
-    assert try_link(repo, c, WS, repo.movement_current(c, WS, "m1"), q, NOW) == "LINKED"
+    assert link_choice(repo, c, WS, "m1", "C1", q, NOW)["status"] == "linked"  # the owner's answer (R57)
     yield
 
 

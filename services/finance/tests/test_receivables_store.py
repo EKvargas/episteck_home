@@ -20,8 +20,8 @@ from app.store.receivables_repo import (
 from app.store.receivables_schema import FACT_TABLES
 from app.store.repo import FinanceRepository
 from tests.support import (
-    PEPPER, T0, make_account, make_movement, make_repo, raw_execute, seed_connection,
-    seed_workspace,
+    PEPPER, T0, column_names, make_account, make_movement, make_repo, raw_execute,
+    seed_connection, seed_workspace,
 )
 
 WS = "ws-1"
@@ -108,7 +108,7 @@ SAMPLES = {
     "movement_role": "INSERT INTO movement_role VALUES('mr',?,'m','NOT_EXCHANGE')",
     "revocation": "INSERT INTO revocation VALUES('rv',?,'exchange','x','r','t')",
     "intervention_log": "INSERT INTO intervention_log VALUES('i',?,'k','t')",
-    "partner_identifier": "INSERT INTO partner_identifier VALUES('pi',?,'h','c')",
+    "partner_identifier": "INSERT INTO partner_identifier VALUES('pi',?,'h','c',NULL)",
     "own_identifier": "INSERT INTO own_identifier VALUES('oi',?,'h')",
 }
 
@@ -755,3 +755,49 @@ def test_receipt_by_id_finds_the_live_receipt_only(tmp_path):
         assert rr.receipt_by_id(c, WS, "nope") is None
         rr.revoke(c, WS, "receipt", "r1", "x", T0)
         assert rr.receipt_by_id(c, WS, "r1") is None
+
+
+def test_partner_identifier_records_the_funding_that_taught_it(tmp_path):
+    """R60: an older table gains the nullable ``funding_id`` (added by ``upgrade_i2``)."""
+    base, _ = make(tmp_path)
+    raw_execute(base, "DROP TABLE partner_identifier")  # the table as an earlier build made it
+    raw_execute(base, "CREATE TABLE partner_identifier(id TEXT PRIMARY KEY, workspace_id TEXT "
+                      "NOT NULL, iban_hash TEXT NOT NULL, counterparty_id TEXT NOT NULL)")
+    raw_execute(base, "INSERT INTO partner_identifier VALUES('pi-old',?,'h0','cp-p')", (WS,))
+    rr = ReceivablesRepository(FinanceRepository(base.path, pepper=PEPPER))
+    assert column_names(base, "partner_identifier")[-1] == "funding_id"
+    FinanceRepository(base.path, pepper=PEPPER)  # a second open changes nothing
+    with rr.tx() as c:
+        rr.insert_funding(c, Funding("f1", WS, 1, ("m1",), ("x1",), 100, 100, T0), {})
+        rr.insert_funding(c, Funding("f2", WS, 2, ("m1",), ("x1",), 120, 100, T0), {})  # redo
+        rr.insert_funding(c, Funding("f3", WS, 3, ("m9",), ("x2",), 100, 100, T0), {})
+        taught = rr.add_partner_identifier(c, WS, "h1", "cp-p", funding_id="f1")
+        rr.add_partner_identifier(c, WS, "h2", "cp-p")  # set by the operator: no funding
+        assert rr.identifiers_taught_by(c, WS, "f1") == [taught]
+        assert rr.identifiers_taught_by(c, WS, "f2") == [taught]  # the same payment
+        assert rr.identifiers_taught_by(c, WS, "f3") == []
+        assert rr.identifiers_taught_by(c, "ws-2", "f1") == []
+        rr.revoke(c, WS, "partner_identifier", taught, "funding reversed", T0)
+        assert rr.identifiers_taught_by(c, WS, "f1") == []
+        assert rr.partner_hashes(c, WS) == {"h0": "cp-p", "h2": "cp-p"}
+    with pytest.raises(sqlite3.IntegrityError, match="facts are immutable"):
+        raw_execute(base, "UPDATE partner_identifier SET funding_id='x'")
+
+
+def test_owner_unlinked_and_go_live_mark(tmp_path):
+    """R57: a funding revoked for any reason but the system's own leaves its payments for the
+    owner's answer. R59: the go-live mark; 0 before the first matcher run."""
+    _, rr = make(tmp_path)
+    with rr.tx() as c:
+        for fid, n, mid in (("f1", 1, "m1"), ("f2", 2, "m2"), ("f3", 3, "m3"), ("f4", 4, "m4")):
+            rr.insert_funding(c, Funding(fid, WS, n, (mid,), (f"x{n}",), 100, 100, T0), {})
+        rr.revoke(c, WS, "funding", "f1", "booked_amount_changed", T0)
+        rr.revoke(c, WS, "funding", "f2", "add_to", T0)
+        rr.revoke(c, WS, "funding", "f3", "no era para C3", T0)
+        reasons = ("booked_amount_changed", "add_to")
+        assert [rr.unlinked_by_owner(c, m, reasons) for m in ("m1", "m2", "m3", "m4")] == [
+            False, False, True, False]
+        assert rr.go_live_rowid(c, WS) == 0
+        rr.init_cursor(c, WS, 7)
+        rr.set_cursor(c, WS, 9)
+        assert rr.go_live_rowid(c, WS) == 7

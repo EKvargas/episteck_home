@@ -349,12 +349,25 @@ def opening(ctx: Ctx, conn, name, amount, cur, basis, note) -> Proposal:
     old = [e for e in ctx.repo.effective_entries_for_refs(
         conn, ctx.ws, [cp.id], (EntryKind.OPENING,)) if e.currency == cur]
     shown = "held" if cp.kind is CounterpartyKind.FUND else "amount"  # a fund: what you hold
+    echo = {"type": "opening", "counterparty": cp.label, "currency": cur,
+            shown: format_minor(minor, cur), "basis": stated, "note": why,
+            "replaces": [f"E{e.number}" for e in old]}
+    if cp.kind is CounterpartyKind.FUND:
+        echo.update(_fund_flows(ctx, conn, cp, cur, minor, old))
     return Proposal("opening", {
         "counterparty_id": cp.id, "currency": cur, "amount_minor": minor, "basis": stated,
-        "note": why, "replaces": [e.id for e in old]}, {
-        "type": "opening", "counterparty": cp.label, "currency": cur,
-        shown: format_minor(minor, cur), "basis": stated, "note": why,
-        "replaces": [f"E{e.number}" for e in old]})
+        "note": why, "replaces": [e.id for e in old]}, echo)
+
+
+def _fund_flows(ctx: Ctx, conn, cp: Counterparty, cur: str, held: int, old) -> dict:
+    """R62: a fund's opening is what it held before its flows, so the echo also says what
+    went out and came in since (``since``: the first of them, ``None`` when there are none)
+    and what it holds once they count (``held_after``, the debts view's figure)."""
+    out, inn, since = ctx.repo.flows_since_creation(conn, ctx.ws, cp.id, cur)
+    flows = ctx.repo.balance(conn, ctx.ws, cp.id, cur) - sum(e.amount_minor for e in old)
+    return {"held_after": format_minor(held - flows, cur),
+            "since": since.isoformat() if since and (out or inn) else None,
+            "out_since": format_minor(out, cur), "in_since": format_minor(inn, cur)}
 
 
 # --- counterparties ------------------------------------------------------------------
@@ -467,6 +480,8 @@ def _fact(ctx: Ctx, conn, ref: str, why: str) -> Proposal:
         echo.update(what="funding", exchanges=[f"C{ex.number}" for ex in exchanges if ex],
                     eur=format_minor(f.eur_minor, "EUR"), usd=format_minor(usd, "USD"),
                     eur_per_usd=rate_text(implied_rate(f.eur_minor, usd)))
+        # R60: the partner IBAN that an owner pick of its payments taught is forgotten too
+        echo["forgets_partner_iban"] = bool(repo.identifiers_taught_by(conn, ctx.ws, f.id))
         high = True
     elif ref[0] == "R":
         rec = repo.receipt_by_ref(conn, ctx.ws, ref)

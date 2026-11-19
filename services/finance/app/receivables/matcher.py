@@ -7,6 +7,11 @@ functions take the caller's connection and validate before their first write.
 Spec §6.2 (auto-link), §6.4 (pending kinds), §6.5 (funds), §7 F2/F3/F9; ruling R32. Option
 values are ``CP:<counterparty id>`` and ``M:<root movement id>``; payloads carry their labels
 and never an IBAN. Logs carry kinds and counts only.
+
+Final review rulings: an incoming credit counts only once BOOKED (R58); a movement whose ROOT
+is from before go-live is history (R59); a payment whose funding the owner undid is linked
+again only by the owner's answer (R57, ``funding.try_link``); after a ``REGISTER`` answer a
+newly registered exchange asks LINK_FUNDING once more (R61).
 """
 from __future__ import annotations
 
@@ -17,9 +22,11 @@ from datetime import date, datetime, timedelta
 from .. import domain
 from ..money import format_minor
 from ..store.receivables_repo import IGNORE, ReceivablesRepository
-from .corrections import reverse, undo_receipt
+from .corrections import reverse
 from .explain import PAYERS, ask_explain_incoming, incoming_key
-from .funding import ask_link_funding, funding_day, redo_funding, reverse_funding, try_link
+from .funding import (
+    ask_link_funding, funding_day, redo_funding, registered_since, reverse_funding, try_link,
+)
 from .fx import deviation, implied_rate
 from .ledger import ValidationError
 from .model import (
@@ -163,7 +170,9 @@ def close_settled_questions(repo: ReceivablesRepository, conn, ws: str,
     """Resolves (``human=False``) the open questions the data has answered since: a
     LINK_FUNDING or EXPLAIN_INCOMING whose movement is linked or classified, a PREVIOUS_UNPAID
     whose exchange is paid or reversed, a REVIEW_OPENING whose counterparty's opening is
-    CONFIRMED (R46). Call it after a link made elsewhere (R32)."""
+    CONFIRMED (R46) or whose effective openings are no longer the ones it shows (R64: the
+    matcher asks again with today's figures if still needed). Call it after a link made
+    elsewhere (R32)."""
     closed = 0
     for item in repo.pending_open(conn, ws):
         if item.kind in (PendingKind.LINK_FUNDING, PendingKind.EXPLAIN_INCOMING):
@@ -175,7 +184,8 @@ def close_settled_questions(repo: ReceivablesRepository, conn, ws: str,
             done = ex is None or repo.live_funding_for_exchange(conn, ex.id) is not None
         elif item.kind is PendingKind.REVIEW_OPENING:  # REVIEW_OPENING:<counterparty id>:<week>
             cp = repo.get_counterparty(conn, ws, item.dedupe_key.split(":")[1])
-            done = cp is None or cp.opening is Opening.CONFIRMED
+            done = (cp is None or cp.opening is Opening.CONFIRMED
+                    or opening_refs(repo, conn, ws, cp.id) != shown_openings(item))
         else:
             continue
         if done:
@@ -184,16 +194,34 @@ def close_settled_questions(repo: ReceivablesRepository, conn, ws: str,
     return closed
 
 
+def shown_openings(item: PendingItem) -> list[str]:
+    """The opening refs (``E<n>``) a REVIEW_OPENING question shows, sorted."""
+    return sorted(str(o.get("entry_ref")) for o in item.payload.get("openings") or []
+                  if isinstance(o, dict))
+
+
+def opening_refs(repo: ReceivablesRepository, conn, ws: str, cp_id: str) -> list[str]:
+    """The refs of a counterparty's effective OPENING entries, sorted."""
+    return sorted(f"E{e.number}" for e in repo.effective_entries_for_refs(
+        conn, ws, [cp_id], (EntryKind.OPENING,)))
+
+
 def recent_payments(repo: ReceivablesRepository, conn, ws: str,
                     now: datetime) -> list[tuple[str, domain.Movement]]:
     """Unlinked outgoing EUR payments of the last 30 days (not to an own IBAN), newest
-    first, as ``(root id, current movement)``."""
-    own = repo.own_hashes(conn, ws)
+    first, as ``(root id, current movement)``. A payment from before go-live to a partner
+    IBAN Finance knows is history; one to an unknown IBAN stays, so the first load can learn
+    the partner's IBAN from it (R59)."""
+    own, partners = repo.own_hashes(conn, ws), repo.partner_hashes(conn, ws)
+    start = repo.go_live_rowid(conn, ws)
     pool = []
     for mv in repo.recent_outgoing(conn, ws, "EUR", now.date() - LOOKBACK):
         root = repo.movement_root(conn, mv.id)
         if (mv.counterparty_iban_hash in own or repo.movement_role(conn, root) is not None
                 or repo.live_funding_for_movement(conn, root) is not None):
+            continue
+        history = (repo.movement_rowid(conn, root) or 0) <= start
+        if history and mv.counterparty_iban_hash in partners:
             continue
         pool.append((root, mv))
     return pool
@@ -265,7 +293,7 @@ class Matcher:
             cursor, start = state
             last = cursor
             for rowid, mv in repo.movements_after(conn, ws, cursor):
-                self._movement(conn, ws, mv, now, counts)
+                self._movement(conn, ws, mv, start, now, counts)
                 last = rowid
             self._waiting(conn, ws, start, cursor, now, counts)
             close_settled_questions(repo, conn, ws, self._queue)  # after every link of the run
@@ -283,8 +311,13 @@ class Matcher:
             counts["asked"] += 1
 
     # --- steps 1-3: one new movement ----------------------------------------------
-    def _movement(self, conn, ws: str, mv: domain.Movement, now: datetime,
+    def _movement(self, conn, ws: str, mv: domain.Movement, start: int, now: datetime,
                   counts: dict[str, int]) -> None:
+        """A new movement: a partner payment (PENDING or BOOKED) is linked or waits; an
+        incoming credit on a watched account counts only BOOKED (R58: a PENDING one may post
+        under another id or never post), so a PENDING credit is skipped and its BOOKED row is
+        handled when it arrives. The BOOKED row of a movement from before go-live is history
+        (R59) unless its root already has a funding (``_successor``)."""
         repo = self._repo
         current = repo.movement_current(conn, ws, mv.id)
         if current is None or current.id != mv.id or _day(mv) is None:
@@ -292,6 +325,8 @@ class Matcher:
         root = repo.movement_root(conn, mv.id)
         if root != mv.id and self._successor(conn, ws, mv, root, now, counts):
             return
+        if (repo.movement_rowid(conn, root) or 0) <= start:
+            return  # history (R59)
         if (repo.movement_role(conn, root) is not None
                 or repo.live_funding_for_movement(conn, root) is not None
                 or repo.live_receipt_for_movement(conn, root) is not None):
@@ -303,8 +338,8 @@ class Matcher:
             counts["linked"] += int(result == "LINKED")
             counts["waiting"] += int(result == "WAITING")
             counts["asked"] += int(result == "AMBIGUOUS" and not was_open)
-        elif (mv.amount_minor > 0 and mv.currency in CURRENCIES
-              and mv.account_id in repo.watched_accounts(conn, ws)):
+        elif (mv.amount_minor > 0 and mv.status is domain.MovementStatus.BOOKED
+              and mv.currency in CURRENCIES and mv.account_id in repo.watched_accounts(conn, ws)):
             self._incoming(conn, ws, mv, root, now, counts)
 
     def _incoming(self, conn, ws: str, mv: domain.Movement, root: str, now: datetime,
@@ -334,10 +369,11 @@ class Matcher:
 
     def _successor(self, conn, ws: str, mv: domain.Movement, root: str, now: datetime,
                    counts: dict[str, int]) -> bool:
-        """A BOOKED successor of a movement already linked or recorded (R32). The same amount
+        """A BOOKED successor of a partner payment already linked (R32). The same amount
         changes nothing. Another amount makes the funding again with the new EUR (or undoes it
-        and asks when the rate leaves LINK_BAND) or records the receipt again; a notice says
-        so. False when the root has neither a funding nor a receipt."""
+        and asks when the rate leaves LINK_BAND); a notice says so. False when the root has no
+        funding. A credit is recorded only from its BOOKED row (R58), which is never
+        superseded, so a receipt never has a successor to follow."""
         repo, queue = self._repo, self._queue
         funding = repo.live_funding_for_movement(conn, root)
         if funding is not None:
@@ -364,21 +400,7 @@ class Matcher:
                 "eur_before": format_minor(funding.eur_minor, "EUR"),
                 "eur_after": format_minor(eur, "EUR")})
             return True
-        rec = repo.live_receipt_for_movement(conn, root)
-        if rec is None:
-            return False
-        if mv.amount_minor > 0 and mv.currency == rec.currency and mv.amount_minor != rec.amount_minor:
-            undo_receipt(repo, conn, ws, rec, _BOOKED_CHANGED, queue, now)
-            new = record_receipt(repo, conn, ws, kind=ReceiptKind.BANK, payer_id=rec.payer_id,
-                                 currency=mv.currency, amount_minor=mv.amount_minor,
-                                 received_on=_day(mv), verification=Verification.BANK_POSTED,
-                                 movement_id=mv.id, queue=queue, now=now)
-            ref = f"R{rec.number}"
-            queue.notice(conn, ws, f"{_BOOKED_CHANGED}:{ref}", {
-                "receipt_ref": ref, "new_receipt_ref": f"R{new.number}", "currency": mv.currency,
-                "amount_before": format_minor(rec.amount_minor, mv.currency),
-                "amount_after": format_minor(mv.amount_minor, mv.currency)})
-        return True
+        return False
 
     # --- step 4: previous exchange unpaid -----------------------------------------
     def _previous_unpaid(self, conn, ws: str, started: datetime, now: datetime,
@@ -411,16 +433,17 @@ class Matcher:
     # --- step 5: payments still waiting -------------------------------------------
     def _waiting(self, conn, ws: str, start: int, cursor: int, now: datetime,
                  counts: dict[str, int]) -> None:
-        """R34: every unlinked partner payment an earlier run saw (after go-live, ``start``)
-        is tried again, so a payment links once its exchange is registered or the rest of a
-        split payment arrives, whatever the order. Still waiting (or fitting several
-        exchanges) and never asked about: LINK_FUNDING. A payment whose question was answered
-        (``REGISTER``) is retried link-only and never asked again; an open question stays."""
+        """R34: every unlinked partner payment an earlier run saw (its root after go-live,
+        ``start``, R59) is tried again, so a payment links once its exchange is registered or
+        the rest of a split payment arrives, whatever the order. Still waiting (or fitting
+        several exchanges) and never asked about: LINK_FUNDING. A payment whose question was
+        answered is retried link-only; after a ``REGISTER`` answer, an open exchange
+        registered since asks LINK_FUNDING once more with it among the options (R61, a new
+        question once per such registration); an open question stays."""
         repo = self._repo
         for mv in repo.unlinked_partner_payments(conn, ws):
             root = repo.movement_root(conn, mv.id)
-            seen = [repo.movement_rowid(conn, m) or 0 for m in (root, mv.id)]
-            if _day(mv) is None or not any(start < rid <= cursor for rid in seen):
+            if _day(mv) is None or not start < (repo.movement_rowid(conn, root) or 0) <= cursor:
                 continue
             last = repo.pending_by_dedupe(conn, ws, f"LINK_FUNDING:{root}", include_resolved=True)
             answered = last is not None and last.resolved_at is not None
@@ -431,6 +454,10 @@ class Matcher:
                 if result == "WAITING":
                     ask_link_funding(repo, conn, ws, mv.id, self._queue)
                 counts["asked"] += 1  # AMBIGUOUS: try_link asked
+            elif (answered and last.resolution == "REGISTER"
+                  and registered_since(repo, conn, ws, last.resolved_at)):
+                ask_link_funding(repo, conn, ws, mv.id, self._queue)
+                counts["asked"] += 1
 
     # --- step 6: funds below their alert ------------------------------------------
     def _funds(self, conn, ws: str) -> None:

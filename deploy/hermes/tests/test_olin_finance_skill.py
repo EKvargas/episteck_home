@@ -134,7 +134,8 @@ def test_skill_covers_every_receivables_tool_and_error_code():
     codes = ("validation_error", "clarification_needed", "possible_duplicate",
              "idempotency_conflict", "already_linked", "unknown_choice", "unknown_pending",
              "already_resolved", "internal_error", "options_changed", "changed", "stale",
-             "not_resolved", "unknown_movement")
+             "not_resolved", "unknown_movement", "no_open_exchange", "unknown_counterparty",
+             "superseded")
     statuses = ("confirmation_required", "needs_amount", "needs_counterparty",
                 "needs_correction", "asked_again", "already_settled", "dismissed",
                 "not_recorded", "cancelled", "linked", "not_exchange", "needs_exchange",
@@ -173,8 +174,8 @@ def test_every_receivables_field_the_skill_relies_on_exists_in_finance():
               "candidates", "field", "detail", "question", "resolution", "balance_after",
               "credit", "direction", "rate", "reference_rate", "funding_ref", "receipt_ref",
               "exchange_refs", "booking_date", "sender", "held", "alert", "new_funding_ref",
-              "eur_before", "eur_after", "amount_before", "amount_after", "new_receipt_ref",
-              "rules_revoked", "undo_ref", "shown", "created_at")
+              "eur_before", "eur_after", "rules_revoked", "undo_ref", "shown", "created_at",
+              "held_after", "questions", "forgets_partner_iban", "partner_ibans_forgotten")
     body = _body()
     for field in fields:
         assert f'"{field}"' in source, f"{field} is not a receivables result field"
@@ -595,3 +596,38 @@ def test_checklist_marks_the_node_assumptions_as_verified():
     section = _flat(_section(RUNBOOK_I2.read_text(encoding="utf-8"),
                              "## Pre-deploy S1 and go-live checklist")).lower()
     assert section.count("verified read-only on the node 2026-11-19") >= 2
+
+
+# --- final review (R57-R64) ------------------------------------------------------------------
+
+def test_skill_shows_reversal_questions_fund_flows_and_superseded_echoes():
+    body = _body()
+    confirmations = _flat(_section(body, "## Confirmations")).lower()
+    # R57: undoing a funding asks again; the payment links only through the owner's answer.
+    assert "show each of its `questions` right away" in confirmations
+    # R62: a fund's starting balance is what it held on `since`, before the flows.
+    assert "¿cuánto había el <since>?" in confirmations
+    assert "`held_after`" in confirmations and "`out_since`" in confirmations
+    # R60: undoing a pick that taught the partner's account forgets it.
+    assert "`forgets_partner_iban`" in confirmations
+    # R63: an old echo replaced by a newer one is answered `already_resolved` / `superseded`.
+    assert "`superseded`" in _row(body, "already_resolved")
+    # R58: bank credits count once posted; the funding notice is the only booked change.
+    assert "`receipt_ref`" not in _row(body, "booked_amount_changed")
+    for code in ("no_open_exchange", "unknown_counterparty"):
+        assert _row(body, code)
+
+
+def test_i2_runbook_checks_description_keys_and_old_pending_fundings_read_only():
+    text = RUNBOOK_I2.read_text(encoding="utf-8")
+    section = _section(text, "## Pre-deploy S1 and go-live checklist")
+    flat = _flat(section).lower()
+    assert "(h)" in flat and "(i)" in flat
+    assert "shared by several senders" in flat and "pending outgoing" in flat
+    for helper in ("KEY_CHECK", "PENDING_CHECK"):
+        assert f"  {helper}\n" in section  # run from the checklist
+        start = text.index(f"{helper}() {{")  # defined with the other helpers, unindented
+        body = text[start:text.index("\nPY\n}", start)]
+        assert '$SSH "cd /; sudo -n -u svc-finance python3 -I - ' in body
+        assert "mode=ro" in body and "podman" not in body and "-v " not in body
+        assert "print(" in body and "SELECT" in body and "INSERT" not in body

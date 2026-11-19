@@ -97,9 +97,10 @@ CREATE TABLE IF NOT EXISTS revocation(
     UNIQUE(table_name, target_id));
 CREATE TABLE IF NOT EXISTS intervention_log(
     id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, kind TEXT NOT NULL, at TEXT NOT NULL);
+-- funding_id: the funding whose owner pick taught this IBAN (R60); NULL when set otherwise.
 CREATE TABLE IF NOT EXISTS partner_identifier(
     id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, iban_hash TEXT NOT NULL,
-    counterparty_id TEXT NOT NULL);
+    counterparty_id TEXT NOT NULL, funding_id TEXT);
 CREATE INDEX IF NOT EXISTS ix_partner_identifier ON partner_identifier(workspace_id);
 CREATE TABLE IF NOT EXISTS own_identifier(
     id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, iban_hash TEXT NOT NULL);
@@ -145,10 +146,13 @@ def upgrade_i2(conn: sqlite3.Connection) -> None:
     ``matcher_cursor.start_rowid`` (the go-live mark): added when missing, and set to the
     row's cursor where NULL, so movements the matcher already passed stay history.
     ``pending_item.shown_digest`` (the options last delivered, R44): added when missing.
+    ``partner_identifier.funding_id`` (the funding that taught the IBAN, R60): added when
+    missing; identifiers learned before it stay NULL (no funding to undo them with).
     """
     _add_column(conn, "matcher_cursor", "start_rowid", "INTEGER")
     conn.execute("UPDATE matcher_cursor SET start_rowid=movement_rowid WHERE start_rowid IS NULL")
     _add_column(conn, "pending_item", "shown_digest", "TEXT")
+    _add_column(conn, "partner_identifier", "funding_id", "TEXT")
 
 
 def _add_column(conn: sqlite3.Connection, table: str, column: str, kind: str) -> None:

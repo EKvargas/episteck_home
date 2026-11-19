@@ -28,6 +28,11 @@ from .pending import PendingQueue
 from .receipts import consume_credits, release_charges
 
 LinkResult = Literal["LINKED", "WAITING", "AMBIGUOUS", "ALREADY_LINKED"]
+ADD_TO = "add_to"  # revocation reason: ADD_TO remakes a funding with one more payment
+# A funding revoked for these reasons was remade or undone by Finance itself; revoked for any
+# other reason, the owner undid it, and only the owner's answer links its payments again (R57).
+# "booked_amount_changed" is the matcher's reason (``matcher._BOOKED_CHANGED``).
+SYSTEM_UNLINKS = (ADD_TO, "booked_amount_changed")
 
 
 class AlreadyLinked(Exception):
@@ -70,6 +75,29 @@ def _usd(repo: ReceivablesRepository, conn, ex: Exchange) -> int:
 
 def _candidates(repo: ReceivablesRepository, conn, ws: str, day: date) -> list[Exchange]:
     return [ex for ex in repo.open_exchanges(conn, ws) if ex.delivered_on <= day]
+
+
+def register_answered_at(repo: ReceivablesRepository, conn, ws: str,
+                         root: str) -> datetime | None:
+    """When the owner last answered this payment's LINK_FUNDING with ``REGISTER``."""
+    key = f"LINK_FUNDING:{root}"
+    return max((p.resolved_at for p in repo.pending_by_prefix(conn, ws, key)
+                if p.dedupe_key == key and p.resolution == "REGISTER" and p.resolved_at),
+               default=None)
+
+
+def _offered(repo: ReceivablesRepository, conn, ws: str, root: str, day: date) -> list[Exchange]:
+    """The exchanges LINK_FUNDING offers for a payment: the open ones delivered by its day
+    (rule 1) and, once the owner answered ``REGISTER``, the open ones registered since then
+    (R61: one registered without its date is delivered "today", after the payment)."""
+    since = register_answered_at(repo, conn, ws, root)
+    return [ex for ex in repo.open_exchanges(conn, ws)
+            if ex.delivered_on <= day or (since is not None and ex.created_at >= since)]
+
+
+def registered_since(repo: ReceivablesRepository, conn, ws: str, when: datetime) -> bool:
+    """An open exchange was registered at or after ``when`` (R61)."""
+    return any(ex.created_at >= when for ex in repo.open_exchanges(conn, ws))
 
 
 def _compatible(repo: ReceivablesRepository, conn, ws: str, eur: int,
@@ -186,6 +214,12 @@ def _notify(conn, ws: str, funding: Funding, exchanges: Sequence[Exchange], rate
                      {**payload, "reference_rate": rate_text(1 / Fraction(ecb))})
 
 
+def held_by_owner(repo: ReceivablesRepository, conn, movement_id: str) -> bool:
+    """The owner undid a funding of this payment (R57): Finance never links it again on its
+    own, alone or in a pool; only the owner's answer does."""
+    return repo.unlinked_by_owner(conn, movement_id, SYSTEM_UNLINKS)
+
+
 def try_link(repo: ReceivablesRepository, conn, ws: str, movement: domain.Movement,
              queue: PendingQueue, now: datetime, *, ask: bool = True) -> LinkResult:
     """Spec §6.2 rules 1-5 for an outgoing EUR payment to a known partner IBAN.
@@ -193,6 +227,9 @@ def try_link(repo: ReceivablesRepository, conn, ws: str, movement: domain.Moveme
     ``ALREADY_LINKED`` also covers a payment the owner already classified (any live role).
     A pool of unlinked partner payments that fits more than one exchange keeps waiting.
     ``ask=False`` only links: AMBIGUOUS asks nothing (a payment whose question was answered).
+    A payment whose funding the owner undid stays ``WAITING`` and asks nothing here: its
+    question was asked again when the funding was undone (R57). A pool takes only payments
+    from after go-live (R59) that the owner did not unlink.
     """
     mv = _payment(repo, conn, ws, movement.id)
     if mv is None:
@@ -200,6 +237,8 @@ def try_link(repo: ReceivablesRepository, conn, ws: str, movement: domain.Moveme
     if (repo.live_funding_for_movement(conn, mv.id) is not None
             or repo.movement_role(conn, mv.id) is not None):
         return "ALREADY_LINKED"
+    if held_by_owner(repo, conn, mv.id):
+        return "WAITING"
     compatible = _compatible(repo, conn, ws, -mv.amount_minor, _day(mv))
     if len(compatible) == 1:
         create_funding(repo, conn, ws, [mv.id], [compatible[0].id], queue, now)
@@ -209,8 +248,13 @@ def try_link(repo: ReceivablesRepository, conn, ws: str, movement: domain.Moveme
             ask_link_funding(repo, conn, ws, mv.id, queue)
         return "AMBIGUOUS"
     root, day = repo.movement_root(conn, mv.id), _day(mv)
-    unlinked = [p for p in repo.unlinked_partner_payments(conn, ws)
-                if repo.movement_root(conn, p.id) != root]
+    start = repo.go_live_rowid(conn, ws)
+    unlinked = []
+    for p in repo.unlinked_partner_payments(conn, ws):
+        other = repo.movement_root(conn, p.id)
+        if (other != root and (repo.movement_rowid(conn, other) or 0) > start
+                and not held_by_owner(repo, conn, other)):
+            unlinked.append(p)
     ecb = repo.usd_per_eur_on(conn, day)
     fits: list[tuple[Exchange, list[domain.Movement]]] = []
     for ex in _candidates(repo, conn, ws, day):
@@ -233,7 +277,8 @@ def ask_link_funding(repo: ReceivablesRepository, conn, ws: str, movement_id: st
                      queue: PendingQueue) -> PendingItem:
     """Raises the LINK_FUNDING question for a payment (or returns the open one).
 
-    One button per open exchange delivered on or before the payment, ``ALL`` when there are
+    One button per open exchange delivered on or before the payment (and, after a
+    ``REGISTER`` answer, per open exchange registered since: R61), ``ALL`` when there are
     several, ``ADD_TO:C<n>`` for the latest paid exchange delivered by then, then
     ``REGISTER`` and ``NOT_EXCHANGE``.
     """
@@ -241,7 +286,7 @@ def ask_link_funding(repo: ReceivablesRepository, conn, ws: str, movement_id: st
     if mv is None:
         raise ValidationError("movement")
     root, day = repo.movement_root(conn, mv.id), _day(mv)
-    candidates = _candidates(repo, conn, ws, day)
+    candidates = _offered(repo, conn, ws, root, day)
     refs = [f"C{ex.number}" for ex in candidates]
     options = refs + (["ALL"] if len(refs) > 1 else [])
     paid = repo.latest_funded_exchange(conn, ws, day)
@@ -278,8 +323,8 @@ def link_choice(repo: ReceivablesRepository, conn, ws: str, movement_id: str | N
         return {"ok": True, "status": "not_exchange"}
 
     movements = [mv.id]
-    if choice == "ALL":
-        exchanges = _candidates(repo, conn, ws, _day(mv))
+    if choice == "ALL":  # the exchanges the question offers (ask_link_funding)
+        exchanges = _offered(repo, conn, ws, repo.movement_root(conn, mv.id), _day(mv))
         if not exchanges:
             return _error("no_open_exchange")
         exchange_ids, partner_id = [ex.id for ex in exchanges], exchanges[0].partner_id
@@ -288,7 +333,7 @@ def link_choice(repo: ReceivablesRepository, conn, ws: str, movement_id: str | N
         old = repo.live_funding_for_exchange(conn, ex.id) if ex is not None else None
         if old is None:
             return _error("exchange_not_paid")
-        _undo(repo, conn, ws, old, "add_to", now)
+        _undo(repo, conn, ws, old, ADD_TO, now)
         movements = [*old.movement_ids, mv.id]
         exchange_ids, partner_id = list(old.exchange_ids), ex.partner_id
     else:
@@ -302,8 +347,8 @@ def link_choice(repo: ReceivablesRepository, conn, ws: str, movement_id: str | N
         exchange_ids, partner_id = [ex.id], ex.partner_id
     funding = create_funding(repo, conn, ws, movements, exchange_ids, queue, now)
     iban = mv.counterparty_iban_hash
-    if iban and iban not in repo.partner_hashes(conn, ws):
-        repo.add_partner_identifier(conn, ws, iban, partner_id)  # the owner picked it (§6.4)
+    if iban and iban not in repo.partner_hashes(conn, ws):  # the owner picked it (§6.4)
+        repo.add_partner_identifier(conn, ws, iban, partner_id, funding_id=funding.id)  # R60
     return {"ok": True, "status": "linked", "funding_ref": f"F{funding.number}"}
 
 
@@ -340,7 +385,8 @@ def redo_funding(repo: ReceivablesRepository, conn, ws: str, funding_id: str, re
 def reverse_funding(repo: ReceivablesRepository, conn, ws: str, funding_id: str, reason: str,
                     queue: PendingQueue, now: datetime) -> list[PendingItem]:
     """Undoes a live funding and asks LINK_FUNDING again for each of its payments (a new
-    question even if an earlier one was resolved). Returns those questions."""
+    question even if an earlier one was resolved). Returns those questions. Unless ``reason``
+    is one of ``SYSTEM_UNLINKS``, only the owner's answer links those payments again (R57)."""
     funding = repo.funding_by_id(conn, ws, funding_id)
     if funding is None:
         raise ValidationError("funding")
