@@ -29,7 +29,7 @@ def test_table_has_no_token_columns(tmp_path):
     columns = {row[1] for row in db.execute("PRAGMA table_info(runtime_grant)")}
     assert columns == {
         "runtime_id", "home_session_id", "allowed_audiences",
-        "granted_at", "expires_at", "last_mint_at",
+        "granted_at", "expires_at", "last_mint_at", "grantor_ref",
     }
 
 
