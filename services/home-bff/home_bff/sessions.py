@@ -162,6 +162,7 @@ def refs_match(a: str, b: str) -> bool:
         return False
     return hmac.compare_digest(a, b)
 
+
 def redact(value: str | None) -> str:
     """Render a credential safe for logs. Never log the token itself."""
     if not value:

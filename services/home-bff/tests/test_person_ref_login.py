@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi.testclient import TestClient
@@ -107,14 +108,23 @@ def test_ref_and_person_id_never_leave_the_server(ctx, caplog):
     http, _, _ = ctx
     ref = person_ref("PSN-00001", DELEGATION_SECRET)
     with caplog.at_level(logging.DEBUG):
-        response = _callback(http)
+        started = http.get("/login", follow_redirects=False)
+        state = parse_qs(urlparse(started.headers["location"]).query)["state"][0]
+        response = http.get(
+            f"/callback?code=auth-code&state={state}", follow_redirects=False
+        )
+    assert started.status_code == 302
     assert response.status_code == 303
-    assert ref not in response.text and "PSN-00001" not in response.text
-    for header in response.headers.raw:
-        value = header[1].decode()
-        assert ref not in value and "PSN-00001" not in value
+    for leg in (started, response):  # both the /login redirect and the callback
+        assert ref not in leg.text and "PSN-00001" not in leg.text
+        for header in leg.headers.raw:
+            value = header[1].decode()
+            assert ref not in value and "PSN-00001" not in value
     for cookie in http.cookies.jar:
         assert ref not in cookie.value and "PSN-00001" not in cookie.value
+    # Something was logged, so "never logged" below cannot pass on an empty capture.
+    assert caplog.records
+    assert any(record.name == "home_bff" for record in caplog.records)
     for record in caplog.records:
         text = record.getMessage()
         assert ref not in text and "PSN-00001" not in text

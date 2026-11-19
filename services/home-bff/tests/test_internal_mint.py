@@ -95,6 +95,7 @@ def test_internal_mint_declares_only_the_runtime_header_as_input(mint_ctx):
         assert "requestBody" not in operation
         assert "security" not in operation
 
+
 def test_internal_mint_requires_a_live_runtime_binding(mint_ctx):
     http, _, _ = mint_ctx
 
