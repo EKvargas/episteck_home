@@ -139,3 +139,9 @@ def test_item_free_sugars():
     assert item_free_sugars_g(NOT_FREE, {}, Decimal("150")) == Decimal("0")
     assert item_free_sugars_g(UNKNOWN, {"sugars_added_g": Decimal("5")}, Decimal("100")) == Decimal("5")
     assert item_free_sugars_g(UNKNOWN, n, Decimal("100")) is None
+
+
+def test_usda_source_with_data_type_suffix():
+    assert classify("USDA_FDC:Foundation", "Sweets") is FREE
+    assert classify("USDA_FDC:SR Legacy", "Vegetables and Vegetable Products") is NOT_FREE
+    assert classify("USDA_FDC:Branded", "Beverages") is UNKNOWN

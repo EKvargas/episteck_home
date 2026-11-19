@@ -139,7 +139,7 @@ def classify(source: str, category: str | None, name: str | None = None) -> Free
     """Classify a food. `name` is used only for BLS, whose code letter is coarse."""
     if source in ("OPEN_FOOD_FACTS", "SYNTHETIC"):
         return _classify_off(category)
-    if source == "USDA_FDC":
+    if source.split(":", 1)[0] == "USDA_FDC":
         return _USDA.get(category or "", _UNKNOWN)
     if source == "BLS":
         return _classify_bls(category, name)
