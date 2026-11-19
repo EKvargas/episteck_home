@@ -498,3 +498,13 @@ def test_day_entries_shape_and_order(env):
         "2026-11-20T08:00:00+01:00", "2026-11-20T18:00:00+01:00"]
     assert set(day["entries"][0]) == {"id", "consumed_at", "items"}
     assert day["items_total"] == 2 and day["free_sugars_known_g"] == "31.8"
+
+
+def test_zero_source_serving_never_books_a_false_zero(env):
+    prov = FakeProvider({"f": fizz("10", serving_g=Decimal("0"))})
+    svc = with_provider(env, prov)
+    item = {"label": "soda", "food_id": "f", "amount": 1, "unit": "serving"}
+    with pytest.raises(ValueError):
+        svc.propose_intake(S, "p1", [item], T)
+    out = svc.propose_intake(S, "p1", [{**item, "grams_estimate": 330}], T)
+    assert out["items"][0]["grams"] == "330"

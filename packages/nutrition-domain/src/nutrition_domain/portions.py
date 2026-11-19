@@ -44,8 +44,13 @@ class PortionError(ValueError):
     pass
 
 
+def _usable(value: Decimal | None) -> bool:
+    """A source figure of zero, below zero or not finite is no figure: missing, never zero."""
+    return value is not None and value.is_finite() and value > 0
+
+
 def _density(density_g_per_ml: Decimal | None) -> tuple[Decimal, str]:
-    if density_g_per_ml is not None:
+    if _usable(density_g_per_ml):
         return density_g_per_ml, f"{density_g_per_ml} g/ml (food's own)"
     return _ASSUMED_DENSITY, "1.0 g/ml (assumed)"
 
@@ -82,7 +87,7 @@ def to_grams(amount: Decimal, unit: str, *, stated: bool,
         return Conversion(ml * density, ConversionMethod.PRESET,
                           f"{amount} {unit} = {ml} ml x {text}", PORTION_TABLE_VERSION)
     if unit == "serving":
-        if serving_g is not None:
+        if _usable(serving_g):
             return Conversion(amount * serving_g, ConversionMethod.SOURCE_SERVING,
                               f"{amount} serving x {serving_g} g (source serving)",
                               PORTION_TABLE_VERSION)

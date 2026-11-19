@@ -78,3 +78,18 @@ def test_rejects(amount, unit):
 def test_rejects_non_positive_estimate(unit):
     with pytest.raises(PortionError):
         to_grams(D("1"), unit, stated=False, grams_estimate=D("0"))
+
+
+@pytest.mark.parametrize("bad", [D("0"), D("-5"), D("NaN"), D("Infinity")])
+def test_unusable_serving_size_is_absent_not_zero(bad):
+    with pytest.raises(PortionError):
+        to_grams(D("1"), "serving", stated=False, serving_g=bad)
+    c = to_grams(D("1"), "serving", stated=False, serving_g=bad, grams_estimate=D("330"))
+    assert (c.grams, c.method) == (D("330"), ConversionMethod.AGENT_ESTIMATE)
+
+
+@pytest.mark.parametrize("bad", [D("0"), D("-1"), D("NaN"), D("Infinity")])
+def test_unusable_density_falls_back_to_assumed(bad):
+    c = to_grams(D("1"), "glass", stated=False, density_g_per_ml=bad)
+    assert c.grams == D("200") and "1.0 g/ml (assumed)" in c.detail
+    assert to_grams(D("100"), "ml", stated=True, density_g_per_ml=bad).grams == D("100")
