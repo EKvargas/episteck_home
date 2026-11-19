@@ -465,6 +465,7 @@ class ReceivablesService:
         choice_text = proposals.text(choice, "choice")
         if details is not None and not isinstance(details, dict):
             raise ValidationError("details")
+        proposals.known_keys(details or {}, proposals.DETAIL_KEYS, "details")
         remember = (details or {}).get("remember", True)
         if not isinstance(remember, bool):
             raise ValidationError("details", {"remember": "true or false"})

@@ -12,11 +12,14 @@ from fastmcp import FastMCP
 from ..receivables.service import ReceivablesService
 from ..service import FinanceService
 from ..session import current_delegation
-from .receivables_tools import _REFUSALS, register_receivables_tools
+from .receivables_tools import (
+    quiet_invalid_arguments, refusal_code, register_receivables_tools,
+)
 
 
 def create_mcp(service: FinanceService,
                receivables: ReceivablesService | None = None) -> FastMCP:
+    quiet_invalid_arguments()
     mcp = FastMCP("episteck-finance")
 
     @mcp.tool
@@ -26,8 +29,10 @@ def create_mcp(service: FinanceService,
         Every figure you state must come from this tool's result in this turn."""
         try:
             return service.overview(current_delegation(), valuation_currency)
-        except tuple(exc for exc, _ in _REFUSALS) as error:
-            code = next(code for exc, code in _REFUSALS if isinstance(error, exc))
+        except Exception as error:
+            code = refusal_code(error)
+            if code is None:
+                raise
             return {"ok": False, "error": code}
 
     if receivables is not None:

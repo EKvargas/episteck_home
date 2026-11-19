@@ -5,6 +5,7 @@ Synthetic data only.
 from __future__ import annotations
 
 import asyncio
+import logging
 import socket
 import threading
 import time
@@ -14,7 +15,7 @@ from fastapi.testclient import TestClient
 
 from app.api import create_app
 from app.mcp.server import create_mcp
-from tests.support import FakeAuthorizer, count_rows, seeded_service
+from tests.support import FakeAuthorizer, count_rows, raw_execute, seeded_service
 from tests.test_receivables_service import DELEG, E1, EVIDENCE, Env
 
 HEADER = "X-Episteck-Delegation"
@@ -149,23 +150,50 @@ def test_rest_resolve_requires_delegation_header(tmp_path):
     assert ok.status_code == 200 and ok.json()["receipt_ref"] == "R1"
 
 
-@pytest.mark.parametrize("scenario", ["no_header", "denied", "unavailable"])
-def test_refusal_codes_match_overview_tool(tmp_path, scenario):
-    def mk():
-        return {"no_header": FakeAuthorizer(),
-                "denied": FakeAuthorizer(allow={"SELF": False}),
-                "unavailable": FakeAuthorizer(mode="unavailable")}[scenario]
+ARGS = {
+    "finance_receivables": {}, "finance_exchanges": {}, "finance_pending": {},
+    "finance_explain": {"ref": "C1"},
+    "finance_record_exchange": {"total_usd": "10",
+                                "lines": [{"payer": "Familiar A", "usd": "10"}]},
+    "finance_record_receipt": {"payer": "Familiar A", "amount": "5", "currency": "USD",
+                               "kind": "CASH"},
+    "finance_resolve_pending": {"code": "P1", "choice": "yes"},
+    "finance_mark_held_cash": {"counterparty": "Familiar A", "amount": "5", "currency": "USD"},
+    "finance_correct_exchange": {"exchange_ref": "C1",
+                                 "lines": [{"payer": "Familiar A", "usd": "10"}],
+                                 "reason": "x"},
+    "finance_reallocate": {"receipt_ref": "R1", "allocations": []},
+    "finance_forgive": {"target": "Familiar A", "reason": "x"},
+    "finance_setup_counterparty": {"label": "Familiar Z", "kind": "PERSON"},
+    "finance_record_opening": {"counterparty": "Familiar A", "amount": "5", "currency": "USD",
+                               "basis": "APPROXIMATE", "note": "n"},
+    "finance_reverse": {"ref": "R1", "reason": "x"},
+}
+SCENARIOS = {
+    "no_header": (lambda: FakeAuthorizer(), False, False),
+    "session_invalid": (lambda: FakeAuthorizer(mode="session_invalid"), True, False),
+    "unavailable": (lambda: FakeAuthorizer(mode="unavailable"), True, False),
+    "denied": (lambda: FakeAuthorizer(allow={"SELF": False}), True, False),
+    "non_member": (lambda: FakeAuthorizer(actor="PSN-9"), True, False),
+    "feature_off": (lambda: FakeAuthorizer(), True, True),
+}
 
+
+@pytest.mark.parametrize("scenario", list(SCENARIOS))
+def test_refusal_codes_match_overview_tool_for_every_tool(tmp_path, scenario):
+    mk, header, paused = SCENARIOS[scenario]
     env = Env(tmp_path, authorizer=mk())
-    url = _serve(_mcp(env, tmp_path, mk()))
-    h = {} if scenario == "no_header" else {HEADER: DELEG}
+    overview = _overview(tmp_path, mk())
+    if paused:
+        raw_execute(env.base, "UPDATE workspace SET status='PAUSED'")
+        raw_execute(overview._repo, "UPDATE workspace SET status='PAUSED'")
+    url = _serve(create_mcp(overview, env.svc))
+    h = {HEADER: DELEG} if header else {}
     expected = _call(url, h, "finance_overview")
     assert expected["ok"] is False
-    for tool, args in (("finance_receivables", {}), ("finance_pending", {}),
-                       ("finance_record_receipt", {"payer": "Familiar A", "amount": "5",
-                                                   "currency": "USD", "kind": "CASH"}),
-                       ("finance_resolve_pending", {"code": "P1", "choice": "yes"})):
-        assert _call(url, h, tool, args) == expected
+    assert set(ARGS) == set(TOOLS)
+    for tool, args in ARGS.items():
+        assert _call(url, h, tool, args) == expected, tool
     assert count_rows(env.base, "pending_item") == 0
 
 
@@ -213,7 +241,8 @@ def test_rest_commands_idempotency_key_and_status_mapping(tmp_path):
     unknown = client.post("/pending/P99/resolve", json={"choice": "yes"}, headers=h)
     assert unknown.status_code == 400 and unknown.json()["error"] == "unknown_pending"
     dup = client.post("/commands/receipt", json=body, headers=h)
-    assert dup.json()["status"] == "possible_duplicate"
+    assert dup.status_code == 200 and dup.json()["status"] == "possible_duplicate"
+    assert dup.json()["options"] == ["other", "same"]
 
 
 def test_rest_remaining_command_types_and_refusal_statuses(tmp_path):
@@ -227,13 +256,14 @@ def test_rest_remaining_command_types_and_refusal_statuses(tmp_path):
         "opening": {"counterparty": "Familiar A", "amount": "10", "currency": "USD",
                     "basis": "APPROXIMATE", "note": "n"},
         "counterparty": {"label": "Familiar Z", "kind": "PERSON", "aliases": []},
-        "reverse": {"ref": "C1", "reason": "x"},
-        "reallocate": {"receipt_ref": "R1", "allocations": []},
     }
     for kind, body in cases.items():
         r = client.post(f"/commands/{kind}", json=body, headers=h)
-        assert r.status_code in (200, 400), (kind, r.status_code, r.json())
-        assert r.json().get("status") == "confirmation_required" or r.json()["ok"] is False
+        assert r.status_code == 200, (kind, r.status_code, r.json())
+        assert r.json()["status"] == "confirmation_required", (kind, r.json())
+        done = client.post(f"/pending/{r.json()['code']}/resolve", json={"choice": "yes"},
+                           headers=h)
+        assert done.status_code == 200 and done.json()["ok"] is True, (kind, done.json())
     held = client.post("/commands/held_cash",
                        json={"counterparty": "Familiar A", "amount": "10", "currency": "USD"},
                        headers={**h, "Idempotency-Key": "h1"})
@@ -243,3 +273,101 @@ def test_rest_remaining_command_types_and_refusal_statuses(tmp_path):
     denied = _rest(tmp_path / "d", denied_env)
     assert denied.get("/pending", headers=h).status_code == 403
     assert denied.post("/commands/receipt", json={"payer": "Familiar A", "amount": "5", "currency": "USD", "kind": "CASH"}, headers=h).status_code == 403
+
+
+class _Capture(logging.Handler):
+    def __init__(self):
+        super().__init__(logging.DEBUG)
+        self.lines: list[str] = []
+
+    def emit(self, record):
+        self.lines.append(record.getMessage())
+
+
+def test_rejected_tool_arguments_never_reach_the_log(tmp_path):
+    env = Env(tmp_path)
+    mcp = _mcp(env, tmp_path)
+    cap = _Capture()
+    logger = logging.getLogger("fastmcp.server.server")
+    logger.addHandler(cap)
+    old = logger.level
+    logger.setLevel(logging.DEBUG)
+    try:
+        url = _serve(mcp)
+        h = {HEADER: DELEG}
+        _call(url, h, "finance_record_exchange",
+              {"total_usd": "120", "lines": [["Familiar A", "120"]]})
+        _call(url, h, "finance_record_receipt", {"payer": "Familiar B", "amount": 77.5,
+                                                 "currency": "USD", "kind": "CASH"})
+    finally:
+        logger.removeHandler(cap)
+        logger.setLevel(old)
+    text = "\n".join(cap.lines)
+    assert "finance_record_exchange" in text and "finance_record_receipt" in text
+    for secret in ("Familiar A", "Familiar B", "120", "77.5"):
+        assert secret not in text
+
+
+def test_receipt_docstring_never_offers_bank_and_schemas_name_nested_keys(tmp_path):
+    env = Env(tmp_path)
+    mcp = _mcp(env, tmp_path)
+    desc = asyncio.run(mcp.get_tool("finance_record_receipt")).description
+    assert "BANK" not in desc and "bank sync" in desc
+    forgive = asyncio.run(mcp.get_tool("finance_forgive")).parameters
+    assert "reason" in forgive["required"]
+    blob = {name: str(asyncio.run(mcp.get_tool(name)).parameters)
+            for name in ("finance_record_exchange", "finance_reallocate",
+                         "finance_resolve_pending", "finance_correct_exchange")}
+    for key in ("ves_reference", "ves_amount", "partner", "date"):
+        assert key in blob["finance_record_exchange"]
+    for key in ("payer", "usd", "debt_currency", "beneficiary", "eur"):
+        assert key in blob["finance_record_exchange"]
+        assert key in blob["finance_correct_exchange"]
+    assert "exchange" in blob["finance_reallocate"] and "amount" in blob["finance_reallocate"]
+    assert "remember" in blob["finance_resolve_pending"]
+
+
+def test_unknown_nested_key_is_refused_over_mcp_and_rest(tmp_path):
+    env = Env(tmp_path)
+    url = _serve(_mcp(env, tmp_path))
+    h = {HEADER: DELEG}
+    bad_ev = {"reference": "REF-SYNTH-0001"}
+    out = _call(url, h, "finance_record_exchange",
+                {"total_usd": "300", "lines": E1, "evidence": bad_ev})
+    assert (out["ok"], out["error"], out["field"]) == (False, "validation_error",
+                                                       "evidence.reference")
+    assert count_rows(env.base, "pending_item") == 0
+    rest = _rest(tmp_path, env)
+    r = rest.post("/commands/exchange", json={"total_usd": "300", "lines": E1,
+                                              "evidence": bad_ev}, headers=h)
+    assert r.status_code == 400 and r.json()["error"] == "validation_error"
+    assert r.json()["field"] == "evidence.reference"
+    r = rest.post("/commands/exchange", json={"total_usd": "10", "lines": [
+        {"payer": "Familiar A", "usd": "10", "amunt": "1"}]}, headers=h)
+    assert r.json()["field"] == "lines[0].amunt"
+    code = env.svc.propose_receipt(DELEG, "Familiar A", "5", "USD", "CASH")["code"]
+    r = rest.post(f"/pending/{code}/resolve",
+                  json={"choice": "yes", "details": {"conterparty": "x"}}, headers=h)
+    assert r.status_code == 400 and r.json()["field"] == "details.conterparty"
+    assert count_rows(env.base, "exchange") == 0
+
+
+def test_unknown_allocation_key_is_a_validation_error_in_the_service(tmp_path):
+    env = Env(tmp_path)
+    out = env.svc.propose_exchange(DELEG, "300", E1, {"reference": "x"})
+    assert (out["error"], out["field"]) == ("validation_error", "evidence.reference")
+    assert out["detail"] == {"reason": "unknown_key"}
+
+
+def test_rest_shape_errors_carry_detail_and_pending_hides_for_delivery(tmp_path):
+    env = Env(tmp_path)
+    client = _rest(tmp_path, env)
+    h = {HEADER: DELEG}
+    r = client.post("/commands/receipt", json={"payer": "x"}, headers=h)
+    assert r.status_code == 400 and "detail" in r.json()
+    env.svc.propose_receipt(DELEG, "Familiar A", "5", "USD", "CASH")
+    shown = client.get("/pending", headers=h).json()
+    assert client.get("/pending?for_delivery=true", headers=h).json() == shown
+    names = [p.name for route in client.app.routes if getattr(route, "path", "") == "/pending"
+             for p in route.dependant.query_params]
+    assert "for_delivery" not in names

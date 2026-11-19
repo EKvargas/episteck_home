@@ -11,6 +11,7 @@ from collections.abc import Callable
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
 from .receivables.service import ReceivablesService
@@ -40,10 +41,12 @@ _COMMANDS: dict[str, tuple[str, tuple[str, ...], tuple[str, ...]]] = {
 }
 
 
-def _invalid(field: str | None = None) -> JSONResponse:
+def _invalid(field: str | None = None, detail: dict | None = None) -> JSONResponse:
+    """Same shape as the service's ``validation_error``: field (when known) and detail."""
     body: dict[str, Any] = {"ok": False, "error": "validation_error"}
     if field is not None:
         body["field"] = field
+    body["detail"] = detail or {}
     return JSONResponse(body, status_code=400)
 
 
@@ -79,14 +82,15 @@ def create_receivables_router(service: ReceivablesService) -> APIRouter:
         return guarded(lambda: service.exchanges(delegation, status, since))
 
     @router.get("/pending")
-    def pending(for_delivery: bool = False, delegation: str | None = Depends(human_session)):
-        return guarded(lambda: service.pending(delegation, for_delivery))
+    def pending(delegation: str | None = Depends(human_session)):
+        # for_delivery marks items as sent: only the scheduled delivery uses it (MCP).
+        return guarded(lambda: service.pending(delegation, False))
 
-    @router.post("/commands/{type}")
-    async def command(type: str, request: Request,
+    @router.post("/commands/{command_type}")
+    async def command(command_type: str, request: Request,
                       delegation: str | None = Depends(human_session),
                       idempotency_key: str | None = Header(default=None)):
-        spec = _COMMANDS.get(type)
+        spec = _COMMANDS.get(command_type)
         if spec is None:
             raise HTTPException(404, "UNKNOWN_COMMAND")
         method, required, optional = spec
@@ -95,14 +99,15 @@ def create_receivables_router(service: ReceivablesService) -> APIRouter:
             return _invalid()
         unknown = sorted(set(body) - set(required) - set(optional))
         if unknown:
-            return _invalid(unknown[0])
+            return _invalid(unknown[0], {"reason": "unknown_key"})
         missing = [name for name in required if name not in body]
         if missing:
-            return _invalid(missing[0])
+            return _invalid(missing[0], {"reason": "required"})
         kwargs: dict[str, Any] = dict(body)
         if idempotency_key is not None:
             kwargs["client_key"] = idempotency_key
-        return guarded(lambda: getattr(service, method)(delegation, **kwargs))
+        return await run_in_threadpool(
+            guarded, lambda: getattr(service, method)(delegation, **kwargs))
 
     @router.post("/pending/{code}/resolve")
     async def resolve(code: str, request: Request,
@@ -111,9 +116,10 @@ def create_receivables_router(service: ReceivablesService) -> APIRouter:
         if body is None or set(body) - {"choice", "details"}:
             return _invalid()
         if "choice" not in body:
-            return _invalid("choice")
-        return guarded(lambda: service.resolve(delegation, code, body["choice"],
-                                               body.get("details")))
+            return _invalid("choice", {"reason": "required"})
+        return await run_in_threadpool(
+            guarded, lambda: service.resolve(delegation, code, body["choice"],
+                                             body.get("details")))
 
     return router
 
