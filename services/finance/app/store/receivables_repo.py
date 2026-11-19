@@ -1,7 +1,8 @@
 """Receivables SQL. Every method takes an open connection first. Facts are never edited.
 
 Scoping: reads that take ``ws`` are workspace-scoped. Reads keyed by a globally unique id
-are id-scoped and take no workspace: ``current_lines``, ``live_funding_for_exchange``,
+are id-scoped and take no workspace: ``current_lines``, ``exchange_lines``,
+``live_funding_for_exchange``,
 ``live_funding_for_movement``, ``funding_shares``, ``live_receipt_for_movement``,
 ``movement_role``, ``live_role_ids_for_movement``, ``movement_root``, ``movement_rowid`` and
 ``is_live``.
@@ -32,7 +33,7 @@ from ..receivables.allocation import OPENING_ORDER, OpenLine
 from ..receivables.model import (
     Allocation, AllocationMethod, Counterparty, CounterpartyKind, EntryKind, Exchange,
     ExchangeLine, Funding, LedgerEntry, MovementRoleKind, Opening, PendingItem, PendingKind,
-    Receipt, ReceiptKind, Verification,
+    Receipt, ReceiptKind, Verification, options_digest,
 )
 from ..receivables.text import normalize_alias
 from . import db
@@ -162,7 +163,7 @@ def _pending(r: sqlite3.Row) -> PendingItem:
         r["code"], r["workspace_id"], PendingKind(r["kind"]), bool(r["requires_answer"]),
         tuple(json.loads(r["options"])), json.loads(r["payload"]), r["dedupe_key"],
         _dt(r["created_at"]), _dt(r["delivered_at"]), _dt(r["resolved_at"]), r["resolution"],
-        _dt(r["snooze_until"]))
+        _dt(r["snooze_until"]), r["shown_digest"])
 
 
 def _movement(r: sqlite3.Row) -> domain.Movement:
@@ -200,7 +201,8 @@ class ReceivablesRepository:
 
     # --- counterparties ----------------------------------------------------------
     def insert_counterparty(self, conn, cp: Counterparty, aliases: Sequence[str]) -> None:
-        keys = [normalize_alias(a) for a in aliases]
+        """The label is always one of the aliases, so labels are unique too (R41)."""
+        keys = list(dict.fromkeys(normalize_alias(a) for a in (cp.label, *aliases)))
         if not all(keys):
             raise ValueError("an alias is empty once normalised")
         for key in keys:
@@ -229,6 +231,14 @@ class ReceivablesRepository:
             "WHERE a.workspace_id=? AND a.alias=? ORDER BY c.rowid",
             (ws, key)).fetchall()
         return [_cp(r) for r in rows]
+
+    def alias_names(self, conn, ws: str) -> dict[str, list[str]]:
+        """Normalised aliases per counterparty id (for partial-name candidates)."""
+        out: dict[str, list[str]] = {}
+        for r in conn.execute("SELECT alias, counterparty_id FROM counterparty_alias "
+                              "WHERE workspace_id=? ORDER BY rowid", (ws,)):
+            out.setdefault(r["counterparty_id"], []).append(r["alias"])
+        return out
 
     def get_counterparty(self, conn, ws: str, cp_id: str) -> Counterparty | None:
         r = conn.execute("SELECT * FROM counterparty WHERE workspace_id=? AND id=?",
@@ -302,11 +312,28 @@ class ReceivablesRepository:
                          (ws, number)).fetchone()
         return _exchange(r) if r else None
 
-    def exchange_by_id(self, conn, ws: str, exchange_id: str) -> Exchange | None:
-        """The live exchange; ``None`` if unknown, of another workspace or revoked."""
-        r = conn.execute(f"SELECT e.* FROM exchange e WHERE e.workspace_id=? AND e.id=? "
-                         f"AND {_live('exchange', 'e')}", (ws, exchange_id)).fetchone()
+    def exchange_by_id(self, conn, ws: str, exchange_id: str, *,
+                       include_revoked: bool = False) -> Exchange | None:
+        """The live exchange; ``None`` if unknown, of another workspace or revoked
+        (``include_revoked`` also finds a revoked one: history)."""
+        live = "" if include_revoked else f" AND {_live('exchange', 'e')}"
+        r = conn.execute(f"SELECT e.* FROM exchange e WHERE e.workspace_id=? AND e.id=?{live}",
+                         (ws, exchange_id)).fetchone()
         return _exchange(r) if r else None
+
+    def exchange_lines(self, conn, exchange_id: str) -> list[ExchangeLine]:
+        """Every version of an exchange's lines (history), by version then position."""
+        rows = conn.execute("SELECT * FROM exchange_line WHERE exchange_id=? "
+                            "ORDER BY version, position, rowid", (exchange_id,)).fetchall()
+        return [_line(r) for r in rows]
+
+    def fundings_for_exchange(self, conn, ws: str, exchange_id: str) -> list[Funding]:
+        """Every funding (live or revoked) that included this exchange, oldest first."""
+        rows = conn.execute(
+            "SELECT f.* FROM funding f JOIN funding_exchange fe ON fe.funding_id=f.id "
+            "WHERE f.workspace_id=? AND fe.exchange_id=? ORDER BY f.number",
+            (ws, exchange_id)).fetchall()
+        return [self._funding(conn, r) for r in rows]
 
     def exchange_by_ves_hash(self, conn, ws: str, h: str) -> Exchange | None:
         r = conn.execute(
@@ -473,13 +500,32 @@ class ReceivablesRepository:
                          f"AND l.number=?{effective}", (ws, number)).fetchone()
         return _entry(r) if r else None
 
-    def receipt_by_ref(self, conn, ws: str, ref: str) -> Receipt | None:
-        """``R<n>`` -> the live receipt."""
+    def entry_by_id(self, conn, ws: str, entry_id: str) -> LedgerEntry | None:
+        """Any entry of the workspace by id (history: revoked and reversed ones included)."""
+        r = conn.execute("SELECT * FROM ledger_entry WHERE workspace_id=? AND id=?",
+                         (ws, entry_id)).fetchone()
+        return _entry(r) if r else None
+
+    def entries_by_sources(self, conn, ws: str, refs: Sequence[str]) -> list[LedgerEntry]:
+        """Every entry (any kind, undone or not) whose ``source_ref`` is one of ``refs``."""
+        ids = list(dict.fromkeys(refs))
+        if not ids:
+            return []
+        rows = conn.execute(
+            f"SELECT * FROM ledger_entry WHERE workspace_id=? "
+            f"AND source_ref IN ({','.join('?' * len(ids))}) ORDER BY number",
+            (ws, *ids)).fetchall()
+        return [_entry(r) for r in rows]
+
+    def receipt_by_ref(self, conn, ws: str, ref: str, *,
+                       include_revoked: bool = False) -> Receipt | None:
+        """``R<n>`` -> the live receipt; ``include_revoked`` also finds a revoked one."""
         number = _ref_number(ref, "R")
         if number is None:
             return None
-        r = conn.execute(f"SELECT r.* FROM receipt r WHERE r.workspace_id=? AND r.number=? "
-                         f"AND {_live('receipt', 'r')}", (ws, number)).fetchone()
+        live = "" if include_revoked else f" AND {_live('receipt', 'r')}"
+        r = conn.execute(f"SELECT r.* FROM receipt r WHERE r.workspace_id=? AND r.number=?{live}",
+                         (ws, number)).fetchone()
         return _receipt(r) if r else None
 
     def receipt_by_id(self, conn, ws: str, receipt_id: str) -> Receipt | None:
@@ -932,6 +978,12 @@ class ReceivablesRepository:
             "SELECT COUNT(*) AS n FROM intervention_log WHERE workspace_id=? "
             "AND substr(at,1,7)=?", (ws, f"{year:04d}-{month:02d}")).fetchone()["n"]
 
+    def command_result(self, conn, ws: str, key: str) -> dict | None:
+        """The stored result of a completed command (I1 ``command_log``, read only)."""
+        r = conn.execute("SELECT result_json FROM command_log WHERE workspace_id=? AND key=?",
+                         (ws, key)).fetchone()
+        return json.loads(r["result_json"]) if r else None
+
     def member_role(self, conn, ws: str, person_id: str) -> str | None:
         r = conn.execute("SELECT role FROM workspace_member WHERE workspace_id=? AND person_id=?",
                          (ws, person_id)).fetchone()
@@ -974,14 +1026,30 @@ class ReceivablesRepository:
 
     def mark_pending_delivered(self, conn, ws: str, code: str, at: datetime,
                                resolve: bool) -> None:
+        """Also stores the digest of the options delivered: a numbered answer is refused once
+        they are replaced (R44)."""
+        row = conn.execute("SELECT options FROM pending_item WHERE workspace_id=? AND code=?",
+                           (ws, _code(code))).fetchone()
+        shown = options_digest(json.loads(row["options"])) if row else None
         if resolve:
             conn.execute(
-                "UPDATE pending_item SET delivered_at=?, resolved_at=?, resolution='delivered' "
-                "WHERE workspace_id=? AND code=? AND resolved_at IS NULL",
-                (_ts(at), _ts(at), ws, _code(code)))
+                "UPDATE pending_item SET delivered_at=?, shown_digest=?, resolved_at=?, "
+                "resolution='delivered' WHERE workspace_id=? AND code=? AND resolved_at IS NULL",
+                (_ts(at), shown, _ts(at), ws, _code(code)))
         else:
-            conn.execute("UPDATE pending_item SET delivered_at=? WHERE workspace_id=? AND code=?",
-                         (_ts(at), ws, _code(code)))
+            conn.execute("UPDATE pending_item SET delivered_at=?, shown_digest=? "
+                         "WHERE workspace_id=? AND code=?", (_ts(at), shown, ws, _code(code)))
+
+    def bind_shown(self, conn, ws: str, code: str) -> None:
+        """Records that the owner is being shown this open item's current options (R49): a
+        numbered answer then means them until they change. Any read that returns private
+        options calls it inside the transaction that read them."""
+        row = conn.execute("SELECT options FROM pending_item WHERE workspace_id=? AND code=? "
+                           "AND resolved_at IS NULL", (ws, _code(code))).fetchone()
+        if row:
+            conn.execute("UPDATE pending_item SET shown_digest=? WHERE workspace_id=? "
+                         "AND code=?", (options_digest(json.loads(row["options"])), ws,
+                                        _code(code)))
 
     def mark_pending_resolved(self, conn, ws: str, code: str, resolution: str,
                               at: datetime) -> bool:

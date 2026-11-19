@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS pending_item(
     workspace_id TEXT NOT NULL, code TEXT NOT NULL, kind TEXT NOT NULL,
     requires_answer INTEGER NOT NULL, options TEXT NOT NULL, payload TEXT NOT NULL,
     dedupe_key TEXT NOT NULL, created_at TEXT NOT NULL, delivered_at TEXT,
-    resolved_at TEXT, resolution TEXT, snooze_until TEXT,
+    resolved_at TEXT, resolution TEXT, snooze_until TEXT, shown_digest TEXT,
     PRIMARY KEY(workspace_id, code));
 CREATE INDEX IF NOT EXISTS ix_pending_dedupe ON pending_item(workspace_id, dedupe_key);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_pending_open_dedupe ON pending_item(workspace_id, dedupe_key)
@@ -144,11 +144,17 @@ def upgrade_i2(conn: sqlite3.Connection) -> None:
 
     ``matcher_cursor.start_rowid`` (the go-live mark): added when missing, and set to the
     row's cursor where NULL, so movements the matcher already passed stay history.
+    ``pending_item.shown_digest`` (the options last delivered, R44): added when missing.
     """
-    if "start_rowid" not in _columns(conn, "matcher_cursor"):
-        try:
-            conn.execute("ALTER TABLE matcher_cursor ADD COLUMN start_rowid INTEGER")
-        except sqlite3.OperationalError:
-            if "start_rowid" not in _columns(conn, "matcher_cursor"):
-                raise  # not another process adding it first
+    _add_column(conn, "matcher_cursor", "start_rowid", "INTEGER")
     conn.execute("UPDATE matcher_cursor SET start_rowid=movement_rowid WHERE start_rowid IS NULL")
+    _add_column(conn, "pending_item", "shown_digest", "TEXT")
+
+
+def _add_column(conn: sqlite3.Connection, table: str, column: str, kind: str) -> None:
+    if column not in _columns(conn, table):
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
+        except sqlite3.OperationalError:
+            if column not in _columns(conn, table):
+                raise  # not another process adding it first

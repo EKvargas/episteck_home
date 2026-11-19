@@ -173,8 +173,60 @@ def forgive(repo: ReceivablesRepository, conn, ws: str, target_ref: str,
     one currency still open there) or a counterparty label (its open items in the one currency
     it owes). What can be forgiven is min(Σ outstanding, balance): a FORGIVE never makes a
     balance negative, so it never creates a credit (R30). ``None`` forgives all of it; more is
-    refused. Several items give several entries; the first one is returned.
+    refused. Several items give several entries; the first one is returned (``forgive_all``
+    returns every one).
     """
+    return forgive_all(repo, conn, ws, target_ref, amount_minor, reason, now)[0]
+
+
+def forgive_all(repo: ReceivablesRepository, conn, ws: str, target_ref: str,
+                amount_minor: int | None, reason: str, now: datetime, *,
+                expect: Sequence[Sequence] | None = None) -> list[LedgerEntry]:
+    """``forgive``, returning every FORGIVE entry written (one per item), oldest item first.
+
+    ``expect`` is the plan the owner was shown (``forgive_parts``): if the items or parts
+    differ now, or forgiving that amount is no longer possible, nothing is written and
+    ``ValidationError("target", {"reason": "changed"})`` is raised (R42)."""
+    try:
+        cp, cur, _, _, parts = _forgive_plan(repo, conn, ws, target_ref, amount_minor)
+    except ValidationError:
+        if expect is None:
+            raise
+        raise ValidationError("target", {"reason": "changed"}) from None
+    if expect is not None and [tuple(p) for p in expect] != parts:
+        raise ValidationError("target", {"reason": "changed"})
+    return [_write(repo, conn, ws, cp.id, cur, -part, EntryKind.FORGIVE, ref, reason, now)
+            for ref, part in parts]
+
+
+def forgive_parts(repo: ReceivablesRepository, conn, ws: str, target_ref: str,
+                  amount_minor: int | None) -> tuple[int, list[tuple[str, int]]]:
+    """Read-only: ``(amount, [(item id, part)])`` that ``forgive`` would write."""
+    _, _, _, amount, parts = _forgive_plan(repo, conn, ws, target_ref, amount_minor)
+    return amount, parts
+
+
+def forgive_preview(repo: ReceivablesRepository, conn, ws: str, target_ref: str,
+                    amount_minor: int | None) -> dict:
+    """Read-only: what ``forgive`` would write, for the owner's echo. Items are named by
+    ``exchange_ref`` (an exchange line) or ``entry_ref`` (an opening), never by id. Raises the
+    same ``ValidationError`` as ``forgive``."""
+    cp, cur, owed, amount, parts = _forgive_plan(repo, conn, ws, target_ref, amount_minor)
+    lines = []
+    for item_id, part in parts:
+        found = repo.line_with_exchange(conn, ws, item_id)
+        opening = None if found else repo.entry_by_id(conn, ws, item_id)
+        lines.append({"exchange_ref": f"C{found[1].number}" if found else None,
+                      "entry_ref": f"E{opening.number}" if opening else None,
+                      "amount": format_minor(part, cur)})
+    return {"counterparty": cp.label, "currency": cur, "outstanding": format_minor(owed, cur),
+            "amount": format_minor(amount, cur), "lines": lines}
+
+
+def _forgive_plan(repo: ReceivablesRepository, conn, ws: str, target_ref: str,
+                  amount_minor: int | None
+                  ) -> tuple[Counterparty, str, int, int, list[tuple[str, int]]]:
+    """(counterparty, currency, forgivable, amount, [(item id, part)]) for ``forgive``."""
     cp, cur, lines = _forgive_target(repo, conn, ws, target_ref)
     owed = min(sum(ol.outstanding_minor for ol in lines),
                max(0, repo.balance(conn, ws, cp.id, cur)))
@@ -191,9 +243,7 @@ def forgive(repo: ReceivablesRepository, conn, ws: str, target_ref: str,
         if take > 0:
             parts.append((ol.line_id, take))
             left -= take
-    written = [_write(repo, conn, ws, cp.id, cur, -part, EntryKind.FORGIVE, ref, reason, now)
-               for ref, part in parts]
-    return written[0]
+    return cp, cur, owed, amount, parts
 
 
 def _forgive_target(repo: ReceivablesRepository, conn, ws: str,

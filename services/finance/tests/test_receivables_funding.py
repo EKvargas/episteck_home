@@ -94,8 +94,8 @@ def test_e1_single_open_exchange_links_automatically(tmp_path):
         assert repo.open_exchanges(c, WS) == []
         notice = repo.pending_by_dedupe(c, WS, "INFO:funding_closed:F1")
         assert notice.payload == {
-            "funding_ref": "F1", "exchange_refs": ["C1"], "rate": "0.9200", "eur": "276.00",
-            "usd": "300.00", "text_key": "funding_closed:F1"}
+            "funding_ref": "F1", "exchange_refs": ["C1"], "delivered_on": {"C1": "2026-11-13"},
+            "rate": "0.9200", "eur": "276.00", "usd": "300.00", "text_key": "funding_closed:F1"}
         assert repo.pending_by_dedupe(c, WS, "INFO:rate_outlier:F1") is None
         assert questions(repo, c) == []
 
@@ -123,7 +123,8 @@ def test_e4_two_compatible_open_exchanges_ask(tmp_path):
         assert item.kind is PendingKind.LINK_FUNDING and item.dedupe_key == "LINK_FUNDING:m1"
         assert item.options == ("C1", "C2", "ALL", "REGISTER", "NOT_EXCHANGE")
         assert item.payload == {"movement_id": "m1", "booking_date": "2026-11-15",
-                                "eur": "276.00", "candidates": ["C1", "C2"]}
+                                "eur": "276.00", "candidates": ["C1", "C2"],
+                                "delivered_on": {"C1": "2026-11-13", "C2": "2026-11-14"}}
         assert repo.live_funding_for_movement(c, "m1") is None
         assert link_choice(repo, c, WS, "m1", "C2", q, NOW) == {
             "ok": True, "status": "linked", "funding_ref": "F1"}

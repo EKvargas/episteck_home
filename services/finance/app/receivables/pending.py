@@ -80,11 +80,11 @@ class PendingQueue:
 
     def for_delivery(self, conn, ws: str) -> list[PendingItem]:
         now = self._now()
-        due = [
+        due = [  # a snoozed item waits, delivered or not
             i for i in self._repo.pending_open(conn, ws)
-            if i.delivered_at is None
-            or (i.requires_answer and i.delivered_at <= now - RESURFACE_AFTER
-                and (i.snooze_until is None or i.snooze_until <= now))
+            if (i.snooze_until is None or i.snooze_until <= now)
+            and (i.delivered_at is None
+                 or (i.requires_answer and i.delivered_at <= now - RESURFACE_AFTER))
         ]
         out = []
         for i in due:

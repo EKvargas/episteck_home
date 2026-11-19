@@ -472,7 +472,7 @@ def test_matcher_logs_counts_only(tmp_path, caplog):
         env.move(c, "in1", 12000, acc="acc-usd", iban=None, text=ZELLE_1, name="Familiar A")
     with caplog.at_level(logging.INFO, logger="finance.matcher"):
         assert env.run() == counts(linked=1, asked=1)
-    text = caplog.text
+    text = " ".join(r.getMessage() for r in caplog.records)  # not caplog.text: it has line numbers
     assert "linked=1" in text and "asked=1" in text
     for secret in ("Familiar", "Socio", "276", "120", "ZELLE", PARTNER_IBAN,
                    env.repo.hash_key(PARTNER_IBAN)):
