@@ -34,6 +34,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import sessions
 from .runtime import BindResult
 
 # An in-flight login should complete in seconds; minutes is already generous.
@@ -560,6 +561,60 @@ class SessionStore:
             grantor_ref=grantor_ref,
         )
         with self._mutation() as db:
+            db.execute(
+                "INSERT OR REPLACE INTO runtime_grant"
+                " (runtime_id, home_session_id, allowed_audiences, grantor_ref,"
+                "  granted_at, expires_at, last_mint_at) VALUES (?,?,?,?,?,?,NULL)",
+                (
+                    runtime_id,
+                    home_session_id,
+                    ",".join(sorted(grant.allowed_audiences)),
+                    grantor_ref,
+                    grant.granted_at,
+                    grant.expires_at,
+                ),
+            )
+        return grant
+
+    def claim_runtime_grant(
+        self,
+        runtime_id: str,
+        home_session_id: str,
+        allowed_audiences: frozenset[str] | set[str],
+        *,
+        ttl_seconds: int,
+        grantor_ref: str,
+    ) -> RuntimeGrant | None:
+        """Atomically write the grant unless another person's live grant is there.
+
+        Returns None (and writes nothing) when the current row is live and names a
+        different grantor. A legacy row (empty grantor), an expired row or this
+        person's own row is replaced.
+        """
+        if not grantor_ref:
+            raise ValueError("grantor_ref is required")
+        now = _now()
+        grant = RuntimeGrant(
+            runtime_id=runtime_id,
+            home_session_id=home_session_id,
+            allowed_audiences=frozenset(allowed_audiences),
+            granted_at=now,
+            expires_at=now + ttl_seconds,
+            last_mint_at=None,
+            grantor_ref=grantor_ref,
+        )
+        with self._mutation() as db:
+            row = db.execute(
+                "SELECT grantor_ref, expires_at FROM runtime_grant WHERE runtime_id = ?",
+                (runtime_id,),
+            ).fetchone()
+            if (
+                row is not None
+                and row["expires_at"] > now
+                and row["grantor_ref"]
+                and not sessions.refs_match(row["grantor_ref"], grantor_ref)
+            ):
+                return None
             db.execute(
                 "INSERT OR REPLACE INTO runtime_grant"
                 " (runtime_id, home_session_id, allowed_audiences, grantor_ref,"

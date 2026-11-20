@@ -391,3 +391,26 @@ def test_empty_ref_session_logout_all_asks_for_login(ctx):
     assert client.close_calls == [] and client.revoked == []
     assert store.resolve_runtime_grant(PRIMARY_RUNTIME_ID) == before
     assert store.get_session(cookie) is not None
+
+
+def test_race_lost_after_home_opened_closes_the_home_grant(ctx):
+    http, store, client = ctx
+    cookie = as_ana(http, client)
+    original_open = client.open_runtime_grant
+
+    def open_then_other_person_wins(access_token, runtime_id, ttl_days):
+        home_id = original_open(access_token, runtime_id, ttl_days)
+        # Between the pre-check and the claim, the owner's live grant lands.
+        store.put_runtime_grant(
+            runtime_id, "HDS-OWNER", {"home-control-plane"},
+            ttl_seconds=30 * DAY, grantor_ref=REF_OWNER,
+        )
+        return home_id
+
+    client.open_runtime_grant = open_then_other_person_wins
+    response = send(http, "/runtime/grant", cookie, agent=ANA_RUNTIME)
+    assert response.status_code == 409
+    assert "Este asistente ya tiene el permiso de otra persona." in response.text
+    assert [call[1] for call in client.close_calls] == ["HDS-GRANT-SECRET"]
+    row = store.resolve_runtime_grant(ANA_RUNTIME)
+    assert row.home_session_id == "HDS-OWNER" and row.grantor_ref == REF_OWNER

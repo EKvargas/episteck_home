@@ -620,7 +620,7 @@ def create_app(
                 message="Esta cuenta no puede conceder el permiso.",
             )
         try:
-            store.put_runtime_grant(
+            claimed = store.claim_runtime_grant(
                 agent,
                 home_session_id,
                 grant_audiences_for(agent),
@@ -636,6 +636,18 @@ def create_app(
             return _page(
                 session, store, client, status_code=503,
                 message="No se pudo guardar el permiso. Intentalo de nuevo.",
+            )
+        if claimed is None:
+            # Another person's grant landed after the pre-check: theirs stays, and the
+            # Home grant just opened for this person is closed again.
+            logger.warning("runtime grant lost the race to another person")
+            try:
+                client.close_runtime_grant(session.access_token, home_session_id)
+            except Exception:
+                pass
+            return _page(
+                session, store, client, status_code=409,
+                message="Este asistente ya tiene el permiso de otra persona.",
             )
         return RedirectResponse("/runtime", status_code=303)
 
