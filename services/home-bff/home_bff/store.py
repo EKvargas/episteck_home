@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS bff_session (
     home_session_id      TEXT NOT NULL,
     access_token         TEXT NOT NULL,
     refresh_token        TEXT,
+    person_ref           TEXT NOT NULL DEFAULT '',
     created_at           INTEGER NOT NULL,
     expires_at           INTEGER NOT NULL
 );
@@ -101,6 +102,7 @@ CREATE TABLE IF NOT EXISTS runtime_grant (
     runtime_id         TEXT PRIMARY KEY,
     home_session_id    TEXT NOT NULL,
     allowed_audiences  TEXT NOT NULL,
+    grantor_ref        TEXT NOT NULL DEFAULT '',
     granted_at         INTEGER NOT NULL,
     expires_at         INTEGER NOT NULL,
     last_mint_at       INTEGER
@@ -111,6 +113,13 @@ CREATE INDEX IF NOT EXISTS ix_session_expiry ON bff_session(expires_at);
 
 _MIGRATE_ADD_LOGIN_BINDING_HASH = (
     "ALTER TABLE oauth_transaction ADD COLUMN login_binding_hash TEXT NOT NULL DEFAULT ''"
+)
+
+_MIGRATE_ADD_PERSON_REF = (
+    "ALTER TABLE bff_session ADD COLUMN person_ref TEXT NOT NULL DEFAULT ''"
+)
+_MIGRATE_ADD_GRANTOR_REF = (
+    "ALTER TABLE runtime_grant ADD COLUMN grantor_ref TEXT NOT NULL DEFAULT ''"
 )
 
 _BUSY_TIMEOUT_MS = 1_000
@@ -145,6 +154,7 @@ class Session:
     refresh_token: str | None
     expires_at: int
     created_at: int = 0
+    person_ref: str = ""
 
 
 @dataclass(frozen=True)
@@ -157,6 +167,7 @@ class RuntimeGrant:
     granted_at: int
     expires_at: int
     last_mint_at: int | None
+    grantor_ref: str = ""
 
 
 def _now() -> int:
@@ -179,6 +190,8 @@ class SessionStore:
             self._switch_to_wal_with_retry(db)
             db.executescript(_SCHEMA)
             self._migrate_login_binding_hash(db)
+            self._migrate_add_column(db, _MIGRATE_ADD_PERSON_REF)
+            self._migrate_add_column(db, _MIGRATE_ADD_GRANTOR_REF)
             db.commit()
         # Tokens live here. Keep them unreadable to other service accounts even if
         # the parent directory is ever loosened.
@@ -222,6 +235,14 @@ class SessionStore:
         """
         try:
             db.execute(_MIGRATE_ADD_LOGIN_BINDING_HASH)
+        except sqlite3.OperationalError as error:
+            if "duplicate column name" not in str(error).lower():
+                raise
+
+    def _migrate_add_column(self, db: sqlite3.Connection, statement: str) -> None:
+        """Idempotent ALTER TABLE ADD COLUMN; a duplicate column is the no-op case."""
+        try:
+            db.execute(statement)
         except sqlite3.OperationalError as error:
             if "duplicate column name" not in str(error).lower():
                 raise
@@ -327,6 +348,7 @@ class SessionStore:
         access_token: str,
         refresh_token: str | None,
         ttl_seconds: int = SESSION_TTL_SECONDS,
+        person_ref: str = "",
     ) -> Session:
         session_id = secrets.token_urlsafe(32)
         now = _now()
@@ -335,12 +357,13 @@ class SessionStore:
             db.execute(
                 "INSERT INTO bff_session"
                 " (session_id, home_session_id, access_token, refresh_token,"
-                "  created_at, expires_at) VALUES (?,?,?,?,?,?)",
+                "  person_ref, created_at, expires_at) VALUES (?,?,?,?,?,?,?)",
                 (
                     session_id,
                     home_session_id,
                     access_token,
                     refresh_token,
+                    person_ref,
                     now,
                     expires_at,
                 ),
@@ -352,6 +375,7 @@ class SessionStore:
             refresh_token=refresh_token,
             expires_at=expires_at,
             created_at=now,
+            person_ref=person_ref,
         )
 
     def create_session_and_claim_runtime(
@@ -362,6 +386,7 @@ class SessionStore:
         refresh_token: str | None,
         runtime_id: str,
         ttl_seconds: int = SESSION_TTL_SECONDS,
+        person_ref: str = "",
     ) -> tuple[Session, BindResult]:
         """Commit a browser session only with a controlled runtime claim result."""
         session_id = secrets.token_urlsafe(32)
@@ -372,12 +397,13 @@ class SessionStore:
                 db.execute(
                     "INSERT INTO bff_session"
                     " (session_id, home_session_id, access_token, refresh_token,"
-                    "  created_at, expires_at) VALUES (?,?,?,?,?,?)",
+                    "  person_ref, created_at, expires_at) VALUES (?,?,?,?,?,?,?)",
                     (
                         session_id,
                         home_session_id,
                         access_token,
                         refresh_token,
+                        person_ref,
                         now,
                         expires_at,
                     ),
@@ -399,6 +425,7 @@ class SessionStore:
                 refresh_token=refresh_token,
                 expires_at=expires_at,
                 created_at=now,
+                person_ref=person_ref,
             ),
             binding,
         )
@@ -416,14 +443,7 @@ class SessionStore:
         if row["expires_at"] <= _now():
             self.delete_session(session_id)
             return None
-        return Session(
-            session_id=row["session_id"],
-            home_session_id=row["home_session_id"],
-            access_token=row["access_token"],
-            refresh_token=row["refresh_token"],
-            expires_at=row["expires_at"],
-            created_at=row["created_at"],
-        )
+        return _session_from_row(row)
 
     def delete_session(self, session_id: str | None) -> bool:
         if not session_id:
@@ -526,6 +546,7 @@ class SessionStore:
         allowed_audiences: frozenset[str] | set[str],
         *,
         ttl_seconds: int,
+        grantor_ref: str = "",
     ) -> RuntimeGrant:
         """Record (or replace) the grant pointer. No OAuth token is accepted or stored."""
         now = _now()
@@ -536,16 +557,18 @@ class SessionStore:
             granted_at=now,
             expires_at=now + ttl_seconds,
             last_mint_at=None,
+            grantor_ref=grantor_ref,
         )
         with self._mutation() as db:
             db.execute(
                 "INSERT OR REPLACE INTO runtime_grant"
-                " (runtime_id, home_session_id, allowed_audiences, granted_at,"
-                "  expires_at, last_mint_at) VALUES (?,?,?,?,?,NULL)",
+                " (runtime_id, home_session_id, allowed_audiences, grantor_ref,"
+                "  granted_at, expires_at, last_mint_at) VALUES (?,?,?,?,?,?,NULL)",
                 (
                     runtime_id,
                     home_session_id,
                     ",".join(sorted(grant.allowed_audiences)),
+                    grantor_ref,
                     grant.granted_at,
                     grant.expires_at,
                 ),
@@ -563,22 +586,35 @@ class SessionStore:
         if row["expires_at"] <= _now():
             self.delete_runtime_grant(runtime_id)
             return None
-        return RuntimeGrant(
-            runtime_id=row["runtime_id"],
-            home_session_id=row["home_session_id"],
-            allowed_audiences=frozenset(
-                part for part in row["allowed_audiences"].split(",") if part
-            ),
-            granted_at=row["granted_at"],
-            expires_at=row["expires_at"],
-            last_mint_at=row["last_mint_at"],
-        )
+        return _grant_from_row(row)
 
-    def delete_runtime_grant(self, runtime_id: str) -> bool:
+    def list_runtime_grants_for(self, person_ref: str) -> list[RuntimeGrant]:
+        """Live grants whose grantor is this person. An empty reference matches nothing."""
+        if not person_ref:
+            return []
+        with self._connection() as db:
+            rows = db.execute(
+                "SELECT * FROM runtime_grant"
+                " WHERE grantor_ref = ? AND expires_at > ? ORDER BY runtime_id",
+                (person_ref, _now()),
+            ).fetchall()
+        return [_grant_from_row(row) for row in rows]
+
+    def delete_runtime_grant(
+        self, runtime_id: str, *, home_session_id: str | None = None
+    ) -> bool:
+        """Delete the grant; with home_session_id, only while it still points there."""
         with self._mutation() as db:
-            cursor = db.execute(
-                "DELETE FROM runtime_grant WHERE runtime_id = ?", (runtime_id,)
-            )
+            if home_session_id is None:
+                cursor = db.execute(
+                    "DELETE FROM runtime_grant WHERE runtime_id = ?", (runtime_id,)
+                )
+            else:
+                cursor = db.execute(
+                    "DELETE FROM runtime_grant"
+                    " WHERE runtime_id = ? AND home_session_id = ?",
+                    (runtime_id, home_session_id),
+                )
         return cursor.rowcount > 0
 
     def touch_runtime_grant(self, runtime_id: str) -> None:
@@ -622,4 +658,19 @@ def _session_from_row(row: sqlite3.Row) -> Session:
         refresh_token=row["refresh_token"],
         expires_at=row["expires_at"],
         created_at=row["created_at"],
+        person_ref=row["person_ref"],
+    )
+
+
+def _grant_from_row(row: sqlite3.Row) -> RuntimeGrant:
+    return RuntimeGrant(
+        runtime_id=row["runtime_id"],
+        home_session_id=row["home_session_id"],
+        allowed_audiences=frozenset(
+            part for part in row["allowed_audiences"].split(",") if part
+        ),
+        granted_at=row["granted_at"],
+        expires_at=row["expires_at"],
+        last_mint_at=row["last_mint_at"],
+        grantor_ref=row["grantor_ref"],
     )

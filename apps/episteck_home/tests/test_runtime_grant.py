@@ -17,6 +17,9 @@ from types import SimpleNamespace
 import pytest
 
 OWNER = "owner@example.invalid"
+ANA = "ana@example.invalid"
+PRIMARY = "home-agent-primary"
+ANA_RT = "home-agent-ana"
 NOW = dt.datetime(2026, 10, 10, 10, 0, 0)
 
 
@@ -60,10 +63,14 @@ def _make_fake_frappe(current_user=OWNER, conf=None, linked_people=None):
     fake.fail_insert = False
     fake.committed = 0
     fake.rolled_back = 0
-    fake.enabled_users = {OWNER: True, "other@example.invalid": True}
+    fake.enabled_users = {OWNER: True, ANA: True, "other@example.invalid": True}
     if current_user:
         fake.enabled_users.setdefault(current_user, True)
-    fake.people_by_user = {OWNER: ["PSN-0001"], "other@example.invalid": ["PSN-0002"]}
+    fake.people_by_user = {
+        OWNER: ["PSN-0001"],
+        "other@example.invalid": ["PSN-0002"],
+        ANA: ["PSN-0003"],
+    }
     if linked_people is not None:
         fake.people_by_user[current_user] = linked_people
 
@@ -199,7 +206,10 @@ def test_runtime_id_default_is_home_agent_primary_only(build):
 
 def test_runtime_id_site_config_replaces_default(build):
     module, fake = build(
-        conf={"home_runtime_ids": ["rt-2"], "home_runtime_grantees": [OWNER]}
+        conf={
+            "home_runtime_ids": ["rt-2"],
+            "home_runtime_grantees_by_runtime": {"rt-2": [OWNER], "home-agent-primary": [OWNER]},
+        }
     )
     module.open_runtime_grant("rt-2", 5)
     with pytest.raises(_PermissionError):
@@ -448,3 +458,110 @@ def test_malformed_max_days_fails_closed(build, bad):
     with pytest.raises(_ValidationError):
         module.open_runtime_grant("home-agent-primary", 1)
     assert fake.rows == {}
+
+
+# ------------------------------------------- per-runtime grantees (second agent)
+
+MAP = {PRIMARY: [OWNER], ANA_RT: [ANA]}
+BOTH = [PRIMARY, ANA_RT]
+
+
+def _as(fake, user):
+    fake.session.user = user
+
+
+def test_without_mapping_grantees_apply_to_primary_only(build):
+    module, fake = build(conf={"home_runtime_ids": BOTH, "home_runtime_grantees": [OWNER]})
+    module.open_runtime_grant(PRIMARY, 90)
+    with pytest.raises(_PermissionError):
+        module.open_runtime_grant(ANA_RT, 90)
+    assert len(fake.rows) == 1
+
+
+def test_mapping_lets_each_person_grant_only_their_runtime(build):
+    module, fake = build(
+        current_user=ANA,
+        conf={"home_runtime_ids": BOTH, "home_runtime_grantees_by_runtime": MAP},
+    )
+    module.open_runtime_grant(ANA_RT, 90)
+    with pytest.raises(_PermissionError):
+        module.open_runtime_grant(PRIMARY, 90)
+    _as(fake, OWNER)
+    module.open_runtime_grant(PRIMARY, 90)
+    with pytest.raises(_PermissionError):
+        module.open_runtime_grant(ANA_RT, 90)
+    assert sorted(r["client"] for r in fake.rows.values()) == [
+        f"agent-runtime:{ANA_RT}",
+        f"agent-runtime:{PRIMARY}",
+    ]
+
+
+def test_mapping_present_ignores_the_old_grantee_list(build):
+    module, fake = build(
+        conf={
+            "home_runtime_ids": BOTH,
+            "home_runtime_grantees": [OWNER],
+            "home_runtime_grantees_by_runtime": {ANA_RT: [ANA]},
+        }
+    )
+    with pytest.raises(_PermissionError):
+        module.open_runtime_grant(PRIMARY, 90)
+    assert fake.rows == {}
+
+
+@pytest.mark.parametrize("bad", [[OWNER], "owner", 3, {PRIMARY: OWNER}])
+def test_malformed_mapping_denies(build, bad):
+    module, fake = build(
+        conf={
+            "home_runtime_ids": BOTH,
+            "home_runtime_grantees": [OWNER],
+            "home_runtime_grantees_by_runtime": bad,
+        }
+    )
+    with pytest.raises(_PermissionError):
+        module.open_runtime_grant(PRIMARY, 90)
+    assert fake.rows == {}
+    assert module._grantees_for(PRIMARY) == []
+
+
+def test_runtime_in_mapping_but_not_in_runtime_ids_is_denied(build):
+    module, fake = build(
+        current_user=ANA,
+        conf={"home_runtime_ids": [PRIMARY], "home_runtime_grantees_by_runtime": MAP},
+    )
+    with pytest.raises(_PermissionError):
+        module.open_runtime_grant(ANA_RT, 90)
+    assert fake.rows == {}
+
+
+def test_grantable_runtimes_lists_only_the_callers(build):
+    module, fake = build(
+        conf={"home_runtime_ids": BOTH, "home_runtime_grantees_by_runtime": MAP}
+    )
+    assert module.get_grantable_runtimes() == {"runtime_ids": [PRIMARY]}
+    _as(fake, ANA)
+    assert module.get_grantable_runtimes() == {"runtime_ids": [ANA_RT]}
+
+
+def test_grantable_runtimes_without_mapping_matches_today(build):
+    module, fake = build(conf={"home_runtime_ids": BOTH, "home_runtime_grantees": [OWNER]})
+    assert module.get_grantable_runtimes() == {"runtime_ids": [PRIMARY]}
+    _as(fake, ANA)
+    assert module.get_grantable_runtimes() == {"runtime_ids": []}
+
+
+def test_grantable_runtimes_takes_no_parameters_and_denies_guest_and_unlinked(build):
+    module, _ = build()
+    assert not inspect.signature(module.get_grantable_runtimes).parameters
+    assert module.get_grantable_runtimes._methods == ["GET"]
+    module, _ = build(current_user="Guest")
+    with pytest.raises(_PermissionError):
+        module.get_grantable_runtimes()
+    module, _ = build(linked_people=[])
+    with pytest.raises(_PermissionError):
+        module.get_grantable_runtimes()
+
+
+def test_primary_runtime_id_constant(build):
+    module, _ = build()
+    assert module.PRIMARY_RUNTIME_ID == PRIMARY

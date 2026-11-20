@@ -27,6 +27,9 @@ OPEN_SESSION_PATH = "/api/method/episteck_home.identity.session.open_session"
 CLOSE_SESSION_PATH = "/api/method/episteck_home.identity.session.close_session"
 OPEN_RUNTIME_GRANT_PATH = "/api/method/episteck_home.identity.session.open_runtime_grant"
 CLOSE_RUNTIME_GRANT_PATH = "/api/method/episteck_home.identity.session.close_runtime_grant"
+GRANTABLE_RUNTIMES_PATH = (
+    "/api/method/episteck_home.identity.session.get_grantable_runtimes"
+)
 WHOAMI_PATH = "/api/method/episteck_home.api.whoami"
 GET_HOME_BOOTSTRAP_PATH = "/api/method/episteck_home.api.get_home_bootstrap"
 
@@ -187,6 +190,22 @@ class HomeOAuthClient:
         except SessionOpenError:
             return False
         return bool((payload or {}).get("closed"))
+
+    def list_grantable_runtimes(self, access_token: str) -> list[str] | None:
+        """Runtime ids this person may grant, as Home says. None = could not tell
+        (unreachable, method absent, malformed). Raises AccessRefused on 401/403."""
+        try:
+            payload = self._as_user(
+                access_token, GRANTABLE_RUNTIMES_PATH, None, method="GET"
+            )
+        except AccessRefused:
+            raise
+        except SessionOpenError:
+            return None
+        ids = payload.get("runtime_ids") if isinstance(payload, dict) else None
+        if not isinstance(ids, list) or not all(isinstance(i, str) for i in ids):
+            return None
+        return ids
 
     def whoami(self, access_token: str) -> dict:
         """Resolve the trusted actor for this human session. Used for evidence."""

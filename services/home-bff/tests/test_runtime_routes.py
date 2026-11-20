@@ -13,6 +13,7 @@ from home_bff.app import create_app
 from home_bff.internal_app import create_internal_app
 from home_bff.frappe_client import AccessRefused, ControlPlaneUnreachable, SessionOpenError
 from home_bff.runtime import RUNTIME_ID
+from home_bff.sessions import person_ref
 from home_bff.store import SessionStore
 from tests.test_app import DELEGATION_SECRET, FakeClient, make_settings
 
@@ -39,6 +40,9 @@ class GrantClient(FakeClient):
         if isinstance(self.close_result, Exception):
             raise self.close_result
         return self.close_result
+
+    def list_grantable_runtimes(self, access_token):
+        return ["home-agent-primary"]
 
 
 @pytest.fixture
@@ -78,7 +82,10 @@ def age_session(path, seconds):
 
 
 def put_grant(store, home_session_id="HDS-G"):
-    store.put_runtime_grant(RUNTIME_ID, home_session_id, EXPECTED_AUDIENCES, ttl_seconds=86400)
+    store.put_runtime_grant(
+        RUNTIME_ID, home_session_id, EXPECTED_AUDIENCES, ttl_seconds=86400,
+        grantor_ref=person_ref("PSN-00001", DELEGATION_SECRET),
+    )
 
 
 # ------------------------------------------------------------------ GET /runtime
@@ -346,7 +353,7 @@ def test_logout_all_with_an_expired_token_does_not_log_out_and_asks_to_login(ctx
 
 def _mint(store):
     app = create_internal_app(make_settings(), store=store)  # legacy flag defaults to on
-    with TestClient(app) as mint:
+    with TestClient(app, headers={"X-Runtime-ID": RUNTIME_ID}) as mint:
         return mint.post("/internal/mint").status_code
 
 

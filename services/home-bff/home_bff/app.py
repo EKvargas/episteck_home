@@ -44,14 +44,12 @@ from .frappe_client import (
     UpstreamUnavailable,
 )
 from .oauth import authorization_params, new_pkce_pair, new_state
-from .runtime import RUNTIME_ID
+from .runtime import PRIMARY_RUNTIME_ID, RUNTIME_ID, grant_audiences_for
+from .runtime_page import AgentView
 from .store import SessionStore, StoreUnavailableError
 
 logger = logging.getLogger("home_bff")
 
-# Audiences a runtime grant may later be asked to mint for. Only home-control-plane is
-# minted today; svc-finance is recorded for H4 and has no effect until the BFF mints it.
-GRANT_AUDIENCES = frozenset({"home-control-plane", "svc-nutrition", "svc-finance"})
 SECONDS_PER_DAY = 86400
 
 # Delegations are minted for exactly one downstream audience per call.
@@ -204,6 +202,21 @@ def create_app(
             )
             return _failure(400, "authorization could not be completed")
 
+        # Who logged in, asked BEFORE a Home session exists so a failure here leaves
+        # nothing behind. Only the opaque reference is kept; the Person id is not.
+        try:
+            who = client.whoami(tokens.access_token)
+        except ControlPlaneUnreachable:
+            logger.warning("whoami unreachable at login")
+            return _failure(503, "login could not be completed")
+        except SessionOpenError as whoami_error:
+            logger.warning("whoami refused at login (%s)", type(whoami_error).__name__)
+            return _failure(403, "this account is not linked to a Home person")
+        person_id = who.get("actor_person_id") if isinstance(who, dict) else None
+        if not isinstance(person_id, str) or not person_id:
+            logger.warning("whoami returned no person at login")
+            return _failure(403, "this account is not linked to a Home person")
+        login_person_ref = sessions.person_ref(person_id, settings.delegation_secret)
         # 6-9. The Control Plane resolves the User from the token and maps it to a
         # Person. Zero links, two links, or a disabled user all surface here as a
         # refusal — we never inspect or second-guess that decision.
@@ -226,6 +239,7 @@ def create_app(
                     access_token=tokens.access_token,
                     refresh_token=tokens.refresh_token,
                     runtime_id=RUNTIME_ID,
+                    person_ref=login_person_ref,
                 )
                 # ALREADY_BOUND is still success: the Home Hub session is valid, and
                 # agent binding is orthogonal. `binding` is logged only as its static
@@ -237,6 +251,7 @@ def create_app(
                     home_session_id=home_session_id,
                     access_token=tokens.access_token,
                     refresh_token=tokens.refresh_token,
+                    person_ref=login_person_ref,
                 )
         except (ValueError, StoreUnavailableError):
             return _failure(503, "runtime binding could not be completed")
@@ -406,20 +421,69 @@ def create_app(
 
     expected_origin = csrf.origin_of(settings.redirect_uri)
 
-    def _page(session, store, *, message=None, status_code=200) -> HTMLResponse:
+    def _stored_agents(session, store: SessionStore) -> list[AgentView]:
+        """This person's own live grants, as the store remembers them."""
+        return [
+            AgentView(grant.runtime_id, grant)
+            for grant in store.list_runtime_grants_for(session.person_ref)
+            if grant.runtime_id in settings.runtime_ids
+        ]
+
+    def _visible_agents(
+        session, store: SessionStore, client: HomeOAuthClient
+    ) -> tuple[list[AgentView], bool]:
+        """The agents this person may grant, each with their own grant only.
+
+        Home says which agents. A grant someone else gave, or a legacy row with no
+        grantor, shows as no grant, so nobody sees another person's expiry or last
+        use. Home unreachable: only this person's stored grants, flagged True.
+        AccessRefused propagates to the caller.
+        """
+        grantable = client.list_grantable_runtimes(session.access_token)
+        if grantable is None:
+            return _stored_agents(session, store), True
+        agents = []
+        for runtime_id in settings.runtime_ids:
+            if runtime_id not in grantable:
+                continue
+            grant = store.resolve_runtime_grant(runtime_id)
+            if grant is not None and not sessions.refs_match(
+                grant.grantor_ref, session.person_ref
+            ):
+                grant = None
+            agents.append(AgentView(runtime_id, grant))
+        return agents, False
+
+    def _render(
+        session, agents, home_unreachable, *, message=None, status_code=200
+    ) -> HTMLResponse:
         body = runtime_page.render(
             csrf_token=csrf.token_for(session.session_id, settings.delegation_secret),
-            grant=store.resolve_runtime_grant(RUNTIME_ID),
+            agents=agents,
             now=int(time.time()),
             message=message,
+            home_unreachable=home_unreachable,
         )
         return HTMLResponse(body, status_code=status_code, headers=runtime_page.PAGE_HEADERS)
 
+    def _page(session, store, client, *, message=None, status_code=200) -> HTMLResponse:
+        """The page after a failed POST. A refused token here reads as Home down."""
+        try:
+            agents, home_unreachable = _visible_agents(session, store, client)
+        except AccessRefused:
+            agents, home_unreachable = _stored_agents(session, store), True
+        return _render(
+            session, agents, home_unreachable, message=message, status_code=status_code
+        )
+
     async def _guard(request: Request, session_id: str | None, store: SessionStore):
-        """Live session + CSRF (Origin/Sec-Fetch-Site and token). Fails closed."""
+        """Live session + CSRF (Origin/Sec-Fetch-Site and token). Fails closed.
+
+        Returns (session, form, error): the parsed form body, read once here.
+        """
         session = store.get_session(session_id)
         if session is None:
-            return None, JSONResponse({"detail": "no active session"}, status_code=401)
+            return None, None, JSONResponse({"detail": "no active session"}, status_code=401)
         raw = (await request.body()).decode("utf-8", "replace")
         form = parse_qs(raw, keep_blank_values=True)
         if not csrf.verify(
@@ -430,22 +494,43 @@ def create_app(
             sec_fetch_site=request.headers.get("sec-fetch-site"),
             expected_origin=expected_origin,
         ):
-            return None, JSONResponse(
+            return None, None, JSONResponse(
                 {"detail": "request could not be verified"}, status_code=403
             )
-        return session, None
+        return session, form, None
 
-    def _revoke_grant(session, store: SessionStore, client: HomeOAuthClient) -> str:
-        """Ask Home first. Delete the pointer when Home confirms or is unreachable.
+    def _form_agent(form: dict[str, list[str]]) -> str | None:
+        """The agent a POST names. No field = the owner's agent, so old pages work.
 
-        A refusal (not the owner, or already gone) keeps the row, so another logged-in
-        user cannot cut the owner's grant. Returns revoked / kept / none.
+        A configured id is returned; anything else (unknown, empty, repeated) is None.
         """
-        grant = store.resolve_runtime_grant(RUNTIME_ID)
+        values = form.get("agent")
+        if values is None:
+            return PRIMARY_RUNTIME_ID
+        if len(values) == 1 and values[0] in settings.runtime_ids:
+            return values[0]
+        return None
+
+    def _unknown_agent() -> JSONResponse:
+        return JSONResponse({"detail": "unknown agent"}, status_code=400)
+
+    def _revoke_grant(
+        session, store: SessionStore, client: HomeOAuthClient, runtime_id: str
+    ) -> str:
+        """Revoke this person's grant of one agent. Returns revoked / kept / none.
+
+        A grant someone else gave (or a legacy row with no grantor) is not touched and
+        Home is not asked, so nobody can cut another person's grant, not even while
+        Home is down. For their own grant: ask Home first, delete the pointer when Home
+        confirms or is unreachable, keep it when Home refuses.
+        """
+        grant = store.resolve_runtime_grant(runtime_id)
         if grant is None:
             # No grant, but the legacy browser binding (flag on) may still let the
             # agent act: revoking must reach it too.
-            return "revoked" if store.clear_runtime_binding(RUNTIME_ID) else "none"
+            return "revoked" if store.clear_runtime_binding(runtime_id) else "none"
+        if not sessions.refs_match(grant.grantor_ref, session.person_ref):
+            return "none"
         outcome = client.close_runtime_grant(session.access_token, grant.home_session_id)
         if outcome is False:
             return "kept"
@@ -453,19 +538,31 @@ def create_app(
             logger.warning(
                 "runtime grant revoke: control plane unreachable, local grant removed"
             )
-        store.delete_runtime_grant(RUNTIME_ID)
-        store.clear_runtime_binding(RUNTIME_ID)
+        # Only the row Home was asked about: a grant that replaced it meanwhile stays.
+        store.delete_runtime_grant(runtime_id, home_session_id=grant.home_session_id)
+        store.clear_runtime_binding(runtime_id)
         return "revoked"
 
     @app.get("/runtime")
     def runtime_view(
         session_id: str | None = Cookie(default=None, alias=sessions.COOKIE_NAME),
         store: SessionStore = Depends(get_store),
+        client: HomeOAuthClient = Depends(get_client),
     ):
+        """Every agent this person may grant. The query string is ignored."""
         session = store.get_session(session_id)
         if session is None:
             return RedirectResponse("/login?next=/runtime", status_code=303)
-        return _page(session, store)
+        if not session.person_ref:
+            # A session from before person references cannot tell whose grants are
+            # whose: a fresh login always records the reference.
+            return RedirectResponse("/login?next=/runtime", status_code=303)
+        try:
+            agents, home_unreachable = _visible_agents(session, store, client)
+        except AccessRefused:
+            # The stored access token was rejected: a fresh login gets a valid one.
+            return RedirectResponse("/login?next=/runtime", status_code=303)
+        return _render(session, agents, home_unreachable)
 
     @app.post("/runtime/grant")
     async def runtime_grant(
@@ -474,34 +571,61 @@ def create_app(
         store: SessionStore = Depends(get_store),
         client: HomeOAuthClient = Depends(get_client),
     ):
-        session, error = await _guard(request, session_id, store)
+        session, form, error = await _guard(request, session_id, store)
         if error is not None:
             return error
+        agent = _form_agent(form)
+        if agent is None:
+            return _unknown_agent()
+        if not session.person_ref:
+            # A session from before person references: the grant could not record who
+            # gave it, so log in again rather than write a row nobody can manage.
+            return RedirectResponse("/login?next=/runtime", status_code=303)
         if int(time.time()) - session.created_at > sessions.RECENT_LOGIN_SECONDS:
             # Granting 90 days of authority needs a recent login, not just a cookie.
             return RedirectResponse("/login?next=/runtime", status_code=303)
         try:
+            existing = store.resolve_runtime_grant(agent)
+        except (StoreUnavailableError, sqlite3.DatabaseError):
+            logger.warning("runtime grant could not be checked")
+            return _page(
+                session, store, client, status_code=503,
+                message="No se pudo guardar el permiso. Intentalo de nuevo.",
+            )
+        if (
+            existing is not None
+            and existing.grantor_ref
+            and not sessions.refs_match(existing.grantor_ref, session.person_ref)
+        ):
+            # Another person's live grant is never replaced, even if Home would allow
+            # it. A legacy row (no grantor) stays replaceable for the owner's re-grant.
+            return _page(
+                session, store, client, status_code=409,
+                message="Este asistente ya tiene el permiso de otra persona.",
+            )
+        try:
             home_session_id = client.open_runtime_grant(
-                session.access_token, RUNTIME_ID, settings.runtime_grant_days
+                session.access_token, agent, settings.runtime_grant_days
             )
         except ControlPlaneUnreachable:
             logger.warning("runtime grant: control plane unreachable")
             return _page(
-                session, store, status_code=503,
+                session, store, client, status_code=503,
                 message="Home no responde. Intentalo de nuevo en unos minutos.",
             )
         except SessionOpenError:
             logger.warning("runtime grant refused by the control plane")
             return _page(
-                session, store, status_code=403,
+                session, store, client, status_code=403,
                 message="Esta cuenta no puede conceder el permiso.",
             )
         try:
             store.put_runtime_grant(
-                RUNTIME_ID,
+                agent,
                 home_session_id,
-                GRANT_AUDIENCES,
+                grant_audiences_for(agent),
                 ttl_seconds=settings.runtime_grant_days * SECONDS_PER_DAY,
+                grantor_ref=session.person_ref,
             )
         except (StoreUnavailableError, sqlite3.DatabaseError):
             logger.warning("runtime grant could not be stored")
@@ -510,7 +634,7 @@ def create_app(
             except Exception:
                 pass
             return _page(
-                session, store, status_code=503,
+                session, store, client, status_code=503,
                 message="No se pudo guardar el permiso. Intentalo de nuevo.",
             )
         return RedirectResponse("/runtime", status_code=303)
@@ -522,11 +646,18 @@ def create_app(
         store: SessionStore = Depends(get_store),
         client: HomeOAuthClient = Depends(get_client),
     ):
-        session, error = await _guard(request, session_id, store)
+        session, form, error = await _guard(request, session_id, store)
         if error is not None:
             return error
+        agent = _form_agent(form)
+        if agent is None:
+            return _unknown_agent()
+        if not session.person_ref:
+            # Without a reference this session matches no grant, not even its own:
+            # log in again so the revoke can find it.
+            return RedirectResponse("/login?next=/runtime", status_code=303)
         try:
-            outcome = _revoke_grant(session, store, client)
+            outcome = _revoke_grant(session, store, client, agent)
         except AccessRefused:
             # The stored access token was rejected (expired): this is not an
             # ownership answer. A fresh login gets a valid token, then revoke again.
@@ -534,12 +665,12 @@ def create_app(
             return RedirectResponse("/login?next=/runtime", status_code=303)
         except (StoreUnavailableError, sqlite3.DatabaseError):
             return _page(
-                session, store, status_code=503,
+                session, store, client, status_code=503,
                 message="No se pudo revocar. Intentalo de nuevo.",
             )
         if outcome == "kept":
             return _page(
-                session, store, status_code=409,
+                session, store, client, status_code=409,
                 message="Home no confirmo la revocacion (no eres el titular o ya estaba revocada).",
             )
         return RedirectResponse("/runtime", status_code=303)
@@ -551,19 +682,29 @@ def create_app(
         store: SessionStore = Depends(get_store),
         client: HomeOAuthClient = Depends(get_client),
     ):
-        """Log out this session AND revoke the agent grant (owner decision, H5)."""
-        session, error = await _guard(request, session_id, store)
+        """Log out this session AND revoke this person's agent grants (owner decision, H5).
+
+        Every configured agent is tried; another person's grant is left alone.
+        """
+        session, _form, error = await _guard(request, session_id, store)
         if error is not None:
             return error
-        # Revoke the grant while the token is still valid, then tear the session down.
-        try:
-            outcome = _revoke_grant(session, store, client)
-        except AccessRefused:
-            # Do not log out leaving the grant alive: log in again, then revoke.
-            logger.warning("runtime grant revoke: login required")
+        if not session.person_ref:
+            # Do not log out leaving this person's grant alive: without a reference
+            # none of their grants can be found. Log in again, then log out everywhere.
             return RedirectResponse("/login?next=/runtime", status_code=303)
-        except (StoreUnavailableError, sqlite3.DatabaseError):
-            outcome = "kept"
+        # Revoke the grants while the token is still valid, then tear the session down.
+        outcomes = set()
+        for runtime_id in settings.runtime_ids:
+            try:
+                outcomes.add(_revoke_grant(session, store, client, runtime_id))
+            except AccessRefused:
+                # Do not log out leaving a grant alive: log in again, then revoke.
+                logger.warning("runtime grant revoke: login required")
+                return RedirectResponse("/login?next=/runtime", status_code=303)
+            except (StoreUnavailableError, sqlite3.DatabaseError):
+                outcomes.add("kept")
+        outcome = next((o for o in ("kept", "revoked") if o in outcomes), "none")
         try:
             client.close_home_session(session.access_token, session.home_session_id)
         except Exception:

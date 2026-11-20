@@ -50,3 +50,9 @@ def test_both_units_carry_the_same_runtime_legacy_binding_flag():
     # The public app (callback) and the mint app must agree during the H5 transition.
     assert "Environment=RUNTIME_LEGACY_BINDING=off" in PUBLIC
     assert "Environment=RUNTIME_LEGACY_BINDING=off" in MINT
+
+
+def test_both_units_carry_the_same_runtime_ids():
+    line = "Environment=RUNTIME_IDS=home-agent-primary,home-agent-ana"
+    assert line in PUBLIC
+    assert line in MINT

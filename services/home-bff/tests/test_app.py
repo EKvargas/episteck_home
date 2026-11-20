@@ -64,6 +64,7 @@ class FakeClient:
             },
         }
         self.whoami_error: Exception | None = None
+        self.home_session_opens = 0
 
     def exchange_code(self, *, code, redirect_uri, code_verifier):
         self.seen_verifiers.append(code_verifier)
@@ -72,6 +73,7 @@ class FakeClient:
         return TokenSet(access_token="at-1", refresh_token="rt-1", expires_in=3600)
 
     def open_home_session(self, access_token, *, client="bff-web"):
+        self.home_session_opens += 1
         if self.session_error:
             raise self.session_error
         return "HDS-0001"
@@ -88,6 +90,9 @@ class FakeClient:
         if self.whoami_error:
             raise self.whoami_error
         return self.whoami_payload
+
+    def list_grantable_runtimes(self, access_token):
+        return ["home-agent-primary"]
 
 
 @pytest.fixture

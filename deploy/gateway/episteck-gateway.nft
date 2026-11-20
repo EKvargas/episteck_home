@@ -2,6 +2,7 @@
 # numeric svc-home-gateway and www-data uids before syntax checking/loading. This
 # file never flushes or replaces unrelated nftables tables.
 define HERMES_UID = 1003
+define ANA_UID = __HOME_AGENT_ANA_UID__
 define GATEWAY_UID = __SVC_HOME_GATEWAY_UID__
 define WWW_DATA_UID = __WWW_DATA_UID__
 
@@ -12,6 +13,10 @@ table inet episteck_gateway {
         # Only Hermes may enter the loopback gateway listener.
         ip daddr 127.0.0.1 tcp dport 9934 meta skuid $HERMES_UID accept
         ip daddr 127.0.0.1 tcp dport 9934 drop
+
+        # Only home-agent-ana may enter Ana's loopback gateway listener.
+        ip daddr 127.0.0.1 tcp dport 9937 meta skuid $ANA_UID accept
+        ip daddr 127.0.0.1 tcp dport 9937 drop
 
         # Only the dedicated nginx gateway may call the direct MCP services.
         ip daddr 127.0.0.1 tcp dport { 9931, 9932, 9936 } meta skuid $GATEWAY_UID accept

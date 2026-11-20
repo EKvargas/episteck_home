@@ -23,15 +23,39 @@ The PID and nginx temporary paths live under the unit's
 `StateDirectory=/var/lib/episteck-mcp-gateway`. The standalone instance does not need
 write access to the public nginx prefix or default cache paths.
 
+A second listener, `127.0.0.1:9937`, serves Ana's agent (ADR-0017): only `/gateway/home/` and
+`/gateway/nutrition/`, no Finance route. Its mint stamps `X-Runtime-ID home-agent-ana`; port
+9934 stamps `home-agent-primary`. In nftables only the `home-agent-ana` uid reaches 9937 and uid
+`1003` stays on 9934 only; `render-nft.sh` resolves `id -u home-agent-ana` and fails if that
+user does not exist. The rollout order is in `deploy/home-bff/README.md`.
+
 ## Installation staging (no runtime switch)
+
+The service loads only the live path `/etc/episteck/mcp-gateway/nginx-mcp-gateway.conf`,
+so any reload, restart or reboot serves whatever is there. Stage a new config next to it
+and test the staging copy; never put an untested or not-yet-due config at the live path:
 
 ```bash
 sudo install -D -m 0644 deploy/gateway/nginx-mcp-gateway.conf \
+  /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.new
+sudo nginx -t -c /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.new \
+  -p /etc/episteck/mcp-gateway/
+```
+
+First install only, the unit too:
+`sudo install -D -m 0644 deploy/gateway/episteck-mcp-gateway.service /etc/systemd/system/episteck-mcp-gateway.service`.
+
+Switch at the planned moment only (for the per-person rollout that is step 3.3 in
+`deploy/home-bff/README.md`). Keep the previous file for rollback when one exists:
+
+```bash
+sudo cp -p /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf \
+  /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.old
+sudo install -m 0644 /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.new \
   /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf
-sudo install -D -m 0644 deploy/gateway/episteck-mcp-gateway.service \
-  /etc/systemd/system/episteck-mcp-gateway.service
 sudo nginx -t -c /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf \
   -p /etc/episteck/mcp-gateway/
+sudo systemctl reload episteck-mcp-gateway.service
 ```
 
 The service is intentionally not started during implementation. At cutover,
@@ -74,11 +98,12 @@ the rendered numeric `www-data` UID, because nginx serves the public PSD2 callba
 (`/finance/connect/callback`). Every other local user is dropped, Hermes included.
 Operator health checks therefore run as `www-data` (`bringup.sh verify` does).
 
-After the coordinated runtime cutover, apply only this table and run the real
-connection matrix as the actual Unix users:
+After the coordinated runtime cutover, load only this table, and only through the
+boot file and its unit (next section). Never run `nft -f` on the rendered file by hand:
+that load does not survive a reboot, and on an existing table it appends duplicate
+rules. Then run the real connection matrix as the actual Unix users:
 
 ```bash
-sudo nft -f /tmp/episteck-gateway-rendered.nft
 sudo -u home-agent curl --max-time 3 http://127.0.0.1:9934/gateway/home/
 sudo -u svc-home-mcp curl --max-time 3 http://127.0.0.1:9934/gateway/home/
 sudo -u home-agent curl --max-time 3 http://127.0.0.1:9931/mcp
@@ -89,9 +114,14 @@ sudo -u svc-home-gateway curl --max-time 3 http://127.0.0.1:9931/mcp
 sudo -u svc-home-gateway curl --max-time 3 http://127.0.0.1:9932/mcp
 sudo -u www-data curl --max-time 3 http://127.0.0.1:9935/health
 sudo -u home-agent curl --max-time 3 http://127.0.0.1:9935/health
+sudo -u home-agent-ana curl --max-time 3 http://127.0.0.1:9937/gateway/home/
+sudo -u home-agent curl --max-time 3 http://127.0.0.1:9937/gateway/home/
+sudo -u home-agent-ana curl --max-time 3 http://127.0.0.1:9934/gateway/home/
 ```
 
 Expected for `9935`: `www-data` gets the health JSON; `home-agent` times out (dropped).
+Expected for `9937`: `home-agent-ana` gets an HTTP answer (401 until Ana grants); `home-agent`
+times out (dropped), and so does `home-agent-ana` on `9934`.
 
 ### Persist at boot (2026-11-15)
 
@@ -111,8 +141,13 @@ sudo systemctl daemon-reload && sudo systemctl enable --now episteck-gateway-nft
 ```
 
 The `table …; delete table …` prefix makes every load an atomic replacement, so a
-restart never duplicates rules. After any policy change: re-render, replace
-`/etc/episteck/nft/episteck-gateway.nft`, then `sudo systemctl restart episteck-gateway-nft.service`.
+restart never duplicates rules. After any policy change: re-render, rebuild the boot
+file with that prefix and `nft --check` it, replace `/etc/episteck/nft/episteck-gateway.nft`,
+then `sudo systemctl restart episteck-gateway-nft.service` and check the result with
+`sudo nft list table inet episteck_gateway`. For a coordinated change, stage the boot file
+first as `/etc/episteck/nft/episteck-gateway.nft.new`, which the unit never loads, and
+install it at the boot path in the window (the per-person rollout in
+`deploy/home-bff/README.md` does this in step 3.1).
 
 Expected: Hermes reaches `9934`; the ordinary alternate user is denied there;
 Hermes and `svc-home-bff` are denied direct `9931/9932`; the gateway user reaches

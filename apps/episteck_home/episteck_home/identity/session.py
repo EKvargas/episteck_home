@@ -40,7 +40,8 @@ STATUS_REVOKED = "Revoked"
 
 # H5 agent runtime grant: a long-lived session whose ``client`` names the runtime.
 RUNTIME_CLIENT_PREFIX = "agent-runtime:"
-DEFAULT_RUNTIME_IDS = ("home-agent-primary",)
+PRIMARY_RUNTIME_ID = "home-agent-primary"
+DEFAULT_RUNTIME_IDS = (PRIMARY_RUNTIME_ID,)
 DEFAULT_MAX_DAYS = 90
 
 
@@ -138,6 +139,28 @@ def _conf_list(key: str, default: tuple[str, ...]) -> list[str]:
     return []
 
 
+def _grantees_for(runtime_id: str) -> list[str]:
+    """Users who may grant ``runtime_id``. Anything unclear denies.
+
+    ``home_runtime_grantees_by_runtime`` (runtime id -> list of User ids), when present,
+    is the ONLY source: the old ``home_runtime_grantees`` list is then ignored. When the
+    key is absent, the old list applies to the primary runtime alone and every other
+    runtime has no grantees. A mapping that is not a dict, or a runtime whose value is
+    not a list, yields no grantees.
+    """
+    mapping = frappe.conf.get("home_runtime_grantees_by_runtime")
+    if mapping is None:
+        if runtime_id == PRIMARY_RUNTIME_ID:
+            return _conf_list("home_runtime_grantees", ())
+        return []
+    if not isinstance(mapping, dict):
+        return []
+    value = mapping.get(runtime_id)
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [str(item) for item in value]
+
+
 def _max_grant_days() -> int:
     """Unset -> 90. Set but malformed -> 0, which rejects every ttl (fail closed).
 
@@ -180,14 +203,16 @@ def open_runtime_grant(runtime_id: str, ttl_days) -> dict:
     Same self-service seam as ``open_session``: the authenticated human is the only
     possible owner, so a machine credential (no linked Person) can never create one.
     Two extra controls: the runtime must be listed in ``home_runtime_ids`` and the
-    caller in ``home_runtime_grantees`` (absent or empty denies everyone). Any previous
+    caller among that runtime's grantees: ``home_runtime_grantees_by_runtime[runtime_id]``
+    when that key is set, else ``home_runtime_grantees`` for ``home-agent-primary`` only
+    (absent, empty or malformed denies everyone). Any previous
     Active grant of the same user and runtime is revoked (rotation).
     """
     user = _require_human()
     _require_single_linked_person(user)
     if runtime_id not in _conf_list("home_runtime_ids", DEFAULT_RUNTIME_IDS):
         frappe.throw("runtime not allowed", frappe.PermissionError)
-    if user not in _conf_list("home_runtime_grantees", ()):
+    if user not in _grantees_for(runtime_id):
         frappe.throw("not allowed to grant a runtime", frappe.PermissionError)
     days = _parse_ttl_days(ttl_days, _max_grant_days())
 
@@ -222,6 +247,24 @@ def open_runtime_grant(runtime_id: str, ttl_days) -> dict:
         frappe.db.rollback()
         raise
     return {"session_id": doc.name, "expires_at": str(doc.expires_at)}
+
+
+@frappe.whitelist(methods=["GET"])
+def get_grantable_runtimes() -> dict:
+    """Runtime ids the CALLER may grant, in ``home_runtime_ids`` order. No parameters.
+
+    Answers only for the authenticated human, so it reveals nothing about anyone else's
+    permissions.
+    """
+    user = _require_human()
+    _require_single_linked_person(user)
+    return {
+        "runtime_ids": [
+            rid
+            for rid in _conf_list("home_runtime_ids", DEFAULT_RUNTIME_IDS)
+            if user in _grantees_for(rid)
+        ]
+    }
 
 
 @frappe.whitelist(methods=["POST"])

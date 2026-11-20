@@ -6,14 +6,17 @@ import threading
 import time
 from collections.abc import Callable
 
-from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Response
 
 from . import sessions
 from .config import Settings
-from .runtime import RUNTIME_ID
+from .runtime import PRIMARY_RUNTIME_ID
 from .store import SessionStore, StoreUnavailableError
 
 DELEGATION_HEADER = "X-Episteck-Delegation"
+# Set only by the gateway mint subrequest; the BFF trusts it because the mint socket is
+# internal and every mint location drops the client request headers.
+RUNTIME_HEADER = "X-Runtime-ID"
 
 # H5: the agent gets a long-lived grant, so a runaway loop (or a stolen gateway
 # identity) must not be able to mint without bound.
@@ -58,26 +61,36 @@ def create_internal_app(
         openapi_url=None,
     )
     app.state.store = store or SessionStore(settings.store_path)
-    limiter = _MinuteLimiter(MINT_LIMIT_PER_MINUTE, clock)
+    limiters = {
+        rid: _MinuteLimiter(MINT_LIMIT_PER_MINUTE, clock) for rid in settings.runtime_ids
+    }
 
     def get_store() -> SessionStore:
         return app.state.store
 
     @app.post("/internal/mint", status_code=204)
-    def mint_delegation(store: SessionStore = Depends(get_store)) -> Response:
-        if not limiter.allow():
+    def mint_delegation(
+        store: SessionStore = Depends(get_store),
+        runtime_id: str | None = Header(default=None, alias=RUNTIME_HEADER),
+    ) -> Response:
+        if runtime_id not in limiters:
+            # Missing, empty or unknown: never defaults to the primary runtime, and the
+            # raw header value is never logged.
+            logger.warning("mint refused: unknown runtime")
+            raise HTTPException(401, "no active runtime grant")
+        if not limiters[runtime_id].allow():
             # Static line only: nothing request- or identity-derived is logged.
             logger.warning("mint rate limit exceeded")
             raise HTTPException(429, "delegation mint rate limited")
         try:
-            grant = store.resolve_runtime_grant(RUNTIME_ID)
+            grant = store.resolve_runtime_grant(runtime_id)
             if grant is not None:
                 if sessions.AUDIENCE_CONTROL_PLANE not in grant.allowed_audiences:
                     raise HTTPException(401, "no active runtime grant")
                 home_session_id = grant.home_session_id
-                store.touch_runtime_grant(RUNTIME_ID)
-            elif settings.runtime_legacy_binding:
-                session = store.resolve_runtime(RUNTIME_ID)
+                store.touch_runtime_grant(runtime_id)
+            elif settings.runtime_legacy_binding and runtime_id == PRIMARY_RUNTIME_ID:
+                session = store.resolve_runtime(runtime_id)
                 if session is None:
                     raise HTTPException(401, "no active runtime binding")
                 home_session_id = session.home_session_id
@@ -100,19 +113,26 @@ def create_internal_app(
         )
 
     @app.post("/internal/mint_finance", status_code=204)
-    def mint_finance_delegation(store: SessionStore = Depends(get_store)) -> Response:
+    def mint_finance_delegation(
+        store: SessionStore = Depends(get_store),
+        runtime_id: str | None = Header(default=None, alias=RUNTIME_HEADER),
+    ) -> Response:
         # Finance is a separate audience on a separate gateway location. It is minted
         # ONLY from a runtime grant that names svc-finance: the legacy browser binding
         # carries no audience scope, so it never authorizes Finance.
-        if not limiter.allow():
+        # Only the owner's runtime may ever hold a Finance delegation.
+        if runtime_id != PRIMARY_RUNTIME_ID:
+            logger.warning("mint refused: unknown runtime")
+            raise HTTPException(401, "no active runtime grant")
+        if not limiters[PRIMARY_RUNTIME_ID].allow():
             logger.warning("mint rate limit exceeded")
             raise HTTPException(429, "delegation mint rate limited")
         try:
-            grant = store.resolve_runtime_grant(RUNTIME_ID)
+            grant = store.resolve_runtime_grant(PRIMARY_RUNTIME_ID)
             if grant is None or sessions.AUDIENCE_FINANCE not in grant.allowed_audiences:
                 raise HTTPException(401, "no active runtime grant")
             home_session_id = grant.home_session_id
-            store.touch_runtime_grant(RUNTIME_ID)
+            store.touch_runtime_grant(PRIMARY_RUNTIME_ID)
         except StoreUnavailableError:
             raise HTTPException(503, "delegation mint unavailable") from None
 

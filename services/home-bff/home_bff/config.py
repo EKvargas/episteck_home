@@ -10,6 +10,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+from home_bff.runtime import PRIMARY_RUNTIME_ID, RUNTIME_ID_PATTERN
+
 
 class ConfigError(RuntimeError):
     """Raised at startup when required configuration is absent."""
@@ -48,6 +50,19 @@ def _bounded_int(key: str, default: int, low: int, high: int) -> int:
     return value
 
 
+def parse_runtime_ids(raw: str) -> tuple[str, ...]:
+    ids = tuple(part.strip() for part in (raw or "").split(",") if part.strip())
+    if not ids:
+        return (PRIMARY_RUNTIME_ID,)
+    if any(not RUNTIME_ID_PATTERN.match(i) for i in ids):
+        raise ConfigError("RUNTIME_IDS contains an invalid runtime id")
+    if len(set(ids)) != len(ids):
+        raise ConfigError("RUNTIME_IDS contains a duplicate runtime id")
+    if PRIMARY_RUNTIME_ID not in ids:
+        raise ConfigError(f"RUNTIME_IDS must include {PRIMARY_RUNTIME_ID}")
+    return ids
+
+
 @dataclass(frozen=True)
 class Settings:
     home_base_url: str
@@ -64,6 +79,11 @@ class Settings:
     # mint falls back to that binding when no grant exists. Off = grant only.
     runtime_legacy_binding: bool = True
     runtime_grant_days: int = 90
+    runtime_ids: tuple[str, ...] = (PRIMARY_RUNTIME_ID,)
+
+    def __post_init__(self) -> None:
+        if self.runtime_legacy_binding and len(self.runtime_ids) > 1:
+            raise ConfigError("RUNTIME_LEGACY_BINDING must be off when more than one runtime is configured")
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -85,4 +105,5 @@ class Settings:
             scope=_optional("BFF_SCOPE", "all openid"),
             runtime_legacy_binding=_flag("RUNTIME_LEGACY_BINDING", True),
             runtime_grant_days=_bounded_int("BFF_RUNTIME_GRANT_DAYS", 90, 1, 90),
+            runtime_ids=parse_runtime_ids(os.environ.get("RUNTIME_IDS") or ""),
         )

@@ -117,6 +117,7 @@ def gateway(tmp_path):
     retry_thread.start()
 
     listen_port = _free_port()
+    ana_port = _free_port()
     prefix = tmp_path / "prefix"
     (prefix / "conf").mkdir(parents=True)
     (prefix / "logs").mkdir()
@@ -129,6 +130,7 @@ def gateway(tmp_path):
     )
     config = config.replace("/run/episteck-mcp-gateway", str(runtime))
     config = config.replace("127.0.0.1:9934", f"127.0.0.1:{listen_port}")
+    config = config.replace("127.0.0.1:9937", f"127.0.0.1:{ana_port}")
     config = config.replace(
         "127.0.0.1:9931", f"127.0.0.1:{nutrition_upstream.server_address[1]}"
     )
@@ -184,6 +186,7 @@ def gateway(tmp_path):
                 time.sleep(0.1)
         else:
             pytest.fail("nginx did not open the gateway listener")
+        mint.ana_port = ana_port
         yield listen_port, mint, home_upstream, nutrition_upstream, retry_upstream
     finally:
         if proc.poll() is None:
@@ -286,3 +289,28 @@ def test_upstream_failure_is_not_retried(gateway):
     assert len(home.requests) == 0
     assert len(nutrition.requests) == 0
     assert len(retry.requests) == 0
+
+
+def test_ana_port_mints_as_ana_even_when_the_client_forges_the_runtime(gateway):
+    port, mint, home, nutrition, retry = gateway
+    status, _, _ = _request(
+        mint.ana_port, headers={"X-Runtime-ID": "home-agent-primary"}
+    )
+    assert status == 200
+    assert len(mint.requests) == 1
+    assert mint.requests[0][2]["x-runtime-id"] == "home-agent-ana"
+    assert len(home.requests) == 1
+
+
+def test_primary_port_mints_as_primary_even_when_the_client_forges_ana(gateway):
+    port, mint, home, nutrition, retry = gateway
+    status, _, _ = _request(port, headers={"X-Runtime-ID": "home-agent-ana"})
+    assert status == 200
+    assert mint.requests[0][2]["x-runtime-id"] == "home-agent-primary"
+
+
+def test_ana_port_has_no_finance_route(gateway):
+    port, mint, home, nutrition, retry = gateway
+    status, _, _ = _request(mint.ana_port, path="/gateway/finance/")
+    assert status == 404
+    assert len(mint.requests) == 0
