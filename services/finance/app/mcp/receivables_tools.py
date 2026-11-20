@@ -7,9 +7,11 @@ Docstrings are the model's only manual: keep them short and free of example figu
 from __future__ import annotations
 
 import logging
-from typing import TypedDict
 
 from pydantic import ConfigDict
+# typing_extensions, not typing: the image runs Python 3.11, where pydantic refuses
+# typing.TypedDict as a tool argument type.
+from typing_extensions import TypedDict
 
 from fastmcp import FastMCP
 

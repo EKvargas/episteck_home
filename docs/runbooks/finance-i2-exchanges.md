@@ -139,7 +139,7 @@ Each item once; record the results on the I2 board (`docs/architecture/FINANCE_I
 - **(c) The first run is not `session_invalid`.** The cron session must carry a delegation: the delivered message (if anything was pending) is not the "No tengo una sesión válida…" line, and the lines in (b) show `200`, not `401` or `403`.
 - **(d) What a clarify tap returns `[TELEGRAM]`.** The first time Olin shows buttons in the chat (an echo, or a `LINK_FUNDING` question), tap one and check that Olin answers that code with the tapped option: its reply names the result (for example "Enlazado (F<n>)"), and "¿qué tengo pendiente?" no longer lists the code. If a tap comes back as a label Olin cannot match, answer that kind by text ("P<n> <número>") until the skill is fixed.
 - **(e) Cron output retention (owner decision).** Hermes keeps every cron run's output under `/home/home-agent/.hermes/cron/output`, figures and names included, even for `[SILENT]` runs. `HSTEP memory-scan` prints how many files there are. Keeping them is your decision; if you choose to prune, a suggested command (deletes files older than 14 days, prints nothing): `$SSH "sudo -n find /home/home-agent/.hermes/cron/output -type f -mtime +14 -delete"`.
-- **(f) Before `HSTEP cron`: `--deliver telegram` targets your private chat.** It goes to `home-agent`'s Telegram home channel (set in B7). The S1 job A arriving in your private chat with the bot proves it; the skill allows figures only in a private chat with the owner.
+- **(f) Before (a) and `HSTEP cron`: `--deliver telegram` targets your private chat.** It goes to `home-agent`'s Telegram home channel. On the first I2 deploy none was set: job A ran, Hermes logged `no delivery target resolved for deliver=telegram` in `logs/errors.log`, and nothing arrived. Send `/sethome` in your private chat with Olin `[TELEGRAM]`: Hermes saves that chat in `config.yaml` and `TELEGRAM_HOME_CHANNEL` in `.env`. Do it before step 6, so that step's `config.yaml` backup includes it. Check without printing the id (expect `1`): `$SSH "sudo -n grep -c '^TELEGRAM_HOME_CHANNEL=.' /home/home-agent/.hermes/.env"`. The S1 job A arriving in your private chat with the bot proves it; the skill allows figures only in a private chat with the owner.
 - **(g) At step 6 and the first fire: the `cron list` format and `--skill`.** `HSTEP cron` must print the job's lines (its id, name and schedule) and a count of at least 1. If `hermes cron list` does not show the job name, the step stops after creating the job ("a job may exist"): remove it by id before re-running. At the first fire, the message follows the skill's format (codes, options numbered as Finance returned them), which shows that `--skill olin-finance` resolved from `/etc/episteck/hermes/skills`.
 - **(h) No description key is shared by several senders `[CLAUDE]`.** Before step 3 (description rules on), then once a week during the first month. A payer rule keyed by a description that lost its sender's name would send one person's payment to another payer. `KEY_CHECK` (helpers above) prints counts only:
   ```bash
@@ -177,9 +177,12 @@ $SSH "sudo -n systemctl start episteck-backup.service"
 git archive "$SHA" services/finance deploy/finance \
   | $SSH "cd /; sudo -n -u svc-finance bash -c 'mkdir -p /srv/episteck/services/finance/build/$SHA && tar -x -C /srv/episteck/services/finance/build/$SHA'"
 STEP build "$SHA"
+# Smoke check inside the new image (no network, no data): the MCP tools must register on the
+# image's Python before step 4 restarts anything. The first I2 deploy failed exactly here.
+$SSH "cd /; U=\$(id -u svc-finance); sudo -n -u svc-finance env XDG_RUNTIME_DIR=/run/user/\$U podman run --rm --network none localhost/episteck-finance:$SHA python -c 'from fastmcp import FastMCP; from app.mcp.receivables_tools import register_receivables_tools; register_receivables_tools(FastMCP(\"smoke\"), None); print(\"MCP tools register OK\")'"
 ```
 
-**Verify:** the backup journal says `Finance DB staged`; the last build line lists `localhost/episteck-finance:<SHA>`.
+**Verify:** the backup journal says `Finance DB staged`; the last build line lists `localhost/episteck-finance:<SHA>`; the smoke check prints `MCP tools register OK`. Anything else: stop here, nothing has restarted.
 **Rollback:** as I1 step 3 (remove the build directory and the image); nothing runs on it yet.
 
 ## 3. Description rules `[! OK]`
@@ -205,7 +208,7 @@ SCHEMA_CHECK          # after: "22/22; missing: none", "ok", "start_rowid column
 
 `install` rewrites the three units for `SHA` and restarts `finance-api` and `finance-mcp`; opening the file creates the I2 tables. `finance-sync.timer` is unchanged (about 06:20 and 18:20 UTC); its next run uses the new image, runs the matcher after the providers, and its first matcher run sets the go-live mark.
 
-**Verify:** the I1 checks of step 6 (listeners, `/health`, `401` without a session, both containers running on `SHA`), the second `SCHEMA_CHECK` as above, and after the next sync `SCHEMA_CHECK` again: `cursor rows: 1; rows without a go-live mark: 0`.
+**Verify:** the I1 checks of step 6 (listeners, `/health`, `401` without a session, both containers running on `SHA`), the second `SCHEMA_CHECK` as above, and after the next sync `SCHEMA_CHECK` again: `cursor rows: 1; rows without a go-live mark: 0`. Right after `install`, `/health` may answer `Connection reset` while uvicorn starts: run `STEP verify` again after about 10 seconds. If `127.0.0.1:9936` is still not listed, the MCP is not running: roll back now.
 **Rollback:** before step 6, `STEP install "$PREV_SHA"`; the I2 tables stay, inert (the I1 code never reads them). Once step 6 has installed the new skill, never roll back the image alone: the skill's `requires_tools` lists the receivables tools, and Hermes hides a skill when any of them is missing, so Olin would lose the balances too. Use "Rollback (everything)" below, Hermes first.
 
 ## 5. Your own IBANs `[OWN TERMINAL]`
