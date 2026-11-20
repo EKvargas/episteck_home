@@ -434,7 +434,8 @@ def test_pending_hides_ids_and_numbered_choices_resolve(tmp_path):
     assert explain["options"] == [
         {"n": 1, "label": "Familiar A"}, {"n": 2, "label": "Fondo F"},
         {"n": 3, "choice": "OTHER", "label": "OTHER"},
-        {"n": 4, "choice": "NOT_EXCHANGE", "label": "NOT_EXCHANGE"}]
+        {"n": 4, "choice": "NOT_EXCHANGE", "label": "NOT_EXCHANGE"},
+        {"n": 5, "choice": "PARTNER", "label": "Socio"}]
     assert explain["suggested"] == 1
     assert explain["details"] == {"booking_date": "2026-11-14", "currency": "USD",
                                   "amount": "120.00", "sender": "FAMILIAR A SINTETICO"}
@@ -557,6 +558,41 @@ def test_not_an_exchange_is_undone_by_code_or_by_the_ignored_list(tmp_path):
     assert row["undo_ref"].startswith("U") and "in2" not in json.dumps(listing)
     assert key not in json.dumps(listing)
     undo = env.svc.propose_reverse(DELEG, row["undo_ref"], "es de un familiar")
+    assert undo["high_value"] is True
+    done = env.yes(undo)
+    assert (done["status"], done["rules_revoked"]) == ("reopened", 1)
+    with env.repo.read() as c:
+        assert env.repo.movement_role(c, "in2") is None
+        assert env.repo.rule_for(c, WS, key) is None
+        assert env.repo.pending_by_dedupe(c, WS, "EXPLAIN_INCOMING:in2") is not None
+    assert env.svc.explain(DELEG, "ignored")["movements"] == []
+
+
+def test_partner_favor_is_answered_and_undone_by_code_or_by_the_ignored_list(tmp_path):
+    env = Env(tmp_path)
+    key = env.repo.hash_key(PAYER_IBAN)
+    with env.repo.tx() as c:
+        mv = env.move(c, "in1", 12000, currency="USD", acc="acc-usd", iban=PAYER_IBAN)
+        item = ask_explain_incoming(env.repo, c, WS, mv, env.q)
+    assert item.options[-1] == "PARTNER"
+    assert env.svc.resolve(DELEG, item.code, "PARTNER")["status"] == "partner_favor"
+    with env.repo.read() as c:
+        assert env.repo.movement_role(c, "in1") is MovementRoleKind.PARTNER_SIDE
+        assert env.repo.rule_for(c, WS, key) == "p"
+    out = env.svc.propose_reverse(DELEG, item.code, "era mío")
+    assert out["high_value"] is True and out["echo"]["rule"] is True
+    done = env.yes(out)
+    assert done["status"] == "reopened" and done["question"] != item.code
+    with env.repo.tx() as c:
+        assert env.repo.rule_for(c, WS, key) is None
+        assert env.repo.movement_role(c, "in1") is None
+        # later: the partner rule set a payment aside on its own (no question, no P-code)
+        env.repo.insert_payer_rule(c, WS, key, "p")
+        env.move(c, "in2", 7000, day=D15, currency="USD", acc="acc-usd", iban=PAYER_IBAN)
+        env.repo.insert_movement_role(c, WS, "in2", MovementRoleKind.PARTNER_SIDE)
+    [row] = env.svc.explain(DELEG, "ignored")["movements"]
+    assert (row["date"], row["amount"], row["currency"]) == ("2026-11-15", "70.00", "USD")
+    undo = env.svc.propose_reverse(DELEG, row["undo_ref"], "era mío")
     assert undo["high_value"] is True
     done = env.yes(undo)
     assert (done["status"], done["rules_revoked"]) == ("reopened", 1)

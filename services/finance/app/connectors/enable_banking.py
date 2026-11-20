@@ -94,6 +94,29 @@ def _kind_for(status: int, body: object) -> ErrorKind:
     return ErrorKind.UNAVAILABLE
 
 
+_CENSUS_FIELDS = ("remittance_information", "party_name", "bank_transaction_code", "note",
+                  "merchant_category_code", "reference_number")
+
+
+def _filled(value: object) -> bool:
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, tuple)):
+        return any(_filled(v) for v in value)
+    if isinstance(value, dict):
+        return any(_filled(v) for v in value.values())
+    return value is not None and value is not False
+
+
+def _present_fields(row: dict) -> list[str]:
+    """Descriptive fields a row carries. Feeds counts only; values are never logged."""
+    party = row.get("creditor" if row.get("credit_debit_indicator") == "DBIT" else "debtor")
+    present = {f for f in _CENSUS_FIELDS if f != "party_name" and _filled(row.get(f))}
+    if isinstance(party, dict) and _filled(party.get("name")):
+        present.add("party_name")
+    return list(present)
+
+
 class EbClient:
     """Authenticated HTTP. Every failure becomes a payload-free ConnectorError."""
 
@@ -222,6 +245,8 @@ class EnableBankingConnector:
     def fetch_movements(self, account_ref: str, since: date | None) -> list[RawMovement]:
         uid = self._uid(account_ref)
         movements: list[RawMovement] = []
+        census = dict.fromkeys(_CENSUS_FIELDS, 0)
+        fetched = 0
         key: str | None = None
         for _ in range(MAX_PAGES):
             params: dict[str, str] = {}
@@ -233,10 +258,19 @@ class EnableBankingConnector:
             rows = body.get("transactions")
             if not isinstance(rows, list):
                 raise ConnectorError(ErrorKind.MALFORMED)
+            for row in rows:
+                if isinstance(row, dict):
+                    fetched += 1
+                    for field in _present_fields(row):
+                        census[field] += 1
             movements += [m for m in (self._movement(r) for r in rows) if m is not None]
             key = body.get("continuation_key") if isinstance(body.get("continuation_key"), str) else None
             if not key:
                 break
+        logger.info(
+            "enable banking descriptor census: ref=%s rows=%d remittance_information=%d "
+            "party_name=%d bank_transaction_code=%d note=%d merchant_category_code=%d "
+            "reference_number=%d", account_ref[:8], fetched, *(census[f] for f in _CENSUS_FIELDS))
         return movements
 
     @staticmethod

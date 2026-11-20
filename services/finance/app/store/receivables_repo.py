@@ -29,6 +29,7 @@ from decimal import Decimal
 from typing import Literal
 
 from .. import domain
+from ..movements.model import InterpretationFacts
 from ..receivables.allocation import OPENING_ORDER, OpenLine
 from ..receivables.model import (
     Allocation, AllocationMethod, Counterparty, CounterpartyKind, EntryKind, Exchange,
@@ -488,6 +489,15 @@ class ReceivablesRepository:
             "ORDER BY number", (ws, cp_id)).fetchall()
         return [_entry(r) for r in rows]
 
+    def forgive_history(self, conn, ws: str) -> list[LedgerEntry]:
+        """Live FORGIVE entries and the live REVERSALs that undo one, oldest first."""
+        rows = conn.execute(
+            f"SELECT l.* FROM ledger_entry l WHERE l.workspace_id=? "
+            f"AND {_live('ledger_entry', 'l')} AND (l.kind='FORGIVE' OR (l.kind='REVERSAL' "
+            "AND EXISTS (SELECT 1 FROM ledger_entry f WHERE f.id=l.reverses_id "
+            "AND f.kind='FORGIVE'))) ORDER BY l.number", (ws,)).fetchall()
+        return [_entry(r) for r in rows]
+
     def entry_by_ref(self, conn, ws: str, ref: str, *,
                      include_undone: bool = False) -> LedgerEntry | None:
         """``E<n>`` -> the effective entry; ``include_undone`` also finds a revoked or
@@ -917,8 +927,8 @@ class ReceivablesRepository:
         and no live funding, oldest first. A superseded PENDING row shows as its successor."""
         rows = conn.execute(
             "SELECT m.* FROM movement m WHERE m.workspace_id=? AND m.currency='EUR' "
-            "AND m.amount_minor<0 AND NOT EXISTS (SELECT 1 FROM movement s "
-            "WHERE s.supersedes_id=m.id) AND EXISTS (SELECT 1 FROM partner_identifier p "
+            "AND m.amount_minor<0 AND m.id NOT IN (SELECT supersedes_id FROM movement "
+            "WHERE supersedes_id IS NOT NULL) AND EXISTS (SELECT 1 FROM partner_identifier p "
             "WHERE p.workspace_id=m.workspace_id AND p.iban_hash=m.counterparty_iban_hash "
             f"AND {_live('partner_identifier', 'p')}) ORDER BY m.booking_date, m.rowid",
             (ws,)).fetchall()
@@ -977,10 +987,115 @@ class ReceivablesRepository:
         rows = conn.execute(
             "SELECT m.* FROM movement m WHERE m.workspace_id=? AND m.currency=? "
             "AND m.amount_minor<0 AND COALESCE(m.booking_date, m.value_date)>=? "
-            "AND NOT EXISTS (SELECT 1 FROM movement s WHERE s.supersedes_id=m.id) "
+            "AND m.id NOT IN (SELECT supersedes_id FROM movement WHERE supersedes_id IS NOT NULL) "
             "ORDER BY COALESCE(m.booking_date, m.value_date) DESC, m.rowid DESC",
             (ws, currency, since.isoformat())).fetchall()
         return [_movement(r) for r in rows]
+
+    # ---- movement interpretation: bulk reads (a fixed number of queries) ----
+
+    def interpretation_facts(self, conn, ws: str) -> InterpretationFacts:
+        """Everything ``interpret`` needs, each map built with the same "live" conditions as the
+        single-row method it mirrors (``live_funding_for_movement``, ``live_receipt_for_movement``,
+        ``movement_role``, ``pending_by_dedupe``, ``rule_for``, ``movement_root``)."""
+        supersedes = {r["id"]: r["supersedes_id"] for r in conn.execute(
+            "SELECT id, supersedes_id FROM movement WHERE workspace_id=? "
+            "AND supersedes_id IS NOT NULL", (ws,))}
+        movement_ids: dict[str, list[str]] = {}
+        for r in conn.execute(
+                "SELECT fm.funding_id, fm.movement_id FROM funding_movement fm "
+                "JOIN funding f ON f.id=fm.funding_id WHERE f.workspace_id=? ORDER BY fm.rowid",
+                (ws,)):
+            movement_ids.setdefault(r["funding_id"], []).append(r["movement_id"])
+        exchange_ids: dict[str, list[str]] = {}
+        for r in conn.execute(
+                "SELECT fe.funding_id, fe.exchange_id FROM funding_exchange fe "
+                "JOIN funding f ON f.id=fe.funding_id WHERE f.workspace_id=? ORDER BY fe.rowid",
+                (ws,)):
+            exchange_ids.setdefault(r["funding_id"], []).append(r["exchange_id"])
+        fundings: dict[str, Funding] = {}
+        for r in conn.execute(  # oldest first: the first live funding of a root wins
+                f"SELECT f.* FROM funding f WHERE f.workspace_id=? AND {_live('funding', 'f')} "
+                "ORDER BY f.rowid", (ws,)):
+            mids = tuple(movement_ids.get(r["id"], ()))
+            funding = Funding(r["id"], r["workspace_id"], r["number"], mids,
+                              tuple(exchange_ids.get(r["id"], ())), r["eur_minor"],
+                              r["usd_minor"], _dt(r["created_at"]))
+            for mid in mids:
+                fundings.setdefault(mid, funding)
+        receipts: dict[str, Receipt] = {}
+        for r in conn.execute(
+                f"SELECT r.* FROM receipt r WHERE r.workspace_id=? AND r.kind='BANK' "
+                f"AND r.movement_id IS NOT NULL AND {_live('receipt', 'r')} ORDER BY r.rowid",
+                (ws,)):
+            receipts.setdefault(r["movement_id"], _receipt(r))
+        roles: dict[str, MovementRoleKind] = {}
+        for r in conn.execute(  # newest live role wins
+                f"SELECT m.movement_id, m.role FROM movement_role m WHERE m.workspace_id=? "
+                f"AND {_live('movement_role', 'm')} ORDER BY m.rowid", (ws,)):
+            roles[r["movement_id"]] = MovementRoleKind(r["role"])
+        questions: dict[str, str] = {}
+        for r in conn.execute(  # newest open item wins, as in pending_by_dedupe
+                "SELECT code, kind, dedupe_key FROM pending_item WHERE workspace_id=? "
+                "AND resolved_at IS NULL AND kind IN (?,?) ORDER BY rowid",
+                (ws, PendingKind.LINK_FUNDING.value, PendingKind.EXPLAIN_INCOMING.value)):
+            prefix = f"{r['kind']}:"
+            if r["dedupe_key"].startswith(prefix):
+                questions[r["dedupe_key"][len(prefix):]] = r["code"]
+        rules: dict[str, str] = {}
+        for r in conn.execute(
+                f"SELECT p.key_hash, p.counterparty_id FROM payer_rule p WHERE p.workspace_id=? "
+                f"AND {_live('payer_rule', 'p')} ORDER BY p.rowid", (ws,)):
+            cp_id = r["counterparty_id"]
+            rules[r["key_hash"]] = cp_id if cp_id is not None else IGNORE
+        counterparties = {cp.id: cp for cp in self.list_counterparties(conn, ws)}
+        person_names = {r["alias"]: r["counterparty_id"] for r in conn.execute(
+            "SELECT a.alias, a.counterparty_id FROM counterparty_alias a JOIN counterparty c "
+            "ON c.id=a.counterparty_id AND c.workspace_id=a.workspace_id "
+            "WHERE a.workspace_id=? AND c.kind=? ORDER BY a.rowid",
+            (ws, CounterpartyKind.PERSON.value))}
+        return InterpretationFacts(
+            supersedes, fundings, receipts, roles, questions, self.partner_hashes(conn, ws),
+            frozenset(self.own_hashes(conn, ws)), rules, counterparties, person_names)
+
+    def current_movements_between(self, conn, ws: str, account_ids: Sequence[str], since: date,
+                                  until: date) -> list[tuple[int, domain.Movement]]:
+        """``(rowid, movement)`` of current (never superseded) movements dated within
+        [since, until] (booking date, else value date), oldest first, then by rowid."""
+        if not account_ids:
+            return []
+        marks = ",".join("?" * len(account_ids))
+        rows = conn.execute(
+            f"SELECT m.rowid AS rid, m.* FROM movement m WHERE m.workspace_id=? "
+            f"AND m.account_id IN ({marks}) AND COALESCE(m.booking_date, m.value_date) "
+            f"BETWEEN ? AND ? AND m.id NOT IN (SELECT supersedes_id FROM movement WHERE supersedes_id IS NOT NULL) "
+            f"ORDER BY COALESCE(m.booking_date, m.value_date), m.rowid",
+            (ws, *account_ids, since.isoformat(), until.isoformat())).fetchall()
+        return [(r["rid"], _movement(r)) for r in rows]
+
+    def current_incoming(self, conn, ws: str,
+                         account_ids: Sequence[str]) -> list[domain.Movement]:
+        """Every current dated movement with a positive amount, oldest first."""
+        if not account_ids:
+            return []
+        marks = ",".join("?" * len(account_ids))
+        rows = conn.execute(
+            f"SELECT m.* FROM movement m WHERE m.workspace_id=? AND m.account_id IN ({marks}) "
+            f"AND m.amount_minor>0 AND COALESCE(m.booking_date, m.value_date) IS NOT NULL "
+            f"AND m.id NOT IN (SELECT supersedes_id FROM movement WHERE supersedes_id IS NOT NULL) "
+            f"ORDER BY COALESCE(m.booking_date, m.value_date), m.rowid",
+            (ws, *account_ids)).fetchall()
+        return [_movement(r) for r in rows]
+
+    def history_from(self, conn, ws: str) -> dict[str, date]:
+        """The earliest dated current movement per account."""
+        rows = conn.execute(
+            "SELECT m.account_id, MIN(COALESCE(m.booking_date, m.value_date)) AS first_day "
+            "FROM movement m WHERE m.workspace_id=? "
+            "AND COALESCE(m.booking_date, m.value_date) IS NOT NULL "
+            "AND m.id NOT IN (SELECT supersedes_id FROM movement WHERE supersedes_id IS NOT NULL) "
+            "GROUP BY m.account_id", (ws,)).fetchall()
+        return {r["account_id"]: date.fromisoformat(r["first_day"]) for r in rows}
 
     def live_exchanges(self, conn, ws: str) -> list[Exchange]:
         rows = conn.execute(f"SELECT e.* FROM exchange e WHERE e.workspace_id=? "

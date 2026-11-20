@@ -1,7 +1,7 @@
 ---
 name: olin-finance
 description: "Household money: balances, family exchanges, who owes what."
-version: 2.0.0
+version: 2.1.0
 author: Episteck
 license: Proprietary (Episteck)
 platforms: [linux]
@@ -9,7 +9,7 @@ metadata:
   hermes:
     tags: [Episteck, Finance, Olin]
     category: episteck
-    requires_tools: [mcp__finance__finance_overview, mcp__finance__finance_receivables, mcp__finance__finance_record_exchange, mcp__finance__finance_record_receipt, mcp__finance__finance_resolve_pending, mcp__finance__finance_pending]
+    requires_tools: [mcp__finance__finance_overview, mcp__finance__finance_receivables, mcp__finance__finance_record_exchange, mcp__finance__finance_record_receipt, mcp__finance__finance_resolve_pending, mcp__finance__finance_pending, mcp__finance__finance_movements, mcp__finance__finance_summary]
 ---
 
 # Olin Finance
@@ -29,18 +29,29 @@ and every change to the exchange books is a proposal that the owner confirms.
   <alias>?", "¿cuánto le debo al socio?", "¿qué queda del fondo?", "¿dónde está mi
   dinero?"); answers a question by its code ("P<n>", "P<n> sí", "P<n> <número>"); asks to
   correct, forgive, undo or set something up.
+- Movements and summary: "¿cuánto gasté este mes?", "¿cuánto me entró?", "¿cuánta ayuda le
+  di a la familia este año?", "¿llegó el reembolso de …?",
+  "¿en qué cuenta entró …?", "busca el pago de …": use the movements section below.
+  "¿cuánto le mandé/ayudé a <alias>?" is answered by `mcp__finance__finance_summary` for
+  the month or the year the owner means, from its `by_person` line of that person, one
+  figure per currency (not by searching movements).
 
 ## The one source of figures
 
 1. Every amount, subtotal, valuation, rate, date or account you state comes from a Finance
    tool result obtained in this same turn: `mcp__finance__finance_overview` for balances,
-   `mcp__finance__finance_receivables` and the other exchange tools for debts. Call the tool
+   `mcp__finance__finance_receivables` and the other exchange tools for debts,
+   `mcp__finance__finance_movements` and `mcp__finance__finance_summary` for movements and
+   income and spending. Call the tool
    for each money question, even if you answered a minute ago.
 2. Never answer figures from Hermes memory, earlier turns, session history, a screenshot,
    the web, or arithmetic over an older result. No result this turn means no figures. A
    screenshot is input for a proposal, never an answer.
 3. Copy each `amount` exactly as returned. Do not round or convert it, and never sum
-   across currencies. The only totals you may give are the `subtotals` the tool returns.
+   across currencies. The only totals you may give are the ones a tool returns: `subtotals`
+   (overview and receivables), and from `finance_summary` `income`, `spending` and its
+   parts, `family_help` and `by_person`, `net` and the flows of `excluded`, `unclear`,
+   `pending_bank` and `undescribed`. Give counts as returned, per group; never add them up.
 
 ## Balances: what to pass
 
@@ -108,7 +119,7 @@ Only when you passed `valuation_currency="EUR"` and `valuation` is not null:
 | says a person keeps cash for them ("me tiene guardados …") | `mcp__finance__finance_mark_held_cash` (no echo: it only changes how the debt is shown). It answers `recorded` with `amount` and `shown`: "Anotado: <counterparty> te guarda <amount> <currency> en efectivo." `shown` is what the debts view will show, never more than they owe; null: nothing to show while they owe nothing in that currency. |
 | asks who owes what, what a fund holds, what is owed to the partner | `mcp__finance__finance_receivables`, optional `counterparty` |
 | asks for the exchanges | `mcp__finance__finance_exchanges`, optional `status` (`OPEN` or `PAID`) and `since` (`YYYY-MM-DD`) |
-| asks why, or the history of a `C<n>`, `F<n>`, `R<n>`, `E<n>`, `P<n>` or a name; "¿qué marqué como no de intercambios?" | `mcp__finance__finance_explain`, `ref` = that reference, the name, or `ignored` |
+| asks why, or the history of a `C<n>`, `F<n>`, `R<n>`, `E<n>`, `P<n>` or a name; "¿qué marqué como no de intercambios o favor del socio?" | `mcp__finance__finance_explain`, `ref` = that reference, the name, or `ignored` |
 | asks what is pending | `mcp__finance__finance_pending` (without `for_delivery`) |
 | answers a question or an echo | `mcp__finance__finance_resolve_pending` |
 | corrects an exchange ("no, eran …") | `mcp__finance__finance_correct_exchange`: `exchange_ref`, all the new `lines`, `reason` |
@@ -116,7 +127,7 @@ Only when you passed `valuation_currency="EUR"` and `valuation` is not null:
 | turns a debt into a gift | `mcp__finance__finance_forgive`: `target` (a name, or `C<n>:<name>`), optional `amount`, `reason` (required) |
 | sets up a person, fund or partner | `mcp__finance__finance_setup_counterparty` |
 | states a starting balance | `mcp__finance__finance_record_opening` |
-| wants something undone | `mcp__finance__finance_reverse`: `ref`, `reason`. `ref` is a `C<n>`, `F<n>`, `R<n>` or `E<n>`; a `P<n>` that was answered by mistake; `rule:<name>` (the payer rules of that person or fund); or an `undo_ref` from `ignored` (a payment marked as not an exchange, listed by `mcp__finance__finance_explain`) |
+| wants something undone | `mcp__finance__finance_reverse`: `ref`, `reason`. `ref` is a `C<n>`, `F<n>`, `R<n>` or `E<n>`; a `P<n>` that was answered by mistake; `rule:<name>` (the payer rules of that person or fund); or an `undo_ref` from `ignored` (a payment marked as not an exchange or as a partner favor, listed by `mcp__finance__finance_explain`) |
 | asks "¿dónde está mi dinero?" | overview and receivables together (below) |
 
 - How a person paid decides the tool. If the owner does not say it, ask "¿en efectivo, en
@@ -265,7 +276,7 @@ marks items as sent, and only the scheduled job uses it.
 | --- | --- | --- |
 | `LINK_FUNDING` | "Un pago de <eur> EUR del <booking_date> al socio no lo pude enlazar solo. ¿A qué cambio corresponde?" | `C<n>` "Cambio C<n> del <fecha>" (dates in `delivered_on`; two exchanges can share a date), `ALL` "Todos", `ADD_TO:C<n>` "Añadir al cambio ya pagado del <fecha>", `REGISTER` "Registrar el cambio", `NOT_EXCHANGE` "No es un cambio" |
 | `PREVIOUS_UNPAID` | "El cambio <exchange_ref> del <delivered_on> (<usd> USD) sigue abierto. ¿Ya lo pagaste?" | each payment by its `label` ("Ya lo pagué: <label>"), `NOT_YET` "Aún no" |
-| `EXPLAIN_INCOMING` | "Entró <amount> <currency> el <booking_date> de «<sender>». ¿De quién es?" | each person or fund by its `label`; `suggested` is the number of the option whose debt matches the amount exactly: offer it first; `OTHER` "Otro familiar" (ask who, then answer with `details` `counterparty`); `NOT_EXCHANGE` "No es de intercambios". Each answer remembers that payer unless the owner says not to. |
+| `EXPLAIN_INCOMING` | "Entró <amount> <currency> el <booking_date> de «<sender>». ¿De quién es?" | each person or fund by its `label`; `suggested` is the number of the option whose debt matches the amount exactly: offer it first; `OTHER` "Otro familiar" (ask who, then answer with `details` `counterparty`); `PARTNER` "Es del socio (un favor)" (only when it is offered: its `label` is the partner's own label, show the button text, not the label; it means the money is a favor: the partner's family sends USD and the owner pays the partner in EUR, so neither side is the owner's money; Finance remembers that sender and sets its later payments aside without asking); `NOT_EXCHANGE` "No es de intercambios". Each answer remembers that payer unless the owner says not to. |
 | `CONFIRM` | the `echo`, as in Confirmations | `[Sí] [Corregir] [Cancelar]`, or `[Es otro] [Es el mismo]` |
 | `REVIEW_OPENING` | "¿Confirmas el saldo inicial de <counterparty>?" with its `opening` and figures | `CONFIRM` "Confirmar", `LATER` "Más tarde" |
 | `INFO` | the notice (next section) | none: it needs no answer |
@@ -292,6 +303,7 @@ After an answer, say what happened from its `status`:
 | --- | --- |
 | `linked` | "Enlazado (<funding_ref>)." |
 | `not_exchange` | "Anotado: no es de intercambios." |
+| `partner_favor` | "Anotado: es del socio (un favor)." When `rule` is true, add that its later payments are set aside without asking. |
 | `needs_exchange` | "Falta registrar ese cambio: reenvíame la captura del socio. Cuando esté registrado te vuelvo a preguntar por ese pago." |
 | `not_yet` | "De acuerdo; lo vuelvo a preguntar más adelante." |
 | `recorded` | "Registrado (<receipt_ref>)." and whether the payer will be recognised next time. |
@@ -332,6 +344,96 @@ The keys in `details`:
 
 A `PREVIOUS_UNPAID` payment `label` is "dd/mm · importe · nombre" exactly as returned; an
 `EXPLAIN_INCOMING` `sender` is the bank's text as returned. Show them as they are.
+
+## Movements and monthly summary
+
+Two read-only tools answer "what came in and went out": `mcp__finance__finance_movements`
+(search) and `mcp__finance__finance_summary` (a month or a year). Neither writes anything.
+Both are for the owner only; they take no actor, account id, token or SQL. Every figure
+comes from the result of this same turn, copied as returned, in Spanish, short.
+
+### Search: `mcp__finance__finance_movements`
+
+Pass only what the owner said: `text` (a word of the sender or the description, 2 to 60
+characters), `amount` (as the owner wrote it, in the currency of the account), `account`
+(the institution as the owner names it), `direction` (`in` or `out`), `since` and `until`
+(`YYYY-MM-DD`; with neither, the last 90 days; at most 400 days) and `limit` (1 to 50).
+Never guess a date or an amount: ask. The result has `since`, `until`, `total_matches`,
+`truncated` (say "hay más; dime un rango o un texto más preciso") and `movements`, plus the
+`accounts` that were searched with their `synced_at` ("sincronizado el <fecha>") and
+`history_from`.
+
+Each movement line gives `date`, the account (`institution`), `amount` with `currency`,
+`status`, `who`, `text`, `kind`, `about` and `ref`. Say what it is from `kind`:
+
+| `kind` | What to say |
+| --- | --- |
+| `OWN` | "tuyo": income or spending of the owner. |
+| `OWN_TRANSFER` | "traspaso entre tus cuentas". |
+| `EXCHANGE` | "pago al socio por un cambio" (`ref` is the F<n>, or null for a payment to the partner without a funding; the same `ref` is the same split, give it once). With `own_part` (the owner's own share) and `help` (a list of `about` and `amount`, family help), say the split exactly as returned. |
+| `PARTNER_FAVOR` | "favor del socio": not the owner's money. |
+| `FAMILY` | "pago de un familiar por un cambio" (not income). |
+| `FAMILY_HELP` | "ayuda a <about>" (the owner's spending). |
+| `FUND` | "del fondo" (not income). |
+| `UNCLEAR` | "todavía sin aclarar": there is a question pending (`ref` is its P<n>); offer to show it. |
+
+- A line with `stale_pending` true is a bank hold that never posted: say "retenido,
+  probablemente anulado", never that it was charged ("cobrado"). A `status` `PENDING`
+  otherwise: "aún pendiente".
+- Search first across all accounts with the merchant's text. When nothing is found, say
+  "no encuentro nada con eso en ese rango" and tell, for each account in `accounts`, the date
+  of its `synced_at` ("<institution>: sincronizada hasta el <fecha>"). Never conclude that a
+  payment did not happen; `history_from` tells where the data starts.
+- One account sends no text at all: a text search finds nothing there. Its movements can
+  only be found by amount and date, so for "¿llegó el reembolso de …?" search by text and
+  also by `amount`.
+- A card that is not connected to Finance: its purchases and refunds are not visible, only
+  the payment of its bill ("no veo las compras de la tarjeta, solo el pago de su factura").
+
+### Summary: `mcp__finance__finance_summary`
+
+Pass `period`: a month `YYYY-MM` or a year `YYYY`; omit it for this month. At most 24
+months back. The result has one block per currency in `currencies`; never add figures
+across currencies, and never convert. Per block, from the owner's point of view:
+
+- `income` and `spending` (own money only), and `net`. `spending` includes the family help
+  and splits into `bank`, `zelle_help`, `exchange_own`, `exchange_help` and `forgiven`.
+- `family_help`: the part of spending that went to family, with `by_person`, one line per
+  person (`about` and `amount`). The owner cares about this most: always give it, person by
+  person, whenever you give a summary.
+- `excluded`: what Finance set aside because it is not income or spending: `own_transfers`,
+  `exchange`, `partner_favor`, `family`, `fund`, each with `count`, `in` and `out`. Say it
+  is "aparte", never add it to income or spending.
+- `unclear` and `pending_bank`: counts and flows still unresolved or not yet posted. Say
+  they are not in the totals.
+- `undescribed`: movements the bank sent with no text at all. They are counted in the
+  totals; say "<n> movimientos sin detalle cuentan, y pueden incluir compras de valores",
+  and that they can only be searched by amount and date.
+- `top_spending`: the biggest own expenses, lines as in the search.
+
+`complete` true: nothing to add. `complete` false: say so and why, from
+`incomplete_reasons`, then still give the figures:
+
+| `incomplete_reasons` | What to say |
+| --- | --- |
+| `in_progress` | "el periodo aún no termina". |
+| `history_starts_late` | "algún banco tiene historial solo desde después del inicio del periodo" (`accounts` `history_from` says which). |
+| `account_stale` | "alguna cuenta tiene datos desactualizados" (`accounts` `stale` says which; `synced_at` its last sync). |
+| `hidden_accounts` | "hay <hidden_accounts> cuenta(s) que no puedes ver, no incluidas". |
+| `exchanges_without_split` | "de algunos pagos al socio no se conoce tu parte (historial anterior a los cambios en Finanzas, o una pregunta sin contestar)". Offer its `P<n>` only when an `UNCLEAR` line exists. |
+
+Shape (placeholders only):
+
+```
+<periodo> en <moneda>: ingresos <amount>, gastos <amount>, neto <amount>.
+Ayuda a la familia: <amount> (<persona>: <amount>, …).
+Aparte (no es ingreso ni gasto): cambios <n>, traspasos <n>, favores <n>, familiares <n>, fondos <n> (cada cuenta como la devuelve la herramienta, sin sumarlas).
+Sin detalle: <n> movimientos cuentan; pueden incluir compras de valores.
+Incompleto porque: <motivo>.
+```
+
+Refusals of both tools are in the table below (`bad_date`, `bad_period`, `bad_amount`,
+`bad_text`, `unknown_account`, `bad_direction`, `bad_range`, `bad_limit`).
 
 ## Who owes what
 
@@ -435,6 +537,14 @@ data another way: a new call needs new input from the owner.
 | `no_open_exchange` | "Ya no queda ningún cambio abierto para ese pago." Offer to list what is pending: the question comes back with current options. |
 | `unknown_counterparty` | "Esa persona o fondo ya no está entre las opciones." Explain the code again and offer its current options. |
 | `already_resolved` | "Ese código ya está contestado." Its `resolution` says how; `superseded`: "Esa confirmación la sustituyó una más reciente; contesta a la nueva." |
+| `bad_date` | "Esa fecha no la entiendo; dime el día como AAAA-MM-DD." |
+| `bad_period` | "Dime el mes (AAAA-MM) o el año (AAAA); puedo mirar hasta 24 meses atrás." |
+| `bad_amount` | "No entiendo ese importe; dímelo con sus decimales." |
+| `bad_text` | "Dame una palabra de entre 2 y 60 letras para buscar." |
+| `unknown_account` | "No encuentro esa cuenta." Show `accounts` (`institution`) and ask which. |
+| `bad_direction` | "¿Buscas lo que entró o lo que salió?" |
+| `bad_range` | "Ese rango no vale: máximo 400 días y la fecha inicial antes de la final." |
+| `bad_limit` | "Puedo mostrar entre 1 y 50 movimientos." |
 | `internal_error` | "Finanzas tuvo un error interno; no se guardó nada. Prueba más tarde." |
 
 ## Memory and privacy
@@ -453,6 +563,6 @@ data another way: a new call needs new input from the owner.
 
 ## Not in Finance yet
 
-Spending, categories, transfers, Trade Republic securities and EquatePlus are not in Finance
-yet. Say "eso todavía no está en Finanzas" instead of estimating. Family exchanges and debts
-are in Finance through the tools above.
+Categories of spending (food, rent, …) and securities holdings are not in Finance yet. Say "eso todavía no está en Finanzas" instead of estimating. Family exchanges
+and debts, bank movements and the income and spending summary are in Finance through the
+tools above.

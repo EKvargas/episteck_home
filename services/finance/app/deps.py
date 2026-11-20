@@ -9,6 +9,7 @@ from .authz import UNAVAILABLE, BatchDecision, Requirement
 from .config import Settings
 from .connectors.eb_auth import receive_callback
 from .home_control.client import HomeAuthorizer
+from .movements.service import MovementsService
 from .receivables.service import MCP_CALLER, Caller, ReceivablesService
 from .service import FinanceService
 from .store.repo import FinanceRepository
@@ -60,6 +61,14 @@ def build_receivables_service(settings: Settings | None = None, *,
     repo = FinanceRepository(settings.db_path, pepper=settings.pepper)
     return ReceivablesService(repo, _build_authorizer(), settings.workspace_id, caller=caller,
                               description_rules=settings.description_rules)
+
+
+def build_movements_service(settings: Settings | None = None) -> MovementsService:
+    """Same authorizer factory as ``build_service``; read only, so no caller identity."""
+    settings = settings or Settings.from_env()
+    repo = FinanceRepository(settings.db_path, pepper=settings.pepper)
+    return MovementsService(repo, _build_authorizer(), settings.workspace_id,
+                            description_rules=settings.description_rules)
 
 
 def build_callback(settings: Settings | None = None) -> Callable[..., bool]:

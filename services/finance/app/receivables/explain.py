@@ -8,10 +8,12 @@ from __future__ import annotations
 
 from .. import domain
 from ..money import format_minor
-from ..store.receivables_repo import ReceivablesRepository
+from ..store.receivables_repo import IGNORE, ReceivablesRepository
 from .allocation import plan_allocation
 from .ledger import ValidationError
-from .model import AllocationMethod, CounterpartyKind, PendingItem, PendingKind
+from .model import (
+    AllocationMethod, Counterparty, CounterpartyKind, MovementRoleKind, PendingItem, PendingKind,
+)
 from .pending import PendingQueue
 from .text import description_key
 
@@ -45,6 +47,28 @@ def sender_text(counterparty_name: str, remittance: str) -> str:
     return " ".join(words)[:SENDER_CHARS].rstrip()
 
 
+def active_partners(repo: ReceivablesRepository, conn, ws: str) -> list[Counterparty]:
+    """The ACTIVE exchange partners; "it's from the partner" is offered with exactly one."""
+    return [cp for cp in repo.list_counterparties(conn, ws)
+            if cp.kind is CounterpartyKind.EXCHANGE_PARTNER and cp.status == "ACTIVE"]
+
+
+def answer_rule_target(repo: ReceivablesRepository, conn, ws: str, key: str | None,
+                       payer_id: str | None, role: MovementRoleKind | None) -> str | None:
+    """What the live payer rule for ``key`` says when the answer that left this receipt payer
+    or role wrote it: the payer, the partner (``PARTNER_SIDE``), else ``IGNORE``. ``None``
+    when there is no such target (no key, or no partner rule)."""
+    if not key:
+        return None
+    if payer_id:
+        return payer_id
+    if role is MovementRoleKind.PARTNER_SIDE:
+        live = repo.rule_for(conn, ws, key)
+        cp = repo.get_counterparty(conn, ws, live) if live and live != IGNORE else None
+        return live if cp is not None and cp.kind is CounterpartyKind.EXCHANGE_PARTNER else None
+    return IGNORE
+
+
 def _exact(repo: ReceivablesRepository, conn, ws: str, cp_id: str, currency: str,
            amount: int) -> bool:
     """The open items (a PERSON's opening included, R29), or an exact subset, equal ``amount``."""
@@ -59,7 +83,8 @@ def explain_question(repo: ReceivablesRepository, conn, ws: str,
 
     Options: the one PERSON whose open items or an exact subset of them equal the amount, then
     every other PERSON or FUND with a balance in that currency, then ``OTHER`` and
-    ``NOT_EXCHANGE``. Option values are ``CP:<counterparty id>``; ``labels`` names them.
+    ``NOT_EXCHANGE``, then ``PARTNER`` when exactly one exchange partner is active. Option
+    values are ``CP:<counterparty id>``; ``labels`` names them.
     """
     root, day = repo.movement_root(conn, mv.id), mv.booking_date or mv.value_date
     found = [(cp, cp.kind is CounterpartyKind.PERSON
@@ -76,7 +101,12 @@ def explain_question(repo: ReceivablesRepository, conn, ws: str,
         "sender": sender_text(mv.counterparty_name, mv.remittance),
         "exact": f"CP:{first[0].id}" if first else None,
         "labels": {f"CP:{cp.id}": cp.label for cp in ordered}}
-    return [f"CP:{cp.id}" for cp in ordered] + ["OTHER", "NOT_EXCHANGE"], payload
+    options = [f"CP:{cp.id}" for cp in ordered] + ["OTHER", "NOT_EXCHANGE"]
+    partners = active_partners(repo, conn, ws)
+    if len(partners) == 1:
+        options.append("PARTNER")
+        payload["labels"]["PARTNER"] = partners[0].label
+    return options, payload
 
 
 def ask_explain_incoming(repo: ReceivablesRepository, conn, ws: str, movement: domain.Movement,

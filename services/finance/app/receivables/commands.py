@@ -18,9 +18,9 @@ from datetime import date, datetime, timedelta
 
 from .. import domain
 from ..money import format_minor
-from ..store.receivables_repo import IGNORE, ReceivablesRepository
+from ..store.receivables_repo import ReceivablesRepository
 from .corrections import correct_exchange, forgive_all, record_opening, reverse
-from .explain import ask_explain_incoming, incoming_key
+from .explain import answer_rule_target, ask_explain_incoming, incoming_key
 from .funding import ask_link_funding, try_link
 from .ledger import Evidence, LineInput, ValidationError, record_exchange
 from .matcher import close_settled_questions, reopen_explain, unhide
@@ -79,12 +79,15 @@ def undo_token(repo: ReceivablesRepository, root: str) -> str:
 
 def ignored_movements(repo: ReceivablesRepository, conn, ws: str,
                       now: datetime) -> list[tuple[str, str, domain.Movement]]:
-    """Movements with a live NOT_EXCHANGE role from the last 60 days, newest first, as
+    """Movements with a live NOT_EXCHANGE role (incoming ones also PARTNER_SIDE) from the
+    last 60 days, newest first, as
     ``(undo token, root id, current movement)``: incoming ones, and outgoing EUR payments to
     a partner IBAN (a LINK_FUNDING answered "not an exchange", R45)."""
     since, partners = now.date() - IGNORED_LOOKBACK, repo.partner_hashes(conn, ws)
     found = []
-    for root in repo.roots_with_role(conn, ws, MovementRoleKind.NOT_EXCHANGE):
+    roots = [*repo.roots_with_role(conn, ws, MovementRoleKind.NOT_EXCHANGE),
+             *repo.roots_with_role(conn, ws, MovementRoleKind.PARTNER_SIDE)]
+    for root in roots:
         mv = repo.movement_current(conn, ws, root)
         day = (mv.booking_date or mv.value_date) if mv else None
         if mv is None or day is None or day < since:
@@ -100,7 +103,9 @@ def answer_state(repo: ReceivablesRepository, conn, ws: str, mv: domain.Movement
     whether the live payer rule for its key still says what the answer said."""
     rec = repo.live_receipt_for_movement(conn, mv.id)
     key = incoming_key(repo, mv, True) if mv.amount_minor > 0 else None
-    rule = bool(key) and repo.rule_for(conn, ws, key) == (rec.payer_id if rec else IGNORE)
+    target = answer_rule_target(repo, conn, ws, key, rec.payer_id if rec else None,
+                                repo.movement_role(conn, mv.id))
+    rule = bool(target) and repo.rule_for(conn, ws, key) == target
     return {"receipt_id": rec.id if rec else None,
             "role_ids": repo.live_role_ids_for_movement(conn, mv.id), "rule": rule}
 
@@ -254,9 +259,9 @@ def _relink(ctx: Ctx, conn, root: str, role_ids: list[str], reason: str) -> dict
 
 
 def _unignore(ctx: Ctx, conn, p: dict, reason: str) -> dict:
-    """Undoes a NOT_EXCHANGE role from the ignored list. An incoming payment: with the
-    IGNORE rule that wrote it and the other roles that rule wrote on its own (R36), then
-    EXPLAIN_INCOMING asks again. An outgoing partner payment: ``_relink`` (R45)."""
+    """Undoes a NOT_EXCHANGE (or PARTNER_SIDE) role from the ignored list. An incoming payment:
+    with the IGNORE (or partner) rule that wrote it and the other roles that rule wrote on
+    its own (R36), then EXPLAIN_INCOMING asks again. An outgoing partner payment: ``_relink`` (R45)."""
     repo = ctx.repo
     match = next(((root, mv) for t, root, mv in ignored_movements(repo, conn, ctx.ws, ctx.now)
                   if t == p["undo_ref"]), None)
@@ -266,14 +271,17 @@ def _unignore(ctx: Ctx, conn, p: dict, reason: str) -> dict:
     if mv.amount_minor < 0:
         return {**_relink(ctx, conn, root, p["role_ids"], reason), "rules_revoked": 0}
     key = incoming_key(repo, mv, True)
-    rule = bool(key) and repo.rule_for(conn, ctx.ws, key) == IGNORE
+    role = repo.movement_role(conn, root)
+    target = answer_rule_target(repo, conn, ctx.ws, key, None, role)
+    rule = bool(target) and repo.rule_for(conn, ctx.ws, key) == target
     if repo.live_role_ids_for_movement(conn, root) != p["role_ids"] or rule != p["rule"]:
         raise changed()
     for role_id in p["role_ids"]:
         repo.revoke(conn, ctx.ws, "movement_role", role_id, reason, ctx.now)
-    revoked = _revoke_rules(ctx, conn, key, IGNORE, reason) if key else 0
+    revoked = _revoke_rules(ctx, conn, key, target, reason) if target else 0
     question = ask_explain_incoming(repo, conn, ctx.ws, mv, ctx.queue).code
-    also = unhide(repo, conn, ctx.ws, key, mv.id, ctx.queue, ctx.now) if revoked else []
+    also = (unhide(repo, conn, ctx.ws, key, mv.id, ctx.queue, ctx.now, role)
+            if revoked else [])
     return {"ok": True, "status": "reopened", "question": question, "also_asked": also,
             "rules_revoked": revoked}
 

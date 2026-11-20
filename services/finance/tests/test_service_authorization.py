@@ -10,7 +10,8 @@ import pytest
 from app import domain
 from app.authz import SELF
 from app.service import (
-    AccessDenied, FeatureOff, FinanceService, PolicyUnavailable, SessionInvalid,
+    AccessDenied, FeatureOff, FinanceService, PolicyUnavailable, SessionInvalid, ViewGrant,
+    authorize_view,
 )
 from tests.support import (
     FakeAuthorizer, SpyRepo, make_account, make_balance, make_repo, seed_connection,
@@ -58,6 +59,21 @@ def test_every_non_answer_is_refused_with_one_home_call_and_no_data_read(repo, m
     svc, spy, authz = _svc(repo, FakeAuthorizer(mode=mode))
     with pytest.raises(error):
         svc.overview("deleg")
+    assert len(authz.calls) == 1
+    assert not set(spy.calls) & DATA_READS
+
+
+@pytest.mark.parametrize("mode,error", [
+    ("session_invalid", SessionInvalid),
+    ("unavailable", PolicyUnavailable),
+    ("malformed", PolicyUnavailable),
+    ("raise", PolicyUnavailable),
+])
+def test_authorize_view_refuses_every_non_answer_like_overview(repo, mode, error):
+    authz = FakeAuthorizer(mode=mode)
+    spy = SpyRepo(repo)
+    with pytest.raises(error):
+        authorize_view(spy, authz, "ws-1", "deleg")
     assert len(authz.calls) == 1
     assert not set(spy.calls) & DATA_READS
 
@@ -163,3 +179,21 @@ def test_valuation_uses_stored_ecb_rates_when_requested(repo):
 
 def test_no_valuation_block_unless_requested(repo):
     assert _svc(repo)[0].overview("deleg")["valuation"] is None
+
+
+def test_authorize_view_returns_actor_and_allowed_owners(repo):
+    grant = authorize_view(SpyRepo(repo), FakeAuthorizer(), "ws-1", "deleg")
+    assert grant.actor == "PSN-1" and "PSN-1" in grant.allowed_owners
+
+
+def test_authorize_view_reads_no_account_data(repo):
+    spy = SpyRepo(repo)
+    authorize_view(spy, FakeAuthorizer(), "ws-1", "deleg")
+    assert set(spy.calls) <= {"workspace_scope", "is_member"}
+
+
+def test_visible_hides_an_account_with_an_owner_not_allowed(repo):
+    grant = ViewGrant("PSN-1", frozenset({"PSN-1"}))
+    shared = make_account(aid="acc-2", owner_person_ids=("PSN-1", "PSN-2"))
+    visible, hidden = grant.visible([make_account(aid="acc-1"), shared])
+    assert [a.id for a in visible] == ["acc-1"] and hidden == 1

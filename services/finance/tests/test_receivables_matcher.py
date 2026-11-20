@@ -9,6 +9,7 @@ from decimal import Decimal
 
 from app import domain
 from app.receivables.corrections import record_opening
+from app.receivables.explain import incoming_key
 from app.receivables.funding import link_choice
 from app.receivables.ledger import Evidence, LineInput, record_exchange
 from app.receivables.matcher import Matcher, reopen_explain, resolve_explain_incoming
@@ -132,11 +133,11 @@ def test_e6_unknown_credit_asks_then_rule_makes_next_automatic(tmp_path):
     with env.repo.tx() as c:
         item = env.item(c, "EXPLAIN_INCOMING:in1")
         assert (item.kind, item.options) == (
-            PendingKind.EXPLAIN_INCOMING, ("CP:a", "OTHER", "NOT_EXCHANGE"))
+            PendingKind.EXPLAIN_INCOMING, ("CP:a", "OTHER", "NOT_EXCHANGE", "PARTNER"))
         assert item.payload == {
             "movement_id": "in1", "booking_date": "2026-11-14", "currency": "USD",
             "amount": "120.00", "sender": "FAMILIAR A", "exact": "CP:a",
-            "labels": {"CP:a": "Familiar A"}}
+            "labels": {"CP:a": "Familiar A", "PARTNER": "Socio"}}
         assert resolve_explain_incoming(env.repo, c, WS, "in1", "CP:a", env.q, env.now,
                                         description_rules=True) == {
             "ok": True, "status": "recorded", "receipt_ref": "R1", "rule": True}
@@ -159,7 +160,7 @@ def test_e6_salary_ignored_after_one_answer(tmp_path):
     assert env.run() == counts(asked=1)
     with env.repo.tx() as c:
         item = env.item(c, "EXPLAIN_INCOMING:s1")
-        assert item.options == ("OTHER", "NOT_EXCHANGE")
+        assert item.options == ("OTHER", "NOT_EXCHANGE", "PARTNER")
         text = json.dumps(item.payload)
         assert EMPLOYER_IBAN not in text and env.repo.hash_key(EMPLOYER_IBAN) not in text
         assert resolve_explain_incoming(env.repo, c, WS, "s1", "NOT_EXCHANGE", env.q,
@@ -197,9 +198,9 @@ def test_description_rules_off_asks_every_time_with_exact_match_first(tmp_path):
     assert env.run() == counts(asked=2)
     with env.repo.tx() as c:
         first, second = env.item(c, "EXPLAIN_INCOMING:in1"), env.item(c, "EXPLAIN_INCOMING:in2")
-        assert first.options == ("CP:c", "CP:a", "OTHER", "NOT_EXCHANGE")
+        assert first.options == ("CP:c", "CP:a", "OTHER", "NOT_EXCHANGE", "PARTNER")
         assert first.payload["exact"] == "CP:c"
-        assert second.options == ("CP:a", "CP:c", "OTHER", "NOT_EXCHANGE")
+        assert second.options == ("CP:a", "CP:c", "OTHER", "NOT_EXCHANGE", "PARTNER")
         assert second.payload["exact"] == "CP:a"  # 120 + 30: the whole outstanding
         assert resolve_explain_incoming(env.repo, c, WS, "in2", "CP:a", env.q, env.now) == {
             "ok": True, "status": "recorded", "receipt_ref": "R1", "rule": False}
@@ -659,3 +660,113 @@ def test_old_cursor_table_is_upgraded_and_asks_no_history(tmp_path):
     raw_execute(base, "UPDATE matcher_cursor SET start_rowid=NULL")
     with env.repo.read() as c:  # NULL never reads as 0 (R37)
         assert env.repo.cursor_state(c, WS) == (top, top)
+
+
+# --- "It's from the partner": PARTNER_SIDE (spec §5.7) -----------------------------------------
+ZELLE_NEW_1 = "ZELLE FROM PERSONA NUEVA CONF# X1"
+ZELLE_NEW_2 = "ZELLE FROM PERSONA NUEVA CONF# X2"
+
+
+def partner_env(tmp_path, count=1):
+    """An env with rules on and ``count`` credits (z1, z2...) from the same unknown sender."""
+    env = make(tmp_path, rules=True)
+    with env.repo.tx() as c:
+        for n, text in list(enumerate((ZELLE_NEW_1, ZELLE_NEW_2), 1))[:count]:
+            env.move(c, f"z{n}", 5000, D13 + timedelta(days=n), acc="acc-usd", iban=None,
+                     text=text, name="")
+    return env
+
+
+def partner_key(env, c, mid="z1"):
+    return incoming_key(env.repo, env.repo.movement_current(c, WS, mid), True)
+
+
+def test_explain_offers_partner_last_when_exactly_one_partner(tmp_path):
+    env = partner_env(tmp_path)
+    assert env.run() == counts(asked=1)
+    with env.repo.read() as c:
+        item = env.item(c, "EXPLAIN_INCOMING:z1")
+    assert item.options[-3:] == ("OTHER", "NOT_EXCHANGE", "PARTNER")
+    assert item.payload["labels"]["PARTNER"] == "Socio"
+
+
+def test_no_partner_option_with_two_active_partners(tmp_path):
+    env = partner_env(tmp_path)
+    with env.repo.tx() as c:
+        env.add(c, "p2", "Socio dos", CounterpartyKind.EXCHANGE_PARTNER)
+    assert env.run() == counts(asked=1)
+    with env.repo.read() as c:
+        item = env.item(c, "EXPLAIN_INCOMING:z1")
+    assert "PARTNER" not in item.options and "PARTNER" not in item.payload["labels"]
+
+
+def test_partner_answer_writes_role_and_remembers_sender(tmp_path):
+    env = partner_env(tmp_path)
+    env.run()
+    with env.repo.tx() as c:
+        out = resolve_explain_incoming(env.repo, c, WS, "z1", "PARTNER", env.q, env.now,
+                                       description_rules=True)
+        assert out == {"ok": True, "status": "partner_favor", "rule": True}
+        assert env.repo.movement_role(c, "z1") is MovementRoleKind.PARTNER_SIDE
+        assert env.repo.rule_for(c, WS, partner_key(env, c)) == "p"
+        assert env.repo.live_receipt_for_movement(c, "z1") is None
+
+
+def test_partner_answer_with_remember_false_writes_no_rule(tmp_path):
+    env = partner_env(tmp_path)
+    env.run()
+    with env.repo.tx() as c:
+        out = resolve_explain_incoming(env.repo, c, WS, "z1", "PARTNER", env.q, env.now,
+                                       description_rules=True, remember=False)
+        assert out == {"ok": True, "status": "partner_favor", "rule": False}
+        assert env.repo.movement_role(c, "z1") is MovementRoleKind.PARTNER_SIDE
+        assert env.repo.rule_for(c, WS, partner_key(env, c)) is None
+
+
+def test_partner_choice_refused_without_a_single_partner(tmp_path):
+    env = partner_env(tmp_path)
+    with env.repo.tx() as c:
+        env.add(c, "p2", "Socio dos", CounterpartyKind.EXCHANGE_PARTNER)
+    env.run()
+    tables = ("receipt", "payer_rule", "movement_role")
+    before = {t: count_rows(env.repo.base, t) for t in tables}
+    with env.repo.tx() as c:
+        assert resolve_explain_incoming(env.repo, c, WS, "z1", "PARTNER", env.q, env.now,
+                                        description_rules=True) == {
+            "ok": False, "error": "unknown_choice"}
+    assert {t: count_rows(env.repo.base, t) for t in tables} == before
+
+
+def answered_partner(tmp_path):
+    """z1 answered PARTNER (rule written), z2 from the same sender set aside by the matcher."""
+    env = partner_env(tmp_path)
+    env.run()
+    with env.repo.tx() as c:
+        item = env.item(c, "EXPLAIN_INCOMING:z1")
+        resolve_explain_incoming(env.repo, c, WS, "z1", "PARTNER", env.q, env.now,
+                                 description_rules=True)
+        env.q.resolve(c, WS, item.code, "PARTNER", human=True)
+        env.move(c, "z2", 5000, D15, acc="acc-usd", iban=None, text=ZELLE_NEW_2, name="")
+    return env, item
+
+
+def test_next_payment_from_partner_side_sender_is_set_aside_without_question(tmp_path):
+    env, _ = answered_partner(tmp_path)
+    assert env.run() == counts(ignored=1)
+    with env.repo.read() as c:
+        assert env.item(c, "EXPLAIN_INCOMING:z2") is None
+        assert env.repo.movement_role(c, "z2") is MovementRoleKind.PARTNER_SIDE
+        assert env.repo.live_receipt_for_movement(c, "z2") is None
+
+
+def test_reopening_partner_answer_revokes_role_rule_and_auto_roles(tmp_path):   # M22
+    env, item = answered_partner(tmp_path)
+    assert env.run() == counts(ignored=1)
+    with env.repo.tx() as c:
+        key = partner_key(env, c)
+        out = reopen_explain(env.repo, c, WS, item.code, env.q, env.now)
+        assert out["status"] == "reopened" and len(out["also_asked"]) == 1  # z2 asked again
+        assert env.repo.movement_role(c, "z1") is None
+        assert env.repo.movement_role(c, "z2") is None
+        assert env.repo.rule_for(c, WS, key) is None
+        assert env.item(c, "EXPLAIN_INCOMING:z2").resolved_at is None
