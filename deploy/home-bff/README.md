@@ -212,18 +212,19 @@ Adds `home-agent-ana`, which acts only as Ana and never reaches Finance. Follow 
 
 **Preconditions (all done before the window):**
 
-- `home-agent-ana` and the owner's Hermes uid (1003) have **no access** to the mint socket
-  `/run/episteck/home-bff-mint/mint.sock`: neither is in group `episteck-gw`. Check
-  `id home-agent-ana` and `id home-agent`. The `X-Runtime-ID` trust model needs `svc-home-gateway`
+- `home-agent-ana` and the owner's Hermes user (uid 1003) have **no access** to the mint socket
+  `/run/episteck/home-bff-mint/mint.sock`. Check `id home-agent-ana` and `id home-agent`:
+  neither output may list the group `episteck-gw` (no `episteck-gw`). The `X-Runtime-ID` trust model needs `svc-home-gateway`
   to be the only client of that socket; otherwise an agent could call `/internal/mint` directly
   with a header of its choosing.
 - The Linux user `home-agent-ana` exists (plan 3; Hermes and the Telegram bot are also plan 3).
 - The new gateway config is staged at `/etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.new`
-  and passes `nginx -t` at that staging path. It is **not** at the live path.
+  and passes the gateway-user config test below at that staging path. It is **not** at the live path.
 - The nginx integration tests for 9937 (`deploy/gateway/tests/test_gateway_integration.py`) pass
-  on a host with nginx, before step 3.3. The dev machine has no nginx, so they have never run;
-  plan 3 decides where. They test the repository file, so run them on the commit you staged
-  from, and `cmp` must find the staged copy identical.
+  before step 3.3. Run them in the throwaway `ubuntu:26.04` container from "Isolated
+  integration harness" in `deploy/gateway/README.md` (the node's OS; the record there shows the
+  first run). They test the repository file, so run them on the commit you staged from, and
+  `cmp` must find the staged copy identical.
 - The new nft table is rendered into a boot file staged at
   `/etc/episteck/nft/episteck-gateway.nft.new` and passes `nft --check`. It is not loaded. The
   renderer needs `home-agent-ana` to exist and refuses a uid that collides with root, 1003, the
@@ -235,8 +236,8 @@ Adds `home-agent-ana`, which acts only as Ana and never reaches Finance. Follow 
 # Gateway config: a staging copy, tested at the staging path.
 sudo install -m 0644 deploy/gateway/nginx-mcp-gateway.conf \
   /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.new
-sudo nginx -t -c /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.new \
-  -p /etc/episteck/mcp-gateway/
+sudo -u svc-home-gateway nginx -e /dev/stderr -t \
+  -c /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.new -p /etc/episteck/mcp-gateway/
 cmp deploy/gateway/nginx-mcp-gateway.conf \
   /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.new   # silent = identical
 
@@ -289,10 +290,22 @@ BFF goes first, the gateway reload last, and the owner's bot is briefly refused 
 
       Expected: one `tcp dport 9937` accept rule for Ana's uid, followed by `tcp dport 9937 drop`.
       The 9934, `{ 9931, 9932, 9936 }` and 9935 rules are as before, each listed once.
-   2. Build the BFF image and update both Quadlet units (`home-bff` and `home-bff-mint`) with
-      `RUNTIME_IDS=home-agent-primary,home-agent-ana`; keep `RUNTIME_LEGACY_BINDING=off`
-      (`on` with more than one runtime is a startup error). Restart `home-bff-mint` first.
-      From here the owner's bot gets 401. That is fail closed.
+   2. Roll out the BFF image with `deploy/ops/image-rollout.sh`, which updates both Quadlet
+      units (`home-bff` and `home-bff-mint`) with `RUNTIME_IDS=home-agent-primary,home-agent-ana`
+      and restarts `home-bff-mint` first. Keep `RUNTIME_LEGACY_BINDING=off` (`on` with more than
+      one runtime is a startup error). First run the read-only preview and read the diff: the
+      `Image=` and `RUNTIME_IDS` lines of each unit. Then apply:
+
+      ```bash
+      ssh -F C:/Users/D064974/.ssh/config episteck-node1 \
+        'sudo -n bash -s -- home-bff preview <SHA>' < deploy/ops/image-rollout.sh
+      ssh -F C:/Users/D064974/.ssh/config episteck-node1 \
+        'sudo -n bash -s -- home-bff apply <SHA>' < deploy/ops/image-rollout.sh
+      ```
+
+      That is `deploy/ops/image-rollout.sh home-bff preview <SHA>`, then
+      `deploy/ops/image-rollout.sh home-bff apply <SHA>`. From here the owner's bot gets 401.
+      That is fail closed.
    3. Only now, install the staged gateway config at the live path and reload. Keep the old one
       for rollback:
 
@@ -301,8 +314,8 @@ BFF goes first, the gateway reload last, and the owner's bot is briefly refused 
         /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.old
       sudo install -m 0644 /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.new \
         /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf
-      sudo nginx -t -c /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf \
-        -p /etc/episteck/mcp-gateway/
+      sudo -u svc-home-gateway nginx -e /dev/stderr -t \
+        -c /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf -p /etc/episteck/mcp-gateway/
       sudo systemctl reload episteck-mcp-gateway.service
       ```
 
@@ -351,16 +364,27 @@ BFF goes first, the gateway reload last, and the owner's bot is briefly refused 
 
      Expected for both: permission denied. curl cannot connect (exit 7) and gets no HTTP status.
 6. Rollback, in reverse order:
-   1. Restore the old gateway config and reload. This removes 9937; the owner's bot gets 401
-      until the next step.
+   1. Restore the gateway config. Pick the case by how far the rollout got.
+
+      **Before 3.3** the live config was never replaced and there is no `.old`. Remove only the
+      staged copy. Nothing is reloaded:
+
+      ```bash
+      sudo rm /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.new
+      ```
+
+      **After 3.3** restore `.old`, reload, then remove `.conf.new`. This removes 9937; the
+      owner's bot gets 401 until the next step:
 
       ```bash
       sudo install -m 0644 /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.old \
         /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf
       sudo systemctl reload episteck-mcp-gateway.service
+      sudo rm /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.new
       ```
 
-   2. Restore the old BFF image and Quadlets (`home-bff-mint` first).
+   2. Restore the old BFF image and Quadlets (`home-bff-mint` first):
+      run the `rollback <BACKUP_DIR>` command that `apply` printed (`deploy/ops/image-rollout.sh`).
    3. The new nft table stays, boot file included. It is the old table plus one rule pair that
       only restricts 9937, which has no listener after step 6.1; every other rule is unchanged.
       Restoring the old boot file would only reopen 9937 to every local uid.
