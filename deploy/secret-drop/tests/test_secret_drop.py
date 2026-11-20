@@ -97,6 +97,19 @@ def test_every_slot_is_complete_and_its_format_is_anchored():
         assert label
 
 
+def test_the_ana_token_slot_targets_her_env_as_her_user():
+    rows = slots()
+    assert rows[0][0] == "telegram"  # the owner's slot keeps number 1 on the phone menu
+    ana = {r[0]: r for r in rows}["telegram-ana"]
+    assert ana == ["telegram-ana", "env", "/home/home-agent-ana/.hermes/.env", "home-agent-ana",
+                   "TELEGRAM_BOT_TOKEN", "^[0-9]{6,12}:[A-Za-z0-9_-]{30,}$",
+                   "Telegram bot token for Ana's Olin (Hermes home-agent-ana)"]
+    assert re.fullmatch(ana[5], "123456789:" + "A" * 35)
+    assert not re.fullmatch(ana[5], "123456789:short")
+    readme = README.read_text(encoding="utf-8")
+    assert "`telegram-ana`" in readme and "/home/home-agent-ana/.hermes/.env" in readme
+
+
 def test_the_readme_key_line_is_locked_to_the_drop():
     line = next(l for l in README.read_text(encoding="utf-8").splitlines()
                 if "secret-drop-phone" in l and "ssh-ed25519" in l)
