@@ -17,6 +17,8 @@ Follow this runbook when the BLS reference file is built or replaced. The file i
 - `openpyxl` in the venv (the `nutrition-r1` venv has it).
 - BLS source: `.data/bls-4.0/BLS_4_0_2025_DE/BLS_4_0_Daten_2025_DE.xlsx`.
 - SSH config at `C:/Users/D064974/.ssh/config` with host `episteck-node1`.
+- `PY` below is the local Python of the `nutrition-r1` venv (`C:\AIProjects\episteck-delivery-workspace\.venvs\nutrition-r1\Scripts\python.exe`). Run every local command from the repo root.
+- `/home/episteck/stage` exists on the node (step 3 creates it).
 
 ## Steps
 
@@ -31,12 +33,15 @@ Follow this runbook when the BLS reference file is built or replaced. The file i
 2. Record the checksum.
 
    ```powershell
-   Get-FileHash <out> -Algorithm SHA256
+   (Get-FileHash <out> -Algorithm SHA256).Hash.ToLower()
    ```
+
+   `Get-FileHash` prints uppercase hex and `sha256sum` lowercase, so compare case-insensitively (the `.ToLower()` does it).
 
 3. Stage the file on the node.
 
    ```powershell
+   ssh -F C:/Users/D064974/.ssh/config episteck-node1 'mkdir -p /home/episteck/stage'
    scp -F C:/Users/D064974/.ssh/config <out> episteck-node1:/home/episteck/stage/bls-4.0.sqlite
    ```
 
@@ -50,7 +55,11 @@ Follow this runbook when the BLS reference file is built or replaced. The file i
 
 ## Verification
 
-The `sha256` on the node equals the one recorded in step 2. Both containers see `/reference/bls-4.0.sqlite` (`BLS_DB`).
+The `sha256` on the node equals the one recorded in step 2. Both containers see `/reference/bls-4.0.sqlite` (`BLS_DB`). After the Quadlets carry the mount (`deploy/ops/image-rollout.sh nutrition apply <SHA>`), `image-rollout.sh nutrition verify` checks the container side: in both `nutrition` and `nutrition-mcp` the first `Apfel` search hit has a `bls:` food id.
+
+## Rollback
+
+`image-rollout.sh nutrition apply` copies both Quadlets to a backup directory and prints the command that restores them: `image-rollout.sh nutrition rollback <BACKUP_DIR>` (see `deploy/ops/README.md`). The reference file may stay; the old image ignores it. To remove it, delete `/srv/episteck/services/nutrition/reference/bls-4.0.sqlite`.
 
 ## Attribution
 
