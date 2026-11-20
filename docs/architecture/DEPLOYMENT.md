@@ -12,7 +12,7 @@
 | Service | User | Bind | Notes |
 | --- | --- | --- | --- |
 | Mealie v3.26.0 | svc-mealie (1004) | 127.0.0.1:9925 + tailnet | recipe provider |
-| Nutrition API | svc-nutrition (1005) | 127.0.0.1:9930 | FastAPI |
+| Nutrition API | svc-nutrition (1005) | 127.0.0.1:9930 | FastAPI. Mounts the BLS 4.0 reference database read-only at `/reference` (`BLS_DB=/reference/bls-4.0.sqlite`, host file `/srv/episteck/services/nutrition/reference/bls-4.0.sqlite`, 0440; built locally, never in git) |
 | Nutrition MCP | svc-nutrition (1005) | 127.0.0.1:9931 | FastMCP, home-agent connects |
 | Home MCP | svc-home-mcp (1006) | 127.0.0.1:9932 | thin business adapter; no Home data store |
 | Home BFF `[G1.6]` | svc-home-bff (uid 1007) | 127.0.0.1:9933 + public 443 via nginx | confidential OAuth client + session boundary; holds client secret and user tokens server-side. FastAPI/uvicorn, rootless Quadlet. Runbook: `deploy/home-bff/README.md` |
@@ -21,6 +21,7 @@
 | Finance sync `[I1, not deployed]` | svc-finance | none | `finance-sync.timer` twice a day runs `python -m app.sync`; only unit that reads provider credentials |
 | infra-agent gateway | infra-agent (1002) | none public | system-scope systemd |
 | home-agent gateway | home-agent (1003) | none public | user-scope systemd |
+| home-agent-ana gateway `[Nutrition R1, not deployed]` | home-agent-ana | none public; reaches only gateway `127.0.0.1:9937` | user-scope systemd, `MemoryMax=900M`; Ana's Telegram agent. See `AGENTS.md` and `docs/runbooks/nutrition-r1-rollout.md` |
 
 Only the Home BFF is exposed publicly, on 80/443 via nginx at
 `bff.home.episteck.com` `[G1.6]` — a browser must reach the OAuth callback over HTTPS.
@@ -44,6 +45,11 @@ service remains unreachable from the Internet.
 - **Nutrition authorization:** both Nutrition containers receive a dedicated Home
   API machine credential and resolve the Home hostname to the Tailscale address.
   There is no cross-region database connection and no authorization cache.
+
+## Nutrition reference data and Ana's agent `[Nutrition R1, not deployed]`
+- The BLS 4.0 database (Max Rubner-Institut, CC BY 4.0) is built locally by `services/nutrition/scripts/import_bls.py` (7140 foods), staged with `scp` and installed 0440 for `svc-nutrition`. Both Nutrition containers mount it `:ro`. It needs no backup of its own: it is rebuilt from the source workbook.
+- Ana's Hermes (`home-agent-ana`) reaches Home and Nutrition only through the second gateway listener `127.0.0.1:9937`, whose mint stamps runtime `home-agent-ana`. Rollout order, rollback and checks: `docs/runbooks/nutrition-r1-rollout.md`.
+- Images roll out with `deploy/ops/image-rollout.sh` (preview, apply, verify, rollback) and the owner runs every live step.
 
 ## Human authentication `[G1.6]`
 

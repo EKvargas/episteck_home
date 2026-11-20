@@ -7,7 +7,6 @@ Logging, if added, must carry ids and statuses only, never food text.
 """
 from __future__ import annotations
 
-import json
 import re
 import sqlite3
 from collections.abc import Callable
@@ -22,7 +21,7 @@ from nutrition_domain.free_sugars import FREE_SUGAR_MAP_VERSION, FreeSugarClass,
 from nutrition_domain.portions import to_grams
 from nutrition_domain.rules import effective_limit, trimester
 
-from ..providers.food_provider import FoodProvider, FoodRecord
+from ..providers.food_provider import FoodNotFound, FoodProvider, FoodRecord
 from ..service import AccessAuthorizer, _refuse_unless_allowed
 
 MODES = ("GENERAL", "PREGNANCY")
@@ -176,17 +175,16 @@ class DiaryService:
     def _fetch(self, food_id: str) -> FoodRecord:
         try:
             return self._provider.get_food(food_id)
-        except LookupError:  # KeyError included
+        except FoodNotFound:
             raise InvalidField("food_id", "unknown food_id") from None
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
                 raise InvalidField("food_id", "unknown food_id") from None
             raise ProviderUnavailable("food provider unavailable") from None
-        except httpx.RequestError:  # transport, decoding, redirect loops
-            raise ProviderUnavailable("food provider unavailable") from None
-        except (json.JSONDecodeError, sqlite3.OperationalError):
-            # A non-JSON body (JSONDecodeError is a ValueError, so it must be caught
-            # before the generic input handling) or an unreadable BLS database.
+        except (LookupError, TypeError, ValueError, sqlite3.DatabaseError, httpx.RequestError):
+            # A broken source: missing keys in a reply (LookupError), a non-JSON body
+            # (JSONDecodeError is a ValueError), a corrupt or metadata-less BLS file, or
+            # a transport failure. The agent can retry; never a raw 500.
             raise ProviderUnavailable("food provider unavailable") from None
 
     def _facts_for(self, food_id: str) -> tuple[str, dict]:

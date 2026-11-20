@@ -4,6 +4,13 @@ A write-only drop box the owner uses to send a secret (a bot token, a password) 
 
 Live since 2026-11-07. The first slot is the Telegram bot token for Hermes `home-agent` (Olin).
 
+## Slots
+
+| # | Slot | Target | Owner | Holds |
+| --- | --- | --- | --- | --- |
+| 1 | `telegram` | `/home/home-agent/.hermes/.env` (`TELEGRAM_BOT_TOKEN`) | `home-agent` | The bot token of the owner's Olin. |
+| 2 | `telegram-ana` | `/home/home-agent-ana/.hermes/.env` (`TELEGRAM_BOT_TOKEN`) | `home-agent-ana` | The bot token of Ana's Olin. The `env` step of `deploy/hermes/install-home-agent-ana.sh` creates the file first. |
+
 ## How it works
 
 - `/usr/local/sbin/secret-drop` (`root:root 0755`) is this folder's `secret-drop`.

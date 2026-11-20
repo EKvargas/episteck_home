@@ -195,6 +195,7 @@ _ITEM_GUIDE = """Each item is an object with these fields:
       unit: one of these exact, case-sensitive tokens. Anything else (grams, G,
         Glass, ...) is rejected with INVALID_ITEM.
         g, ml, serving;
+        serving uses the food's own serving size; when the food has none, the result is INVALID_ITEM and you must send grams_estimate instead.
         small_glass (150 ml), glass (200), large_glass (300), cup (250), can (330),
         tablespoon (15), teaspoon (5);
         piece, slice, plate, portion: these four REQUIRE grams_estimate.

@@ -1,0 +1,10 @@
+# Every 10 minutes: runs ana-media-purge.service (installed by `install-home-agent-ana.sh purge`).
+[Unit]
+Description=Purge Ana's agent media every 10 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=10min
+
+[Install]
+WantedBy=timers.target

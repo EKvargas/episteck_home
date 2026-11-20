@@ -1,0 +1,42 @@
+# Ana's Hermes agent ("Olin" on Telegram): the keys set in its config.yaml.
+# Reference only. The installer (Task 9) applies every key below with Hermes' own config
+# load/save, which keeps the rest of the file untouched. No credential belongs here: the
+# gateway on 9937 mints the delegation server-side, the Kimi key is copied root-to-root
+# on the node and never stored in this repo, and the Telegram access list is set on the node.
+# The toolset restriction (skills + clarify only) is not a config key: the installer does it
+# with `hermes tools`.
+model:
+  default: gpt-5.6-sol
+  provider: openai-codex
+fallback_providers:
+  - provider: kimi-coding
+    model: kimi-k2.6
+stt:
+  enabled: true
+  language: es
+  local:
+    model: base
+timezone: Europe/Berlin
+memory:
+  memory_enabled: false
+  user_profile_enabled: false
+cron:
+  catch_up_missed: false
+  mirror_delivery: true
+display:
+  tool_progress: "off"
+  interim_assistant_messages: false
+mcp_servers:
+  home:
+    url: http://127.0.0.1:9937/gateway/home/
+    enabled: true
+  nutrition:
+    url: http://127.0.0.1:9937/gateway/nutrition/
+    enabled: true
+skills:
+  # Externally owned skills: root-owned, so the agent cannot rewrite its own rules.
+  external_dirs: /etc/episteck/hermes-ana/skills
+platforms:
+  telegram:
+    enabled: true
+group_sessions_per_user: true

@@ -7,7 +7,7 @@
 """
 from __future__ import annotations
 from decimal import Decimal
-from .food_provider import FoodProvider, FoodSearchHit, FoodRecord
+from .food_provider import FoodNotFound, FoodProvider, FoodSearchHit, FoodRecord
 
 
 class ProviderChain(FoodProvider):
@@ -26,7 +26,7 @@ class ProviderChain(FoodProvider):
         for p in self._providers:
             if getattr(p, "name", None) == want:
                 return p
-        raise KeyError(f"no provider for id {food_id!r}")
+        raise FoodNotFound(f"no provider for id {food_id!r}")
 
     def search_food(self, query: str) -> list[FoodSearchHit]:
         results: list[FoodSearchHit] = []

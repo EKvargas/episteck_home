@@ -27,14 +27,15 @@ Details: [KAP-2 consolidation handoff](proposals/KNOWLEDGE_KAP2_CONSOLIDATION_HA
 | Nuremberg node + Tailscale mesh | ✅ operational |
 | infra-agent / home-agent (Hermes) | ✅ operational, independent. `home-agent` answers on Telegram (`@EpisteckHome_bot`, owner allowlist) and runs on `openai-codex` / `gpt-5.6-sol` with no fallback since 2026-11-07 |
 | Mealie v3.26.0 | ✅ operational (loopback + tailnet) |
-| svc-nutrition (API + MCP) | ✅ operational; USDA prod key live; OFF live; food diary (drafts, confirm, day summary, BLS 4.0) merged to main (#136), not deployed |
+| svc-nutrition (API + MCP) | ✅ operational; USDA prod key live; OFF live; food diary (drafts, confirm, day summary, BLS 4.0) merged to main (#136), not deployed; Nutrition release 1 plan 3 (error mapping, read-only BLS, Ana's agent, the Hoy page and the rollout) merged, not deployed (rollout: `docs/runbooks/nutrition-r1-rollout.md`) |
 | Off-box restic backup | ✅ operational + restore validated; Finance SQLite included since 2026-11-07 (tag `finance`) |
 | home.episteck.com Frappe site | ✅ live (frappe+erpnext) |
 | episteck_home app on home.episteck.com | ✅ actor-aware Control Plane API live |
 | Home MCP | ✅ live behind dedicated gateway; direct loopback `:9932` blocked from callers |
 | Home BFF (confidential OAuth client, EU node) | ✅ live; public session app + socket-only mint process |
 | Hermes delegation gateway | ✅ live on `127.0.0.1:9934`; Home, Nutrition and Finance paths |
-| Home Hub (`svc-home-hub`, Nuremberg) | ✅ live; `/app/nutrition` shows the live Nutrition profile panel (F3c). Follow-ups #108/#109 live since 2026-11-07 (image `3b9a3dc`); signed-in banner check pending (owner) |
+| Home Hub (`svc-home-hub`, Nuremberg) | ✅ live; `/app/nutrition` shows the live Nutrition profile panel (F3c). Follow-ups #108/#109 live since 2026-11-07 (image `3b9a3dc`); signed-in banner check pending (owner). The Hoy page (`/app/nutrition/hoy`) merged, not deployed |
+| Ana's agent (`home-agent-ana`, Telegram, gateway `:9937`) | ⏳ merged, not deployed; the owner runs the rollout (`docs/runbooks/nutrition-r1-rollout.md`). The `ubuntu:26.04` gateway harness run is still open |
 | Olin Finance (`svc-finance`: API `:9935`, MCP `:9936`) | ✅ live since 2026-10-13; image `dbe6632` since 2026-11-07. Bank of America via SimpleFIN (2 accounts) since 2026-10-25; Sparkasse and Trade Republic cash via Enable Banking since 2026-11-07. Backed up nightly; sync timer at 06:20 and 18:20 UTC (#117). Live verification B11 passed 2026-11-08 (`FINANCE_I1_VALIDATION.md`) |
 
 ## G1.5 final state — PASS
@@ -98,7 +99,7 @@ Full runtime, provenance, network, rollback, and trust-boundary evidence is in
 | Item | State |
 | --- | --- |
 | Home: `open_runtime_grant`, `close_runtime_grant`, `get_runtime_grant_status` | ✅ merged (PR #75), deployed |
-| BFF: grant table, `/runtime`, mint precedence, `RUNTIME_LEGACY_BINDING` | ✅ merged (PRs #76, #77), deployed; per-person runtimes (home-agent-ana) merged, not deployed |
+| BFF: grant table, `/runtime`, mint precedence, `RUNTIME_LEGACY_BINDING` | ✅ merged (PRs #76, #77), deployed; per-person runtime grants (ADR-0017, `home-agent-ana`) merged, not deployed |
 | Live verification | ✅ 2026-10-13: grant carries Hermes with no browser session; Revoke stops it; re-grant restores it |
 | `RUNTIME_LEGACY_BINDING` | `off` in both units (grant only) |
 

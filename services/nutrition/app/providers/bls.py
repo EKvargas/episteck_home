@@ -8,7 +8,7 @@ import sqlite3
 from contextlib import closing
 from decimal import Decimal
 
-from .food_provider import FoodProvider, FoodRecord, FoodSearchHit
+from .food_provider import FoodNotFound, FoodProvider, FoodRecord, FoodSearchHit
 
 _MAX_HITS = 20
 
@@ -20,7 +20,7 @@ class BlsFoodProvider(FoodProvider):
         self._path = db_path
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._path)
+        conn = sqlite3.connect(f"file:{self._path}?mode=ro", uri=True)
         conn.create_function("cf", 1, lambda s: (s or "").casefold(), deterministic=True)
         return conn
 
@@ -41,14 +41,17 @@ class BlsFoodProvider(FoodProvider):
     def get_food(self, food_id: str) -> FoodRecord:
         prefix, _, code = food_id.partition(":")
         if prefix != "bls" or not code:
-            raise KeyError(f"not a BLS id {food_id!r}")
+            raise FoodNotFound(f"not a BLS id {food_id!r}")
         with closing(self._connect()) as conn:
             food = conn.execute("SELECT name_de, category FROM foods WHERE code = ?", (code,)).fetchone()
             if food is None:
-                raise KeyError(f"unknown food_id {food_id!r}")
+                raise FoodNotFound(f"unknown food_id {food_id!r}")
             nutrients = {k: Decimal(v) for k, v in
                          conn.execute("SELECT key, value FROM nutrients WHERE code = ?", (code,))}
-            version = conn.execute("SELECT value FROM meta WHERE key = 'version'").fetchone()[0]
+            meta = conn.execute("SELECT value FROM meta WHERE key = 'version'").fetchone()
+            if meta is None:
+                raise sqlite3.DatabaseError("BLS metadata missing")
+            version = meta[0]
         return FoodRecord(food_id, food[0], nutrients, self.name, version, category=food[1])
 
     def get_nutrients(self, food_id: str, quantity, unit: str) -> dict[str, Decimal]:

@@ -125,3 +125,55 @@ def test_deps_ignores_bls_when_file_missing_or_synthetic(tmp_path, monkeypatch):
     monkeypatch.setenv("BLS_DB", db)
     monkeypatch.setenv("FOOD_PROVIDER", "synthetic")
     assert isinstance(deps._build_provider(), SyntheticFoodProvider)
+
+
+def _service(tmp_path, provider):
+    from datetime import datetime, timezone
+    from app.diary.service import DiaryService
+    from app.store.diary_sqlite import SqliteDiaryStore
+    from app.store.sqlite_repo import SqliteNutritionRepository
+    from tests.support import AllowAllAuthorizer
+    db = str(tmp_path / "n.sqlite")
+    return DiaryService(SqliteDiaryStore(db), provider, SqliteNutritionRepository(db),
+                        authorizer=AllowAllAuthorizer(),
+                        clock=lambda: datetime(2026, 11, 19, 10, 0, tzinfo=timezone.utc)), db
+
+
+def _bls_item():
+    return {"label": "Apfel", "food_id": "bls:F110100", "amount": 100, "unit": "g", "stated": True}
+
+
+def _drafts(db):
+    with sqlite3.connect(db) as c:
+        try:
+            return c.execute("SELECT COUNT(*) FROM diary_draft").fetchone()[0]
+        except sqlite3.OperationalError:
+            return 0
+
+
+def test_bls_without_metadata_is_provider_unavailable(tmp_path):
+    from app.diary.service import ProviderUnavailable
+    db, _ = _db(tmp_path, row("F110100", "Apfel roh", group="F", energy_kcal="54"))
+    with sqlite3.connect(db) as c:
+        c.execute("DELETE FROM meta")
+    svc, ndb = _service(tmp_path, BlsFoodProvider(db))
+    with pytest.raises(ProviderUnavailable):
+        svc.propose_intake("s", "p1", [_bls_item()], consumed_at="2026-11-19T10:30:00+01:00")
+    assert _drafts(ndb) == 0
+
+
+def test_bls_file_that_is_not_sqlite_is_provider_unavailable(tmp_path):
+    from app.diary.service import ProviderUnavailable
+    bad = tmp_path / "bad.sqlite"
+    bad.write_bytes(b"not a database")
+    svc, ndb = _service(tmp_path, BlsFoodProvider(str(bad)))
+    with pytest.raises(ProviderUnavailable):
+        svc.propose_intake("s", "p1", [_bls_item()], consumed_at="2026-11-19T10:30:00+01:00")
+    assert _drafts(ndb) == 0
+
+
+def test_bls_opens_read_only(tmp_path):
+    db, _ = _db(tmp_path, row("F110100", "Apfel roh", group="F"))
+    p = BlsFoodProvider(db)
+    with pytest.raises(sqlite3.OperationalError):
+        p._connect().execute("CREATE TABLE x(a)")

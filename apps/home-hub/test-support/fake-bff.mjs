@@ -29,7 +29,7 @@ let lastCookieHeader = null;
 const mints = new Map();
 const bootstraps = new Map();
 const runOf = (cookie) => /run([a-z0-9]+)/.exec(cookie)?.[1] ?? 'none';
-const scenarioOf = (cookie) => /nutr-([a-z0-9]+)/.exec(cookie)?.[1] ?? 'absent';
+const scenarioOf = (cookie) => /nutr-([a-z0-9-]+?)-run/.exec(cookie)?.[1] ?? 'absent';
 const bump = (map, run) => map.set(run, (map.get(run) ?? 0) + 1);
 
 createServer((request, response) => {

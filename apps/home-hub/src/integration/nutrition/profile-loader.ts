@@ -1,11 +1,15 @@
 import type { DataEnvelope } from '../state/DataEnvelope.ts';
 import type { SafeUIErrorCode } from '../state/SafeUIErrorCode.ts';
-import { discardBody, FETCH_TIMEOUT_MS, isAbortError } from '../state/fetch-timeout.ts';
+import { discardBody, FETCH_TIMEOUT_MS } from '../state/fetch-timeout.ts';
+import {
+  DELEGATION_HEADER,
+  failedEnvelope,
+  mintNutritionDelegation,
+  PERSON_ID,
+  readJson,
+  readyEnvelope,
+} from './nutrition-delegation.ts';
 import { isAbsentProfileBody, parseProfileWire, type ProfileSummary } from './profile-contract.ts';
-
-const NUTRITION_AUDIENCE = 'svc-nutrition';
-const DELEGATION_HEADER = 'X-Episteck-Delegation';
-const PERSON_ID = /^[A-Za-z0-9-]{1,64}$/;
 
 export interface LoadNutritionProfileOptions {
   mode: 'MOCK' | 'LIVE';
@@ -19,66 +23,9 @@ export interface LoadNutritionProfileOptions {
 }
 
 type Envelope = DataEnvelope<ProfileSummary>;
-type JsonRead = { ok: true; body: unknown } | { ok: false; timedOut: boolean };
 
-function ready(data: ProfileSummary, environment: 'MOCK' | 'LIVE'): Envelope {
-  return { delivery: 'READY', authorization: 'GRANTED', freshness: 'FRESH', environment, data };
-}
-
-function failed(errorCode: SafeUIErrorCode): Envelope {
-  return {
-    delivery: 'ERROR',
-    authorization: errorCode === 'ACCESS_DENIED' ? 'DENIED' : 'INDETERMINATE',
-    freshness: 'UNKNOWN',
-    environment: 'LIVE',
-    errorCode,
-  };
-}
-
-async function readJson(response: Response): Promise<JsonRead> {
-  try {
-    return { ok: true, body: await response.json() };
-  } catch (error) {
-    return { ok: false, timedOut: isAbortError(error) };
-  }
-}
-
-/** One delegation for one Nutrition call. Never retried, logged, or returned. */
-async function mintDelegation(
-  options: LoadNutritionProfileOptions & { bffBaseUrl: string; cookieValue: string },
-): Promise<{ token: string } | { error: SafeUIErrorCode }> {
-  let response: Response;
-  try {
-    response = await options.fetcher(
-      new URL(`/delegation?audience=${NUTRITION_AUDIENCE}`, options.bffBaseUrl).toString(),
-      {
-        method: 'POST',
-        cache: 'no-store',
-        redirect: 'manual',
-        signal: AbortSignal.timeout(options.timeoutMs ?? FETCH_TIMEOUT_MS),
-        headers: { Accept: 'application/json', Cookie: `episteck_home_session=${options.cookieValue}` },
-      },
-    );
-  } catch {
-    return { error: 'SERVICE_UNAVAILABLE' };
-  }
-  if (response.status === 401) {
-    discardBody(response);
-    return { error: 'SESSION_INVALID' };
-  }
-  if (response.status !== 200) {
-    discardBody(response);
-    return { error: 'SERVICE_UNAVAILABLE' };
-  }
-  const parsed = await readJson(response);
-  if (!parsed.ok) return { error: parsed.timedOut ? 'SERVICE_UNAVAILABLE' : 'INVALID_RESPONSE' };
-  if (typeof parsed.body !== 'object' || parsed.body === null) return { error: 'INVALID_RESPONSE' };
-  const { delegation, audience } = parsed.body as Record<string, unknown>;
-  if (typeof delegation !== 'string' || delegation.length === 0 || audience !== NUTRITION_AUDIENCE) {
-    return { error: 'INVALID_RESPONSE' };
-  }
-  return { token: delegation };
-}
+const ready = (data: ProfileSummary, environment: 'MOCK' | 'LIVE'): Envelope => readyEnvelope(data, environment);
+const failed = (errorCode: SafeUIErrorCode): Envelope => failedEnvelope<ProfileSummary>(errorCode);
 
 /** Cancel the unread body, then fail. */
 function reject(response: Response, errorCode: SafeUIErrorCode): Envelope {
@@ -97,8 +44,9 @@ export async function loadNutritionProfile(options: LoadNutritionProfileOptions)
   if (!options.cookieValue) return failed('SESSION_REQUIRED');
   if (!PERSON_ID.test(options.personId)) return failed('INVALID_RESPONSE');
 
-  const minted = await mintDelegation({
-    ...options,
+  const minted = await mintNutritionDelegation({
+    fetcher: options.fetcher,
+    timeoutMs: options.timeoutMs,
     bffBaseUrl: options.bffBaseUrl,
     cookieValue: options.cookieValue,
   });
