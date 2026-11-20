@@ -8,6 +8,7 @@
 # steps:
 #   baseline            read-only: running image, ActiveState, NRestarts, sha256 of each live Quadlet
 #   build <SHA>         PREP: rootless image build from /home/<account>/build/<SHA>; prints the image ID
+#   preview <SHA>       read-only: diff -u of each live Quadlet against the rendered template
 #   apply <SHA>         LIVE: back up, render the repo templates, install, diff, reload, restart
 #   verify              read-only probes (no secret file or token is ever printed)
 #   rollback <backup>   LIVE: restore the backed-up Quadlets byte for byte, reload, restart
@@ -39,7 +40,7 @@ load_component() {
       TEMPLATES="deploy/home-hub/svc-home-hub.container"
       IMAGE=localhost/episteck-home-hub
       BUILD_FILE=apps/home-hub/Dockerfile; BUILD_CTX=apps/home-hub ;;
-    *) echo "usage: <nutrition|home-bff|home-hub> <baseline|build SHA|apply SHA|verify|rollback BACKUP_DIR>" >&2; return 2 ;;
+    *) echo "usage: <nutrition|home-bff|home-hub> <baseline|build SHA|preview SHA|apply SHA|verify|rollback BACKUP_DIR>" >&2; return 2 ;;
   esac
   QDIR=/home/$ACCOUNT/.config/containers/systemd
 }
@@ -69,12 +70,18 @@ state() {
     as_account "$ACCOUNT" systemctl --user show "$u.service" -p ActiveState -p SubState -p NRestarts
   done
 }
-reload_restart() {
-  local u
-  as_account "$ACCOUNT" systemctl --user daemon-reload
-  for u in $UNITS; do as_account "$ACCOUNT" systemctl --user restart "$u.service"; done
+reload_restart() {  # returns 1 if any command failed, but always tries every unit and prints the state
+  local u rc=0
+  as_account "$ACCOUNT" systemctl --user daemon-reload || rc=1
+  for u in $UNITS; do as_account "$ACCOUNT" systemctl --user restart "$u.service" || rc=1; done
   sleep 5
-  state
+  state || true
+  return $rc
+}
+own() { chown "$ACCOUNT:$ACCOUNT" "$1"; }
+rollback_cmd() {
+  echo "== rollback command"
+  echo "ssh -F C:/Users/D064974/.ssh/config episteck-node1 'sudo -n bash -s -- $COMPONENT rollback $1' < deploy/ops/image-rollout.sh"
 }
 
 step_baseline() {
@@ -97,10 +104,28 @@ step_build() {
   as_account "$ACCOUNT" podman image inspect "$IMAGE:$sha" --format '{{.Id}}'
 }
 
+# Read-only: show what apply would change. Run it before every apply and read the diff.
+step_preview() {
+  local sha=${1:-} dir t name tmp
+  need_sha "$sha" || return 2
+  dir=${BUILD_BASE:-/home/$ACCOUNT/build}/$sha
+  [ -d "$dir" ] || { echo "STOP: archive not extracted at $dir (see deploy/ops/README.md)" >&2; return 1; }
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' RETURN
+  for t in $TEMPLATES; do
+    [ -f "$dir/$t" ] || { echo "STOP: $dir/$t missing" >&2; return 1; }
+    name=$(basename "$t")
+    render_quadlet "$dir/$t" "$sha" "$tmp/$name" || return 1
+    echo "== diff -u $name (live vs rendered)"
+    diff -u "$QDIR/$name" "$tmp/$name" || true
+  done
+  return 0
+}
+
 step_apply() {
   local sha=${1:-} dir stamp bk t name live mode tmp
-  need_sha "$sha"
-  dir=/home/$ACCOUNT/build/$sha
+  need_sha "$sha" || return 2
+  dir=${BUILD_BASE:-/home/$ACCOUNT/build}/$sha
   as_account "$ACCOUNT" podman image exists "$IMAGE:$sha" || { echo "STOP: image $IMAGE:$sha not built" >&2; return 1; }
   # render everything first: a bad template stops before any live file is touched
   tmp=$(mktemp -d)
@@ -109,7 +134,7 @@ step_apply() {
     render_quadlet "$dir/$t" "$sha" "$tmp/$(basename "$t")" || { rm -rf "$tmp"; return 1; }
   done
   stamp=$(date -u +%Y%m%dT%H%M%SZ)
-  bk=/var/backups/episteck/$COMPONENT-${sha:0:7}-$stamp
+  bk=${BACKUP_ROOT:-/var/backups/episteck}/$COMPONENT-${sha:0:7}-$stamp
   install -d -m 700 "$bk"
   for t in $TEMPLATES; do
     name=$(basename "$t"); live=$QDIR/$name
@@ -117,19 +142,24 @@ step_apply() {
     [ "$(sha256sum < "$live")" = "$(sha256sum < "$bk/$name")" ] || { echo "STOP: backup of $name differs" >&2; return 1; }
     echo "backup OK: $bk/$name  $(sha256sum < "$bk/$name" | cut -c1-64)"
   done
+  rollback_cmd "$bk"
   for t in $TEMPLATES; do
     name=$(basename "$t"); live=$QDIR/$name
     mode=$(stat -c %a "$live")
-    install -m "$mode" -o "$ACCOUNT" -g "$ACCOUNT" "$tmp/$name" "$live"
+    install -m "$mode" "$tmp/$name" "$live"
+    own "$live"
   done
   rm -rf "$tmp"
   for t in $TEMPLATES; do
     name=$(basename "$t")
     echo "== diff -u $name (backup vs new)"; diff -u "$bk/$name" "$QDIR/$name" || true
   done
-  reload_restart
-  echo "== rollback command"
-  echo "ssh -F C:/Users/D064974/.ssh/config episteck-node1 'sudo -n bash -s -- $COMPONENT rollback $bk' < deploy/ops/image-rollout.sh"
+  if ! reload_restart; then
+    echo "FAIL: a restart failed; state above. Roll back now:"
+    rollback_cmd "$bk"
+    return 1
+  fi
+  rollback_cmd "$bk"
 }
 
 step_verify() {
@@ -199,10 +229,11 @@ step_rollback() {
   done
   for t in $TEMPLATES; do
     name=$(basename "$t")
-    install -m "$(stat -c %a "$QDIR/$name")" -o "$ACCOUNT" -g "$ACCOUNT" "$bk/$name" "$QDIR/$name"
+    install -m "$(stat -c %a "$QDIR/$name")" "$bk/$name" "$QDIR/$name"
+    own "$QDIR/$name"
     sha256sum "$bk/$name" "$QDIR/$name"
   done
-  reload_restart
+  reload_restart || { echo "FAIL: a restart failed; state above" >&2; return 1; }
 }
 
 main() {
@@ -210,6 +241,7 @@ main() {
   case "${2:-}" in
     baseline) step_baseline ;;
     build) step_build "${3:-}" ;;
+    preview) step_preview "${3:-}" ;;
     apply) step_apply "${3:-}" ;;
     verify) step_verify ;;
     rollback) step_rollback "${3:-}" ;;

@@ -82,8 +82,10 @@ def test_apply_refuses_a_short_sha_and_backs_up_before_writing():
     assert "^[0-9a-f]{40}$" in SCRIPT
     apply = SCRIPT[SCRIPT.index("step_apply()"):SCRIPT.index("step_verify()")]
     assert apply.index("need_sha") < apply.index("image exists")
-    assert apply.index("/var/backups/episteck/") < apply.index("install -m")
+    assert apply.index("BACKUP_ROOT") < apply.index("install -m")
     assert apply.index("sha256sum") < apply.index("install -m")
+    assert "/var/backups/episteck" in SCRIPT
+    assert apply.index("rollback_cmd") < apply.index("install -m")
     assert "diff -u" in apply
     assert "reload_restart" in apply and "rollback" in apply
     assert "daemon-reload" in SCRIPT
@@ -112,3 +114,64 @@ def test_never_prints_environment_files():
         assert not re.search(pat, SCRIPT), pat
     assert "printenv BLS_DB" in SCRIPT and "printenv\n" not in SCRIPT
     assert re.search(r"</dev/null", SCRIPT)
+
+
+def _sandbox(tmp_path, restart_fails):
+    sha = "d" * 40
+    qdir = tmp_path / "q"
+    qdir.mkdir()
+    build = tmp_path / "build" / sha
+    for t in ("deploy/home-bff/home-bff-mint.container", "deploy/home-bff/home-bff.container"):
+        (build / t).parent.mkdir(parents=True, exist_ok=True)
+        text = (REPO / t).read_text(encoding="utf-8")
+        (build / t).write_text(text, encoding="utf-8", newline="\n")
+        live = text.replace(PLACEHOLDER, "oldsha") + "NodeOnly=1\n"
+        (qdir / Path(t).name).write_text(live, encoding="utf-8", newline="\n")
+    stub = f"""
+export TMPDIR={tmp_path.as_posix()}
+source {SCRIPT_REL} --lib
+load_component home-bff
+QDIR={qdir.as_posix()}; BUILD_BASE={(tmp_path / "build").as_posix()}; BACKUP_ROOT={(tmp_path / "bk").as_posix()}
+sleep() {{ :; }}; own() {{ :; }}
+install() {{ if [ "$1" = -d ]; then mkdir -p "${{@: -1}}"; else command install "$@"; fi; }}
+as_account() {{
+  shift
+  case "$*" in
+    *"image exists"*) return 0 ;;
+    *"restart home-bff-mint"*) {"return 1" if restart_fails else "return 0"} ;;
+  esac
+  return 0
+}}
+"""
+    return sha, qdir, stub
+
+
+@needs_bash
+def test_apply_prints_rollback_command_when_a_restart_fails(tmp_path):
+    sha, qdir, stub = _sandbox(tmp_path, True)
+    r = run_bash(stub + f"step_apply {sha}")
+    assert r.returncode != 0
+    assert r.stdout.count("rollback /") + r.stdout.count("rollback C:") + r.stdout.count("rollback ") >= 2
+    assert "== rollback command" in r.stdout
+    assert "FAIL: a restart failed" in r.stdout
+
+
+@needs_bash
+def test_apply_success_prints_rollback_command_and_exits_zero(tmp_path):
+    sha, qdir, stub = _sandbox(tmp_path, False)
+    r = run_bash(stub + f"step_apply {sha}")
+    assert r.returncode == 0, r.stderr
+    assert "home-bff rollback" in r.stdout
+    assert f"Image=localhost/episteck-home-bff:{sha}" in (qdir / "home-bff.container").read_text()
+
+
+@needs_bash
+def test_preview_writes_nothing_and_prints_the_diff(tmp_path):
+    sha, qdir, stub = _sandbox(tmp_path, False)
+    before = {p.name: p.read_bytes() for p in qdir.iterdir()}
+    r = run_bash(stub + f"step_preview {sha}")
+    assert r.returncode == 0, r.stderr
+    assert "diff -u home-bff.container" in r.stdout
+    assert "-NodeOnly=1" in r.stdout
+    assert {p.name: p.read_bytes() for p in qdir.iterdir()} == before
+    assert not (tmp_path / "bk").exists()

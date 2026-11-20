@@ -16,6 +16,7 @@
 | --- | --- | --- |
 | `baseline` | read-only | running image, ActiveState, NRestarts, sha256 of each live Quadlet |
 | `build <SHA>` | prep | builds the image from `/home/<account>/build/<SHA>`, prints the image ID |
+| `preview <SHA>` | read-only | renders the templates and prints `diff -u` live vs rendered; writes and restarts nothing |
 | `apply <SHA>` | LIVE | backs up the live Quadlets, installs the rendered templates, prints `diff -u`, restarts, prints the rollback command |
 | `verify` | read-only | health, isolation and BLS probes per component |
 | `rollback <backup-dir>` | LIVE | restores the backed-up Quadlets byte for byte, reloads, restarts |
@@ -41,7 +42,7 @@
      'sudo -n bash -s -- <component> <step> [arg]' < deploy/ops/image-rollout.sh
    ```
 
-   Order: `baseline`, `build <SHA>`, `apply <SHA>`, `verify`.
+   Order: `baseline`, `build <SHA>`, `preview <SHA>`, `apply <SHA>`, `verify`. Run `preview <SHA>` before every `apply` and read the diff: `apply` replaces each Quadlet whole, so a node-only line would be dropped.
 
 ## Verification
 
@@ -52,7 +53,7 @@
 
 ## Rollback
 
-`apply` prints the exact command: `... 'sudo -n bash -s -- <component> rollback <backup-dir>' < deploy/ops/image-rollout.sh`.
+`apply` prints the exact command right after the backups are verified and again at the end (also when a restart fails): `... 'sudo -n bash -s -- <component> rollback <backup-dir>' < deploy/ops/image-rollout.sh`.
 
 ## Tests
 
