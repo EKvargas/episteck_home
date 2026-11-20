@@ -638,8 +638,15 @@ class SessionStore:
             ).fetchone()
         if row is None:
             return None
-        if row["expires_at"] <= _now():
-            self.delete_runtime_grant(runtime_id)
+        now = _now()
+        if row["expires_at"] <= now:
+            # Only while the row is still expired: a fresh claim written since the
+            # read above must survive.
+            with self._mutation() as db:
+                db.execute(
+                    "DELETE FROM runtime_grant WHERE runtime_id = ? AND expires_at <= ?",
+                    (runtime_id, now),
+                )
             return None
         return _grant_from_row(row)
 
