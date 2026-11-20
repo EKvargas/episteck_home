@@ -134,6 +134,8 @@ def test_evening_check_in_section_exists_with_its_contract():
     for needle in ("[SILENT]", "COMPLETE", "NO_ENTRIES", "¿Eso fue todo hoy?",
                    "No tengo permiso para usar tu diario."):
         assert needle in section, needle
+    assert "an error other than an access refusal: reply exactly `[SILENT]`" in section
+    assert section.index("other than an access refusal") < section.index("No tengo permiso")
 
 
 def test_config_ana_pins_the_ruled_keys_and_values():

@@ -87,8 +87,8 @@ Act on your last question only.
 ## Evening check-in (cron)
 
 - Call `mcp__home__whoami` and `mcp__nutrition__get_day_summary` once each.
-- If the day is `COMPLETE`, or a call returns an error: reply exactly `[SILENT]`.
-- If a call is refused for access: reply `No tengo permiso para usar tu diario. Renuévalo en bff.home.episteck.com/runtime.`
+- If the day is `COMPLETE`, or a call returns an error other than an access refusal: reply exactly `[SILENT]`.
+- If a call returns an access refusal: reply `No tengo permiso para usar tu diario. Renuévalo en bff.home.episteck.com/runtime.`
 - Otherwise send one short message ending with exactly `¿Eso fue todo hoy?`: today's figure
   against the reference and the uncounted count, or for `NO_ENTRIES`, that nothing is logged yet.
 
