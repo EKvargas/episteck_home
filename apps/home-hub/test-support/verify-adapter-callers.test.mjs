@@ -9,6 +9,8 @@ import { findViolations } from './verify-adapter-callers.mjs';
 const APP_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const GOOD_SERVER = "import 'server-only';\nimport { loadNutritionProfile } from './profile-loader';\nexport async function readNutritionProfile(context) {\n  assertIssuedContext(context);\n  return cookies();\n}\n";
 const ALLOWED = 'src/app/nutrition/LiveProfilePanel.tsx';
+const GOOD_DIARY_SERVER = "import 'server-only';\nimport { loadDiaryToday } from './diary-loader';\nexport async function readDiaryToday(context) {\n  assertIssuedContext(context);\n  return cookies();\n}\n";
+const DIARY_ALLOWED = 'src/app/nutrition/hoy/LiveTodayPanel.tsx';
 
 async function tree(files) {
   const root = await mkdtemp(join(tmpdir(), 'adapter-callers-'));
@@ -20,7 +22,11 @@ async function tree(files) {
 }
 
 async function violationsFor(files) {
-  const root = await tree({ 'src/integration/nutrition/profile.server.ts': GOOD_SERVER, ...files });
+  const root = await tree({
+    'src/integration/nutrition/profile.server.ts': GOOD_SERVER,
+    'src/integration/nutrition/diary.server.ts': GOOD_DIARY_SERVER,
+    ...files,
+  });
   try { return await findViolations(root); } finally { await rm(root, { recursive: true, force: true }); }
 }
 
@@ -84,4 +90,31 @@ test('a tree without profile.server.ts is a violation, not a vacuous pass', asyn
 
 test('the Home Hub source tree has no adapter-caller violations', async () => {
   assert.deepEqual(await findViolations(APP_ROOT), []);
+});
+
+test('LiveTodayPanel may import diary.server', async () => {
+  assert.deepEqual(await violationsFor({
+    [DIARY_ALLOWED]: "import { readDiaryToday } from '@/integration/nutrition/diary.server';\n",
+  }), []);
+});
+
+test('the guard rejects diary.server imported outside LiveTodayPanel and diary-loader imported outside diary.server', async () => {
+  const a = await violationsFor({ 'src/app/other/page.tsx': "import { readDiaryToday } from '@/integration/nutrition/diary.server';\n" });
+  assert.equal(a.length, 1);
+  assert.match(a[0], /diary\.server/);
+  const b = await violationsFor({ 'src/integration/nutrition/shortcut.ts': "import { loadDiaryToday } from './diary-loader';\n" });
+  assert.equal(b.length, 1);
+  assert.match(b[0], /diary-loader/);
+  const c = await violationsFor({ [DIARY_ALLOWED]: "'use client';\nimport { readDiaryToday } from '@/integration/nutrition/diary.server';\n" });
+  assert.equal(c.length, 1);
+});
+
+test('diary.server.ts must verify the context before reading cookies', async () => {
+  const v = await violationsFor({ 'src/integration/nutrition/diary.server.ts': "export async function readDiaryToday(context) {\n  const c = cookies();\n  assertIssuedContext(context);\n}\n" });
+  assert.equal(v.length, 1);
+});
+
+test('each panel may import only its own adapter', async () => {
+  assert.equal((await violationsFor({ [DIARY_ALLOWED]: "import { readNutritionProfile } from '@/integration/nutrition/profile.server';\n" })).length, 1);
+  assert.equal((await violationsFor({ [ALLOWED]: "import { readDiaryToday } from '@/integration/nutrition/diary.server';\n" })).length, 1);
 });

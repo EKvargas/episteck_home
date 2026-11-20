@@ -18,6 +18,7 @@ const env = {
 const PROBES = [
   ['@/integration/home/bootstrap.server', 'getBootstrapForRequest'],
   ['@/integration/nutrition/profile.server', 'readNutritionProfile'],
+  ['@/integration/nutrition/diary.server', 'readDiaryToday'],
 ];
 
 for (const [modulePath, exportName] of PROBES) {
