@@ -35,6 +35,8 @@ ARCHIVE() {                                                                     
 }
 ```
 
+Part B's operator steps run in one interactive Git Bash window where this helper block is pasted once (paste it again in any new window). Each `!` command in Claude Code starts a fresh shell, so if a step is run as a `!` line, the helper block and the step go in the same `!` command.
+
 `ROLL` and `ANA` pipe the script from the working tree, so the working tree must be at `SHA`. Neither script prints a secret, a token or an `.env` value.
 
 ## Owner inputs
@@ -99,7 +101,7 @@ ARCHIVE() {                                                                     
    curl -s -o /dev/null -w '%{http_code}\n' https://home.episteck.com/api/method/episteck_home.identity.session.get_grantable_runtimes
    ```
 
-   Expected: each baseline shows the running image, `ActiveState=active` and the `NRestarts` to compare against later (note them); `preflight` ends `preflight: all checks passed` and says `home-agent-ana does not exist yet`; `free -m` is noted; the owner's `home-agent` `NRestarts` is printed (record it: B5.7 and B7 compare against it); the Finance job is in the owner's cron list; the last `curl` prints `403` (Home's new code is deployed and refuses an anonymous caller; a `404` means the deploy job has not run yet, so wait). The two `sha256` lines are the rollback reference for the gateway config and the nft boot file.
+   Expected: each baseline shows the running image, `ActiveState=active` and the `NRestarts` to compare against later (note them); `preflight` ends `preflight: all checks passed` and says `home-agent-ana does not exist yet`; `free -m` is noted; the owner's `home-agent` `NRestarts` is printed (record it: B5.8 and B7 compare against it); the Finance job is in the owner's cron list; the last `curl` prints `403` (Home's new code is deployed and refuses an anonymous caller; a `404` means the deploy job has not run yet, so wait). The two `sha256` lines are the rollback reference for the gateway config and the nft boot file.
    - Also confirm: the `ubuntu:26.04` gateway harness has passed (see Prerequisites). It has not yet.
 
 **Verification:** every command above ran, nothing live changed (the baselines match the live Quadlets).
@@ -248,15 +250,16 @@ Follows `deploy/home-bff/README.md`, "Per-person runtimes rollout (ADR-0017)", a
 
    Per unit (`home-bff-mint`, `home-bff`) the diff is `Image=` plus `RUNTIME_IDS=home-agent-primary,home-agent-ana`. `RUNTIME_LEGACY_BINDING` stays `off` (`on` with more than one runtime is a startup error). Anything else stops the window.
 4. Window, in exactly this order. Keep it short.
-   1. `[OPERATOR]` 3.1 Load nft. Port 9937 is then locked to Ana's uid and has no listener yet; the owner's bot keeps working. Never run `nft -f` by hand alone (it does not survive a reboot and appends duplicate rules):
+   1. `[OPERATOR]` 3.1 On the node (`$SSH`): load nft. Port 9937 is then locked to Ana's uid and has no listener yet; the owner's bot keeps working. Never run `nft -f` by hand alone (it does not survive a reboot and appends duplicate rules):
 
       ```bash
+      sudo cp -p /etc/episteck/nft/episteck-gateway.nft /etc/episteck/nft/episteck-gateway.nft.old
       sudo install -m 0644 /etc/episteck/nft/episteck-gateway.nft.new /etc/episteck/nft/episteck-gateway.nft
       sudo systemctl restart episteck-gateway-nft.service
       sudo nft list table inet episteck_gateway
       ```
 
-      Expected: one `tcp dport 9937` accept rule for Ana's uid followed by `tcp dport 9937 drop`; the 9934, `{ 9931, 9932, 9936 }` and 9935 rules as before, each listed once.
+      Expected: one `tcp dport 9937` accept rule for Ana's uid followed by `tcp dport 9937 drop`; the 9934, `{ 9931, 9932, 9936 }` and 9935 rules as before, each listed once. If the listing is not as expected, install `.old` back, restart the unit and compare its sha256 with B0.3's record (`sudo install -m 0644 /etc/episteck/nft/episteck-gateway.nft.old /etc/episteck/nft/episteck-gateway.nft`, `sudo systemctl restart episteck-gateway-nft.service`, `sudo sha256sum /etc/episteck/nft/episteck-gateway.nft`), then stop the window.
    2. `[OPERATOR]` 3.2 Roll out the BFF image:
 
       ```bash
@@ -264,7 +267,7 @@ Follows `deploy/home-bff/README.md`, "Per-person runtimes rollout (ADR-0017)", a
       ```
 
       Keep the backup directory it prints. From here the owner's bot gets 401. That is fail closed.
-   3. `[OPERATOR]` 3.3 Only now, with the `ubuntu:26.04` run passed, install the staged gateway config at the live path, test it as the gateway user and reload (the old one is kept for rollback):
+   3. `[OPERATOR]` 3.3 On the node (`$SSH`): only now, with the `ubuntu:26.04` run passed, install the staged gateway config at the live path, test it as the gateway user and reload (the old one is kept for rollback):
 
       ```bash
       sudo cp -p /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf \
@@ -294,7 +297,7 @@ Follows `deploy/home-bff/README.md`, "Per-person runtimes rollout (ADR-0017)", a
      -H 'X-Runtime-ID: home-agent-primary' http://x/internal/mint
    ```
 
-   Expected: `home-bff verify: PASS` (`/health` 200, the mint answers 401 without `X-Runtime-ID`); the mint call prints `401`; the two cross-port calls time out (curl exit 28, no HTTP status, dropped by nft); Ana's port has no Finance route (`404`); both socket calls fail with permission denied (curl exit 7). Ana's own grant is checked in B5.
+   Expected: `verify: PASS` (`/health` 200, the mint answers 401 without `X-Runtime-ID`); the mint call prints `401`; the two cross-port calls time out (curl exit 28, no HTTP status, dropped by nft); Ana's port has no Finance route (`404`); both socket calls fail with permission denied (curl exit 7). Ana's own grant is checked in B5.
    - The owner sends the owner's own bot one Home question and one Finance question. Both answer.
 
 **Verification:** step 6 passes, and the owner's bot answers Home and Finance.
@@ -315,7 +318,7 @@ Follows `deploy/home-bff/README.md`, "Per-person runtimes rollout (ADR-0017)", a
    ```
 
 2. Restore the old BFF image and Quadlets (`home-bff-mint` first): `ROLL home-bff rollback <BACKUP_DIR>` (the directory `apply` printed).
-3. The new nft table stays, boot file included. It is the old table plus one rule pair that only restricts 9937, which has no listener after step 1. Restoring the old boot file would only reopen 9937 to every local uid.
+3. The new nft table stays, boot file included. It is the old table plus one rule pair that only restricts 9937, which has no listener after step 1. Restoring the old boot file would only reopen 9937 to every local uid. Restore `episteck-gateway.nft.old` only if 3.1's listing was wrong (see 3.1).
 
 ## B4. Hub ("Hoy")
 
@@ -361,7 +364,8 @@ Her bot talks to the owner (allowlisted) and acts as the tester, so no real data
 3. `[OPERATOR INPUT]` Allow the owner's own Telegram account (test phase) and make it the home channel: `ANA telegram <owner Telegram ID>`. It backs up `.env` and `config.yaml` first.
 4. `[OPERATOR INPUT]` `ANA login`. It prints a URL and a device code; the owner opens the URL, signs in with the owner's ChatGPT account and enters the code (credential label `ana-codex`).
 5. `[CLAUDE VERIFY]` `ANA login-check`. Expected: `ana-codex credential` listed, and both `openai-codex / gpt-5.6-sol answered ok` and `kimi-coding / kimi-k2.6 answered ok`.
-6. `[OPERATOR]` Start her gateway, then the media purge, then the check-in a few minutes ahead (Berlin time):
+6. `[OPERATOR]` Grant before her gateway starts (a gateway that starts with no grant retries the MCP connect on a backoff of up to 600 s). In a private browser window, log in as the tester at `bff.home.episteck.com/runtime`. Only `home-agent-ana` is listed; grant it. Then open `/app/nutrition/hoy` as the tester.
+7. `[OPERATOR]` Start her gateway, then the media purge, then the check-in a few minutes ahead (Berlin time):
 
    ```bash
    ANA gateway
@@ -369,9 +373,16 @@ Her bot talks to the owner (allowlisted) and acts as the tester, so no real data
    ANA cron <HH:MM, 5 minutes from now, Europe/Berlin>
    ```
 
-   `gateway` installs with `--no-start-now`, adds the `MemoryMax=900M` drop-in, and only then starts it. Expected: `cgroup memory.max ... (900M)` and `home-agent gateway NRestarts unchanged`. `purge` installs the timer that deletes voice notes and images older than 10 minutes, every 10 minutes. `cron` creates `olin-nutrition-checkin`.
-7. `[CLAUDE VERIFY]` `ANA verify`, then `$SSH 'free -m'`. Expected: `verify: all checks passed`; the owner's `home-agent` NRestarts equals B0.3's; `free -m` noted (compare with B0.3); the 9934 port times out for her user (curl exit 28).
-8. `[OPERATOR]` In a private browser window, log in as the tester at `bff.home.episteck.com/runtime`. Only `home-agent-ana` is listed; grant it. Then open `/app/nutrition/hoy` as the tester.
+   `gateway` installs with `--no-start-now`, adds the `MemoryMax=900M` drop-in, and only then starts it. Expected: `cgroup memory.max ... (900M)` and `home-agent gateway NRestarts unchanged`. `purge` installs the timer that deletes voice notes and images older than 10 minutes, checking every 10 minutes. `cron` creates `olin-nutrition-checkin`.
+8. `[CLAUDE VERIFY]` `ANA verify`, then `$SSH 'free -m'`. Expected: `verify: all checks passed`; the owner's `home-agent` NRestarts equals B0.3's; `free -m` noted (compare with B0.3); the 9934 port times out for her user (curl exit 28).
+   Before the first message, check that her gateway reaches 9937 (count only, never print log lines; they can contain her text). Expected: at least `1`. If it is `0`, wait and count again: Hermes retries the MCP connect with a growing backoff.
+
+   ```bash
+   $SSH 'sudo -n grep -cE "gateway/home/.*200" /home/home-agent-ana/.hermes/logs/agent.log'
+   ```
+
+   Then `[OPERATOR]` the owner sends Ana's bot one message ("hola"). A Telegram bot cannot message someone who never wrote to it, so this must happen before the first check-in time.
+
 9. End to end, on the owner's phone with Ana's bot (spec 7, step A):
    1. A voice note, for example "un vaso de zumo de naranja y dos rebanadas de pan", gives a draft with `~` and `¿Lo guardo? (sí / corrige)`.
    2. `sí` gives `Guardado.` and the free-sugar figure. The tester's Hoy page shows the entry.
@@ -380,7 +391,13 @@ Her bot talks to the owner (allowlisted) and acts as the tester, so no real data
    5. The check-in arrives, ending `¿Eso fue todo hoy?`. `sí` gives `Día cerrado.`, and Hoy shows `Día cerrado`.
    6. A photo gets `Todavía no leo fotos; dime qué es.`
    7. "¿qué tiempo hace?" gets `Solo te ayudo con tu diario de comidas.`
-   8. `[CLAUDE VERIFY]` 21 minutes or more after the voice notes, no audio file older than 21 minutes is left (file count only). A file is deleted once it is older than 10 minutes, by a timer that runs every 10 minutes, so it can live about 21 minutes:
+   8. `[CLAUDE VERIFY]` Positive control, right after the voice note: count the files in her audio cache (count only, as the agent user). Expected: at least `1`, so the next check proves deletion and not a wrong path:
+
+      ```bash
+      $SSH 'sudo -n -u home-agent-ana find /home/home-agent-ana/.hermes/cache/audio -type f 2>/dev/null | wc -l'
+      ```
+
+      Then 21 minutes or more after the voice notes, no audio file older than 21 minutes is left (file count only). A file is deleted once it is older than 10 minutes, by a timer that runs every 10 minutes, so it can live about 21 minutes:
 
       ```bash
       $SSH 'sudo -n find /home/home-agent-ana/.hermes/cache/audio /home/home-agent-ana/.hermes/audio_cache -type f -mmin +21 2>/dev/null | wc -l'
@@ -391,19 +408,19 @@ Her bot talks to the owner (allowlisted) and acts as the tester, so no real data
 
       ```bash
       for c in nutrition nutrition-mcp; do
-        $SSH "cd /; sudo -n -u svc-nutrition env XDG_RUNTIME_DIR=/run/user/\$(id -u svc-nutrition) podman logs --tail 300 $c 2>&1" | grep -ciE 'zumo|naranja|pan|arepa'
+        $SSH "cd /; sudo -n -u svc-nutrition env XDG_RUNTIME_DIR=/run/user/\$(id -u svc-nutrition) podman logs --tail 300 $c 2>&1" | grep -ciwE 'zumo|naranja|pan|arepa'
       done
       ```
    10. The owner's own bot still answers Home and Finance.
 
-   Before 9.5, re-run `ANA cron <HH:MM, a few minutes ahead, Europe/Berlin>`: the 5-minute check-in from step 6 fires during steps 7 to 9.4, before the tester has granted, so it cannot be observed then.
+   Before 9.5, re-run `ANA cron <HH:MM, a few minutes ahead, Europe/Berlin>`: the 5-minute check-in from step 7 fires during steps 8 to 9.4, before the test entries exist, so it cannot show the `¿Eso fue todo hoy?` flow then.
 
-**Verification:** steps 5, 7 and 9, every sub-step.
+**Verification:** steps 5, 8 and 9, every sub-step.
 **Rollback:** `ANA stop` removes the check-in job and stops the gateway and the purge timer; config, `.env`, sessions and the login stay. To restore the config alone: `ANA rollback-config <dir>` (the directory `configure` or `telegram` printed). To undo the secret drop: `$SSH 'sudo -n install -m 0755 -o root -g root /var/backups/episteck/secret-drop.before-ana /usr/local/sbin/secret-drop'`. **Destructive, only if the owner wants it:** `ANA remove yes-delete-home-agent-ana` deletes the user and its home (it saves `.hermes` state, without the Hermes checkout, to a backup first). The Home mapping and grants stay harmless without the agent.
 
 ## B6. Switch to Ana
 
-1. `[OPERATOR]` As the tester, revoke the grant at `/runtime`. Then disable the tester User in the desk.
+1. `[OPERATOR]` As the tester, revoke the grant at `/runtime`. Then disable the tester User in the desk. Ana's agent keeps its gateway running; it has no grant until step 4.
 2. `[OPERATOR]` Map `home-agent-ana` to Ana's user (on Ashburn, as in B2.3):
 
    ```bash
@@ -411,18 +428,26 @@ Her bot talks to the owner (allowlisted) and acts as the tester, so no real data
      '{"home-agent-primary":["<owner user>"],"home-agent-ana":["<Ana email>"]}'
    ```
 
-3. `[OPERATOR INPUT]` Point her bot at Ana and set her check-in time (re-running `cron` replaces the job, so there is never a second one):
+3. With Ana, on her phone (her grant comes first, so the restart in step 4 finds it):
+   - She sets her password from the welcome email.
+   - She logs in at `bff.home.episteck.com`.
+   - She grants at `/runtime`; only `home-agent-ana` is shown.
+   - She bookmarks `/app/nutrition/hoy`.
+4. `[OPERATOR INPUT]` Only after Ana has granted: point her bot at Ana and set her check-in time (`telegram` restarts her gateway; re-running `cron` replaces the job, so there is never a second one):
 
    ```bash
    ANA telegram <Ana Telegram ID>
    ANA cron <Ana's check-in time, HH:MM Berlin>
    ```
 
-4. With Ana, on her phone:
-   - She sets her password from the welcome email.
-   - She logs in at `bff.home.episteck.com`.
-   - She grants at `/runtime`; only `home-agent-ana` is shown.
-   - She bookmarks `/app/nutrition/hoy`.
+   Before her first message, `[CLAUDE VERIFY]` that the restarted gateway reaches 9937 (count only, never print log lines; expected at least `1`, otherwise wait and count again: Hermes retries the MCP connect with a growing backoff):
+
+   ```bash
+   $SSH 'sudo -n grep -cE "gateway/home/.*200" /home/home-agent-ana/.hermes/logs/agent.log'
+   ```
+
+   Then Ana sends the bot one message ("hola") before her first check-in time: a Telegram bot cannot message someone who never wrote to it.
+
 5. Ana writes to her bot: `Estoy embarazada; la fecha probable de parto es el <fecha>`. She confirms. The Hoy heading reads `Hoy · Embarazo, 2.º trimestre`.
 6. `[CLAUDE VERIFY]` Checks:
    - `ANA verify` passes.
@@ -442,7 +467,7 @@ Her bot talks to the owner (allowlisted) and acts as the tester, so no real data
 7. Claude updates the "Olin Household Guide" artifact and writes the rollout evidence to the deploy READMEs and `STATUS.md` in a docs PR.
 
 **Verification:** steps 5 and 6.
-**Rollback:** set `home_runtime_grantees_by_runtime` back to the tester mapping, re-enable the tester User, and run `ANA telegram <owner Telegram ID>`. Or stop her agent: `ANA stop`. Ana keeps her Home user.
+**Rollback:** Ana revokes her grant at `/runtime` (until she does, or the grant expires, her agent keeps acting as her). Then set `home_runtime_grantees_by_runtime` back to the tester mapping, re-enable the tester User, and run `ANA telegram <owner Telegram ID>`. Or stop her agent: `ANA stop`. Ana keeps her Home user.
 
 ## B7. One week with Ana (spec 7)
 

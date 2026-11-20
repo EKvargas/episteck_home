@@ -7,5 +7,5 @@ Description=Purge Ana's agent media older than 10 minutes and cron outputs older
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c '/usr/bin/find %h/.hermes/cache/audio %h/.hermes/audio_cache %h/.hermes/cache/image %h/.hermes/image_cache -ignore_readdir_race -type f -mmin +10 -delete 2>/dev/null || true'
+ExecStart=/bin/sh -c '/usr/bin/find %h/.hermes/cache/audio %h/.hermes/audio_cache %h/.hermes/cache/images %h/.hermes/image_cache -ignore_readdir_race -type f -mmin +10 -delete 2>/dev/null || true'
 ExecStart=/bin/sh -c '/usr/bin/find %h/.hermes/cron/output -ignore_readdir_race -type f -mtime +0 -delete 2>/dev/null || true'

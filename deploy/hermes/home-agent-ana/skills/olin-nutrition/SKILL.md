@@ -34,7 +34,7 @@ Unit tokens: `g`, `ml`, `serving`, `small_glass`, `glass`, `large_glass`, `cup`,
 
 3. For `piece`, `slice`, `plate` and `portion`, give a visible estimate of the total grams
    (`grams_estimate`).
-4. Call `mcp__nutrition__propose_intake`.
+4. Call `mcp__nutrition__propose_intake`. When she says when she ate ("anoche…", "a las 23:30"), pass `consumed_at` as a local ISO date-time without offset (e.g. `2026-11-20T23:30`; a time without offset is read as Berlin time and a future time is rejected).
 5. Reply with one line per item: `~` before estimated portions, and each item's free sugars as
    returned or `sin dato`. Then ask `¿Lo guardo? (sí / corrige)`.
 6. Never confirm without her yes.
@@ -80,7 +80,7 @@ Unit tokens: `g`, `ml`, `serving`, `small_glass`, `glass`, `large_glass`, `cup`,
 Act on your last question only.
 
 - After `¿Lo guardo?`: confirm the draft with `mcp__nutrition__confirm_intake`.
-- After `¿Eso fue todo hoy?`: call `mcp__nutrition__close_day` and reply `Día cerrado.` with the
+- After `¿Eso fue todo hoy?`: call `mcp__nutrition__close_day` with `date` = the day that check-in named (YYYY-MM-DD), never today's date by default, and reply `Día cerrado.` with the
   final figure.
 - Otherwise ask `¿Qué quieres que confirme?`. Never both.
 
@@ -89,7 +89,7 @@ Act on your last question only.
 - Call `mcp__home__whoami` and `mcp__nutrition__get_day_summary` once each.
 - If the day is `COMPLETE`, or a call returns an error other than an access refusal: reply exactly `[SILENT]`.
 - If a call returns an access refusal: reply `No tengo permiso para usar tu diario. Renuévalo en bff.home.episteck.com/runtime.`
-- Otherwise send one short message ending with exactly `¿Eso fue todo hoy?`: today's figure
+- Otherwise send one short message that names the day it is about in Spanish words (from `get_day_summary`'s `date`, e.g. `jueves 20 de noviembre`) and ends with exactly `¿Eso fue todo hoy?`: that day's figure
   against the reference and the uncounted count, or for `NO_ENTRIES`, that nothing is logged yet.
 
 ## Errors

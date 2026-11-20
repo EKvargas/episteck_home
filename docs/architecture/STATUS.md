@@ -27,7 +27,7 @@ Details: [KAP-2 consolidation handoff](proposals/KNOWLEDGE_KAP2_CONSOLIDATION_HA
 | Nuremberg node + Tailscale mesh | ✅ operational |
 | infra-agent / home-agent (Hermes) | ✅ operational, independent. `home-agent` answers on Telegram (`@EpisteckHome_bot`, owner allowlist) and runs on `openai-codex` / `gpt-5.6-sol` with no fallback since 2026-11-07 |
 | Mealie v3.26.0 | ✅ operational (loopback + tailnet) |
-| svc-nutrition (API + MCP) | ✅ operational; USDA prod key live; OFF live; food diary (drafts, confirm, day summary, BLS 4.0) merged to main (#136), not deployed; Nutrition release 1 (diary corrections, day close, check-in support) merged, not deployed (rollout: `docs/runbooks/nutrition-r1-rollout.md`) |
+| svc-nutrition (API + MCP) | ✅ operational; USDA prod key live; OFF live; food diary (drafts, confirm, day summary, BLS 4.0) merged to main (#136), not deployed; Nutrition release 1 plan 3 (error mapping, read-only BLS, Ana's agent, the Hoy page and the rollout) merged, not deployed (rollout: `docs/runbooks/nutrition-r1-rollout.md`) |
 | Off-box restic backup | ✅ operational + restore validated; Finance SQLite included since 2026-11-07 (tag `finance`) |
 | home.episteck.com Frappe site | ✅ live (frappe+erpnext) |
 | episteck_home app on home.episteck.com | ✅ actor-aware Control Plane API live |
@@ -99,7 +99,7 @@ Full runtime, provenance, network, rollback, and trust-boundary evidence is in
 | Item | State |
 | --- | --- |
 | Home: `open_runtime_grant`, `close_runtime_grant`, `get_runtime_grant_status` | ✅ merged (PR #75), deployed |
-| BFF: grant table, `/runtime`, mint precedence, `RUNTIME_LEGACY_BINDING` | ✅ merged (PRs #76, #77), deployed; per-person runtimes (home-agent-ana) merged, not deployed; BFF runtime grant per person (ADR-0017) merged, not deployed |
+| BFF: grant table, `/runtime`, mint precedence, `RUNTIME_LEGACY_BINDING` | ✅ merged (PRs #76, #77), deployed; per-person runtime grants (ADR-0017, `home-agent-ana`) merged, not deployed |
 | Live verification | ✅ 2026-10-13: grant carries Hermes with no browser session; Revoke stops it; re-grant restores it |
 | `RUNTIME_LEGACY_BINDING` | `off` in both units (grant only) |
 

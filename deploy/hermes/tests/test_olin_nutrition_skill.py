@@ -93,6 +93,14 @@ def test_ambiguous_yes_acts_on_the_last_question_only():
     assert "Día cerrado." in section
     assert "¿Qué quieres que confirme?" in section
     assert "Never both" in section
+    assert "`date` = the day that check-in named (YYYY-MM-DD)" in section
+    assert "never today's date by default" in section
+
+
+def test_late_logging_passes_consumed_at():
+    section = _flat(_section(_body(), "## Logging food"))
+    assert "`consumed_at`" in section and "propose_intake" in section
+    assert "local ISO date-time without offset" in section and "2026-11-20T23:30" in section
 
 
 def test_mode_changes_need_her_explicit_confirmation():
@@ -136,6 +144,7 @@ def test_evening_check_in_section_exists_with_its_contract():
         assert needle in section, needle
     assert "an error other than an access refusal: reply exactly `[SILENT]`" in section
     assert section.index("other than an access refusal") < section.index("No tengo permiso")
+    assert "names the day it is about" in section and "`date`" in section
 
 
 def test_config_ana_pins_the_ruled_keys_and_values():

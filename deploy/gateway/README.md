@@ -178,7 +178,7 @@ install it at the boot path in the window (the per-person rollout in
 Expected: Hermes reaches `9934`; the ordinary alternate user is denied there;
 Hermes and `svc-home-bff` are denied direct `9931/9932`; the gateway user reaches
 both direct MCP ports (an MCP HTTP error is acceptable, connection refusal is
-not). On rollback, restore the previous boot file and restart episteck-gateway-nft.service. Never delete the table at runtime (that drops every rule until the next boot) and never flush the global ruleset.
+not). On rollback, restore the previous boot file and restart episteck-gateway-nft.service. Never delete the table at runtime (that drops every rule until the next boot) and never flush the global ruleset. The coordinated rollout in `deploy/home-bff/README.md` keeps the previous boot file as `/etc/episteck/nft/episteck-gateway.nft.old` before installing the new one; after restoring it, compare its sha256 with the recorded one.
 
 ## Hermes shows "Home MCP not connected" (2026-10-10)
 

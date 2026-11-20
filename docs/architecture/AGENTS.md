@@ -33,7 +33,7 @@ Ana's own instance (ADR-0017, Nutrition release 1). Runbook: `docs/runbooks/nutr
 - Model: `openai-codex` / `gpt-5.6-sol` (credential `ana-codex`), fallback `kimi-coding` / `kimi-k2.6`.
 - Memory is **off**: Ana's diary lives in Nutrition, not in Hermes.
 - Telegram: its own bot, with a one-user allowlist (the token arrives through the secret drop, slot `telegram-ana`).
-- Housekeeping: voice notes and images are deleted every 10 minutes (`ana-media-purge.timer`); the
+- Housekeeping: voice notes and images older than 10 minutes are deleted, checked every 10 minutes (`ana-media-purge.timer`); the
   evening check-in is the cron job `olin-nutrition-checkin` (Europe/Berlin).
 
 ## Agent authorization model

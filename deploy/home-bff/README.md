@@ -283,6 +283,7 @@ BFF goes first, the gateway reload last, and the owner's bot is briefly refused 
       the delete-table prefix it appends duplicate rules.
 
       ```bash
+      sudo cp -p /etc/episteck/nft/episteck-gateway.nft /etc/episteck/nft/episteck-gateway.nft.old
       sudo install -m 0644 /etc/episteck/nft/episteck-gateway.nft.new \
         /etc/episteck/nft/episteck-gateway.nft
       sudo systemctl restart episteck-gateway-nft.service
@@ -290,7 +291,9 @@ BFF goes first, the gateway reload last, and the owner's bot is briefly refused 
       ```
 
       Expected: one `tcp dport 9937` accept rule for Ana's uid, followed by `tcp dport 9937 drop`.
-      The 9934, `{ 9931, 9932, 9936 }` and 9935 rules are as before, each listed once.
+      The 9934, `{ 9931, 9932, 9936 }` and 9935 rules are as before, each listed once. If the listing is not as expected, install
+      `episteck-gateway.nft.old` back at the boot path, restart `episteck-gateway-nft.service` and
+      compare its sha256 with the one recorded before the window.
    2. The BFF image is built from the merge SHA **before the window**, after extracting the
       archive on the node (`deploy/ops/README.md`):
       `deploy/ops/image-rollout.sh home-bff build <SHA>`. This step only runs preview, then

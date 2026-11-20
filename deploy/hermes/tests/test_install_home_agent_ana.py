@@ -42,10 +42,11 @@ CRON_PROMPT = (
     "your whole final response is exactly [SILENT].\n"
     "3. If a call returns an access refusal, reply with the permission line from the skill "
     "and stop.\n"
-    "4. Otherwise write ONE short message in Spanish as that section says, ending with "
-    "exactly: ¿Eso fue todo hoy?"
+    "4. Otherwise write ONE short message in Spanish as that section says. It names the day "
+    "it is about in Spanish words (for example jueves 20 de noviembre), taken from the date "
+    "of get_day_summary, and ends with exactly: ¿Eso fue todo hoy?"
 )
-MEDIA_DIRS = ("%h/.hermes/cache/audio", "%h/.hermes/audio_cache", "%h/.hermes/cache/image",
+MEDIA_DIRS = ("%h/.hermes/cache/audio", "%h/.hermes/audio_cache", "%h/.hermes/cache/images",
               "%h/.hermes/image_cache")
 
 
