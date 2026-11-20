@@ -53,3 +53,13 @@ def test_invalid_timeout_fails_fast(settings, monkeypatch):
     monkeypatch.setenv("HOME_API_TIMEOUT_SECONDS", "soon")
     with pytest.raises(ValueError):
         build_service(settings)
+
+
+def test_movements_service_without_home_configuration_ends_in_policy_unavailable(settings):
+    from app.deps import build_movements_service
+    from app.service import PolicyUnavailable
+
+    svc = build_movements_service(settings)
+    for operation in (svc.movements, svc.summary):
+        with pytest.raises(PolicyUnavailable):
+            operation("tok")

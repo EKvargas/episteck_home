@@ -11,7 +11,8 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from . import domain
@@ -44,6 +45,51 @@ class UnsupportedValuation(Exception):
     """A valuation currency other than EUR was requested."""
 
 
+@dataclass(frozen=True)
+class ViewGrant:
+    """What Home allowed: the actor plus every owner whose VIEW was granted."""
+
+    actor: str
+    allowed_owners: frozenset[str]
+
+    def visible(self, accounts: Sequence[domain.Account]) -> tuple[list[domain.Account], int]:
+        """Accounts whose owners are all allowed, and how many were hidden."""
+        shown = [a for a in accounts
+                 if all(o in self.allowed_owners for o in a.owner_person_ids)]
+        return shown, len(accounts) - len(shown)
+
+
+def authorize_view(repo: FinanceRepository, authorizer: Authorizer, workspace_id: str,
+                   delegation: str | None) -> ViewGrant:
+    """One Home request; reads only ``workspace_scope`` and ``is_member``."""
+    if not delegation:
+        raise SessionInvalid()
+    scope = repo.workspace_scope(workspace_id)
+    owners = scope.owner_person_ids if scope else ()
+    requirements = [Requirement(SELF, "VIEW")] + [Requirement(o, "VIEW") for o in owners]
+    if len(requirements) > MAX_REQUIREMENTS:
+        logger.warning("finance authorization not possible: too many owners")
+        raise PolicyUnavailable()
+    try:
+        batch = authorizer.authorize(delegation, requirements)
+    except Exception:
+        logger.warning("finance authorization not granted: authorizer_error")
+        raise PolicyUnavailable() from None
+    if batch.outcome == SESSION_INVALID:
+        raise SessionInvalid()
+    if batch.outcome != ANSWERED:
+        raise PolicyUnavailable()
+    if not batch.is_allowed(SELF):
+        raise AccessDenied()
+    actor = batch.actor_person_id
+    if not actor or not repo.is_member(workspace_id, actor):
+        raise AccessDenied()
+    if scope is None or scope.status is not domain.WorkspaceStatus.ACTIVE:
+        raise FeatureOff()
+    allowed = frozenset({actor} | {o for o in owners if batch.is_allowed(o)})
+    return ViewGrant(actor, allowed)
+
+
 class FinanceService:
     def __init__(self, repo: FinanceRepository, authorizer: Authorizer, workspace_id: str,
                  clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc)) -> None:
@@ -53,38 +99,11 @@ class FinanceService:
         self._clock = clock
 
     def overview(self, delegation: str | None, valuation_currency: str | None = None) -> dict:
-        if not delegation:
-            raise SessionInvalid()
-        scope = self._repo.workspace_scope(self._workspace_id)
-        owners = scope.owner_person_ids if scope else ()
-        requirements = [Requirement(SELF, "VIEW")] + [Requirement(o, "VIEW") for o in owners]
-        if len(requirements) > MAX_REQUIREMENTS:
-            logger.warning("finance authorization not possible: too many owners")
-            raise PolicyUnavailable()
-        try:
-            batch = self._authorizer.authorize(delegation, requirements)
-        except Exception:
-            logger.warning("finance authorization not granted: authorizer_error")
-            raise PolicyUnavailable() from None
-        if batch.outcome == SESSION_INVALID:
-            raise SessionInvalid()
-        if batch.outcome != ANSWERED:
-            raise PolicyUnavailable()
-        if not batch.is_allowed(SELF):
-            raise AccessDenied()
-        actor = batch.actor_person_id
-        if not actor or not self._repo.is_member(self._workspace_id, actor):
-            raise AccessDenied()
-        if scope is None or scope.status is not domain.WorkspaceStatus.ACTIVE:
-            raise FeatureOff()
+        grant = authorize_view(self._repo, self._authorizer, self._workspace_id, delegation)
         if valuation_currency not in (None, "EUR"):
             raise UnsupportedValuation()
-
-        def owner_allowed(owner: str) -> bool:
-            return (owner == actor and batch.is_allowed(SELF)) or batch.is_allowed(owner)
-
         accounts = self._repo.list_accounts(self._workspace_id)
-        visible = [a for a in accounts if all(owner_allowed(o) for o in a.owner_person_ids)]
+        visible, hidden = grant.visible(accounts)
         observations = {}
         for account in visible:
             kind = observation_kind(account)
@@ -95,5 +114,5 @@ class FinanceService:
         rates = self._repo.latest_fx_rates() if valuation_currency else None
         result = compute_overview(visible, observations, connections, self._clock(),
                                   rates, valuation_currency)
-        result["hidden_accounts"] = len(accounts) - len(visible)
+        result["hidden_accounts"] = hidden
         return result

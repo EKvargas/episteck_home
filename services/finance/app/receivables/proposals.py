@@ -16,12 +16,12 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from ..money import format_minor, parse_amount
-from ..store.receivables_repo import IGNORE, MAX_LINE_POSITION
+from ..store.receivables_repo import MAX_LINE_POSITION
 from .commands import (
     CommandRefused, Ctx, answer_state, ignored_movements, item_ref, receipt_rule,
 )
 from .corrections import forgive_parts, forgive_preview
-from .explain import incoming_key, sender_text
+from .explain import answer_rule_target, incoming_key, sender_text
 from .fx import implied_rate, rate_text
 from .ledger import DEBT_CURRENCIES, LineInput, ValidationError, validate_lines
 from .model import (
@@ -566,7 +566,9 @@ def _unignore(ctx: Ctx, conn, token: str, why: str) -> Proposal:
         raise ValidationError("ref")
     root, mv = match
     key = incoming_key(ctx.repo, mv, True) if mv.amount_minor > 0 else None
-    rule = bool(key) and ctx.repo.rule_for(conn, ctx.ws, key) == IGNORE
+    target = answer_rule_target(ctx.repo, conn, ctx.ws, key, None,
+                                ctx.repo.movement_role(conn, root))
+    rule = bool(target) and ctx.repo.rule_for(conn, ctx.ws, key) == target
     return Proposal("reverse", {
         "target": "unignore", "undo_ref": token,
         "role_ids": ctx.repo.live_role_ids_for_movement(conn, root), "rule": rule,

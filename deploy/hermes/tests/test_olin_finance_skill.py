@@ -25,13 +25,16 @@ RUNBOOK_I2 = ROOT / "docs" / "runbooks" / "finance-i2-exchanges.md"
 FINANCE = ROOT / "services" / "finance" / "app"
 MCP_SERVER = FINANCE / "mcp" / "server.py"
 RECEIVABLES_TOOLS = FINANCE / "mcp" / "receivables_tools.py"
+MOVEMENTS_TOOLS = FINANCE / "mcp" / "movements_tools.py"
+RUNBOOK_MOVEMENTS = ROOT / "docs" / "runbooks" / "finance-movements.md"
 GATEWAY_CONF = ROOT / "deploy" / "gateway" / "nginx-mcp-gateway.conf"
 
 SKILLS_ROOT = "/etc/episteck/hermes/skills"
 MCP_URL = "http://127.0.0.1:9934/gateway/finance/"
 # The skill is hidden from the index unless every one of these is connected (spec §8.3).
 REQUIRED_TOOLS = ("finance_overview", "finance_receivables", "finance_record_exchange",
-                  "finance_record_receipt", "finance_resolve_pending", "finance_pending")
+                  "finance_record_receipt", "finance_resolve_pending", "finance_pending",
+                  "finance_movements", "finance_summary")
 MONEY = re.compile(r"(?:[€$£]\s?\d|\d[\d.,]*\s?(?:€|EUR|USD|VES)\b)")
 
 
@@ -107,7 +110,8 @@ def test_requires_tools_lists_the_overview_receivables_and_answer_tools():
 def test_the_required_tools_exist_in_the_finance_mcp_server():
     server = MCP_SERVER.read_text(encoding="utf-8")
     assert re.search(r"@mcp\.tool\s+def finance_overview\(valuation_currency", server)
-    tools = _mcp_tools(MCP_SERVER) + _mcp_tools(RECEIVABLES_TOOLS)
+    tools = (_mcp_tools(MCP_SERVER) + _mcp_tools(RECEIVABLES_TOOLS)
+             + _mcp_tools(MOVEMENTS_TOOLS))
     assert set(REQUIRED_TOOLS) <= set(tools)
     body = _body()
     for tool in tools:  # a new Finance tool must be taught to the skill before it ships
@@ -516,7 +520,7 @@ def test_memory_scan_counts_cron_output_files_and_verify_counts_tools():
     assert not re.search(r"\b(cat|less|head|tail)\b[^\n]*cron/output", text)  # counts only
     verify = _case(text, "verify")
     assert "tail -n 20" not in verify
-    assert "(expect 15)" in verify
+    assert "(expect 17)" in verify
 
 
 # --- fix round 1: the I2 runbook -----------------------------------------------------------
@@ -650,3 +654,93 @@ def test_i2_runbook_counts_old_open_pending_rows_before_go_live_read_only():
     assert "print(" in body and "INSERT" not in body and "amount_minor," not in body
     assert "status='PENDING'" in body and "supersedes_id" in body and "-5 days" in body
     assert "GROUP BY" in body  # per account and direction
+
+
+# --- movements and summary (finance-movements, skill 2.1.0) ---------------------------------
+
+def test_skill_covers_movements_kinds_fields_reasons_and_errors():
+    body = _body()
+    kinds = ("OWN", "OWN_TRANSFER", "EXCHANGE", "PARTNER_FAVOR", "FAMILY", "FAMILY_HELP",
+             "FUND", "UNCLEAR")
+    fields = ("income", "spending", "family_help", "by_person", "net", "excluded", "unclear",
+              "pending_bank", "undescribed", "top_spending", "complete", "incomplete_reasons")
+    reasons = ("in_progress", "history_starts_late", "account_stale", "hidden_accounts",
+               "exchanges_without_split")
+    search = ("stale_pending", "synced_at", "own_part", "help")
+    errors = ("bad_date", "bad_period", "bad_amount", "bad_text", "unknown_account",
+              "bad_direction", "bad_range", "bad_limit")
+    for name in kinds + fields + reasons + search + errors:
+        assert f"`{name}`" in body, name
+    source = (FINANCE / "movements" / "model.py").read_text(encoding="utf-8")
+    assert set(re.findall(r'^    \w+ = "(\w+)"$', source, re.M)) == set(kinds)
+    for tool in ("finance_movements", "finance_summary"):
+        assert _hermes_mcp_name("finance", tool) in body
+
+
+def test_skill_shows_the_partner_option():
+    body = _body()
+    assert "`PARTNER`" in body and "Es del socio (un favor)" in body
+
+
+def test_skill_version_is_2_1_0():
+    front, _ = _split()
+    assert re.search(r"^version: 2\.1\.0$", front, re.M)
+
+
+def test_movements_runbook_has_smoke_timing_census_and_partner_rollback_check():
+    text = RUNBOOK_MOVEMENTS.read_text(encoding="utf-8")
+    for needle in ("register_movements_tools", "MOVEMENTS TOOLS OK", "elapsed=",
+                   "descriptor census", "PARTNER_SIDE", "PREV_SHA"):
+        assert needle in text, needle
+
+
+def test_skill_has_the_spec_5_12_movement_phrases():
+    flat = _flat(_body())
+    for phrase in ("pueden incluir compras de valores", "retenido, probablemente anulado",
+                   "tarjeta", "also by `amount`", "¿llegó el reembolso de …?",
+                   "¿en qué cuenta entró …?", "¿cuánta ayuda le di a la familia este año?",
+                   "sincronizada hasta el", "historial anterior"):
+        assert phrase in flat, phrase
+    assert "puede que no se haya cobrado" not in flat
+
+
+def test_movements_runbook_copies_on_the_host_and_never_rolls_back_the_skill_alone():
+    text = RUNBOOK_MOVEMENTS.read_text(encoding="utf-8")
+    step4 = _section(text, "## 4.")
+    assert "mode=ro" in step4 and "python3 -I" in step4 and "mktemp -d" in step4
+    assert "trap 'rm -rf" in step4 and "/work:z" in step4 and ":/data" not in step4
+    assert "cannot open the database" in step4
+    rollback = _flat(_section(text, "## 7."))
+    assert "HSTEP verify" in rollback and "HSTEP cron" in rollback
+    assert rollback.index("Do not use `HSTEP rollback`") > 0
+    assert "(expect 15)" not in text
+
+
+# --- final review fixes ----------------------------------------------------------------------
+
+def test_skill_confirms_a_partner_favor_answer():
+    flat = _flat(_body())
+    assert "`partner_favor`" in flat and "Anotado: es del socio (un favor)." in flat
+    assert "no de intercambios o favor del socio" in flat or \
+        "no de intercambios o como favor del socio" in flat
+
+
+def test_skill_routes_per_person_help_to_the_summary():
+    flat = _flat(_body())
+    assert "¿cuánto le mandé/ayudé a <alias>?" in flat
+    routing = flat[flat.index("¿cuánto le mandé/ayudé a <alias>?"):][:400]
+    assert "finance_summary" in routing and "`by_person`" in routing
+
+
+def test_skill_rule_3_names_the_summary_totals_and_never_sums_the_excluded_counts():
+    flat = _flat(_body())
+    rule3 = flat[flat.index("3. Copy each `amount`"):flat.index("## Balances: what to pass")]
+    for name in ("subtotals", "income", "spending", "family_help", "by_person", "net"):
+        assert f"`{name}`" in rule3, name
+    assert "never add them up" in flat and "Aparte (no es ingreso ni gasto): cambios <n>" in flat
+
+
+def test_skill_explains_a_null_exchange_ref_and_the_stale_flag():
+    flat = _flat(_body())
+    assert "`ref` is the F<n>, or null" in flat and "same `ref` is the same split" in flat
+    assert "`accounts` `stale`" in flat

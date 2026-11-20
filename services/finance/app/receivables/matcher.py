@@ -24,7 +24,9 @@ from .. import domain
 from ..money import format_minor
 from ..store.receivables_repo import IGNORE, ReceivablesRepository
 from .corrections import reverse
-from .explain import PAYERS, ask_explain_incoming, incoming_key
+from .explain import (
+    PAYERS, active_partners, answer_rule_target, ask_explain_incoming, incoming_key,
+)
 from .funding import (
     ask_link_funding, funding_day, is_history, redo_funding, registered_since, reverse_funding,
     try_link,
@@ -82,9 +84,11 @@ def resolve_explain_incoming(repo: ReceivablesRepository, conn, ws: str, movemen
                              choice: str, queue: PendingQueue, now: datetime, *,
                              description_rules: bool = False, remember: bool = True) -> dict:
     """Applies the owner's answer to EXPLAIN_INCOMING: ``CP:<id>`` records a BANK receipt for
-    that person or fund, ``NOT_EXCHANGE`` the role; both write a payer rule (IGNORE for
-    ``NOT_EXCHANGE``) when the movement has a key (``incoming_key``), so the next payment from
-    that sender needs no answer; ``remember=False`` writes no rule. ``OTHER`` writes nothing:
+    that person or fund, ``NOT_EXCHANGE`` the role, ``PARTNER`` (with exactly one active exchange
+    partner) the role ``PARTNER_SIDE``; all write a payer rule (IGNORE for
+    ``NOT_EXCHANGE``, the partner for ``PARTNER``) when the movement has a key
+    (``incoming_key``), so the next payment from that sender needs no answer;
+    ``remember=False`` writes no rule. ``OTHER`` writes nothing:
     the caller asks which counterparty and answers again with ``CP:<id>``. Refusals write
     nothing; the caller resolves the item."""
     mv = repo.movement_current(conn, ws, movement_id or "")
@@ -102,6 +106,13 @@ def resolve_explain_incoming(repo: ReceivablesRepository, conn, ws: str, movemen
         rule = _remember(repo, conn, ws, key, None)
         repo.insert_movement_role(conn, ws, mv.id, MovementRoleKind.NOT_EXCHANGE)
         return {"ok": True, "status": "not_exchange", "rule": rule}
+    if choice == "PARTNER":
+        partners = active_partners(repo, conn, ws)
+        if len(partners) != 1:
+            return _error("unknown_choice")
+        rule = _remember(repo, conn, ws, key, partners[0].id)
+        repo.insert_movement_role(conn, ws, mv.id, MovementRoleKind.PARTNER_SIDE)
+        return {"ok": True, "status": "partner_favor", "rule": rule}
     if not choice.startswith("CP:"):
         return _error("unknown_choice")
     cp = repo.get_counterparty(conn, ws, choice[3:])
@@ -134,27 +145,33 @@ def reopen_explain(repo: ReceivablesRepository, conn, ws: str, code: str, queue:
     question = None
     if receipt is not None:
         question = reverse(repo, conn, ws, f"R{receipt.number}", _REOPENED, queue, now)["question"]
+    role = repo.movement_role(conn, mv.id)
     for role_id in repo.live_role_ids_for_movement(conn, mv.id):
         repo.revoke(conn, ws, "movement_role", role_id, _REOPENED, now)
     key = incoming_key(repo, mv, True)  # a description rule exists only if rules were on
-    target = receipt.payer_id if receipt else IGNORE
+    target = answer_rule_target(repo, conn, ws, key, receipt.payer_id if receipt else None, role)
     revoked = False
-    while key and repo.rule_for(conn, ws, key) == target:  # the newest rule says so
+    while key and target and repo.rule_for(conn, ws, key) == target:  # the newest rule says so
         repo.revoke(conn, ws, "payer_rule", repo.live_rule_ids(conn, ws, key)[-1], _REOPENED, now)
         revoked = True
     if question is None:
         question = ask_explain_incoming(repo, conn, ws, mv, queue).code
-    also = unhide(repo, conn, ws, key, mv.id, queue, now) if revoked and receipt is None else []
+    hidden = MovementRoleKind.PARTNER_SIDE if role is MovementRoleKind.PARTNER_SIDE \
+        else MovementRoleKind.NOT_EXCHANGE
+    also = unhide(repo, conn, ws, key, mv.id, queue, now, hidden) if revoked and receipt is None \
+        else []
     return {"ok": True, "status": "reopened", "question": question, "also_asked": also}
 
 
 def unhide(repo: ReceivablesRepository, conn, ws: str, key: str, movement_id: str,
-           queue: PendingQueue, now: datetime) -> list[str]:
-    """R36: the NOT_EXCHANGE roles a revoked IGNORE rule wrote on its own (incoming movements
+           queue: PendingQueue, now: datetime,
+           role: MovementRoleKind = MovementRoleKind.NOT_EXCHANGE) -> list[str]:
+    """R36: the ``role`` roles (NOT_EXCHANGE, or PARTNER_SIDE after a partner rule) a revoked
+    rule wrote on its own (incoming movements
     with the same key that never had an EXPLAIN_INCOMING question) are revoked, and each of
     those movements is asked about. Returns the question codes."""
     root, codes = repo.movement_root(conn, movement_id), []
-    for other in repo.roots_with_role(conn, ws, MovementRoleKind.NOT_EXCHANGE):
+    for other in repo.roots_with_role(conn, ws, role):
         mv = repo.movement_current(conn, ws, other)
         if (other == root or mv is None or mv.amount_minor <= 0
                 or incoming_key(repo, mv, True) != key
@@ -356,6 +373,11 @@ class Matcher:
         if target == IGNORE:
             repo.insert_movement_role(conn, ws, mv.id, MovementRoleKind.NOT_EXCHANGE)
             counts["ignored"] += 1
+            return
+        cp = repo.get_counterparty(conn, ws, target) if target is not None else None
+        if cp is not None and cp.kind is CounterpartyKind.EXCHANGE_PARTNER:
+            repo.insert_movement_role(conn, ws, mv.id, MovementRoleKind.PARTNER_SIDE)
+            counts["ignored"] += 1  # the partner's family paid a favor: not the owner's money
             return
         if target is not None:
             try:

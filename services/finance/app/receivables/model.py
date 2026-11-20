@@ -80,6 +80,7 @@ class MovementRoleKind(str, Enum):
     RECEIVABLE_PAYMENT = "RECEIVABLE_PAYMENT"
     FUND_DEPOSIT = "FUND_DEPOSIT"
     NOT_EXCHANGE = "NOT_EXCHANGE"
+    PARTNER_SIDE = "PARTNER_SIDE"  # paid by the exchange partner's family: not the owner's money
 
 
 @dataclass(frozen=True)

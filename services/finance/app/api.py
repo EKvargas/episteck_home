@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import PlainTextResponse
 
+from .movements.service import MovementsService
 from .receivables.service import ReceivablesService
 from .service import (
     AccessDenied, FeatureOff, FinanceService, PolicyUnavailable, SessionInvalid,
@@ -49,7 +50,8 @@ def _authorized(operation: Callable[[], Any]):
 
 
 def create_app(service: FinanceService, callback: CallbackHandler | None = None,
-               receivables: ReceivablesService | None = None) -> FastAPI:
+               receivables: ReceivablesService | None = None,
+               movements: MovementsService | None = None) -> FastAPI:
     app = FastAPI(title="Episteck Finance", version="0.1.0")
 
     @app.get("/health")
@@ -65,6 +67,11 @@ def create_app(service: FinanceService, callback: CallbackHandler | None = None,
         from .api_receivables import create_receivables_router
 
         app.include_router(create_receivables_router(receivables))
+
+    if movements is not None:
+        from .api_movements import create_movements_router
+
+        app.include_router(create_movements_router(movements))
 
     if callback is not None:
         @app.get("/connect/callback", response_class=PlainTextResponse)

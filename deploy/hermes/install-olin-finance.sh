@@ -177,7 +177,7 @@ case "${1:-}" in
     echo "== finance MCP server (tool discovery; 401/502 means no runtime grant for svc-finance)"
     mcp_out="$(as_agent "$HERMES" mcp test finance 2>&1 || true)"
     printf '%s\n' "$mcp_out" | tail -n 40
-    echo "finance tools listed: $(printf '%s\n' "$mcp_out" | grep -oE 'finance_[a-z]+(_[a-z]+)*' | sort -u | wc -l) (expect 15)"
+    echo "finance tools listed: $(printf '%s\n' "$mcp_out" | grep -oE 'finance_[a-z]+(_[a-z]+)*' | sort -u | wc -l) (expect 17)"
     echo "== scheduled delivery (I2): expect one job, '$CRON_SCHEDULE', telegram, skill olin-finance"
     cron_show
     ;;

@@ -194,9 +194,10 @@ def test_private_choices_are_stable_tokens_and_numbers_after_a_refresh_are_refus
         ask_explain_incoming(env.repo, c, WS, mv, env.q)
     assert env.svc.resolve(DELEG, item.code, "1") == {
         "ok": False, "error": "unknown_choice", "reason": "options_changed",
-        "expected": [tokens["Familiar B"], "OTHER", "NOT_EXCHANGE"]}
+        "expected": [tokens["Familiar B"], "OTHER", "NOT_EXCHANGE", "PARTNER"]}
     now = env.svc.pending(DELEG)["items"][0]  # the owner is shown the new options
-    assert [o["label"] for o in now["options"]] == ["Familiar B", "OTHER", "NOT_EXCHANGE"]
+    assert [o["label"] for o in now["options"]] == [
+        "Familiar B", "OTHER", "NOT_EXCHANGE", "Socio"]
     assert now["options"][0]["choice"] == tokens["Familiar B"]  # same value, same token
     assert env.svc.resolve(DELEG, item.code, tokens["Familiar A"])["error"] == "unknown_choice"
     assert count_rows(env.base, "receipt") == 1

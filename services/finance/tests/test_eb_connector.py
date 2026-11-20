@@ -329,3 +329,20 @@ def test_transaction_pages_each_count_against_the_budget(budget):
         _connector(handler, budget).fetch_movements(REF, None)
     assert raised.value.kind is ErrorKind.RATE_LIMITED
     assert len(seen) == 4
+
+
+def test_fetch_movements_logs_field_census_without_values(caplog):
+    full = _tx(transaction_id="c1", remittance_information=["Texto"],
+               creditor={"name": "Comercio"}, bank_transaction_code={"description": "Card"},
+               note="Nota", merchant_category_code="5411", reference_number="R1")
+    bare = _tx(transaction_id="c2", credit_debit_indicator="CRDT", creditor=None,
+               creditor_account=None, remittance_information=None, debtor=None)
+    body = {"transactions": [full, bare], "continuation_key": None}
+    with caplog.at_level("INFO", logger="finance.enable_banking"):
+        movements = _connector(_router(transactions=body)).fetch_movements(REF, None)
+    assert [r.getMessage() for r in caplog.records if "census" in r.getMessage()] == [
+        "enable banking descriptor census: ref=" + REF[:8] + " rows=2 remittance_information=1 "
+        "party_name=1 bank_transaction_code=1 note=1 merchant_category_code=1 reference_number=1"]
+    for value in ("Texto", "Comercio", "Card", "Nota", "5411", "R1"):
+        assert value not in caplog.text
+    assert movements[1].counterparty_name == "" and movements[1].remittance == ""

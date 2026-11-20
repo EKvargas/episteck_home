@@ -25,7 +25,7 @@ VALUATION_BASIS = "ECB euro reference rates (informational, not a transaction ra
 
 FRESH, STALE = "FRESH", "STALE"
 REAUTH_DUE, REAUTH_REQUIRED, NO_DATA = "REAUTH_DUE", "REAUTH_REQUIRED", "NO_DATA"
-_TAINTED = {STALE, REAUTH_REQUIRED}
+TAINTED: frozenset[str] = frozenset({STALE, REAUTH_REQUIRED})
 
 
 @dataclass(frozen=True)
@@ -46,7 +46,7 @@ def observation_kind(account: domain.Account) -> domain.BalanceKind | None:
     return None  # LEDGER-derived balances arrive with the ledger (not I1)
 
 
-def _status(account: domain.Account, obs: domain.BalanceObservation | None,
+def account_status(account: domain.Account, obs: domain.BalanceObservation | None,
             conn: domain.Connection | None, now: datetime) -> str:
     if obs is None or observation_kind(account) is None:
         return NO_DATA
@@ -104,7 +104,7 @@ def compute_overview(
     for account in accounts:
         obs = observations.get(account.id)
         conn = connections.get(account.connection_id or "")
-        status = _status(account, obs, conn, now)
+        status = account_status(account, obs, conn, now)
         has_figure = status != NO_DATA
         row = {
             "id": account.id,
@@ -118,7 +118,7 @@ def compute_overview(
             "observed_at": obs.observed_at.isoformat() if has_figure else None,
             "source": conn.provider.value if conn else account.balance_authority.value,
             "status": status,
-            "stale": status in _TAINTED,
+            "stale": status in TAINTED,
         }
         rows.append(row)
         if not has_figure:
