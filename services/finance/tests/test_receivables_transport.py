@@ -371,3 +371,18 @@ def test_rest_shape_errors_carry_detail_and_pending_hides_for_delivery(tmp_path)
     names = [p.name for route in client.app.routes if getattr(route, "path", "") == "/pending"
              for p in route.dependant.query_params]
     assert "for_delivery" not in names
+
+
+def test_tool_typeddicts_come_from_typing_extensions():
+    # The image runs Python 3.11, where pydantic refuses typing.TypedDict as a tool argument
+    # type and the MCP server never starts. Tests on Python 3.12+ would not notice that.
+    import re
+    from pathlib import Path
+
+    import app
+
+    root = Path(app.__file__).parent
+    offenders = [str(p.relative_to(root)) for p in root.rglob("*.py")
+                 if re.search(r"^from typing import [^\n]*\bTypedDict\b",
+                              p.read_text(encoding="utf-8"), re.M)]
+    assert offenders == []

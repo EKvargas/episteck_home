@@ -177,9 +177,12 @@ $SSH "sudo -n systemctl start episteck-backup.service"
 git archive "$SHA" services/finance deploy/finance \
   | $SSH "cd /; sudo -n -u svc-finance bash -c 'mkdir -p /srv/episteck/services/finance/build/$SHA && tar -x -C /srv/episteck/services/finance/build/$SHA'"
 STEP build "$SHA"
+# Smoke check inside the new image (no network, no data): the MCP tools must register on the
+# image's Python before step 4 restarts anything. The first I2 deploy failed exactly here.
+$SSH "cd /; U=\$(id -u svc-finance); sudo -n -u svc-finance env XDG_RUNTIME_DIR=/run/user/\$U podman run --rm --network none localhost/episteck-finance:$SHA python -c 'from fastmcp import FastMCP; from app.mcp.receivables_tools import register_receivables_tools; register_receivables_tools(FastMCP(\"smoke\"), None); print(\"MCP tools register OK\")'"
 ```
 
-**Verify:** the backup journal says `Finance DB staged`; the last build line lists `localhost/episteck-finance:<SHA>`.
+**Verify:** the backup journal says `Finance DB staged`; the last build line lists `localhost/episteck-finance:<SHA>`; the smoke check prints `MCP tools register OK`. Anything else: stop here, nothing has restarted.
 **Rollback:** as I1 step 3 (remove the build directory and the image); nothing runs on it yet.
 
 ## 3. Description rules `[! OK]`
@@ -205,7 +208,7 @@ SCHEMA_CHECK          # after: "22/22; missing: none", "ok", "start_rowid column
 
 `install` rewrites the three units for `SHA` and restarts `finance-api` and `finance-mcp`; opening the file creates the I2 tables. `finance-sync.timer` is unchanged (about 06:20 and 18:20 UTC); its next run uses the new image, runs the matcher after the providers, and its first matcher run sets the go-live mark.
 
-**Verify:** the I1 checks of step 6 (listeners, `/health`, `401` without a session, both containers running on `SHA`), the second `SCHEMA_CHECK` as above, and after the next sync `SCHEMA_CHECK` again: `cursor rows: 1; rows without a go-live mark: 0`.
+**Verify:** the I1 checks of step 6 (listeners, `/health`, `401` without a session, both containers running on `SHA`), the second `SCHEMA_CHECK` as above, and after the next sync `SCHEMA_CHECK` again: `cursor rows: 1; rows without a go-live mark: 0`. Right after `install`, `/health` may answer `Connection reset` while uvicorn starts: run `STEP verify` again after about 10 seconds. If `127.0.0.1:9936` is still not listed, the MCP is not running: roll back now.
 **Rollback:** before step 6, `STEP install "$PREV_SHA"`; the I2 tables stay, inert (the I1 code never reads them). Once step 6 has installed the new skill, never roll back the image alone: the skill's `requires_tools` lists the receivables tools, and Hermes hides a skill when any of them is missing, so Olin would lose the balances too. Use "Rollback (everything)" below, Hermes first.
 
 ## 5. Your own IBANs `[OWN TERMINAL]`

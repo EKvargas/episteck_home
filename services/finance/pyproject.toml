@@ -14,6 +14,8 @@ dependencies = [
     "httpx>=0.27",
     "fastmcp==4.0.3",
     "pyjwt[crypto]>=2.8",
+    # The MCP tool argument types import TypedDict from it (Python 3.11 image).
+    "typing-extensions>=4.12",
 ]
 
 [build-system]
