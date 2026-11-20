@@ -1,6 +1,7 @@
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -8,8 +9,24 @@ import pytest
 REPO = Path(__file__).resolve().parents[3]
 SCRIPT_REL = "deploy/ops/image-rollout.sh"
 SCRIPT = (REPO / SCRIPT_REL).read_text(encoding="utf-8")
-BASH = shutil.which("bash")
-needs_bash = pytest.mark.skipif(BASH is None, reason="bash not available")
+
+
+def _find_bash():
+    """Git for Windows bash on Windows (System32 bash.exe is WSL and cannot see C:/ paths)."""
+    if sys.platform != "win32":
+        return shutil.which("bash")
+    git = shutil.which("git")
+    if git:
+        root = Path(git).resolve().parent.parent  # <git>/cmd/git.exe or <git>/bin/git.exe
+        for rel in ("bin/bash.exe", "usr/bin/bash.exe"):
+            cand = root / rel
+            if cand.is_file():
+                return str(cand)
+    return None
+
+
+BASH = _find_bash()
+needs_bash = pytest.mark.skipif(BASH is None, reason="no Git for Windows bash (or bash on PATH) found")
 PLACEHOLDER = "REPLACE_WITH_COMMIT_SHA"
 
 
