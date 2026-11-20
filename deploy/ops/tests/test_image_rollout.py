@@ -192,3 +192,22 @@ def test_preview_writes_nothing_and_prints_the_diff(tmp_path):
     assert "-NodeOnly=1" in r.stdout
     assert {p.name: p.read_bytes() for p in qdir.iterdir()} == before
     assert not (tmp_path / "bk").exists()
+
+
+@needs_bash
+def test_preview_through_main_exits_zero_and_leaves_no_tmp(tmp_path):
+    sha, qdir, stub = _sandbox(tmp_path, False)
+    (tmp_path / "t").mkdir()
+    before = {p.name: p.read_bytes() for p in qdir.iterdir()}
+    code = stub.replace("export TMPDIR=" + tmp_path.as_posix(), "export TMPDIR=" + (tmp_path / "t").as_posix())
+    code += f"""
+eval "orig_$(declare -f load_component)"
+load_component() {{ orig_load_component "$@" || return $?; QDIR={qdir.as_posix()}; }}
+main home-bff preview {sha}
+"""
+    r = run_bash(code)
+    assert r.returncode == 0, r.stderr
+    assert "unbound" not in r.stderr
+    assert "-NodeOnly=1" in r.stdout
+    assert {p.name: p.read_bytes() for p in qdir.iterdir()} == before
+    assert list((tmp_path / "t").iterdir()) == []

@@ -106,20 +106,20 @@ step_build() {
 
 # Read-only: show what apply would change. Run it before every apply and read the diff.
 step_preview() {
-  local sha=${1:-} dir t name tmp
+  local sha=${1:-} dir t name tmp rc=0
   need_sha "$sha" || return 2
   dir=${BUILD_BASE:-/home/$ACCOUNT/build}/$sha
   [ -d "$dir" ] || { echo "STOP: archive not extracted at $dir (see deploy/ops/README.md)" >&2; return 1; }
   tmp=$(mktemp -d)
-  trap 'rm -rf "$tmp"' RETURN
   for t in $TEMPLATES; do
-    [ -f "$dir/$t" ] || { echo "STOP: $dir/$t missing" >&2; return 1; }
     name=$(basename "$t")
-    render_quadlet "$dir/$t" "$sha" "$tmp/$name" || return 1
+    if [ ! -f "$dir/$t" ]; then echo "STOP: $dir/$t missing" >&2; rc=1; break; fi
+    render_quadlet "$dir/$t" "$sha" "$tmp/$name" || { rc=1; break; }
     echo "== diff -u $name (live vs rendered)"
     diff -u "$QDIR/$name" "$tmp/$name" || true
   done
-  return 0
+  rm -rf "$tmp"
+  return $rc
 }
 
 step_apply() {
