@@ -1,0 +1,27 @@
+[Unit]
+Description=Episteck Nutrition MCP (Home Agent business tools)
+After=network-online.target
+
+[Container]
+Image=localhost/episteck-nutrition:REPLACE_WITH_COMMIT_SHA
+ContainerName=nutrition-mcp
+PublishPort=127.0.0.1:9931:9931
+Volume=/srv/episteck/services/nutrition/data:/data:Z
+Volume=/srv/episteck/services/nutrition/reference:/reference:ro
+EnvironmentFile=/srv/episteck/services/nutrition/secrets/mealie.env
+EnvironmentFile=/srv/episteck/services/nutrition/secrets/providers.env
+EnvironmentFile=/srv/episteck/services/nutrition/secrets/home-auth.env
+Environment=NUTRITION_DB=/data/nutrition.sqlite
+Environment=BLS_DB=/reference/bls-4.0.sqlite
+Environment=DIARY_TZ=Europe/Berlin
+Environment=MCP_PORT=9931
+AddHost=home.episteck.com:100.71.79.33
+Exec=python -m app.mcp.server
+PodmanArgs=--memory=384m --memory-swap=384m
+
+[Service]
+Restart=always
+TimeoutStartSec=180
+
+[Install]
+WantedBy=default.target
