@@ -221,9 +221,10 @@ Adds `home-agent-ana`, which acts only as Ana and never reaches Finance. Follow 
 - The new gateway config is staged at `/etc/episteck/mcp-gateway/nginx-mcp-gateway.conf.new`
   and passes the gateway-user config test below at that staging path. It is **not** at the live path.
 - The nginx integration tests for 9937 (`deploy/gateway/tests/test_gateway_integration.py`) pass
-  before step 3.3. Run them in the throwaway `ubuntu:26.04` container from "Isolated
-  integration harness" in `deploy/gateway/README.md` (the node's OS; the record there shows the
-  first run). They test the repository file, so run them on the commit you staged from, and
+  before step 3.3. The only run so far (WSL Ubuntu 24.04, nginx 1.24.0) does NOT satisfy this
+  precondition. The throwaway `ubuntu:26.04` container run (the node's OS, nginx 1.28.3) must
+  pass before step 3.3. Its exact command is under "Isolated integration harness", "Run
+  record", in `deploy/gateway/README.md`. They test the repository file, so run them on the commit you staged from, and
   `cmp` must find the staged copy identical.
 - The new nft table is rendered into a boot file staged at
   `/etc/episteck/nft/episteck-gateway.nft.new` and passes `nft --check`. It is not loaded. The
@@ -290,7 +291,10 @@ BFF goes first, the gateway reload last, and the owner's bot is briefly refused 
 
       Expected: one `tcp dport 9937` accept rule for Ana's uid, followed by `tcp dport 9937 drop`.
       The 9934, `{ 9931, 9932, 9936 }` and 9935 rules are as before, each listed once.
-   2. Roll out the BFF image with `deploy/ops/image-rollout.sh`, which updates both Quadlet
+   2. The BFF image is built from the merge SHA **before the window**, after extracting the
+      archive on the node (`deploy/ops/README.md`):
+      `deploy/ops/image-rollout.sh home-bff build <SHA>`. This step only runs preview, then
+      apply. Roll out the BFF image with `deploy/ops/image-rollout.sh`, which updates both Quadlet
       units (`home-bff` and `home-bff-mint`) with `RUNTIME_IDS=home-agent-primary,home-agent-ana`
       and restarts `home-bff-mint` first. Keep `RUNTIME_LEGACY_BINDING=off` (`on` with more than
       one runtime is a startup error). First run the read-only preview and read the diff: the

@@ -91,7 +91,9 @@ useradd -m t && su t -c 'python3 -m pytest -q -p no:cacheprovider \
   deploy/gateway/tests/test_gateway_integration.py deploy/gateway/tests/test_gateway_lifecycle.py'
 ```
 
-The container form to repeat once Docker is up (same tests, the node's OS, run as `t`):
+The `ubuntu:26.04` container run is **still to do before step 3.3** of the per-person rollout.
+The WSL run above does not satisfy that precondition. Command (same tests, the node's OS, run
+as `t`):
 
 ```bash
 docker run --rm -v "$(pwd -W):/src:ro" -w /src ubuntu:26.04 bash -c \

@@ -50,7 +50,7 @@ def test_precondition_names_the_owner_hermes_user_and_the_id_checks():
 
 
 def test_step_3_2_previews_then_applies_the_bff_image():
-    step = flat(SECTION[SECTION.index("2. Roll out the BFF image") : SECTION.index("3. Only now")])
+    step = flat(SECTION[SECTION.index("2. The BFF image is built") : SECTION.index("3. Only now")])
     preview = step.index("deploy/ops/image-rollout.sh home-bff preview <SHA>")
     apply = step.index("deploy/ops/image-rollout.sh home-bff apply <SHA>")
     assert preview < apply
@@ -71,3 +71,21 @@ def test_gateway_readme_nft_rollback_never_deletes_the_table():
         "episteck-gateway-nft.service. Never delete the table at runtime (that drops "
         "every rule until the next boot) and never flush the global ruleset."
     ) in text
+
+
+def test_wsl_run_does_not_satisfy_the_container_precondition():
+    pre = flat(SECTION[: SECTION.index("**Staging commands.**")])
+    assert "does NOT satisfy this precondition" in pre
+    assert "must pass before step 3.3" in pre
+    assert "(WSL Ubuntu 24.04, nginx 1.24.0)" in pre
+    gateway = flat(GATEWAY_README)
+    assert "still to do before step 3.3" in gateway
+    assert "docker run --rm" in gateway and "ubuntu:26.04" in gateway
+
+
+def test_step_3_2_builds_before_the_window_and_only_previews_then_applies():
+    step = flat(SECTION[SECTION.index("2. The BFF image is built") : SECTION.index("3. Only now")])
+    assert "before the window" in step
+    assert "deploy/ops/image-rollout.sh home-bff build <SHA>" in step
+    assert "deploy/ops/README.md" in step
+    assert "only runs preview, then apply" in step
