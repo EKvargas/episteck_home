@@ -1,7 +1,7 @@
 """Tiny local synthetic food provider for Stage E validation only. NO real data."""
 from __future__ import annotations
 from decimal import Decimal
-from .food_provider import FoodProvider, FoodSearchHit, FoodRecord
+from .food_provider import FoodNotFound, FoodProvider, FoodSearchHit, FoodRecord
 
 _DATA = {
     "syn-chicken-breast": ("Chicken breast (synthetic)", {"protein_g": Decimal("31"), "fat_g": Decimal("3.6"), "energy_kcal": Decimal("165")}),
@@ -31,7 +31,7 @@ class SyntheticFoodProvider(FoodProvider):
 
     def get_food(self, food_id: str) -> FoodRecord:
         if food_id not in _DATA:
-            raise KeyError(f"unknown food_id {food_id!r}")
+            raise FoodNotFound(f"unknown food_id {food_id!r}")
         name, nutrients = _DATA[food_id]
         return FoodRecord(food_id, name, nutrients, _SOURCE, _VERSION,
                           category=_CATEGORY.get(food_id))

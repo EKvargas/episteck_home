@@ -586,3 +586,18 @@ def test_validation_errors_name_the_field_only(env):
     with pytest.raises(ValueError) as e:
         svc.propose_intake(S, "p1", [cola(unit="bucket")], consumed_at=T)
     assert getattr(e.value, "field", None) is None
+
+
+def test_unknown_food_id_is_still_invalid_item(env):
+    from app.diary.service import InvalidField
+    with pytest.raises(InvalidField) as e:
+        env[0].propose_intake(S, "p1", [gram_item("syn-does-not-exist", 1)], consumed_at=T)
+    assert e.value.field == "food_id"
+
+
+def test_provider_parse_error_is_provider_unavailable(env):
+    prov = FakeProvider()
+    prov.error = KeyError("fdcId")
+    with pytest.raises(ProviderUnavailable):
+        with_provider(env, prov).propose_intake(S, "p1", [gram_item("f", 1)], consumed_at=T)
+    assert draft_rows(env[3]) == 0

@@ -153,9 +153,31 @@ def test_mcp_exposes_the_eight_diary_tools(api):
     _, server, _ = api
     for name in NEW_TOOLS:
         assert callable(_tool(server, name))
+
+
+ALL_TOOLS = {
+    "get_nutrition_profile", "evaluate_meal", "get_daily_nutrition_gap",
+    "record_planned_meal", "record_actual_intake", "ate_as_planned", "propose_meal_change",
+    "search_recipes", "get_meal_plan", "search_foods", "get_food_detail",
+    "get_pregnancy_profile", "plan_menu",
+    "propose_intake", "confirm_intake", "correct_intake", "void_intake",
+    "get_diary_entry", "get_day_summary", "close_day", "set_nutrition_mode",
+}
+
+
+def test_mcp_lists_exactly_the_21_tools(api):
+    _, server, _ = api
     import asyncio
     tools = asyncio.run(server.mcp.list_tools())
-    assert NEW_TOOLS <= {t.name for t in tools}
+    assert {t.name for t in tools} == ALL_TOOLS
+    assert len(tools) == 21
+
+
+def test_item_guide_says_serving_needs_an_estimate_without_a_source_serving():
+    from app.mcp.server import _ITEM_GUIDE
+    assert "serving" in _ITEM_GUIDE and "grams_estimate" in _ITEM_GUIDE
+    assert ("serving uses the food's own serving size; when the food has none, "
+            "the result is INVALID_ITEM and you must send grams_estimate instead.") in _ITEM_GUIDE
 
 
 def test_mcp_unknown_draft_returns_error_code(api):

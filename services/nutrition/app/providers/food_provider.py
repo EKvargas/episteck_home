@@ -8,6 +8,10 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 
+class FoodNotFound(KeyError):
+    """The provider does not know this food id (a caller mistake, not an outage)."""
+
+
 @dataclass(frozen=True)
 class FoodSearchHit:
     food_id: str
