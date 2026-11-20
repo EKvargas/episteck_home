@@ -67,7 +67,7 @@ test('the allowed importer must not be a client component', async () => {
 });
 
 test('profile.server.ts must verify the context before reading cookies', async () => {
-  const root = await tree({ 'src/integration/nutrition/profile.server.ts': "export async function readNutritionProfile(context) {\n  const c = cookies();\n  assertIssuedContext(context);\n}\n" });
+  const root = await tree({ 'src/integration/nutrition/diary.server.ts': GOOD_DIARY_SERVER, 'src/integration/nutrition/profile.server.ts': "export async function readNutritionProfile(context) {\n  const c = cookies();\n  assertIssuedContext(context);\n}\n" });
   try { assert.equal((await findViolations(root)).length, 1); } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -117,4 +117,22 @@ test('diary.server.ts must verify the context before reading cookies', async () 
 test('each panel may import only its own adapter', async () => {
   assert.equal((await violationsFor({ [DIARY_ALLOWED]: "import { readNutritionProfile } from '@/integration/nutrition/profile.server';\n" })).length, 1);
   assert.equal((await violationsFor({ [ALLOWED]: "import { readDiaryToday } from '@/integration/nutrition/diary.server';\n" })).length, 1);
+});
+
+test('a tree with only profile.server.ts reports diary.server.ts as missing', async () => {
+  const root = await tree({ 'src/integration/nutrition/profile.server.ts': GOOD_SERVER });
+  try {
+    const v = await findViolations(root);
+    assert.equal(v.length, 1);
+    assert.match(v[0], /diary\.server\.ts: not found/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('a tree with only diary.server.ts reports profile.server.ts as missing', async () => {
+  const root = await tree({ 'src/integration/nutrition/diary.server.ts': GOOD_DIARY_SERVER });
+  try {
+    const v = await findViolations(root);
+    assert.equal(v.length, 1);
+    assert.match(v[0], /profile\.server\.ts: not found/);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

@@ -44,7 +44,7 @@ async function walk(directory) {
  */
 export async function findViolations(root) {
   const violations = [];
-  let sawAdapter = false;
+  const seenAdapters = new Set();
   for (const file of await walk(join(root, 'src'))) {
     const rel = relative(root, file).split(sep).join('/');
     if (/\.test\.(ts|tsx)$/.test(rel)) continue;
@@ -52,7 +52,7 @@ export async function findViolations(root) {
 
     const ownPair = PAIRS.find((pair) => pair.adapter === rel);
     if (ownPair) {
-      sawAdapter = true;
+      seenAdapters.add(ownPair.name);
       const guard = text.indexOf('assertIssuedContext(');
       const cookies = text.indexOf('cookies()');
       if (guard === -1 || (cookies !== -1 && cookies < guard)) {
@@ -82,7 +82,14 @@ export async function findViolations(root) {
       violations.push(`${rel}: a route handler must not import the Nutrition integration`);
     }
   }
-  if (!sawAdapter) violations.push(`${PAIRS[0].adapter}: not found, so there is nothing to verify`);
+  if (seenAdapters.size === 0) {
+    // Nothing at all to verify: one violation (the original behaviour), naming the first adapter.
+    violations.push(`${PAIRS[0].adapter}: not found, so there is nothing to verify`);
+  } else {
+    for (const pair of PAIRS) {
+      if (!seenAdapters.has(pair.name)) violations.push(`${pair.adapter}: not found, so there is nothing to verify`);
+    }
+  }
   return violations;
 }
 
