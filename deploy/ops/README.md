@@ -1,6 +1,6 @@
 # Image rollout (Nutrition, Home BFF, Home Hub)
 
-`image-rollout.sh` rolls out an image built from a merge SHA on the Nuremberg node (rootless Podman Quadlets). The owner runs the live steps; an agent never runs this script against the node.
+`image-rollout.sh` rolls out an image built from a merge SHA on the Nuremberg node (rootless Podman Quadlets). The owner runs `apply` and `rollback`. An agent runs only the read-only steps (`baseline`, `preview`, `verify`), and runs `build` only as a `[PREP]` step after the owner says go for it.
 
 ## Components
 

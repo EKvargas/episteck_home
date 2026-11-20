@@ -95,10 +95,11 @@ ARCHIVE() {                                                                     
    $SSH 'free -m'
    $SSH 'sudo -n sha256sum /etc/episteck/mcp-gateway/nginx-mcp-gateway.conf /etc/episteck/nft/episteck-gateway.nft'
    $SSH 'sudo -n runuser -u home-agent -- env HOME=/home/home-agent /home/home-agent/.hermes/hermes-agent/venv/bin/hermes cron list --all'
+   $SSH 'sudo -n runuser -u home-agent -- env XDG_RUNTIME_DIR=/run/user/1003 systemctl --user show hermes-gateway.service -p NRestarts -p LoadState'
    curl -s -o /dev/null -w '%{http_code}\n' https://home.episteck.com/api/method/episteck_home.identity.session.get_grantable_runtimes
    ```
 
-   Expected: each baseline shows the running image, `ActiveState=active` and the `NRestarts` to compare against later (note them); `preflight` ends `preflight: all checks passed` and says `home-agent-ana does not exist yet`; `free -m` is noted; the Finance job is in the owner's cron list; the last `curl` prints `403` (Home's new code is deployed and refuses an anonymous caller; a `404` means the deploy job has not run yet, so wait). The two `sha256` lines are the rollback reference for the gateway config and the nft boot file.
+   Expected: each baseline shows the running image, `ActiveState=active` and the `NRestarts` to compare against later (note them); `preflight` ends `preflight: all checks passed` and says `home-agent-ana does not exist yet`; `free -m` is noted; the owner's `home-agent` `NRestarts` is printed (record it: B5.7 and B7 compare against it); the Finance job is in the owner's cron list; the last `curl` prints `403` (Home's new code is deployed and refuses an anonymous caller; a `404` means the deploy job has not run yet, so wait). The two `sha256` lines are the rollback reference for the gateway config and the nft boot file.
    - Also confirm: the `ubuntu:26.04` gateway harness has passed (see Prerequisites). It has not yet.
 
 **Verification:** every command above ran, nothing live changed (the baselines match the live Quadlets).
@@ -147,7 +148,13 @@ ARCHIVE() {                                                                     
      ```
 
      Expected to include `diary_day`, `diary_draft`, `diary_entry`, `diary_revision`. Their absence is a finding: stop.
-   - Logs carry no food text: `$SSH 'cd /; sudo -n -u svc-nutrition env XDG_RUNTIME_DIR=/run/user/$(id -u svc-nutrition) podman logs --tail 200 nutrition' | grep -ci apfel` prints `0`, and the lines are request lines only.
+   - Logs carry no food text. The image runs uvicorn with `--no-access-log` and `podman logs` writes the container's stderr to its own stderr, so the `2>&1` is inside the remote command. Both containers print `0`:
+
+     ```bash
+     for c in nutrition nutrition-mcp; do
+       $SSH "cd /; sudo -n -u svc-nutrition env XDG_RUNTIME_DIR=/run/user/\$(id -u svc-nutrition) podman logs --tail 300 $c 2>&1" | grep -ci apfel
+     done
+     ```
    - `NRestarts` is `0` for both units (`ROLL nutrition baseline`).
    - The live Hub still answers: `$SSH 'curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:9940/app/nutrition'` prints `307` (anonymous, to the login).
 
@@ -346,11 +353,11 @@ Her bot talks to the owner (allowlisted) and acts as the tester, so no real data
    - `[CLAUDE VERIFY]` The journal line `stored slot=telegram-ana` and the file mode:
 
      ```bash
-     $SSH 'sudo -n journalctl --since "15 min ago" --no-pager | grep "secret-drop: stored slot=telegram-ana"'
+     $SSH 'sudo -n journalctl -t secret-drop --since "15 min ago" --no-pager | grep -c "stored slot=telegram-ana"'
      $SSH 'sudo -n stat -c "%a %U %n" /home/home-agent-ana/.hermes/.env'
      ```
 
-     Expected: the line names the slot and no value; `600 home-agent-ana`.
+     Expected: the count is at least `1` (the line names the slot, never a value); `600 home-agent-ana`.
 3. `[OPERATOR INPUT]` Allow the owner's own Telegram account (test phase) and make it the home channel: `ANA telegram <owner Telegram ID>`. It backs up `.env` and `config.yaml` first.
 4. `[OPERATOR INPUT]` `ANA login`. It prints a URL and a device code; the owner opens the URL, signs in with the owner's ChatGPT account and enters the code (credential label `ana-codex`).
 5. `[CLAUDE VERIFY]` `ANA login-check`. Expected: `ana-codex credential` listed, and both `openai-codex / gpt-5.6-sol answered ok` and `kimi-coding / kimi-k2.6 answered ok`.
@@ -373,18 +380,26 @@ Her bot talks to the owner (allowlisted) and acts as the tester, so no real data
    5. The check-in arrives, ending `¿Eso fue todo hoy?`. `sí` gives `Día cerrado.`, and Hoy shows `Día cerrado`.
    6. A photo gets `Todavía no leo fotos; dime qué es.`
    7. "¿qué tiempo hace?" gets `Solo te ayudo con tu diario de comidas.`
-   8. `[CLAUDE VERIFY]` 15 minutes after the voice notes, the audio cache is empty (file count only):
+   8. `[CLAUDE VERIFY]` 21 minutes or more after the voice notes, no audio file older than 21 minutes is left (file count only). A file is deleted once it is older than 10 minutes, by a timer that runs every 10 minutes, so it can live about 21 minutes:
 
       ```bash
-      $SSH 'sudo -n find /home/home-agent-ana/.hermes/cache/audio /home/home-agent-ana/.hermes/audio_cache -type f 2>/dev/null | wc -l'
+      $SSH 'sudo -n find /home/home-agent-ana/.hermes/cache/audio /home/home-agent-ana/.hermes/audio_cache -type f -mmin +21 2>/dev/null | wc -l'
       ```
 
       Expected: `0`.
-   9. `[CLAUDE VERIFY]` Nutrition logs show ids and statuses only (`podman logs --tail 300 nutrition`, as in B1.4; no food text).
+   9. `[CLAUDE VERIFY]` Neither Nutrition container logs food text. Ana's food goes through `/gateway/nutrition/` to `nutrition-mcp`, so check both (`2>&1` inside the remote command). Expected `0` each:
+
+      ```bash
+      for c in nutrition nutrition-mcp; do
+        $SSH "cd /; sudo -n -u svc-nutrition env XDG_RUNTIME_DIR=/run/user/\$(id -u svc-nutrition) podman logs --tail 300 $c 2>&1" | grep -ciE 'zumo|naranja|pan|arepa'
+      done
+      ```
    10. The owner's own bot still answers Home and Finance.
 
+   Before 9.5, re-run `ANA cron <HH:MM, a few minutes ahead, Europe/Berlin>`: the 5-minute check-in from step 6 fires during steps 7 to 9.4, before the tester has granted, so it cannot be observed then.
+
 **Verification:** steps 5, 7 and 9, every sub-step.
-**Rollback:** `ANA stop` removes the check-in job and stops the gateway and the purge timer; config, `.env`, sessions and the login stay. To restore the config alone: `ANA rollback-config <dir>` (the directory `configure` or `telegram` printed). To undo the secret drop: restore `/var/backups/episteck/secret-drop.before-ana` over `/usr/local/sbin/secret-drop`. **Destructive, only if the owner wants it:** `ANA remove yes-delete-home-agent-ana` deletes the user and its home (it saves `.hermes` state, without the Hermes checkout, to a backup first). The Home mapping and grants stay harmless without the agent.
+**Rollback:** `ANA stop` removes the check-in job and stops the gateway and the purge timer; config, `.env`, sessions and the login stay. To restore the config alone: `ANA rollback-config <dir>` (the directory `configure` or `telegram` printed). To undo the secret drop: `$SSH 'sudo -n install -m 0755 -o root -g root /var/backups/episteck/secret-drop.before-ana /usr/local/sbin/secret-drop'`. **Destructive, only if the owner wants it:** `ANA remove yes-delete-home-agent-ana` deletes the user and its home (it saves `.hermes` state, without the Hermes checkout, to a backup first). The Home mapping and grants stay harmless without the agent.
 
 ## B6. Switch to Ana
 
@@ -414,10 +429,14 @@ Her bot talks to the owner (allowlisted) and acts as the tester, so no real data
    - The BFF holds two live grants with distinct grantor references (counts only):
 
      ```bash
-     $SSH "sudo -n sqlite3 -readonly /srv/episteck/services/home-bff/data/bff.sqlite \"SELECT COUNT(*), COUNT(DISTINCT grantor_ref) FROM runtime_grant WHERE expires_at > strftime('%s','now');\""
+     $SSH 'cd /; sudo -n -u svc-home-bff python3 -I -' <<'PY'
+     import sqlite3
+     c = sqlite3.connect("file:/srv/episteck/services/home-bff/data/bff.sqlite?mode=ro", uri=True)
+     print(c.execute("SELECT COUNT(*), COUNT(DISTINCT grantor_ref) FROM runtime_grant WHERE expires_at > strftime('%s','now')").fetchone())
+     PY
      ```
 
-     Expected: `2|2`.
+     Expected: `(2, 2)` (counts only; never print a reference).
    - The 9937 gateway log shows 200s (`/var/lib/episteck-mcp-gateway`, status counts only).
    - The owner's bot is unaffected (Home and Finance still answer).
 7. Claude updates the "Olin Household Guide" artifact and writes the rollout evidence to the deploy READMEs and `STATUS.md` in a docs PR.
@@ -429,8 +448,8 @@ Her bot talks to the owner (allowlisted) and acts as the tester, so no real data
 
 Each day Claude checks read-only:
 - The check-in was delivered (`ANA verify`, and the journal for `olin-nutrition-checkin`).
-- Ana's agent and `home-agent` show no restarts (`NRestarts` against B0.3).
-- Nutrition logs no errors (`podman logs`, status codes only).
+- Ana's agent and `home-agent` show no restarts (`NRestarts` against the value recorded in B0.3).
+- Nutrition logs no errors (`podman logs ... 2>&1` for both containers, error lines only).
 - Memory headroom (`free -m`, and the gateway's RSS in `ANA verify` against the 900 MB cap).
 
 If her Spanish voice notes come out poorly, compare the `small` Whisper model with `base` on three of her recordings, and measure RAM before switching `stt.local.model` (spec 6.2).
@@ -446,7 +465,7 @@ Collect what annoyed Ana before extending the scope (plan 4).
 - [ ] B2: Skip Authorization on; Ana and the tester are enabled Website Users with one Person each; each runtime has one grantee; the anonymous call is 403.
 - [ ] B3: nft table has the 9937 pair; `ROLL home-bff verify` `PASS`; 9934 and 9937 never cross; no Finance route on 9937; neither agent reaches the mint socket; the owner re-granted and the owner's bot answers Home and Finance.
 - [ ] B4: `ROLL home-hub verify` `PASS`; anonymous `/app/nutrition/hoy` is 307; the phone shows `Sin registros hoy`.
-- [ ] B5: `ANA verify` passes; `login-check` answers `ok` for both providers; memory and the owner's NRestarts unchanged; all ten end-to-end checks pass; the audio cache is empty after 15 minutes; logs carry ids and statuses only.
+- [ ] B5: `ANA verify` passes; `login-check` answers `ok` for both providers; memory and the owner's NRestarts unchanged; all ten end-to-end checks pass; no audio file older than 21 minutes remains; neither Nutrition container logs food text.
 - [ ] B6: the tester's grant is revoked and the User disabled; Ana grants and sees only `home-agent-ana`; the heading reads `Hoy · Embarazo, 2.º trimestre`; two live grants with distinct grantor references; the owner's bot is unaffected.
 - [ ] B7: seven days with a delivered check-in, no restarts, no Nutrition errors and memory headroom; what annoyed Ana is collected.
 - [ ] Rollout evidence written to the deploy READMEs and `STATUS.md` in a docs PR.

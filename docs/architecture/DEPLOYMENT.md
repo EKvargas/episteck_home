@@ -47,7 +47,7 @@ service remains unreachable from the Internet.
   There is no cross-region database connection and no authorization cache.
 
 ## Nutrition reference data and Ana's agent `[Nutrition R1, not deployed]`
-- The BLS 4.0 database (Max Rubner-Institut, CC BY 4.0) is built locally by `services/nutrition/scripts/import_bls.py` (7140 foods), staged with `scp` and installed 0440 for `svc-nutrition`. Both Nutrition containers mount it `:ro`. It is not backed up: it is rebuilt from the source workbook.
+- The BLS 4.0 database (Max Rubner-Institut, CC BY 4.0) is built locally by `services/nutrition/scripts/import_bls.py` (7140 foods), staged with `scp` and installed 0440 for `svc-nutrition`. Both Nutrition containers mount it `:ro`. It needs no backup of its own: it is rebuilt from the source workbook.
 - Ana's Hermes (`home-agent-ana`) reaches Home and Nutrition only through the second gateway listener `127.0.0.1:9937`, whose mint stamps runtime `home-agent-ana`. Rollout order, rollback and checks: `docs/runbooks/nutrition-r1-rollout.md`.
 - Images roll out with `deploy/ops/image-rollout.sh` (preview, apply, verify, rollback) and the owner runs every live step.
 
