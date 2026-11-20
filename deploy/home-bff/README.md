@@ -394,7 +394,8 @@ BFF goes first, the gateway reload last, and the owner's bot is briefly refused 
       run the `rollback <BACKUP_DIR>` command that `apply` printed (`deploy/ops/image-rollout.sh`).
    3. The new nft table stays, boot file included. It is the old table plus one rule pair that
       only restricts 9937, which has no listener after step 6.1; every other rule is unchanged.
-      Restoring the old boot file would only reopen 9937 to every local uid.
+      Restoring the old boot file would only reopen 9937 to every local uid. Restore
+      `episteck-gateway.nft.old` only if 3.1's listing was wrong (see 3.1).
    Never serve 9937 in front of a BFF older than this change.
 
 Person references are keyed on `HOME_DELEGATION_SECRET`: after rotating it, every person must

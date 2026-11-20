@@ -193,5 +193,6 @@ a BFF session and does not help.
 2. Keep that session. Logging out releases the binding.
 3. Re-run Hermes. A new login cannot replace another live owner (`already_bound`).
 
-Verification: `gateway/home/` requests in the Home Agent's `agent.log` change from
-`401 Unauthorized` to `200 OK`.
+Verification: the gateway's own access log (`/var/lib/episteck-mcp-gateway/access.log`) shows
+`gateway/home/` requests changing from 401 to 200 (counts only), or, for Ana's agent, `ANA verify`
+reports "the Home gateway answers HTTP <code>" other than 401. Hermes does not log its HTTP requests.

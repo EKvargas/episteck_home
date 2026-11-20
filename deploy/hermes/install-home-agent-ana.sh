@@ -57,7 +57,7 @@ CRON_PROMPT='Scheduled evening check-in. Follow the skill section "Evening check
 1. Call mcp__home__whoami once, then mcp__nutrition__get_day_summary once with subject_person_id set to its actor_person_id and no date. Call no other tool and save nothing.
 2. If day_status is COMPLETE, or a call returns an error other than an access refusal, your whole final response is exactly [SILENT].
 3. If a call returns an access refusal, reply with the permission line from the skill and stop.
-4. Otherwise write ONE short message in Spanish as that section says. It names the day it is about in Spanish words (for example jueves 20 de noviembre), taken from the date of get_day_summary, and ends with exactly: ¿Eso fue todo hoy?'
+4. Otherwise write ONE short message in Spanish as that section says. It names the day it is about as day and month in Spanish words, no weekday (for example 20 de noviembre), taken from the date of get_day_summary, and ends with exactly: ¿Eso fue todo hoy?'
 
 # Hermes' own config load/save (hermes_cli.config), run as the agent in its venv:
 #   set <yaml>   set every key of <yaml>, keep the rest of config.yaml, print the changed key paths

@@ -365,39 +365,34 @@ Her bot talks to the owner (allowlisted) and acts as the tester, so no real data
 4. `[OPERATOR INPUT]` `ANA login`. It prints a URL and a device code; the owner opens the URL, signs in with the owner's ChatGPT account and enters the code (credential label `ana-codex`).
 5. `[CLAUDE VERIFY]` `ANA login-check`. Expected: `ana-codex credential` listed, and both `openai-codex / gpt-5.6-sol answered ok` and `kimi-coding / kimi-k2.6 answered ok`.
 6. `[OPERATOR]` Grant before her gateway starts (a gateway that starts with no grant retries the MCP connect on a backoff of up to 600 s). In a private browser window, log in as the tester at `bff.home.episteck.com/runtime`. Only `home-agent-ana` is listed; grant it. Then open `/app/nutrition/hoy` as the tester.
-7. `[OPERATOR]` Start her gateway, then the media purge, then the check-in a few minutes ahead (Berlin time):
+7. `[OPERATOR]` Start her gateway, then the media purge, then the check-in well ahead (Berlin time):
 
    ```bash
    ANA gateway
    ANA purge
-   ANA cron <HH:MM, 5 minutes from now, Europe/Berlin>
+   ANA cron <HH:MM, at least an hour from now, Europe/Berlin>
    ```
 
    `gateway` installs with `--no-start-now`, adds the `MemoryMax=900M` drop-in, and only then starts it. Expected: `cgroup memory.max ... (900M)` and `home-agent gateway NRestarts unchanged`. `purge` installs the timer that deletes voice notes and images older than 10 minutes, checking every 10 minutes. `cron` creates `olin-nutrition-checkin`.
 8. `[CLAUDE VERIFY]` `ANA verify`, then `$SSH 'free -m'`. Expected: `verify: all checks passed`; the owner's `home-agent` NRestarts equals B0.3's; `free -m` noted (compare with B0.3); the 9934 port times out for her user (curl exit 28).
-   Before the first message, check that her gateway reaches 9937 (count only, never print log lines; they can contain her text). Expected: at least `1`. If it is `0`, wait and count again: Hermes retries the MCP connect with a growing backoff.
+   Before the first message, read `ANA verify`'s line "the Home gateway answers HTTP <code>" (status only). The tester has granted, so expect anything but `401`. If it is `401`, stop: check the tester's grant at `/runtime` before anyone sends a message.
 
-   ```bash
-   $SSH 'sudo -n grep -cE "gateway/home/.*200" /home/home-agent-ana/.hermes/logs/agent.log'
-   ```
-
-   Then `[OPERATOR]` the owner sends Ana's bot one message ("hola"). A Telegram bot cannot message someone who never wrote to it, so this must happen before the first check-in time.
+   Then `[OPERATOR]` the owner sends Ana's bot one message ("hola"). A Telegram bot cannot message someone who never wrote to it, so this must happen before the check-in time set in step 7.
 
 9. End to end, on the owner's phone with Ana's bot (spec 7, step A):
    1. A voice note, for example "un vaso de zumo de naranja y dos rebanadas de pan", gives a draft with `~` and `¿Lo guardo? (sí / corrige)`.
+      `[CLAUDE VERIFY]` Positive control, right after this voice note, before anything is purged: count the files in her audio cache (count only, as the agent user). Expected: at least `1`, so the deletion check in 9.8 proves deletion and not a wrong path:
+
+      ```bash
+      $SSH 'sudo -n -u home-agent-ana find /home/home-agent-ana/.hermes/cache/audio -type f 2>/dev/null | wc -l'
+      ```
    2. `sí` gives `Guardado.` and the free-sugar figure. The tester's Hoy page shows the entry.
    3. A voice correction, "era un vaso grande", calls `correct_intake`, and Hoy shows the new figure.
    4. "una arepa" is saved as `sin dato`. Hoy shows `1 alimento sin contar`, never `0 g`.
    5. The check-in arrives, ending `¿Eso fue todo hoy?`. `sí` gives `Día cerrado.`, and Hoy shows `Día cerrado`.
    6. A photo gets `Todavía no leo fotos; dime qué es.`
    7. "¿qué tiempo hace?" gets `Solo te ayudo con tu diario de comidas.`
-   8. `[CLAUDE VERIFY]` Positive control, right after the voice note: count the files in her audio cache (count only, as the agent user). Expected: at least `1`, so the next check proves deletion and not a wrong path:
-
-      ```bash
-      $SSH 'sudo -n -u home-agent-ana find /home/home-agent-ana/.hermes/cache/audio -type f 2>/dev/null | wc -l'
-      ```
-
-      Then 21 minutes or more after the voice notes, no audio file older than 21 minutes is left (file count only). A file is deleted once it is older than 10 minutes, by a timer that runs every 10 minutes, so it can live about 21 minutes:
+   8. `[CLAUDE VERIFY]` 21 minutes or more after the voice notes, no audio file older than 21 minutes is left (file count only). A file is deleted once it is older than 10 minutes, by a timer that runs every 10 minutes, so it can live about 21 minutes:
 
       ```bash
       $SSH 'sudo -n find /home/home-agent-ana/.hermes/cache/audio /home/home-agent-ana/.hermes/audio_cache -type f -mmin +21 2>/dev/null | wc -l'
@@ -413,7 +408,7 @@ Her bot talks to the owner (allowlisted) and acts as the tester, so no real data
       ```
    10. The owner's own bot still answers Home and Finance.
 
-   Before 9.5, re-run `ANA cron <HH:MM, a few minutes ahead, Europe/Berlin>`: the 5-minute check-in from step 7 fires during steps 8 to 9.4, before the test entries exist, so it cannot show the `¿Eso fue todo hoy?` flow then.
+   Before 9.5, re-run `ANA cron <HH:MM, a few minutes ahead, Europe/Berlin>`: the check-in from step 7 is set an hour or more ahead so that it cannot fire during steps 8 to 9.4 (a `sí` meant for `¿Lo guardo?` would close the empty test day and make 9.5 silent); the re-run puts it a few minutes after 9.4.
 
 **Verification:** steps 5, 8 and 9, every sub-step.
 **Rollback:** `ANA stop` removes the check-in job and stops the gateway and the purge timer; config, `.env`, sessions and the login stay. To restore the config alone: `ANA rollback-config <dir>` (the directory `configure` or `telegram` printed). To undo the secret drop: `$SSH 'sudo -n install -m 0755 -o root -g root /var/backups/episteck/secret-drop.before-ana /usr/local/sbin/secret-drop'`. **Destructive, only if the owner wants it:** `ANA remove yes-delete-home-agent-ana` deletes the user and its home (it saves `.hermes` state, without the Hermes checkout, to a backup first). The Home mapping and grants stay harmless without the agent.
@@ -440,11 +435,7 @@ Her bot talks to the owner (allowlisted) and acts as the tester, so no real data
    ANA cron <Ana's check-in time, HH:MM Berlin>
    ```
 
-   Before her first message, `[CLAUDE VERIFY]` that the restarted gateway reaches 9937 (count only, never print log lines; expected at least `1`, otherwise wait and count again: Hermes retries the MCP connect with a growing backoff):
-
-   ```bash
-   $SSH 'sudo -n grep -cE "gateway/home/.*200" /home/home-agent-ana/.hermes/logs/agent.log'
-   ```
+   Before her first message, `[CLAUDE VERIFY]` `ANA verify` and read its line "the Home gateway answers HTTP <code>" (status only). Ana has granted, so expect anything but `401`. If it is `401`, stop: check Ana's grant at `/runtime` before she sends a message.
 
    Then Ana sends the bot one message ("hola") before her first check-in time: a Telegram bot cannot message someone who never wrote to it.
 

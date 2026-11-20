@@ -89,7 +89,7 @@ Act on your last question only.
 - Call `mcp__home__whoami` and `mcp__nutrition__get_day_summary` once each.
 - If the day is `COMPLETE`, or a call returns an error other than an access refusal: reply exactly `[SILENT]`.
 - If a call returns an access refusal: reply `No tengo permiso para usar tu diario. Renuévalo en bff.home.episteck.com/runtime.`
-- Otherwise send one short message that names the day it is about in Spanish words (from `get_day_summary`'s `date`, e.g. `jueves 20 de noviembre`) and ends with exactly `¿Eso fue todo hoy?`: that day's figure
+- Otherwise send one short message that names the day it is about as day and month in Spanish words, no weekday (from `get_day_summary`'s `date`, e.g. `20 de noviembre`) and ends with exactly `¿Eso fue todo hoy?`: that day's figure
   against the reference and the uncounted count, or for `NO_ENTRIES`, that nothing is logged yet.
 
 ## Errors

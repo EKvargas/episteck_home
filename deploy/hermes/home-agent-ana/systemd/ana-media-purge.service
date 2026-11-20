@@ -1,5 +1,5 @@
-# Ana's agent (home-agent-ana), user unit: voice notes and images are deleted 10 minutes after
-# they arrive, cron run outputs after a day. Hermes' own pruning waits 24 hours.
+# Ana's agent (home-agent-ana), user unit: voice notes and images older than 10 minutes are
+# deleted, checked every 10 minutes, cron run outputs after a day. Hermes' own pruning waits 24 hours.
 # Installed into ~/.config/systemd/user by `install-home-agent-ana.sh purge`; run by its timer.
 # A cache directory that does not exist yet is not an error.
 [Unit]
