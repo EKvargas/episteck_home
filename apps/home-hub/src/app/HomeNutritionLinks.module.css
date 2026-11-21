@@ -1,0 +1,20 @@
+.links {
+  display: flex;
+}
+
+.links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--olin-text-main);
+  font-weight: 650;
+  text-underline-offset: 0.2em;
+  padding: 0.5rem 0.875rem;
+  border: 1px solid var(--olin-surface-border);
+  border-radius: 0.625rem;
+  background: var(--olin-surface-card);
+  text-decoration: none;
+}
+
+.links a:hover { text-decoration: underline; }
+.links a:focus-visible { outline: 2px solid var(--olin-accent); outline-offset: 3px; }

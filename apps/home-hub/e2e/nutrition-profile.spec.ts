@@ -50,7 +50,8 @@ async function captureHubBodies(page: Page) {
     await route.fulfill({ response, body });
   });
   return async ({ rscContaining }: { rscContaining?: string } = {}) => {
-    // Finish in-flight RSC routes (late prefetches) so they are scanned, not torn down mid-fetch.
+    // Let Next's speculative RSC requests settle before unregistering their intercepted routes.
+    await page.waitForLoadState('networkidle');
     await page.unrouteAll({ behavior: 'wait' });
     const bodies = (await Promise.all(pending)).filter((body) => body.text.length > 0);
     expect(bodies.length, 'captured Hub response bodies').toBeGreaterThan(0);
@@ -118,12 +119,13 @@ test('one document render: layout and panel share one bootstrap, one mint, one N
   expect(calls).toHaveLength(1);
 });
 
-test('other pages never prefetch or render the Nutrition read', async ({ page, request }) => {
+test('hovering Home and Nutrition on a demo route never prefetches private diary or profile data', async ({ page, request }) => {
   const run = newRun();
   await signIn(page, 'present', run);
-  await page.goto('/app');
+  await page.goto('/app/health');
   await expect(page.getByRole('tab', { name: /Synthetic Viewer/ })).toBeVisible();
   await page.getByRole('link', { name: 'Nutrition', exact: true }).first().hover();
+  await page.getByRole('link', { name: 'Today', exact: true }).first().hover();
   await page.waitForLoadState('networkidle');
   await page.waitForTimeout(1_000);
   expect(await observed(request, run)).toEqual({ mints: 0, calls: [] });
@@ -209,7 +211,7 @@ test('a hung Nutrition upstream streams a skeleton, then times out to unavailabl
   test.setTimeout(30_000);
   await signIn(page, 'hang', newRun());
   await page.goto('/app/nutrition', { waitUntil: 'commit' });
-  await expect(page.getByRole('heading', { name: 'Nutrition Hub' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Perfil y objetivos' })).toBeVisible();
   await expect(panel(page)).toContainText('Checking Nutrition profile');
   await expect(panel(page)).toContainText('temporarily unavailable', { timeout: 15_000 });
 });

@@ -1,8 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 
-async function authenticate(page: import('@playwright/test').Page) {
+async function authenticate(page: import('@playwright/test').Page, value = 'authenticated') {
   await page.context().addCookies([{
-    name: 'episteck_home_session', value: 'authenticated',
+    name: 'episteck_home_session', value,
     url: 'http://127.0.0.1:3322', httpOnly: true, sameSite: 'Lax',
   }]);
 }
@@ -14,7 +15,7 @@ test('a care Person survives refresh and child navigation after validation', asy
   await page.reload();
   await expect(page.getByRole('tab', { name: /Synthetic Care Context/ })).toBeVisible();
   await page.getByRole('link', { name: 'Nutrition', exact: true }).first().click();
-  await expect(page).toHaveURL(/\/app\/nutrition\?person=PSN-00007$/);
+  await expect(page).toHaveURL(/\/app\/nutrition\/hoy\?person=PSN-00007$/);
   await expect(page.getByRole('tab', { name: /Synthetic Care Context/ })).toBeVisible();
 });
 
@@ -23,7 +24,7 @@ test('stale and malformed Person URLs canonicalize to self with a notice', async
   for (const person of ['PSN-00999', 'CIR-00001', 'broken']) {
     await page.goto(`/app?person=${person}`);
     await expect(page).toHaveURL(/\/app\/?\?person=PSN-00001$/);
-    await expect(page.getByRole('status')).toContainText('Context changed');
+    await expect(page.getByRole('status').filter({ hasText: 'Context changed' })).toBeVisible();
     await expect(page.getByRole('tab', { name: /Synthetic Viewer/ })).toBeVisible();
   }
 });
@@ -42,7 +43,9 @@ test('two tabs keep separate URL selections and actor query noise has no effect'
 });
 
 test('Person selection changes no browser persistence or BFF session cookie', async ({ page }) => {
-  await authenticate(page);
+  const run = randomUUID().replace(/-/g, '');
+  const session = `authenticated-run${run}`;
+  await authenticate(page, session);
   await page.goto('/app');
   await expect(page.getByRole('tab', { name: /Synthetic Viewer/ })).toBeVisible();
   const before = await page.evaluate(() => ({
@@ -56,8 +59,8 @@ test('Person selection changes no browser persistence or BFF session cookie', as
     cookie: document.cookie,
   }));
   expect(after).toEqual(before);
-  const forwarded = await page.request.get('http://127.0.0.1:3323/__test/last-cookie').then((response) => response.json());
-  expect(forwarded.cookie).toBe('episteck_home_session=authenticated');
+  const forwarded = await page.request.get(`http://127.0.0.1:3323/__test/last-cookie/${run}`).then((response) => response.json());
+  expect(forwarded.cookie).toBe(`episteck_home_session=${session}`);
 });
 
 test('an open tab clears an obsolete subject when focus revalidates its session', async ({ page }) => {
@@ -70,7 +73,7 @@ test('an open tab clears an obsolete subject when focus revalidates its session'
   }]);
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(page).toHaveURL(/\/app\/?\?person=PSN-00001$/);
-  await expect(page.getByRole('status')).toContainText('Context changed');
+  await expect(page.getByRole('status').filter({ hasText: 'Context changed' })).toBeVisible();
   await expect(page.getByRole('tab', { name: /Synthetic Care Context/ })).toHaveCount(0);
 });
 
@@ -86,8 +89,8 @@ test('structured context requests reject actor fields', async ({ page }) => {
 test('a subject is carried through an internal detail link', async ({ page }) => {
   await authenticate(page);
   await page.goto('/app?person=PSN-00007');
-  await page.getByRole('link', { name: 'Review detail' }).click();
-  await expect(page).toHaveURL(/\/app\/memory\?person=PSN-00007$/);
+  await page.getByRole('link', { name: 'Abrir diario de nutrición' }).click();
+  await expect(page).toHaveURL(/\/app\/nutrition\/hoy\?person=PSN-00007$/);
 });
 
 test('browser Back during a pending selection restores the previous Person', async ({ page }) => {
@@ -106,16 +109,23 @@ test('browser Back during a pending selection restores the previous Person', asy
   await expect(page.getByRole('tab', { name: /Synthetic Viewer/ })).toBeVisible();
 });
 
-test('context selection resets prior subject presentation before the new one renders', async ({ page }) => {
-  await authenticate(page);
+test('changing the Home context clears the previous diary and runs the new access check', async ({ page }) => {
+  await page.context().addCookies([{
+    name: 'episteck_home_session', value: 'authenticated-nutr-today-two-subjects-runcontextswapping',
+    url: 'http://127.0.0.1:3322', httpOnly: true, sameSite: 'Lax',
+  }]);
   await page.goto('/app');
-  await page.getByRole('button', { name: 'Dismiss insight' }).click();
-  await expect(page.getByRole('article', { name: 'Olin noticed: New pattern detected' })).toHaveCount(0);
+  const diary = page.getByTestId('today-panel');
+  await expect(diary).toContainText('Azúcares libres: 17 g de 50 g');
   await page.getByRole('tab', { name: /Synthetic Care Context/ }).click();
   await expect(page).toHaveURL(/\/app\/?\?person=PSN-00007$/);
+  await expect(diary).toContainText('No tienes acceso a este diario.');
+  await expect(diary).not.toContainText('17 g');
+  await expect(page.getByText('Telegram usa tu propio diario.')).toBeVisible();
+  await expect(page.getByText('Registrar una comida', { exact: true })).toHaveCount(0);
   await page.getByRole('tab', { name: /Synthetic Viewer/ }).click();
   await expect(page).toHaveURL(/\/app\/?\?person=PSN-00001$/);
-  await expect(page.getByRole('article', { name: 'Olin noticed: New pattern detected' })).toBeVisible();
+  await expect(diary).toContainText('Azúcares libres: 17 g de 50 g');
 });
 
 test('context route rejects unavailable bootstrap without mock identity', async ({ request }) => {

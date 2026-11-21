@@ -81,3 +81,52 @@ test('the Nutrition page links to Hoy and keeps ?person=', async ({ page }) => {
   await page.goto('/app/nutrition?person=PSN-00007');
   await expect(page.getByRole('link', { name: 'Hoy', exact: true })).toHaveAttribute('href', /\/nutrition\/hoy\?person=PSN-00007$/);
 });
+
+test('mobile Home shows the diary summary and opens the live diary in one tap', async ({ page, request }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const run = newRun();
+  await signIn(page, 'today-partial', run);
+  await page.goto('/app');
+  await expect(panel(page)).toContainText('Azúcares libres: 17 g de 50 g');
+  await expect(panel(page)).toContainText('Referencia general');
+  await expect(panel(page)).toContainText('Bundeslebensmittelschlüssel (BLS)');
+  await expect(panel(page).getByText('Zumo', { exact: false })).toHaveCount(0);
+  await expect(page.getByRole('note', { name: 'Demo mock data' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: /Attention & Tasks/ })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Acciones en Telegram' })).toBeVisible();
+  expect((await observed(request, run)).calls).toEqual([{ path: '/diary/PSN-00001/days/today', hasCookie: false }]);
+
+  const nutritionLink = page.getByRole('link', { name: 'Nutrition', exact: true });
+  await nutritionLink.click();
+  await expect(page).toHaveURL(/\/app\/nutrition\/hoy\?person=PSN-00001$/);
+  await expect(nutritionLink).toHaveAttribute('aria-current', 'page');
+  await expect(panel(page)).toContainText('Zumo');
+  await page.getByRole('link', { name: 'Acciones en Telegram' }).click();
+  await expect(page.getByRole('region', { name: 'Acciones en Telegram' })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Acciones en Telegram' })).toBeInViewport();
+  await page.getByRole('link', { name: 'Perfil y objetivos' }).click();
+  await expect(page).toHaveURL(/\/app\/nutrition\?person=PSN-00001$/);
+  await expect(nutritionLink).toHaveAttribute('aria-current', 'location');
+  await expect(page.getByTestId('profile-panel')).toContainText('No nutrition profile');
+});
+
+test('a Telegram action copies a generic prompt without personal diary data', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await signIn(page, 'today-partial', newRun());
+  await page.goto('/app/nutrition/hoy');
+  await page.getByText('Registrar una comida', { exact: true }).click();
+  await page.getByRole('button', { name: 'Copiar ejemplo para registrar una comida' }).click();
+  await expect(page.getByText('Ejemplo copiado.')).toBeVisible();
+  const clipboard = await page.evaluate(() => navigator.clipboard.readText());
+  expect(clipboard).toBe('Hoy a las [hora] comí [alimentos y porciones]. Prepara el borrador y espera a que confirme.');
+});
+
+test('refreshing Hoy fetches the latest diary after a meal changes in Telegram', async ({ page, request }) => {
+  const run = newRun();
+  await signIn(page, 'today-updated', run);
+  await page.goto('/app/nutrition/hoy');
+  await expect(panel(page)).toContainText('Sin registros hoy');
+  await page.getByRole('button', { name: 'Actualizar diario' }).click();
+  await expect(panel(page)).toContainText('Pan integral');
+  expect((await observed(request, run)).mints).toBe(2);
+});

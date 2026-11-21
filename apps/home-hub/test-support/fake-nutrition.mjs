@@ -55,6 +55,9 @@ createServer((request, response) => {
   const json = (status, body) => response.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body));
   if (url.pathname.startsWith('/diary/')) {
     switch (scenario) {
+      case 'today-two-subjects':
+        return match[1] === 'PSN-00001' ? json(200, PARTIAL_DAY) : json(403, { detail: 'ACCESS_DENIED' });
+      case 'today-updated': return json(200, list.length === 1 ? EMPTY_DAY : PARTIAL_DAY);
       case 'today-partial': return json(200, PARTIAL_DAY);
       case 'today-denied': return json(403, { detail: 'ACCESS_DENIED' });
       case 'today-error': return json(500, { detail: 'boom' });

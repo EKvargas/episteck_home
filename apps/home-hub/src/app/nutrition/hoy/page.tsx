@@ -1,6 +1,8 @@
 import { Suspense } from 'react';
 import { TodayPanel } from '@/components/features/nutrition/TodayPanel';
+import { NutritionActions } from '@/components/features/nutrition/NutritionActions';
 import { SERVER_CONFIGURATION } from '@/integration/state/Environment.server';
+import { NutritionHeader } from '../NutritionHeader';
 import styles from '../page.module.css';
 import { LiveTodayPanel } from './LiveTodayPanel';
 
@@ -20,6 +22,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const params = await searchParams;
   return (
     <div className={styles.nutritionCanvas}>
+      <NutritionHeader view="diary" />
       {/* Keyed on the raw selector so one subject's panel can never paint under another's. */}
       <Suspense
         key={JSON.stringify(params.person ?? null)}
@@ -27,6 +30,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       >
         <LiveTodayPanel searchParams={params} />
       </Suspense>
+      <NutritionActions />
     </div>
   );
 }

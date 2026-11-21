@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 
 async function setSessionCookie(page: import('@playwright/test').Page, value: string) {
@@ -30,13 +31,14 @@ test('prototype routes label domain content and make no consent or live-source c
   await setSessionCookie(page, 'authenticated');
   const forbiddenClaims = /Consent Granted|Consent required|Full Clinical Consent|authorized|Active care consent|Care Circle Access|Home Secure|Source: FHIR Gateway|Source: Device Gateway|Provenance: svc-nutrition|Live Status|live data|Active Care Link|Shared with you/i;
   const demoNote = page.getByRole('note', { name: 'Demo mock data' });
-  // In LIVE, /app/nutrition renders the real panel (the fake answers "no profile"): no demo note, same claims rule.
   async function settled(path: string, subject: string) {
-    if (path === '/app/nutrition') {
+    if (path === '/app') {
+      await expect(page.getByTestId('today-panel')).toContainText('Sin registros hoy');
+      await expect(demoNote).toHaveCount(0);
+    } else if (path === '/app/nutrition') {
       await expect(page.getByTestId('profile-panel')).toContainText(`No nutrition profile for ${subject}`);
       await expect(page.getByText('svc-nutrition', { exact: true })).toHaveCount(0);
-    }
-    else await expect(demoNote).toBeVisible();
+    } else await expect(demoNote).toBeVisible();
   }
   for (const path of [
     '/app', '/app/health', '/app/nutrition', '/app/nutrition/pregnancy',
@@ -61,8 +63,8 @@ test('prototype routes label domain content and make no consent or live-source c
 
 test('mock assistant actions do not claim live device or domain writes', async ({ page }) => {
   await setSessionCookie(page, 'authenticated');
-  await page.goto('/app');
-  await page.getByRole('button', { name: /Ask Olin/ }).click();
+  await page.goto('/app/kiosk');
+  await page.getByRole('button', { name: 'Ask Olin voice assistant' }).click();
   const dialog = page.getByRole('dialog', { name: 'Ask Olin' });
   await expect(dialog.getByText('Mock assistant conversation')).toBeVisible();
   await dialog.getByRole('button', { name: 'Lock front door' }).click();
@@ -147,13 +149,15 @@ test('serialized client bootstrap props contain no upstream secrets or raw respo
 });
 
 test('only the Hub session cookie reaches the BFF', async ({ page, request }) => {
-  await setSessionCookie(page, 'authenticated');
+  const run = randomUUID().replace(/-/g, '');
+  const session = `authenticated-run${run}`;
+  await setSessionCookie(page, session);
   await page.context().addCookies([{
     name: 'unrelated', value: 'do-not-forward', url: 'http://127.0.0.1:3322',
   }]);
   await page.goto('/app');
-  const forwarded = await request.get('http://127.0.0.1:3323/__test/last-cookie').then((r) => r.json());
-  expect(forwarded.cookie).toBe('episteck_home_session=authenticated');
+  const forwarded = await request.get(`http://127.0.0.1:3323/__test/last-cookie/${run}`).then((r) => r.json());
+  expect(forwarded.cookie).toBe(`episteck_home_session=${session}`);
 });
 
 test('401 redirects once to the origin root /login', async ({ request }) => {

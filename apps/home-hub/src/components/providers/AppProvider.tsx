@@ -8,6 +8,7 @@ import { ServiceUnavailableBoundary } from '@/integration/components/boundaries/
 
 interface AppContextState {
   viewer: Viewer;
+  environment: 'MOCK' | 'LIVE';
   activeContext: PersonContextView;
   presentationContext: ContextOption;
   setContext: (personId: string) => void;
@@ -137,7 +138,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider value={{
       viewer: { id: bootstrap.viewer.personId, name: bootstrap.viewer.displayName },
-      activeContext, presentationContext, setContext, availableContexts, bootstrap,
+      environment, activeContext, presentationContext, setContext, availableContexts, bootstrap,
     }}>
       {contextChanged && <div role="status" aria-live="polite">Context changed. Showing your current Person context.</div>}
       <React.Fragment key={`${activeContext.personId}:${presentationContext.id}`}>{children}</React.Fragment>
