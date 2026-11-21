@@ -36,7 +36,7 @@ Details: [KAP-2 consolidation handoff](proposals/KNOWLEDGE_KAP2_CONSOLIDATION_HA
 | Hermes delegation gateway | ✅ live on `127.0.0.1:9934`; Home, Nutrition and Finance paths |
 | Home Hub (`svc-home-hub`, Nuremberg) | ✅ live; `/app/nutrition` shows the live Nutrition profile panel (F3c). Follow-ups #108/#109 live since 2026-11-07 (image `3b9a3dc`); signed-in banner check pending (owner). The Hoy page (`/app/nutrition/hoy`) merged, not deployed |
 | Ana's agent (`home-agent-ana`, Telegram, gateway `:9937`) | ⏳ merged, not deployed; the owner runs the rollout (`docs/runbooks/nutrition-r1-rollout.md`). The `ubuntu:26.04` gateway harness run is still open |
-| Olin Finance (`svc-finance`: API `:9935`, MCP `:9936`) | ✅ live since 2026-10-13; image `dbe6632` since 2026-11-07. Bank of America via SimpleFIN (2 accounts) since 2026-10-25; Sparkasse and Trade Republic cash via Enable Banking since 2026-11-07. Backed up nightly; sync timer at 06:20 and 18:20 UTC (#117). Live verification B11 passed 2026-11-08 (`FINANCE_I1_VALIDATION.md`) |
+| Olin Finance (`svc-finance`: API `:9935`, MCP `:9936`) | ✅ live since 2026-10-13; image `3edbc60` (I2) since 2026-11-20. Bank of America via SimpleFIN (2 accounts) since 2026-10-25; Sparkasse and Trade Republic cash via Enable Banking since 2026-11-07. Backed up nightly; sync timer at 06:20 and 18:20 UTC (#117). Live verification B11 passed 2026-11-08 (`FINANCE_I1_VALIDATION.md`) |
 
 ## G1.5 final state — PASS
 | Item | State |
@@ -126,14 +126,16 @@ design: ADR-0011, ADR-0012, ADR-0013 and ADR-0015.
 | B11 findings | ✅ owner approved 2026-11-15, all three fixed in one PR: F1 nft lets only `www-data` reach API `:9935` (`deploy/gateway/episteck-gateway.nft`, applied on the node), F2 `bringup.sh build` labels the image `org.opencontainers.image.revision=<sha>` (takes effect on the next Finance build), F3 Home binds only `svc-finance` delegations for `home_finance_machine_user` (`auth_hook._accepted_audiences`, isolation now two-way). Node SSH also hardened the same day: key-only + fail2ban |
 | Trade Republic securities (I3) | ⏳ not in I1: PSD2 carries the cash account only. Holdings come from Trade Republic's CSV export (proposal R5) |
 
-## Olin Finance I2 (designed, in implementation)
+## Olin Finance I2 (live; first load in progress)
 
 Board: `FINANCE_I2_PROGRESS.md`. Design: `docs/superpowers/specs/2026-11-18-finance-i2-exchanges-design.md`.
-Decision: ADR-0016.
+Decision: ADR-0016. Runbook: `docs/runbooks/finance-i2-exchanges.md`.
 
 | Item | State |
 | --- | --- |
-| I2 family currency exchanges (receivables ledger in svc-finance) | I2 designed and in implementation; nothing deployed |
+| I2 family currency exchanges (receivables ledger in svc-finance) | ✅ live since 2026-11-20 (image `3edbc60`; #140 fixed a Python 3.11 start-up crash). Olin skill and the `olin-finance-pending` cron (06:35 and 18:35 UTC) installed. ⏳ the owner's first load, then `watch-account` on the two receiving accounts |
+| Home refusals seen by Finance | 2026-11-20 17:03–22:41 UTC every delegated call was refused: an app install on the shared Frappe bench rewrote `sites/apps.txt` without `episteck_home`, because the app had no `patches.txt` (bench only keeps folders with `hooks.py`, `modules.txt` and `patches.txt`). Line restored on the host; the app now ships `patches.txt`, and runbook step 8 counts Home refusals daily |
+| `finance_movements` and `finance_summary` (I3 first slice: search, own income and spending, family help) | merged (#142), not deployed. Runbook: `docs/runbooks/finance-movements.md` |
 
 ## G2 — approval recorded; onboarding not complete
 

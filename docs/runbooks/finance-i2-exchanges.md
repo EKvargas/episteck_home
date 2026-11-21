@@ -290,6 +290,14 @@ $SSH "cd /; U=\$(id -u svc-finance); sudo -n -u svc-finance env XDG_RUNTIME_DIR=
 
 **Verify:** `0`. Any other count: read the matching journal lines (exception types only) and fix it before the next sync. Until then new movements get no links, receipts or questions.
 
+Then check that Home still accepts Olin's calls. The MCP container logs one line per refused call (kind only). Count `finance-mcp` only: `finance-api` also logs the refusals that `STEP verify` provokes on purpose.
+
+```bash
+$SSH "cd /; U=\$(id -u svc-finance); sudo -n -u svc-finance env XDG_RUNTIME_DIR=/run/user/\$U podman logs --since 24h finance-mcp 2>&1 | grep -c 'home authorization not granted' || true"
+```
+
+**Verify:** `0`. Any other count means Olin and the scheduled job got "No tengo una sesión válida". Check Home before anything else. On 2026-11-20 an app install on the shared Frappe bench rewrote `sites/apps.txt` without `episteck_home`, and Home stopped loading its delegation hook. On the Home host, `sites/apps.txt` must list `episteck_home`. bench keeps an app there only if the app folder has `hooks.py`, `modules.txt` and `patches.txt`.
+
 ## Rollback (everything)
 
 Hermes first, then the image:

@@ -2,7 +2,7 @@
 
 > Board for I2 (family currency exchanges) inside svc-finance. Synthetic data only: this is a public repo, so no real names, amounts, IBANs, phone numbers or frequencies appear here. Roles are "el dueño", "socio de cambio", "Familiar A" and "Fondo F". The I1 board stays in `FINANCE_I1_PROGRESS.md`.
 
-Last updated: 2026-11-19 (Tasks 1-12 merged in #128, #129, #130, #132, #133, #134, #135 and #137; final-review fixes R57-R64 on `feature/finance-i2-final-fixes`, not merged; Task 13 next; Task 0 S1 waiting on the owner).
+Last updated: 2026-11-21 (Tasks 0-12 done; final-review fixes merged in #138 and the Python 3.11 start-up fix in #140; I2 deployed 2026-11-20 with image `3edbc60`; Task 13 in progress: the owner's first load, then `watch-account`).
 
 ## 0. How to work with this board
 
@@ -51,7 +51,7 @@ Task 0 runs on the node in parallel with PRs 1-6.
 
 | Task | Work | PR | Status |
 | --- | --- | --- | --- |
-| 0 | Two spikes on the node (owner-run, no repo code) | - | S2 done; S1 waiting on owner |
+| 0 | Two spikes on the node (owner-run, no repo code) | - | done (S1 `CODE_REPLY`, S2 `STABLE`) |
 | 1 | ADR-0016, documentation pointers and the I2 board | 1 | done (#128) |
 | 2 | Pure core: model, FX arithmetic, allocation, text keys | 1 | done (#128) |
 | 3 | Schema and repository | 2 | done (#129) |
@@ -64,7 +64,7 @@ Task 0 runs on the node in parallel with PRs 1-6.
 | 10 | Commands and `ReceivablesService` | 6 | done (#134) |
 | 11 | MCP tools and REST routes | 6 | done (#135) |
 | 12 | Hermes skill, cron and runbook (needs Task 0) | 7 | done (#137) |
-| 13 | Deploy, live check and initial load (owner-run) | - | not started (next, after the final-review fixes merge) |
+| 13 | Deploy, live check and initial load (owner-run) | - | in progress: deployed 2026-11-20 (`3edbc60`), skill and cron live; first load, then `watch-account` |
 | 14 | Fund reconstruction from the chat export (optional) | 8 | not started (optional) |
 
 ## 5. Spikes (Task 0, owner-run on the node)
@@ -77,10 +77,12 @@ A one-off cron job delivers to the owner's Telegram a message with two inline bu
 
 | Field | Result |
 | --- | --- |
-| Buttons render and the choice comes back | pendiente |
-| Silence works when there is nothing to report | pendiente |
-| Exact create / list / remove `hermes cron` syntax | pendiente |
-| S1 verdict (`BUTTONS` or `CODE_REPLY`) | pendiente |
+| Buttons render and the choice comes back | Not in cron messages (2026-11-20): a cron run cannot use `clarify`. Buttons only in the live chat |
+| Silence works when there is nothing to report | Yes (2026-11-20): a `[SILENT]` run delivered nothing |
+| Exact create / list / remove `hermes cron` syntax | As listed below; the installed job uses `35 6,18 * * *` with `--skill olin-finance` |
+| S1 verdict (`BUTTONS` or `CODE_REPLY`) | `CODE_REPLY` (the owner answers "P3", "P3 sí" to a cron message) |
+
+Before the first S1 run, `home-agent` had no Telegram home channel, so job A delivered nothing (`no delivery target resolved`). The owner sent `/sethome`; runbook checklist (f) now covers it.
 
 Read-only findings from the installed Hermes 0.21.2 docs and code (2026-11-18), before the owner test:
 
@@ -107,3 +109,4 @@ Counts and token-class templates only (letters to `A`, digits to `9`, a short li
 - 2026-11-18: PR 1 merged (#128); Tasks 3–4 implemented on feature/finance-i2-store.
 - 2026-11-18: PRs #129, #130, #132 merged; Task 9 on feature/finance-i2-matcher.
 - 2026-11-19: PRs #133, #134, #135 and #137 merged (Tasks 9-12). The final whole-I2 review over a realistic month found 1 Critical and 6 Important defects between the PRs; fixed on `feature/finance-i2-final-fixes` (rulings R57-R64: owner-reversed fundings wait for the owner, credits count once BOOKED, go-live history, partner IBANs forgotten with the funding that taught them, re-ask after "register it", fund opening echo with flows, superseded echoes) plus two read-only go-live checks in the runbook. Nothing deployed. Next: Task 13.
+- 2026-11-20: #138 (final-review fixes) and #140 (Python 3.11 start-up fix) merged; I2 deployed with image `3edbc60` (a first attempt rolled back within minutes because of the 3.11 crash). S1 = `CODE_REPLY` after `/sethome`. The first scheduled run (18:35 UTC) was refused by Home: an app install on the shared Frappe bench had rewritten `sites/apps.txt` without `episteck_home`, which had no `patches.txt`. Line restored on the host at 22:41 UTC, `patches.txt` added to the app, and runbook step 8 now counts Home refusals. `finance_movements`/`finance_summary` merged (#142), not deployed.

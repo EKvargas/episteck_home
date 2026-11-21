@@ -1,0 +1,6 @@
+# Kept even with no patches: bench treats an app folder as a Frappe app only when it has
+# hooks.py, modules.txt and patches.txt. On every get-app or update, bench rewrites
+# sites/apps.txt and drops the other folders, and Frappe then stops loading this app.
+[pre_model_sync]
+
+[post_model_sync]
