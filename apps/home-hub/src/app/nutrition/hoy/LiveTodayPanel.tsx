@@ -23,7 +23,7 @@ async function resolvePanel(searchParams: SearchParams): Promise<TodayPanelModel
   return toTodayPanelModel(await readDiaryToday(subject.context));
 }
 
-export async function LiveTodayPanel({ searchParams }: { searchParams: SearchParams }) {
+export async function LiveTodayPanel({ searchParams, compact }: { searchParams: SearchParams; compact?: boolean }) {
   const signInHref = new URL('/login', SERVER_CONFIGURATION.publicOrigin).toString();
   let model: TodayPanelModel;
   try {
@@ -33,5 +33,5 @@ export async function LiveTodayPanel({ searchParams }: { searchParams: SearchPar
     model = { kind: 'UNAVAILABLE' };
   }
   logOutcome(todayOutcome(model));
-  return <TodayPanel model={model} signInHref={signInHref} />;
+  return <TodayPanel model={model} signInHref={signInHref} compact={compact} />;
 }

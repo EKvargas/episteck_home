@@ -15,20 +15,23 @@ const navLinks = [
 ];
 
 export function BottomNav() {
-  const pathname = usePathname();
-  const activeContext = useOptionalAppContext()?.activeContext;
+  const route = usePathname().replace(/\/+$/, '') || '/';
+  const context = useOptionalAppContext();
 
   return (
     <div className={styles.mobileNav}>
       {navLinks.map(link => {
-        const isActive = pathname === link.href;
+        const isNutrition = link.href === '/nutrition';
+        const path = isNutrition && context?.environment === 'LIVE' ? '/nutrition/hoy' : link.href;
+        const isActive = route === link.href || (isNutrition && route.startsWith('/nutrition/'));
         
         return (
           <Link 
             key={link.href}
-            href={activeContext ? `${link.href}?person=${encodeURIComponent(activeContext.personId)}` : link.href}
+            href={context ? `${path}?person=${encodeURIComponent(context.activeContext.personId)}` : path}
+            prefetch={isNutrition || path === '/' ? false : undefined}
             className={`${styles.mobileNavItem} ${isActive ? styles.mobileNavItemActive : ''}`}
-            aria-current={isActive ? 'page' : undefined}
+            aria-current={route === path ? 'page' : isActive ? 'location' : undefined}
           >
             <link.Icon size={24} weight={isActive ? "fill" : "regular"} />
             <span>{link.label}</span>

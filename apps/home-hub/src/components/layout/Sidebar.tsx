@@ -7,8 +7,8 @@ import { House, Heartbeat, AppleLogo, Gear, Calendar, Brain } from '@phosphor-ic
 import styles from './Navigation.module.css';
 
 export function Sidebar({ isCollapsed }: { isCollapsed?: boolean }) {
-  const pathname = usePathname();
-  const activeContext = useOptionalAppContext()?.activeContext;
+  const route = usePathname().replace(/\/+$/, '') || '/';
+  const context = useOptionalAppContext();
 
   const getLinks = () => {
     return [
@@ -26,11 +26,16 @@ export function Sidebar({ isCollapsed }: { isCollapsed?: boolean }) {
   return (
     <ul className={styles.navList}>
       {links.map((link) => {
-        const isActive = pathname === link.path;
+        const isNutrition = link.path === '/nutrition';
+        const path = isNutrition && context?.environment === 'LIVE' ? '/nutrition/hoy' : link.path;
+        const isActive = route === link.path || (isNutrition && route.startsWith('/nutrition/'));
         return (
           <li key={link.path}>
             <Link 
-              href={activeContext ? `${link.path}?person=${encodeURIComponent(activeContext.personId)}` : link.path}
+              href={context ? `${path}?person=${encodeURIComponent(context.activeContext.personId)}` : path}
+              prefetch={isNutrition || path === '/' ? false : undefined}
+              aria-label={isCollapsed ? link.label : undefined}
+              aria-current={route === path ? 'page' : isActive ? 'location' : undefined}
               className={`${styles.navItem} ${isActive ? styles.navItemActive : ''}`}
             >
               {link.icon}

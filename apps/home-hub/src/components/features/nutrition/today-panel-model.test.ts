@@ -77,6 +77,24 @@ test('times are Berlin clock times', () => {
   assert.equal(at('2026-11-18T23:30:00Z'), '00:30');
 });
 
+test('unknown free sugars distinguish an unmatched food from a matched food without a value', () => {
+  const m = today(toTodayPanelModel(ready(day({
+    sugarStatus: 'PARTIAL',
+    itemsUncounted: 2,
+    entries: [{ id: 'e1', consumedAt: '2026-11-18T09:15:00+01:00', items: [
+      item({ label: 'Comida casera', source: null, freeSugarsG: null }),
+      item({ label: 'Yogur', source: 'BLS', freeSugarsG: null }),
+      item({ label: 'Agua', source: 'BLS', freeSugarsG: '0.0' }),
+    ] }],
+  }))));
+  assert.deepEqual(m.entries[0].items.map((entry) => [entry.sugar, entry.nutrientNote]), [
+    ['sin dato', 'Sin coincidencia en la base de alimentos'],
+    ['sin dato', 'Alimento identificado con azúcares libres desconocidos'],
+    ['0 g', null],
+  ]);
+  assert.equal(m.hasUnmatchedFood, true);
+});
+
 test('decimal comma, no trailing ,0', () => {
   assert.equal(today(toTodayPanelModel(ready(day({ freeSugarsKnownG: '15.9' })))).sugarLine, 'Azúcares libres: 15,9 g de 50 g');
   assert.equal(today(toTodayPanelModel(ready(day({ freeSugarsKnownG: '17.0' })))).sugarLine, 'Azúcares libres: 17 g de 50 g');

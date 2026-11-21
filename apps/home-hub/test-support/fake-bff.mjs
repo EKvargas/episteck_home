@@ -24,8 +24,7 @@ const fixture = {
   rawUpstreamResponse: 'RAW_UPSTREAM_SENTINEL',
 };
 
-let lastCookieHeader = null;
-
+const lastCookieHeaders = new Map();
 const mints = new Map();
 const bootstraps = new Map();
 const runOf = (cookie) => /run([a-z0-9]+)/.exec(cookie)?.[1] ?? 'none';
@@ -45,8 +44,9 @@ createServer((request, response) => {
     }).end('{"status":"logged_out"}');
     return;
   }
-  if (request.url === '/__test/last-cookie') {
-    response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ cookie: lastCookieHeader }));
+  if (request.url?.startsWith('/__test/last-cookie/')) {
+    const run = request.url.split('/').pop();
+    response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ cookie: lastCookieHeaders.get(run) ?? null }));
     return;
   }
   if (request.url === '/delegation?audience=svc-nutrition' && request.method === 'POST') {
@@ -80,9 +80,10 @@ createServer((request, response) => {
     return;
   }
 
-  lastCookieHeader = request.headers.cookie ?? null;
-  bump(bootstraps, runOf(request.headers.cookie ?? ''));
   const cookie = request.headers.cookie ?? '';
+  const run = runOf(cookie);
+  lastCookieHeaders.set(run, cookie);
+  bump(bootstraps, run);
   if (!cookie.includes('episteck_home_session=authenticated')) {
     response.writeHead(401, { 'content-type': 'application/json' }).end('{"error":"SESSION_INVALID"}');
   } else if (cookie.includes('status-502')) {

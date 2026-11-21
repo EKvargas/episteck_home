@@ -10,7 +10,8 @@ export type TodayPanelModel =
       sugarLine: string;
       meter: { valueG: number; limitG: number } | null;
       statusLine: string;
-      entries: { time: string; items: { text: string; sugar: string }[] }[];
+      entries: { time: string; items: { text: string; sugar: string; nutrientNote: string | null }[] }[];
+      hasUnmatchedFood: boolean;
       referenceLine: string | null;
       attribution: string[];
     };
@@ -67,6 +68,13 @@ function sugarLine(day: DiaryDay): string {
   return `Azúcares libres: ${known} de ${grams(day.limit.valueG)}${over}`;
 }
 
+function nutrientNote(item: DiaryItem): string | null {
+  if (item.freeSugarsG !== null) return null;
+  return item.source === null
+    ? 'Sin coincidencia en la base de alimentos'
+    : 'Alimento identificado con azúcares libres desconocidos';
+}
+
 function toToday(day: DiaryDay): TodayPanelModel {
   const hasFigure = day.dayStatus !== 'NO_ENTRIES' && day.freeSugarsKnownG !== null && day.limit !== null;
   return {
@@ -80,8 +88,11 @@ function toToday(day: DiaryDay): TodayPanelModel {
       items: entry.items.map((item) => ({
         text: `${item.label}, ${portion(item)}`,
         sugar: item.freeSugarsG === null ? 'sin dato' : grams(item.freeSugarsG),
+        nutrientNote: nutrientNote(item),
       })),
     })),
+    hasUnmatchedFood: day.entries.some((entry) =>
+      entry.items.some((item) => item.source === null && item.freeSugarsG === null)),
     referenceLine: day.limit === null
       ? null
       : `Referencia general: ${grams(day.limit.valueG)} de azúcares libres al día (OMS, DGE). No es una indicación médica.`,

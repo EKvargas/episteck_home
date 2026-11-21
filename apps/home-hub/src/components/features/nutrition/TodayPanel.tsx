@@ -19,7 +19,11 @@ function Frame({ role, tone, busy, children }: {
   );
 }
 
-export function TodayPanel({ model, signInHref }: { model: TodayPanelModel; signInHref: string }) {
+export function TodayPanel({ model, signInHref, compact = false }: {
+  model: TodayPanelModel;
+  signInHref: string;
+  compact?: boolean;
+}) {
   switch (model.kind) {
     case 'LOADING':
       return (
@@ -65,10 +69,16 @@ export function TodayPanel({ model, signInHref }: { model: TodayPanelModel; sign
                 />
               )}
               <p className={styles.status}>{model.statusLine}</p>
+              {model.hasUnmatchedFood && (
+                <p className={styles.reference}>
+                  Hay alimentos registrados sin coincidencia en la base.
+                </p>
+              )}
               {model.referenceLine && <p className={styles.reference}>{model.referenceLine}</p>}
+              <RetryButton label="Actualizar diario" pendingLabel="Actualizando…" className={styles.refresh} />
             </div>
           </div>
-          {model.entries.length > 0 && (
+          {!compact && model.entries.length > 0 && (
             <div className={styles.timeline}>
               <h3 className={styles.timelineTitle}>Lo que has anotado</h3>
               {model.entries.map((entry, index) => (
@@ -79,6 +89,7 @@ export function TodayPanel({ model, signInHref }: { model: TodayPanelModel; sign
                       <li key={i} className={styles.item}>
                         <span className={styles.itemText}>{item.text}</span>
                         <span className={styles.sugar}>Azúcares libres: {item.sugar}</span>
+                        {item.nutrientNote && <span className={styles.sugar}>{item.nutrientNote}</span>}
                       </li>
                     ))}
                   </ul>

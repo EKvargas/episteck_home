@@ -1,0 +1,99 @@
+.section {
+  padding: clamp(1rem, 4vw, 1.75rem);
+  scroll-margin-block-start: 1.25rem;
+  color: var(--olin-text-main);
+  background: var(--olin-surface-card);
+  border: 1px solid var(--olin-surface-border);
+  border-radius: var(--olin-card-radius, 1rem);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--olin-font-headline, inherit);
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.intro,
+.note {
+  color: var(--olin-text-muted);
+}
+
+.intro {
+  margin: 0.5rem 0 1.25rem;
+}
+
+.groups {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.group {
+  min-width: 0;
+}
+
+.group h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.note {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+}
+
+.action {
+  border-top: 1px solid var(--olin-surface-border);
+}
+
+.action summary {
+  padding: 0.625rem 0;
+  min-height: 44px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.action summary::marker {
+  color: var(--olin-accent);
+}
+
+.example {
+  padding-block-end: 0.75rem;
+  padding-inline-start: 1rem;
+}
+
+.example p {
+  margin: 0 0 0.5rem;
+  max-width: 55ch;
+}
+
+.example button {
+  min-height: 44px;
+  padding: 0.25rem 0.75rem;
+  background: none;
+  border: 1px solid var(--olin-surface-border);
+  border-radius: 0.5rem;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.example [role='status'] {
+  margin: 0.5rem 0 0;
+}
+
+.action summary:focus-visible,
+.example button:focus-visible {
+  outline: 2px solid var(--olin-accent);
+  outline-offset: 2px;
+}
+
+@media (min-width: 768px) {
+  .groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

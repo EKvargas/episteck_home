@@ -203,7 +203,7 @@ export function KioskScreen() {
             </button>
 
             {/* Exit Kiosk */}
-            <Link href={`/?person=${encodeURIComponent(activeContext.personId)}`} className={styles.exitKioskBtn} title="Exit Kiosk Mode" aria-label="Exit Kiosk Mode">
+            <Link href={`/?person=${encodeURIComponent(activeContext.personId)}`} prefetch={false} className={styles.exitKioskBtn} title="Exit Kiosk Mode" aria-label="Exit Kiosk Mode">
               <X size={16} weight="bold" />
             </Link>
           </div>
