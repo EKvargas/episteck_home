@@ -194,7 +194,9 @@ class ProfileService:
             changes["weight_measured_on"] = today
         current = inputs_from_doc(latest_doc["inputs"]) if latest_doc else None
         new = apply_changes(current, changes)
-        validate_inputs(new, today)
+        # The 90-day freshness rule applies only when this change touches the measurement.
+        checked = new if "weight_measured_on" in changes else replace(new, weight_measured_on=None)
+        validate_inputs(checked, today)
         return current, new
 
     def propose_profile(self, delegation, subject_person_id: str, changes: dict) -> dict:

@@ -213,3 +213,24 @@ def test_denied_reads_and_writes_store_nothing(env):
         deny.confirm_profile(S, "PSN-E", p["draft_id"])
     assert store.list_versions("PSN-E") == []
     assert store.get_draft("PSN-E", p["draft_id"])["version"] is None
+
+
+def test_unrelated_change_ignores_a_stale_weight_measurement(env):
+    svc, _, clock, store = env
+    _onboard(env)
+    clock.now += timedelta(days=120)
+    p = svc.propose_profile(S, "PSN-E", {"intolerances": "lactosa"})
+    c = svc.confirm_profile(S, "PSN-E", p["draft_id"])
+    assert c["profile"]["version"] == 2
+    assert c["profile"]["inputs"]["weight_measured_on"] == "2026-11-23"
+    assert store.latest("PSN-E")["doc"]["inputs"]["weight_measured_on"] == "2026-11-23"
+    assert c["profile"]["food"]["intolerances"] == "lactosa"
+
+
+def test_stale_measurement_date_given_explicitly_is_refused(env):
+    svc, _, clock, _ = env
+    _onboard(env)
+    clock.now += timedelta(days=120)
+    with pytest.raises(ProfileInvalid) as e:
+        svc.propose_profile(S, "PSN-E", {"weight_measured_on": "2026-11-23"})
+    assert e.value.field == "weight_measured_on"
