@@ -44,7 +44,9 @@ CRON_PROMPT = (
     "and stop.\n"
     "4. Otherwise write ONE short message in Spanish as that section says. It names the day "
     "it is about as day and month in Spanish words, no weekday (for example 20 de noviembre), "
-    "taken from the date of get_day_summary, and ends with exactly: ¿Eso fue todo hoy?"
+    "taken from the date of get_day_summary. When profile_version is not null, also give "
+    "energy and protein from nutrients against their targets. The message ends with exactly: "
+    "¿Eso fue todo hoy?"
 )
 MEDIA_DIRS = ("%h/.hermes/cache/audio", "%h/.hermes/audio_cache", "%h/.hermes/cache/images",
               "%h/.hermes/image_cache")

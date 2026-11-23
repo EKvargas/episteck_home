@@ -197,7 +197,8 @@ def test_soul_is_spanish_and_loads_the_skill_first():
     soul = SOUL.read_text(encoding="utf-8")
     assert "olin-nutrition" in soul and "skill_view" in soul
     assert "Olin" in soul and "Ana" in soul
-    assert "diario" in soul and "médic" in soul
+    assert "nutrición" in soul and "médic" in soul and "español" in soul
+    assert "Solo te ayudo con tu nutrición." in soul
     assert not re.search(r"\b(the|you|and)\b", soul)
 
 
