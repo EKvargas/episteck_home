@@ -349,7 +349,7 @@ def test_the_tool_inventory_is_actually_discoverable(nutrition_env):
     assert len(tools) >= 10, f"expected the production tools, found {sorted(tools)}"
     # Spot-check that these are the real person-sensitive ones.
     assert "get_nutrition_profile" in tools
-    assert "ate_as_planned" in tools
+    assert "propose_profile" in tools
 
 
 def test_no_tool_accepts_a_delegation_or_actor_parameter(nutrition_env):

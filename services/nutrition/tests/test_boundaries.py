@@ -171,7 +171,7 @@ def test_mcp_tools_expose_no_actor_parameter(boundary_modules):
         and getattr(fn, "__module__", None) == mcp_server.__name__
     ]
     assert tool_functions, "expected MCP tools to be discoverable"
-    # The tool set is ~13; a couple would mean the discovery above quietly broke and
+    # The tool set is 20; a couple would mean the discovery above quietly broke and
     # the assertion stopped covering anything.
     assert len(tool_functions) >= 10, f"only found {len(tool_functions)} tools"
     for function in tool_functions:

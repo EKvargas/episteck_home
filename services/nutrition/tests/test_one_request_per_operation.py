@@ -21,16 +21,24 @@ WHAT IS COUNTED
 Delegated Home REQUESTS, not permissions. ``check_access_many`` decides several
 requirements in one request, which is the entire point: replay protection constrains
 requests, so an operation needing two permissions gets both in one.
+
+Both operations named above were retired with the pre-diary intake model (Task 8). The
+properties they first proved now run on ``propose_profile`` (two permissions, one
+request) and ``plan_menu`` (one authorization, then an internal targets read).
 """
 from __future__ import annotations
 
 import importlib
 import inspect
+import sqlite3
 import sys
+from contextlib import closing
+from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app import deps
 from app.diary.service import DiaryService
 from app.profile.service import ProfileService
 from app.store.profile_sqlite import SqliteProfileStore
@@ -38,13 +46,13 @@ from app.home_control.client import AccessDecision
 from app.providers.synthetic import SyntheticFoodProvider
 from app.service import NutritionService
 from app.store.diary_sqlite import SqliteDiaryStore
-from app.store.sqlite_repo import SqliteNutritionRepository
 
-from tests.support import SESSION, AllowAllAuthorizer
+from tests.support import SESSION, AllowAllAuthorizer, DenyAllAuthorizer
 
 SUBJECT = "PSN-SUBJECT"
 DATE = "2026-09-17"
 DELEGATION_HEADER = "X-Episteck-Delegation"
+MENU = [{"label": "b", "foods": [{"food_id": "syn-yogurt", "grams": 40}]}]
 
 
 class ReplayAwareAuthorizer:
@@ -84,22 +92,21 @@ class ReplayAwareAuthorizer:
         return AccessDecision(self.allow, "allowed" if self.allow else "denied")
 
 
-@pytest.fixture
-def repo(tmp_path):
-    return SqliteNutritionRepository(str(tmp_path / "n.sqlite"))
+def _service(db, authorizer):
+    """The menu service wired as deps wires it.
+
+    Its targets come from the profile store through the SAME authorizer, so a wiring
+    that authorized a second time would be counted here, not hidden by a stub.
+    """
+    return NutritionService(
+        SyntheticFoodProvider(), authorizer=authorizer,
+        targets_today=deps.targets_today_from(_profile_service(db, authorizer)),
+    )
 
 
-def _service(repo, authorizer):
-    return NutritionService(repo, SyntheticFoodProvider(), authorizer=authorizer)
-
-
-def _seed_planned(service, repo):
-    """A planned record to convert, created outside the operation under test."""
-    fresh = AllowAllAuthorizer()
-    seeding = NutritionService(repo, SyntheticFoodProvider(), authorizer=fresh)
-    return seeding.record_planned(
-        "seed-token", SUBJECT, DATE, [{"food_id": "syn-yogurt", "grams": 100}]
-    )["id"]
+def _drafts(db) -> int:
+    with closing(sqlite3.connect(db)) as c:
+        return c.execute("SELECT COUNT(*) FROM profile_draft").fetchone()[0]
 
 
 class ActionRecordingAuthorizer(AllowAllAuthorizer):
@@ -144,32 +151,8 @@ def _seed_diary(db) -> dict:
 #: Each entry invokes ONE business operation on the service. A person-sensitive
 #: operation missing from here fails ``test_every_authorizing_service_method_is_covered``.
 SERVICE_OPERATIONS = {
-    "get_profile": lambda s, repo: s.get_profile(SESSION, SUBJECT),
-    "upsert_profile": lambda s, repo: s.upsert_profile(
-        SESSION, SUBJECT, {"context": "GENERAL"}
-    ),
-    "daily_intake": lambda s, repo: s.daily_intake(SESSION, SUBJECT, DATE),
-    "daily_gap": lambda s, repo: s.daily_gap(SESSION, SUBJECT, DATE),
-    "daily": lambda s, repo: s.daily(SESSION, SUBJECT, DATE),
-    "daily_gap_v2": lambda s, repo: s.daily_gap_v2(SESSION, SUBJECT, DATE),
-    "record_planned": lambda s, repo: s.record_planned(
-        SESSION, SUBJECT, DATE, [{"food_id": "syn-yogurt", "grams": 50}]
-    ),
-    "record_actual": lambda s, repo: s.record_actual(
-        SESSION, SUBJECT, DATE, [{"food_id": "syn-yogurt", "grams": 50}]
-    ),
-    "ate_as_planned": lambda s, repo: s.ate_as_planned(
-        SESSION, SUBJECT, DATE, _seed_planned(s, repo)
-    ),
-    "create_pregnancy_profile": lambda s, repo: s.create_pregnancy_profile(
-        SESSION, SUBJECT, stage="T2"
-    ),
-    "plan_menu": lambda s, repo: s.plan_menu(
-        SESSION,
-        SUBJECT,
-        [{"label": "b", "foods": [{"food_id": "syn-yogurt", "grams": 40}]}],
-    ),
-    "get_meal_plan": lambda s, repo: s.get_meal_plan(SESSION, SUBJECT, DATE, DATE),
+    "plan_menu": lambda s: s.plan_menu(SESSION, SUBJECT, MENU),
+    "get_meal_plan": lambda s: s.get_meal_plan(SESSION, SUBJECT, DATE, DATE),
 }
 
 
@@ -177,8 +160,8 @@ def _authorizing_service_methods() -> set[str]:
     """Public service methods that authorize, found in the SOURCE, not a list.
 
     This is what makes the suite exhaustive rather than a sample: adding a method that
-    calls ``_require_access``/``_require_all`` without adding it to
-    ``SERVICE_OPERATIONS`` fails the coverage test below.
+    calls ``_require_access`` without adding it to ``SERVICE_OPERATIONS`` fails the
+    coverage test below.
     """
     import ast
     import pathlib
@@ -200,7 +183,7 @@ def _authorizing_service_methods() -> set[str]:
         authorizes = any(
             isinstance(call, ast.Call)
             and isinstance(call.func, ast.Attribute)
-            and call.func.attr in {"_require_access", "_require_all"}
+            and call.func.attr == "_require_access"
             for call in ast.walk(node)
         )
         if authorizes:
@@ -326,6 +309,13 @@ def _seed_profile(db) -> dict:
     return {"draft": seeding.propose_profile("seed-token", SUBJECT, PROFILE_WIRE)["draft_id"]}
 
 
+def _seed_onboarded(db) -> None:
+    """A confirmed profile, so the person has targets in force today."""
+    seeding = _profile_service(db, AllowAllAuthorizer())
+    draft = seeding.propose_profile("seed-token", SUBJECT, PROFILE_WIRE)["draft_id"]
+    seeding.confirm_profile("seed-token", SUBJECT, draft)
+
+
 #: method -> (invocation, the exact actions its ONE Home request must ask about)
 PROFILE_OPERATIONS = {
     "get_profile_view": (
@@ -399,12 +389,14 @@ def test_every_profile_operation_survives_a_replay_aware_home(tmp_path, name):
 
 
 @pytest.mark.parametrize("name", sorted(SERVICE_OPERATIONS))
-def test_one_home_request_per_service_operation(repo, name):
+def test_one_home_request_per_service_operation(tmp_path, name):
     """THE REGRESSION: every operation, not a sample of four."""
+    db = str(tmp_path / "n.sqlite")
+    _seed_onboarded(db)
     authorizer = AllowAllAuthorizer()
-    service = _service(repo, authorizer)
+    service = _service(db, authorizer)
 
-    SERVICE_OPERATIONS[name](service, repo)
+    SERVICE_OPERATIONS[name](service)
 
     assert authorizer.home_calls == 1, (
         f"{name}: expected exactly 1 delegated Home request, "
@@ -413,17 +405,19 @@ def test_one_home_request_per_service_operation(repo, name):
 
 
 @pytest.mark.parametrize("name", sorted(SERVICE_OPERATIONS))
-def test_every_service_operation_survives_a_replay_aware_home(repo, name):
+def test_every_service_operation_survives_a_replay_aware_home(tmp_path, name):
     """The real constraint: one delegation, single-use, must be enough.
 
     ``AllowAllAuthorizer`` counts calls but would happily allow a second one. This
     models production, where the second use of a token is refused — so an operation
     that authorizes twice raises PermissionError here.
     """
+    db = str(tmp_path / "n.sqlite")
+    _seed_onboarded(db)
     authorizer = ReplayAwareAuthorizer(allow=True)
-    service = _service(repo, authorizer)
+    service = _service(db, authorizer)
 
-    SERVICE_OPERATIONS[name](service, repo)  # must not raise
+    SERVICE_OPERATIONS[name](service)  # must not raise
 
     assert authorizer.home_calls == 1, name
 
@@ -435,39 +429,6 @@ def test_every_service_operation_survives_a_replay_aware_home(repo, name):
 #: path -> (method, kwargs) invoking exactly one business operation.
 ROUTE_OPERATIONS = {
     "/profile/{person_id}": ("get", {"url": f"/profile/{SUBJECT}"}),
-    "PUT /profile/{person_id}": (
-        "put",
-        {"url": f"/profile/{SUBJECT}", "json": {"context": "GENERAL"}},
-    ),
-    "/daily/{person_id}/{date}": ("get", {"url": f"/daily/{SUBJECT}/{DATE}"}),
-    "/gap-v2/{person_id}/{date}": ("get", {"url": f"/gap-v2/{SUBJECT}/{DATE}"}),
-    "/intake/{person_id}/planned": (
-        "post",
-        {
-            "url": f"/intake/{SUBJECT}/planned",
-            "params": {"date": DATE},
-            "json": [{"food_id": "syn-yogurt", "grams": 50}],
-        },
-    ),
-    "/intake/{person_id}/actual": (
-        "post",
-        {
-            "url": f"/intake/{SUBJECT}/actual",
-            "params": {"date": DATE},
-            "json": [{"food_id": "syn-yogurt", "grams": 50}],
-        },
-    ),
-    "/intake/{person_id}/ate-as-planned": (
-        "post",
-        {
-            "url": f"/intake/{SUBJECT}/ate-as-planned",
-            "params": {"date": DATE, "planned_id": "SEEDED"},
-        },
-    ),
-    "/profile/{person_id}/pregnancy": (
-        "post",
-        {"url": f"/profile/{SUBJECT}/pregnancy", "json": {"stage": "T2"}},
-    ),
     "/plan/{person_id}": (
         "post",
         {
@@ -537,19 +498,16 @@ def http(monkeypatch, tmp_path):
         sys.modules.pop(name, None)
     main = importlib.import_module("app.main")
 
-    repository = SqliteNutritionRepository(str(tmp_path / "http.sqlite"))
+    db = str(tmp_path / "http.sqlite")
     authorizer = ActionRecordingAuthorizer()
-    main.svc = NutritionService(
-        repository, SyntheticFoodProvider(), authorizer=authorizer
-    )
-    main.diary = _diary_service(str(tmp_path / "http.sqlite"), authorizer)
-    main.profile = _profile_service(str(tmp_path / "http.sqlite"), authorizer)
-    planned_id = _seed_planned(main.svc, repository)
-    main.seeded_diary = _seed_diary(str(tmp_path / "http.sqlite"))
+    main.svc = _service(db, authorizer)
+    main.diary = _diary_service(db, authorizer)
+    main.profile = _profile_service(db, authorizer)
+    main.seeded_diary = _seed_diary(db)
     authorizer.home_calls = 0  # seeding is setup, not the operation under test
     authorizer.delegations.clear()
     authorizer.actions.clear()
-    return main, authorizer, planned_id
+    return main, authorizer
 
 
 def _person_sensitive_routes(app) -> set[str]:
@@ -586,7 +544,7 @@ def _person_sensitive_routes(app) -> set[str]:
 
 def test_every_person_sensitive_route_is_covered(http):
     """The HTTP inventory must not drift either."""
-    main, _, _ = http
+    main, _ = http
     discovered = _person_sensitive_routes(main.app)
     assert discovered, "discovery found no person-sensitive routes"
 
@@ -614,11 +572,9 @@ def test_every_person_sensitive_route_is_covered(http):
 @pytest.mark.parametrize("name", sorted(ROUTE_OPERATIONS))
 def test_one_home_request_per_http_request(http, name):
     """One incoming HTTP request -> exactly one delegated Home request."""
-    main, authorizer, planned_id = http
+    main, authorizer = http
     verb, kwargs = ROUTE_OPERATIONS[name]
     kwargs = dict(kwargs)
-    if kwargs.get("params", {}).get("planned_id") == "SEEDED":
-        kwargs["params"] = {**kwargs["params"], "planned_id": planned_id}
     if "{" in kwargs["url"]:
         kwargs["url"] = kwargs["url"].format(**main.seeded_diary)
 
@@ -642,7 +598,7 @@ def test_one_home_request_per_http_request(http, name):
 
 
 def test_every_diary_route_maps_to_a_diary_operation(http):
-    main, _, _ = http
+    main, _ = http
     discovered = {
         route.split(" ", 1)[1]
         for route in _person_sensitive_routes(main.app)
@@ -653,7 +609,7 @@ def test_every_diary_route_maps_to_a_diary_operation(http):
 
 
 def test_every_profile_route_maps_to_a_profile_operation(http):
-    main, _, _ = http
+    main, _ = http
     discovered = {
         route.split(" ", 1)[1]
         for route in _person_sensitive_routes(main.app)
@@ -684,34 +640,23 @@ def _mcp_tools(mcp_server):
 
 
 MCP_OPERATIONS = {
-    "get_nutrition_profile": lambda t, pid: t["get_nutrition_profile"](SUBJECT),
-    "get_pregnancy_profile": lambda t, pid: t["get_pregnancy_profile"](SUBJECT),
-    "get_daily_nutrition_gap": lambda t, pid: t["get_daily_nutrition_gap"](SUBJECT, DATE),
-    "record_planned_meal": lambda t, pid: t["record_planned_meal"](
-        SUBJECT, DATE, [{"food_id": "syn-yogurt", "grams": 50}]
-    ),
-    "record_actual_intake": lambda t, pid: t["record_actual_intake"](
-        SUBJECT, DATE, [{"food_id": "syn-yogurt", "grams": 50}]
-    ),
-    "ate_as_planned": lambda t, pid: t["ate_as_planned"](SUBJECT, DATE, pid),
-    "plan_menu": lambda t, pid: t["plan_menu"](
-        SUBJECT, [{"label": "b", "foods": [{"food_id": "syn-yogurt", "grams": 40}]}]
-    ),
-    "get_meal_plan": lambda t, pid: t["get_meal_plan"](SUBJECT, DATE, DATE),
+    "get_nutrition_profile": lambda t: t["get_nutrition_profile"](SUBJECT),
+    "get_pregnancy_profile": lambda t: t["get_pregnancy_profile"](SUBJECT),
+    "plan_menu": lambda t: t["plan_menu"](SUBJECT, MENU),
+    "get_meal_plan": lambda t: t["get_meal_plan"](SUBJECT, DATE, DATE),
     # ---- diary ----
-    "propose_intake": lambda t, pid: t["propose_intake"](SUBJECT, [COLA]),
-    "confirm_intake": lambda t, pid: t["confirm_intake"](SUBJECT, t["_ids"]["draft"]),
-    "correct_intake": lambda t, pid: t["correct_intake"](SUBJECT, t["_ids"]["entry"], [COLA]),
-    "void_intake": lambda t, pid: t["void_intake"](SUBJECT, t["_ids"]["entry"]),
-    "get_diary_entry": lambda t, pid: t["get_diary_entry"](SUBJECT, t["_ids"]["entry"]),
-    "get_day_summary": lambda t, pid: t["get_day_summary"](SUBJECT, DATE),
-    "close_day": lambda t, pid: t["close_day"](SUBJECT, DATE),
-    "set_nutrition_mode": lambda t, pid: t["set_nutrition_mode"](SUBJECT, "GENERAL"),
-    "get_period_summary": lambda t, pid: t["get_period_summary"](SUBJECT),
+    "propose_intake": lambda t: t["propose_intake"](SUBJECT, [COLA]),
+    "confirm_intake": lambda t: t["confirm_intake"](SUBJECT, t["_ids"]["draft"]),
+    "correct_intake": lambda t: t["correct_intake"](SUBJECT, t["_ids"]["entry"], [COLA]),
+    "void_intake": lambda t: t["void_intake"](SUBJECT, t["_ids"]["entry"]),
+    "get_diary_entry": lambda t: t["get_diary_entry"](SUBJECT, t["_ids"]["entry"]),
+    "get_day_summary": lambda t: t["get_day_summary"](SUBJECT, DATE),
+    "close_day": lambda t: t["close_day"](SUBJECT, DATE),
+    "set_nutrition_mode": lambda t: t["set_nutrition_mode"](SUBJECT, "GENERAL"),
+    "get_period_summary": lambda t: t["get_period_summary"](SUBJECT),
     # ---- profile ----
-    "propose_profile": lambda t, pid: t["propose_profile"](SUBJECT, {"weight_kg": "80"}),
-    "confirm_profile": lambda t, pid: t["confirm_profile"](
-        SUBJECT, t["_profile_ids"]["draft"]),
+    "propose_profile": lambda t: t["propose_profile"](SUBJECT, {"weight_kg": "80"}),
+    "confirm_profile": lambda t: t["confirm_profile"](SUBJECT, t["_profile_ids"]["draft"]),
 }
 
 #: diary tool -> the DiaryService method it must reach
@@ -748,15 +693,12 @@ def mcp(monkeypatch, tmp_path):
     mcp_server = importlib.import_module("app.mcp.server")
     session_module = importlib.import_module("app.session")
 
-    repository = SqliteNutritionRepository(str(tmp_path / "mcp.sqlite"))
+    db = str(tmp_path / "mcp.sqlite")
     authorizer = ActionRecordingAuthorizer()
-    mcp_server._svc = NutritionService(
-        repository, SyntheticFoodProvider(), authorizer=authorizer
-    )
-    mcp_server._diary = _diary_service(str(tmp_path / "mcp.sqlite"), authorizer)
-    mcp_server._profile = _profile_service(str(tmp_path / "mcp.sqlite"), authorizer)
-    planned_id = _seed_planned(mcp_server._svc, repository)
-    diary_ids = _seed_diary(str(tmp_path / "mcp.sqlite"))
+    mcp_server._svc = _service(db, authorizer)
+    mcp_server._diary = _diary_service(db, authorizer)
+    mcp_server._profile = _profile_service(db, authorizer)
+    diary_ids = _seed_diary(db)
     authorizer.home_calls = 0
     authorizer.delegations.clear()
     authorizer.actions.clear()
@@ -768,8 +710,8 @@ def mcp(monkeypatch, tmp_path):
     monkeypatch.setattr(mcp_server, "current_delegation", lambda: SESSION)
     tools = _mcp_tools(mcp_server)
     tools["_ids"] = diary_ids
-    tools["_profile_ids"] = _seed_profile(str(tmp_path / "mcp.sqlite"))
-    return tools, authorizer, planned_id
+    tools["_profile_ids"] = _seed_profile(db)
+    return tools, authorizer
 
 
 def test_every_person_sensitive_mcp_tool_is_covered(mcp):
@@ -804,9 +746,9 @@ def test_every_person_sensitive_mcp_tool_is_covered(mcp):
 @pytest.mark.parametrize("name", sorted(MCP_OPERATIONS))
 def test_one_home_request_per_mcp_tool_call(mcp, name):
     """One tool call -> exactly one delegated Home request."""
-    tools, authorizer, planned_id = mcp
+    tools, authorizer = mcp
 
-    MCP_OPERATIONS[name](tools, planned_id)
+    MCP_OPERATIONS[name](tools)
 
     assert authorizer.home_calls == 1, (
         f"{name}: expected exactly 1 delegated Home request, "
@@ -819,37 +761,37 @@ def test_one_home_request_per_mcp_tool_call(mcp, name):
 
 
 def test_every_diary_tool_maps_to_a_diary_operation(mcp):
-    tools, _, _ = mcp
+    tools, _ = mcp
     assert set(DIARY_TOOL_METHODS) <= set(tools)
     assert set(DIARY_TOOL_METHODS.values()) == set(DIARY_OPERATIONS)
 
 
 def test_every_profile_tool_maps_to_a_profile_operation(mcp):
-    tools, _, _ = mcp
+    tools, _ = mcp
     assert set(PROFILE_TOOL_METHODS) <= set(tools)
     assert set(PROFILE_TOOL_METHODS.values()) == set(PROFILE_OPERATIONS)
 
 
 # ==========================================================================
-# The fixed operations specifically, and the shape of their one request
+# Operations that need several permissions, or compose an authorized read
 # ==========================================================================
+# First proven on ate_as_planned (VIEW + CREATE) and GET /daily (two reads), both
+# retired with the pre-diary intake model. propose_profile now needs two permissions;
+# plan_menu authorizes once and then reads the person's targets internally.
 
 
-def test_ate_as_planned_asks_for_view_and_create_in_one_request(repo):
-    """Both permissions, one request — not CREATE alone, not two requests."""
+def test_propose_profile_asks_for_update_and_view_in_one_request(tmp_path):
+    """Both permissions, one request â€” not UPDATE alone, not two requests."""
     authorizer = AllowAllAuthorizer()
-    service = _service(repo, authorizer)
-    planned_id = _seed_planned(service, repo)
-    authorizer.home_calls = 0
-    authorizer.requirements.clear()
 
-    service.ate_as_planned(SESSION, SUBJECT, DATE, planned_id)
+    _profile_service(str(tmp_path / "p.sqlite"), authorizer).propose_profile(
+        SESSION, SUBJECT, PROFILE_WIRE)
 
     assert authorizer.home_calls == 1
-    assert authorizer.requirements == [(("NUTRITION", "VIEW"), ("NUTRITION", "CREATE"))]
+    assert authorizer.requirements == [(("NUTRITION", "UPDATE"), ("NUTRITION", "VIEW"))]
 
 
-def test_ate_as_planned_denied_when_either_permission_is_refused(repo):
+def test_propose_profile_denied_when_either_permission_is_refused(tmp_path):
     """An overall allow requires EVERY requirement to allow."""
 
     class ViewOnly:
@@ -865,76 +807,87 @@ def test_ate_as_planned_denied_when_either_permission_is_refused(repo):
             allowed = all(action == "VIEW" for _, action in requirements)
             return AccessDecision(allowed, "only VIEW granted (fail closed)")
 
+    db = str(tmp_path / "p.sqlite")
     authorizer = ViewOnly()
-    seeded = _seed_planned(_service(repo, AllowAllAuthorizer()), repo)
 
     with pytest.raises(PermissionError):
-        _service(repo, authorizer).ate_as_planned(SESSION, SUBJECT, DATE, seeded)
+        _profile_service(db, authorizer).propose_profile(SESSION, SUBJECT, PROFILE_WIRE)
     assert authorizer.home_calls == 1
+    assert _drafts(db) == 0
 
 
-def test_ate_as_planned_authorizes_before_reading_the_plan(repo):
+def test_propose_profile_authorizes_before_reading_the_profile(tmp_path):
     """A denial must happen before any sensitive read."""
-    seeded = _seed_planned(_service(repo, AllowAllAuthorizer()), repo)
+    db = str(tmp_path / "p.sqlite")
+    _seed_onboarded(db)
+    store = SqliteProfileStore(db)
     reads = {"count": 0}
-    original = repo.list_intake
+    for method in ("latest", "list_versions", "get_draft"):
+        original = getattr(store, method)
 
-    def counting(*args, **kwargs):
-        reads["count"] += 1
-        return original(*args, **kwargs)
+        def counting(*args, _original=original, **kwargs):
+            reads["count"] += 1
+            return _original(*args, **kwargs)
 
-    repo.list_intake = counting
-
-    from tests.support import DenyAllAuthorizer
+        setattr(store, method, counting)
 
     with pytest.raises(PermissionError):
-        _service(repo, DenyAllAuthorizer()).ate_as_planned(
-            SESSION, SUBJECT, DATE, seeded
-        )
+        ProfileService(store, authorizer=DenyAllAuthorizer()).propose_profile(
+            SESSION, SUBJECT, {"weight_kg": "80"})
     assert reads["count"] == 0
 
 
-def test_daily_composes_internally_rather_than_calling_authorized_methods(repo):
-    """The /daily fix: one VIEW, then internal helpers — not two public calls."""
+def test_plan_menu_composes_internally_rather_than_calling_authorized_methods(tmp_path):
+    """One VIEW, then the profile's internal targets read â€” not get_profile_view."""
+    db = str(tmp_path / "n.sqlite")
+    _seed_onboarded(db)
     authorizer = AllowAllAuthorizer()
-    service = _service(repo, authorizer)
 
-    result = service.daily(SESSION, SUBJECT, DATE)
+    plan = _service(db, authorizer).plan_menu(SESSION, SUBJECT, MENU)
 
     assert authorizer.home_calls == 1
-    assert set(result) == {"intake", "gap"}
-    # The composite must return what the two public methods would have returned.
-    fresh_a, fresh_b = AllowAllAuthorizer(), AllowAllAuthorizer()
-    assert result["intake"] == _service(repo, fresh_a).daily_intake(
-        SESSION, SUBJECT, DATE
+    # The composite must compare with the targets the public profile read shows.
+    view = _profile_service(db, AllowAllAuthorizer()).get_profile_view(SESSION, SUBJECT)
+    assert set(plan["gap_vs_reference"]) == set(view["targets_flat"])
+    for nutrient, target in view["targets_flat"].items():
+        consumed = Decimal(plan["day_total"].get(nutrient, "0"))
+        assert Decimal(plan["gap_vs_reference"][nutrient]) == Decimal(target) - consumed
+
+
+def test_plan_menu_survives_a_single_use_delegation(tmp_path):
+    """One token, spent once, covers the authorization AND the targets read."""
+    db = str(tmp_path / "n.sqlite")
+    _seed_onboarded(db)
+    authorizer = ReplayAwareAuthorizer(allow=True)
+
+    plan = _service(db, authorizer).plan_menu(SESSION, SUBJECT, MENU)
+
+    assert authorizer.home_calls == 1
+    assert "energy_kcal" in plan["gap_vs_reference"]
+
+
+def test_plan_menu_reading_targets_through_the_authorized_view_would_be_replay_denied(tmp_path):
+    """Wiring targets_today to get_profile_view reproduces the double-spend failure."""
+    db = str(tmp_path / "n.sqlite")
+    _seed_onboarded(db)
+    authorizer = ReplayAwareAuthorizer(allow=True)
+    profiles = _profile_service(db, authorizer)
+    rewired = NutritionService(
+        SyntheticFoodProvider(), authorizer=authorizer,
+        targets_today=lambda person: profiles.get_profile_view(SESSION, person)["targets_flat"],
     )
-    assert result["gap"] == _service(repo, fresh_b).daily_gap(SESSION, SUBJECT, DATE)
 
-
-def test_daily_survives_a_single_use_delegation(repo):
-    """The production symptom: the old composition was replay-denied."""
-    authorizer = ReplayAwareAuthorizer(allow=True)
-    _service(repo, authorizer).daily(SESSION, SUBJECT, DATE)
-    assert authorizer.home_calls == 1
-
-
-def test_the_old_daily_composition_would_be_replay_denied(repo):
-    """Reverting /daily to two authorized calls reproduces the failure."""
-    authorizer = ReplayAwareAuthorizer(allow=True)
-    service = _service(repo, authorizer)
-
-    service.daily_intake(SESSION, SUBJECT, DATE)  # spends the delegation
     with pytest.raises(PermissionError, match="replay"):
-        service.daily_gap(SESSION, SUBJECT, DATE)
+        rewired.plan_menu(SESSION, SUBJECT, MENU)
 
 
-def test_the_old_ate_as_planned_composition_would_be_replay_denied(repo):
-    """Reverting ate_as_planned to VIEW-then-CREATE reproduces the failure."""
+def test_splitting_update_and_view_into_two_requests_would_be_replay_denied():
+    """Reverting propose_profile to UPDATE-then-VIEW reproduces the failure."""
     authorizer = ReplayAwareAuthorizer(allow=True)
 
-    first = authorizer.check_access(SUBJECT, "NUTRITION", "VIEW", SESSION)
+    first = authorizer.check_access(SUBJECT, "NUTRITION", "UPDATE", SESSION)
     assert first.allow
-    second = authorizer.check_access(SUBJECT, "NUTRITION", "CREATE", SESSION)
+    second = authorizer.check_access(SUBJECT, "NUTRITION", "VIEW", SESSION)
     assert not second.allow
     assert "replay" in second.reason
 
@@ -944,23 +897,25 @@ def test_the_old_ate_as_planned_composition_would_be_replay_denied(repo):
 # ==========================================================================
 
 
-def test_a_delegation_is_still_single_use_across_operations(repo):
+def test_a_delegation_is_still_single_use_across_operations(tmp_path):
     """Two operations on one token: the second is still refused."""
+    db = str(tmp_path / "n.sqlite")
     authorizer = ReplayAwareAuthorizer(allow=True)
-    service = _service(repo, authorizer)
 
-    service.get_profile(SESSION, SUBJECT)
+    _profile_service(db, authorizer).get_profile_view(SESSION, SUBJECT)
     with pytest.raises(PermissionError, match="replay"):
-        service.daily(SESSION, SUBJECT, DATE)
+        _service(db, authorizer).plan_menu(SESSION, SUBJECT, MENU)
 
 
-def test_check_access_many_still_requires_a_session(repo):
+def test_check_access_many_still_requires_a_session(tmp_path):
     """No delegation is a denial, not a bypass into the multi-requirement path."""
+    db = str(tmp_path / "p.sqlite")
     authorizer = AllowAllAuthorizer()
-    seeded = _seed_planned(_service(repo, AllowAllAuthorizer()), repo)
 
     with pytest.raises(PermissionError):
-        _service(repo, authorizer).ate_as_planned(None, SUBJECT, DATE, seeded)
+        _profile_service(db, authorizer).propose_profile(None, SUBJECT, PROFILE_WIRE)
+    assert authorizer.requirements == [(("NUTRITION", "UPDATE"), ("NUTRITION", "VIEW"))]
+    assert _drafts(db) == 0
 
 
 def test_no_service_method_accepts_an_actor():
@@ -972,6 +927,7 @@ def test_no_service_method_accepts_an_actor():
         assert not (set(inspect.signature(fn).parameters) & forbidden), name
 
 
-def test_require_all_takes_no_actor():
-    params = set(inspect.signature(NutritionService._require_all).parameters)
+def test_multi_permission_authorization_takes_no_actor():
+    """The helper that asks for several permissions (was NutritionService._require_all)."""
+    params = set(inspect.signature(ProfileService._authorize).parameters)
     assert params == {"self", "delegation", "subject_person_id", "actions"}

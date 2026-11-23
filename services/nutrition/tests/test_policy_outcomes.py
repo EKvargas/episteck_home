@@ -9,14 +9,12 @@ from fastapi.testclient import TestClient
 
 from app.home_control.client import SESSION_INVALID, UNAVAILABLE, AccessDecision
 from app.profile.service import ProfileService
-from app.providers.synthetic import SyntheticFoodProvider
 from app.store.profile_sqlite import SqliteProfileStore
 from tests.support import AllowAllAuthorizer
-from app.service import AccessDenied, NutritionService, PolicyUnavailable, SessionInvalid
+from app.service import AccessDenied, PolicyUnavailable, SessionInvalid
 
 SESSION = "delegation-token-outcomes"
 HOME_REASON = "no matching active grant (fail closed)"
-PROFILE = {"context": "GENERAL", "target_source": "USER_CONFIGURED", "targets": {"energy_kcal": 2000.0}}
 WIRE = {"birth_date": "1986-03-10", "sex": "MALE", "height_cm": "180", "weight_kg": "82",
         "activity_pal": "1.6"}
 
@@ -45,16 +43,6 @@ class ScriptedAuthorizer:
         return self.decisions[subject]
 
 
-class SpyRepository:
-    def __init__(self, profiles):
-        self.profiles = profiles
-        self.reads = []
-
-    def get_profile(self, person_id):
-        self.reads.append(person_id)
-        return self.profiles.get(person_id)
-
-
 class SpyProfileStore(SqliteProfileStore):
     def __init__(self, path):
         super().__init__(path)
@@ -65,21 +53,21 @@ class SpyProfileStore(SqliteProfileStore):
         return super().list_versions(person_id)
 
 
-def _service():
-    repo = SpyRepository({"PSN-A": PROFILE})
+def _service(tmp_path):
+    store = SpyProfileStore(str(tmp_path / "outcomes.sqlite"))
     authorizer = ScriptedAuthorizer(DECISIONS)
-    return NutritionService(repo, SyntheticFoodProvider(), authorizer=authorizer), repo, authorizer
+    return ProfileService(store, authorizer=authorizer), store, authorizer
 
 
 @pytest.mark.parametrize(
     "subject, error",
     [("PSN-B", AccessDenied), ("PSN-SESSION", SessionInvalid), ("PSN-DOWN", PolicyUnavailable)],
 )
-def test_service_refuses_each_non_allow_without_reading(subject, error):
-    service, repo, authorizer = _service()
+def test_service_refuses_each_non_allow_without_reading(tmp_path, subject, error):
+    service, store, authorizer = _service(tmp_path)
     with pytest.raises(error):
-        service.get_profile(SESSION, subject)
-    assert repo.reads == []
+        service.get_profile_view(SESSION, subject)
+    assert store.reads == []
     assert len(authorizer.calls) == 1
 
 

@@ -20,8 +20,8 @@ from ..session import NO_SESSION, current_delegation
 
 
 mcp = FastMCP("episteck-nutrition")
-_svc = build_service()
 _profile = build_profile_service()
+_svc = build_service(_profile)
 _diary = build_diary_service(_profile)
 
 
@@ -55,53 +55,6 @@ def get_nutrition_profile(
 def evaluate_meal(foods: list[dict]) -> dict:
     """Deterministically compute nutrient totals for confirmed food amounts."""
     return _svc.evaluate_meal(foods)
-
-
-@mcp.tool
-def get_daily_nutrition_gap(
-    subject_person_id: str, date: str
-) -> dict:
-    """Read target, consumed, and remaining nutrients after Home authorization."""
-    return _authorized(
-        lambda: _svc.daily_gap(_session(), subject_person_id, date)
-    )
-
-
-@mcp.tool
-def record_planned_meal(
-    subject_person_id: str,
-    date: str,
-    foods: list[dict],
-    ref: str | None = None,
-) -> dict:
-    """Record intended intake after Home authorizes CREATE for actor and subject."""
-    return _authorized(
-        lambda: _svc.record_planned(_session(), subject_person_id, date, foods, ref)
-    )
-
-
-@mcp.tool
-def record_actual_intake(
-    subject_person_id: str,
-    date: str,
-    foods: list[dict],
-) -> dict:
-    """Record confirmed intake after Home authorizes CREATE for actor and subject."""
-    return _authorized(
-        lambda: _svc.record_actual(_session(), subject_person_id, date, foods)
-    )
-
-
-@mcp.tool
-def ate_as_planned(
-    subject_person_id: str,
-    date: str,
-    planned_id: str,
-) -> dict:
-    """Read a plan and create actual intake only after both Home decisions allow."""
-    return _authorized(
-        lambda: _svc.ate_as_planned(_session(), subject_person_id, date, planned_id)
-    )
 
 
 @mcp.tool
