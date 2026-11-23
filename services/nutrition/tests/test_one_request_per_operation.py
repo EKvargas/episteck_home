@@ -247,9 +247,6 @@ DIARY_OPERATIONS = {
         lambda d, ids: d.get_period_summary(SESSION, SUBJECT), ["VIEW"]),
 }
 
-#: operations with no route or tool yet; Task 7 exposes them and empties this set
-NOT_YET_EXPOSED = {"get_period_summary"}
-
 
 def _authorizing_diary_methods() -> set[str]:
     """Public DiaryService methods that authorize, found in the SOURCE, not a list."""
@@ -504,6 +501,7 @@ ROUTE_OPERATIONS = {
         "post", {"url": f"/diary/{SUBJECT}/days/today/close"}),
     "/profile/{person_id}/mode": (
         "put", {"url": f"/profile/{SUBJECT}/mode", "json": {"mode": "GENERAL"}}),
+    "/diary/{person_id}/period": ("get", {"url": f"/diary/{SUBJECT}/period"}),
 }
 
 #: diary route -> the DiaryService method it must reach (its actions are in DIARY_OPERATIONS)
@@ -518,6 +516,12 @@ DIARY_ROUTE_METHODS = {
     "/diary/{person_id}/days/{date}/close": "close_day",
     "/diary/{person_id}/days/today/close": "close_day",
     "/profile/{person_id}/mode": "set_mode",
+    "/diary/{person_id}/period": "get_period_summary",
+}
+
+#: profile route -> the ProfileService method it must reach (actions are in PROFILE_OPERATIONS)
+PROFILE_ROUTE_METHODS = {
+    "/profile/{person_id}": "get_profile_view",
 }
 
 
@@ -539,6 +543,7 @@ def http(monkeypatch, tmp_path):
         repository, SyntheticFoodProvider(), authorizer=authorizer
     )
     main.diary = _diary_service(str(tmp_path / "http.sqlite"), authorizer)
+    main.profile = _profile_service(str(tmp_path / "http.sqlite"), authorizer)
     planned_id = _seed_planned(main.svc, repository)
     main.seeded_diary = _seed_diary(str(tmp_path / "http.sqlite"))
     authorizer.home_calls = 0  # seeding is setup, not the operation under test
@@ -554,7 +559,8 @@ def _person_sensitive_routes(app) -> set[str]:
 
     from app import main as main_module
 
-    authorizing = _authorizing_service_methods() | _authorizing_diary_methods()
+    authorizing = (_authorizing_service_methods() | _authorizing_diary_methods()
+                   | _authorizing_profile_methods())
     tree = ast.parse(pathlib.Path(main_module.__file__).read_text(encoding="utf-8"))
     routes = set()
     for node in ast.walk(tree):
@@ -629,6 +635,10 @@ def test_one_home_request_per_http_request(http, name):
     if name in DIARY_ROUTE_METHODS:
         assert response.status_code == 200, (name, response.status_code, response.text)
         assert authorizer.actions == DIARY_OPERATIONS[DIARY_ROUTE_METHODS[name]][1], name
+    if name in PROFILE_ROUTE_METHODS:
+        # no profile yet is a 404, but the ONE Home request was still made
+        assert response.status_code in (200, 404), (name, response.status_code, response.text)
+        assert authorizer.actions == PROFILE_OPERATIONS[PROFILE_ROUTE_METHODS[name]][1], name
 
 
 def test_every_diary_route_maps_to_a_diary_operation(http):
@@ -639,7 +649,19 @@ def test_every_diary_route_maps_to_a_diary_operation(http):
         if route.split(" ", 1)[1] in DIARY_ROUTE_METHODS
     }
     assert discovered == set(DIARY_ROUTE_METHODS), sorted(set(DIARY_ROUTE_METHODS) - discovered)
-    assert set(DIARY_ROUTE_METHODS.values()) | NOT_YET_EXPOSED == set(DIARY_OPERATIONS)
+    assert set(DIARY_ROUTE_METHODS.values()) == set(DIARY_OPERATIONS)
+
+
+def test_every_profile_route_maps_to_a_profile_operation(http):
+    main, _, _ = http
+    discovered = {
+        route.split(" ", 1)[1]
+        for route in _person_sensitive_routes(main.app)
+        if route.split(" ", 1)[1] in PROFILE_ROUTE_METHODS
+    }
+    assert discovered == set(PROFILE_ROUTE_METHODS), sorted(set(PROFILE_ROUTE_METHODS) - discovered)
+    # the other profile operations are agent-only (MCP); see PROFILE_TOOL_METHODS
+    assert {"get_profile_view"} <= set(PROFILE_ROUTE_METHODS.values()) <= set(PROFILE_OPERATIONS)
 
 
 # ==========================================================================
@@ -685,6 +707,11 @@ MCP_OPERATIONS = {
     "get_day_summary": lambda t, pid: t["get_day_summary"](SUBJECT, DATE),
     "close_day": lambda t, pid: t["close_day"](SUBJECT, DATE),
     "set_nutrition_mode": lambda t, pid: t["set_nutrition_mode"](SUBJECT, "GENERAL"),
+    "get_period_summary": lambda t, pid: t["get_period_summary"](SUBJECT),
+    # ---- profile ----
+    "propose_profile": lambda t, pid: t["propose_profile"](SUBJECT, {"weight_kg": "80"}),
+    "confirm_profile": lambda t, pid: t["confirm_profile"](
+        SUBJECT, t["_profile_ids"]["draft"]),
 }
 
 #: diary tool -> the DiaryService method it must reach
@@ -697,6 +724,15 @@ DIARY_TOOL_METHODS = {
     "get_day_summary": "get_day_summary",
     "close_day": "close_day",
     "set_nutrition_mode": "set_mode",
+    "get_period_summary": "get_period_summary",
+}
+
+#: profile tool -> the ProfileService method it must reach
+PROFILE_TOOL_METHODS = {
+    "get_nutrition_profile": "get_profile_view",
+    "get_pregnancy_profile": "get_profile_view",
+    "propose_profile": "propose_profile",
+    "confirm_profile": "confirm_profile",
 }
 
 
@@ -718,6 +754,7 @@ def mcp(monkeypatch, tmp_path):
         repository, SyntheticFoodProvider(), authorizer=authorizer
     )
     mcp_server._diary = _diary_service(str(tmp_path / "mcp.sqlite"), authorizer)
+    mcp_server._profile = _profile_service(str(tmp_path / "mcp.sqlite"), authorizer)
     planned_id = _seed_planned(mcp_server._svc, repository)
     diary_ids = _seed_diary(str(tmp_path / "mcp.sqlite"))
     authorizer.home_calls = 0
@@ -731,6 +768,7 @@ def mcp(monkeypatch, tmp_path):
     monkeypatch.setattr(mcp_server, "current_delegation", lambda: SESSION)
     tools = _mcp_tools(mcp_server)
     tools["_ids"] = diary_ids
+    tools["_profile_ids"] = _seed_profile(str(tmp_path / "mcp.sqlite"))
     return tools, authorizer, planned_id
 
 
@@ -741,7 +779,8 @@ def test_every_person_sensitive_mcp_tool_is_covered(mcp):
 
     from app.mcp import server as mcp_module
 
-    authorizing = _authorizing_service_methods() | _authorizing_diary_methods()
+    authorizing = (_authorizing_service_methods() | _authorizing_diary_methods()
+                   | _authorizing_profile_methods())
     tree = ast.parse(pathlib.Path(mcp_module.__file__).read_text(encoding="utf-8"))
     discovered = set()
     for node in ast.walk(tree):
@@ -775,12 +814,20 @@ def test_one_home_request_per_mcp_tool_call(mcp, name):
     )
     if name in DIARY_TOOL_METHODS:
         assert authorizer.actions == DIARY_OPERATIONS[DIARY_TOOL_METHODS[name]][1], name
+    if name in PROFILE_TOOL_METHODS:
+        assert authorizer.actions == PROFILE_OPERATIONS[PROFILE_TOOL_METHODS[name]][1], name
 
 
 def test_every_diary_tool_maps_to_a_diary_operation(mcp):
     tools, _, _ = mcp
     assert set(DIARY_TOOL_METHODS) <= set(tools)
-    assert set(DIARY_TOOL_METHODS.values()) | NOT_YET_EXPOSED == set(DIARY_OPERATIONS)
+    assert set(DIARY_TOOL_METHODS.values()) == set(DIARY_OPERATIONS)
+
+
+def test_every_profile_tool_maps_to_a_profile_operation(mcp):
+    tools, _, _ = mcp
+    assert set(PROFILE_TOOL_METHODS) <= set(tools)
+    assert set(PROFILE_TOOL_METHODS.values()) == set(PROFILE_OPERATIONS)
 
 
 # ==========================================================================

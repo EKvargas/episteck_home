@@ -22,11 +22,12 @@ class FakeService:
         self.calls = []
         self.deny = False
 
-    def get_profile(self, delegation, subject_person_id):
-        self.calls.append(("get_profile", delegation, subject_person_id))
+    def get_profile_view(self, delegation, subject_person_id):
+        self.calls.append(("get_profile_view", delegation, subject_person_id))
         if self.deny:
             raise PermissionError("Home denied")
-        return {"person_id": subject_person_id, "context": "SYNTHETIC"}
+        return {"person_id": subject_person_id, "context": "SYNTHETIC",
+                "targets": {"method": "m"}, "targets_flat": {}}
 
 
 @pytest.fixture
@@ -42,8 +43,8 @@ def boundary_modules(monkeypatch, tmp_path):
     mcp_server = importlib.import_module("app.mcp.server")
     session = importlib.import_module("app.session")
     service = FakeService()
-    main.svc = service
-    mcp_server._svc = service
+    main.profile = service
+    mcp_server._profile = service
     return main, mcp_server, service, session
 
 
@@ -90,7 +91,7 @@ def test_fastapi_takes_the_session_from_the_header_only(boundary_modules):
     )
     assert response.status_code == 200
     assert response.json()["context"] == "SYNTHETIC"
-    assert service.calls == [("get_profile", SESSION, "PSN-SUBJECT")]
+    assert service.calls == [("get_profile_view", SESSION, "PSN-SUBJECT")]
 
 
 def test_fastapi_ignores_a_query_supplied_actor(boundary_modules):
@@ -103,7 +104,7 @@ def test_fastapi_ignores_a_query_supplied_actor(boundary_modules):
     )
     assert response.status_code == 200
     # Only the header session reached the service; the query values were ignored.
-    assert service.calls == [("get_profile", SESSION, "PSN-SUBJECT")]
+    assert service.calls == [("get_profile_view", SESSION, "PSN-SUBJECT")]
 
 
 def test_fastapi_without_session_passes_none_and_service_denies(boundary_modules):
@@ -113,7 +114,7 @@ def test_fastapi_without_session_passes_none_and_service_denies(boundary_modules
         "/profile/PSN-SUBJECT"
     )
     assert response.status_code == 403
-    assert service.calls == [("get_profile", None, "PSN-SUBJECT")]
+    assert service.calls == [("get_profile_view", None, "PSN-SUBJECT")]
 
 
 def test_fastapi_exposes_no_actor_parameter_in_its_schema(boundary_modules):
@@ -153,7 +154,7 @@ def test_mcp_takes_the_session_from_context_not_arguments(boundary_modules):
     with _delegated_request(SESSION):
         result = _tool(mcp_server, "get_nutrition_profile")("PSN-SUBJECT")
     assert result["context"] == "SYNTHETIC"
-    assert service.calls == [("get_profile", SESSION, "PSN-SUBJECT")]
+    assert service.calls == [("get_profile_view", SESSION, "PSN-SUBJECT")]
 
 
 def test_mcp_tools_expose_no_actor_parameter(boundary_modules):
@@ -188,7 +189,7 @@ def test_mcp_denial_is_structured_and_does_not_escalate(boundary_modules):
         "error": "access_denied",
         "reason": "Home denied",
     }
-    assert service.calls == [("get_profile", SESSION, "PSN-SUBJECT")]
+    assert service.calls == [("get_profile_view", SESSION, "PSN-SUBJECT")]
 
 
 def test_mcp_without_session_never_reaches_the_repository(boundary_modules):
@@ -198,4 +199,4 @@ def test_mcp_without_session_never_reaches_the_repository(boundary_modules):
         result = _tool(mcp_server, "get_nutrition_profile")("PSN-SUBJECT")
     assert result["allow"] is False
     # The service was still called, but with no session, so it denies before any read.
-    assert service.calls == [("get_profile", None, "PSN-SUBJECT")]
+    assert service.calls == [("get_profile_view", None, "PSN-SUBJECT")]

@@ -51,8 +51,11 @@ def build_service() -> NutritionService:
     return NutritionService(repo, provider, mealie, authorizer=build_home_authorizer())
 
 
-def build_diary_service():
-    """Build the diary service. A bad DIARY_TZ fails here, at startup."""
+def build_diary_service(profile=None):
+    """Build the diary service. A bad DIARY_TZ fails here, at startup.
+
+    Pass the entry point's own ProfileService so both share one instance.
+    """
     from zoneinfo import ZoneInfo
 
     from .diary.service import DiaryService
@@ -63,7 +66,7 @@ def build_diary_service():
     return DiaryService(
         SqliteDiaryStore(_DB),
         _build_provider(),
-        build_profile_service(),
+        profile if profile is not None else build_profile_service(),
         authorizer=build_home_authorizer(),
         tz=tz,
     )

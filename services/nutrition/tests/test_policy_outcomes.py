@@ -8,12 +8,17 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.home_control.client import SESSION_INVALID, UNAVAILABLE, AccessDecision
+from app.profile.service import ProfileService
 from app.providers.synthetic import SyntheticFoodProvider
+from app.store.profile_sqlite import SqliteProfileStore
+from tests.support import AllowAllAuthorizer
 from app.service import AccessDenied, NutritionService, PolicyUnavailable, SessionInvalid
 
 SESSION = "delegation-token-outcomes"
 HOME_REASON = "no matching active grant (fail closed)"
 PROFILE = {"context": "GENERAL", "target_source": "USER_CONFIGURED", "targets": {"energy_kcal": 2000.0}}
+WIRE = {"birth_date": "1986-03-10", "sex": "MALE", "height_cm": "180", "weight_kg": "82",
+        "activity_pal": "1.6"}
 
 DECISIONS = {
     "PSN-A": AccessDecision(True, "grant NUTRITION/VIEW"),
@@ -50,6 +55,16 @@ class SpyRepository:
         return self.profiles.get(person_id)
 
 
+class SpyProfileStore(SqliteProfileStore):
+    def __init__(self, path):
+        super().__init__(path)
+        self.reads = []
+
+    def list_versions(self, person_id):
+        self.reads.append(person_id)
+        return super().list_versions(person_id)
+
+
 def _service():
     repo = SpyRepository({"PSN-A": PROFILE})
     authorizer = ScriptedAuthorizer(DECISIONS)
@@ -79,15 +94,20 @@ def http(monkeypatch, tmp_path):
     monkeypatch.setenv("NUTRITION_DB", str(tmp_path / "nutrition.sqlite"))
     sys.modules.pop("app.main", None)
     main = importlib.import_module("app.main")
-    service, repo, authorizer = _service()
-    main.svc = service
-    return TestClient(main.app, raise_server_exceptions=False), repo, authorizer
+    store = SpyProfileStore(str(tmp_path / "nutrition.sqlite"))
+    seeding = ProfileService(store, authorizer=AllowAllAuthorizer())
+    draft = seeding.propose_profile("seed", "PSN-A", WIRE)["draft_id"]
+    seeding.confirm_profile("seed", "PSN-A", draft)
+    store.reads.clear()
+    authorizer = ScriptedAuthorizer(DECISIONS)
+    main.profile = ProfileService(store, authorizer=authorizer)
+    return TestClient(main.app, raise_server_exceptions=False), store, authorizer
 
 
 @pytest.mark.parametrize(
     "subject, status, body",
     [
-        ("PSN-A", 200, PROFILE),
+        ("PSN-A", 200, None),
         ("PSN-EMPTY", 404, {"detail": "no profile"}),
         ("PSN-B", 403, {"detail": "ACCESS_DENIED"}),
         ("PSN-SESSION", 401, {"detail": "SESSION_INVALID"}),
@@ -98,7 +118,13 @@ def test_profile_route_contract(http, subject, status, body):
     client, repo, authorizer = http
     response = client.get(f"/profile/{subject}", headers={"X-Episteck-Delegation": SESSION})
     assert response.status_code == status
-    assert response.json() == body
+    if body is None:  # the view: flat Hub keys plus the structured set
+        found = response.json()
+        assert found["context"] == "GENERAL" and found["target_source"] == "REFERENCE_TARGET"
+        assert found["targets"]["energy_kcal"] and "targets_flat" not in found
+        assert found["target_set"]["method"] == "episteck-targets-1"
+    else:
+        assert response.json() == body
     assert HOME_REASON not in response.text
     assert "indeterminate" not in response.text
     assert repo.reads == ([subject] if status in (200, 404) else [])
@@ -130,7 +156,7 @@ def test_unusable_delegation_answers_401_not_500_with_the_real_client(http):
         "https://home.episteck.com", "k", "s", transport=httpx.MockTransport(handler)
     )
     client, repo, _ = http
-    main.svc = NutritionService(repo, SyntheticFoodProvider(), authorizer=real)
+    main.profile = ProfileService(repo, authorizer=real)
     main.app.dependency_overrides[main.human_session] = lambda: "tok\u00e9n\u2603"
     try:
         response = client.get("/profile/PSN-A")

@@ -7,14 +7,17 @@ from typing import Any
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from .deps import build_diary_service, build_service
+from nutrition_domain.profile import ProfileInvalid
+
+from .deps import build_diary_service, build_profile_service, build_service
 from .diary.service import BLS_ATTRIBUTION, DraftExpired, DraftNotFound, EntryNotFound, ProviderUnavailable
 from .service import AccessDenied, PolicyUnavailable, SessionInvalid
 
 
 app = FastAPI(title="Episteck Nutrition", version="0.3.0")
 svc = build_service()
-diary = build_diary_service()
+profile = build_profile_service()
+diary = build_diary_service(profile)
 
 DELEGATION_HEADER = "X-Episteck-Delegation"
 
@@ -66,10 +69,14 @@ def health():
 
 @app.get("/profile/{person_id}")
 def get_profile(person_id: str, delegation: str | None = Depends(human_session)):
-    profile = _authorized(lambda: svc.get_profile(delegation, person_id))
-    if profile is None:
+    view = _authorized(lambda: profile.get_profile_view(delegation, person_id))
+    if view is None:
         raise HTTPException(404, "no profile")
-    return profile
+    # The deployed Hub reads a flat ``targets`` map; the structured set moves to ``target_set``.
+    body = {key: value for key, value in view.items() if key not in ("targets", "targets_flat")}
+    body["targets"] = view["targets_flat"]
+    body["target_set"] = view["targets"]
+    return body
 
 
 @app.put("/profile/{person_id}")
@@ -263,6 +270,10 @@ def _diary_call(operation: Callable[[], Any]):
         raise HTTPException(409, "DRAFT_EXPIRED") from None
     except ProviderUnavailable:
         raise HTTPException(503, "PROVIDER_UNAVAILABLE") from None
+    except ProfileInvalid as error:
+        raise HTTPException(
+            400, {"error": "INVALID_FIELD", "field": getattr(error, "field", None)}
+        ) from None
     except ValueError as error:
         # The field NAME only, never food text.
         raise HTTPException(
@@ -332,6 +343,15 @@ def diary_entry(person_id: str, entry_id: str, delegation: str | None = Depends(
 def diary_today(person_id: str, delegation: str | None = Depends(human_session)):
     """Today in DIARY_TZ, so the caller never works out the local date itself."""
     return _diary_call(lambda: diary.get_day_summary(delegation, person_id))
+
+
+@app.get("/diary/{person_id}/period")
+def diary_period(
+    person_id: str, start: str | None = None, end: str | None = None,
+    delegation: str | None = Depends(human_session),
+):
+    """At most 31 days; the default is the last 7 days ending today."""
+    return _diary_call(lambda: diary.get_period_summary(delegation, person_id, start, end))
 
 
 @app.post("/diary/{person_id}/days/today/close")
