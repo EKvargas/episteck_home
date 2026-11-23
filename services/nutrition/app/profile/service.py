@@ -52,6 +52,11 @@ def _refs(rows: list[dict]) -> list[VersionRef]:
             for r in rows]
 
 
+def _onboarded(rows: list[dict]) -> bool:
+    """Onboarded = at least one version confirmed through confirm_profile (spec 6.4)."""
+    return any(r["origin"] == "PROFILE" for r in rows)
+
+
 class ProfileService:
     def __init__(
         self,
@@ -102,7 +107,7 @@ class ProfileService:
         return row["version"] if row else None
 
     def has_onboarded(self, person: str) -> bool:
-        return any(r["origin"] == "PROFILE" for r in self._store.list_versions(person))
+        return _onboarded(self._store.list_versions(person))
 
     def _doc(self, inputs: ProfileInputs, changed: list[str], valid_from: date) -> dict:
         return {"inputs": inputs_to_doc(inputs), "changed": changed,
@@ -130,7 +135,7 @@ class ProfileService:
 
     # ---- views ----------------------------------------------------------
     def _view(self, person: str, inputs: ProfileInputs, *, version: int | None,
-              valid_from: date, origin: str, method: str, history: list[dict]) -> dict:
+              valid_from: date, origin: str, method: str, rows: list[dict]) -> dict:
         today = self.today()
         ts = targets_for_day(inputs, today, method=method)
         due = inputs.due_date
@@ -138,7 +143,7 @@ class ProfileService:
             "person_id": person, "version": version, "valid_from": valid_from.isoformat(),
             "origin": origin,
             # False while only mode or migrated versions exist: offer onboarding.
-            "onboarded": self.has_onboarded(person),
+            "onboarded": _onboarded(rows),
             "mode": inputs.mode,
             "due_date": due.isoformat() if due else None,
             "trimester": trimester(due, today) if inputs.mode == "PREGNANCY" and due else None,
@@ -160,7 +165,7 @@ class ProfileService:
             "food": {"preferences": inputs.preferences, "dislikes": inputs.dislikes,
                      "intolerances": inputs.intolerances},
             "targets": targets_json(ts),
-            "history": history,
+            "history": self._history(rows),
             # kept for the deployed Hub (profile-contract.ts)
             "context": inputs.mode, "target_source": "REFERENCE_TARGET",
             "targets_flat": {n: str(t.value) for n, t in ts.targets.items()},
@@ -180,7 +185,7 @@ class ProfileService:
         return self._view(
             person, inputs_from_doc(row["doc"]["inputs"]), version=row["version"],
             valid_from=date.fromisoformat(row["valid_from"]), origin=row["origin"],
-            method=row["method"], history=self._history(rows))
+            method=row["method"], rows=rows)
 
     # ---- public operations ---------------------------------------------
     def get_profile_view(self, delegation, subject_person_id: str) -> dict | None:
@@ -212,7 +217,7 @@ class ProfileService:
         draft = self._store.put_draft(subject_person_id, {"changes": dict(changes)}, expires_at)
         rows = self._store.list_versions(subject_person_id)
         view = self._view(subject_person_id, new, version=None, valid_from=today,
-                          origin="PROFILE", method=METHOD_V1, history=self._history(rows))
+                          origin="PROFILE", method=METHOD_V1, rows=rows)
         return {"draft_id": draft["id"], "expires_at": expires_at.isoformat(), "profile": view,
                 "changed": _changed_fields(current, new),
                 "targets_before": targets_json(before) if before else None,
