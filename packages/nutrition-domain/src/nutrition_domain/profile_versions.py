@@ -21,6 +21,7 @@ def version_in_force(versions: Sequence[VersionRef], day: date) -> int | None:
     if profile:
         first = profile[0].valid_from
         if day < first:
-            return max(v.version for v in profile if v.valid_from == first)
+            # The onboarding day's last version reaches back, whatever its origin (spec 6.4).
+            return max(v.version for v in ordered if v.valid_from == first)
     eligible = [v for v in ordered if v.valid_from <= day]
     return eligible[-1].version if eligible else None

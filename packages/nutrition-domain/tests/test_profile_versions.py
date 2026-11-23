@@ -19,6 +19,12 @@ def test_same_day_correction_reaches_back():
     assert version_in_force(vs, date(2026, 11, 21)) == 2
 
 
+def test_same_day_mode_switch_reaches_back():
+    vs = [V(1, "2026-11-23", "PROFILE"), V(2, "2026-11-23", "MODE")]
+    assert version_in_force(vs, date(2026, 11, 22)) == 2
+    assert version_in_force(vs, date(2026, 11, 23)) == 2
+
+
 def test_next_day_correction_starts_that_day():
     vs = [V(1, "2026-11-23", "PROFILE"), V(2, "2026-11-24", "PROFILE")]
     assert version_in_force(vs, date(2026, 11, 21)) == 1

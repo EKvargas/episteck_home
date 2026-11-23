@@ -170,6 +170,14 @@ def test_targets_on_follow_the_version_in_force(env):
     assert svc.targets_on("PSN-NONE", date(2026, 11, 25)) is None
 
 
+def test_same_day_mode_switch_after_onboarding_reaches_back(env):
+    svc, *_ = env
+    _onboard(env, "PSN-A", ANA_WIRE)
+    svc.record_mode("PSN-A", "PREGNANCY", date(2027, 5, 15))  # same local day
+    assert svc.inputs_on("PSN-A", date(2026, 11, 22)).mode == "PREGNANCY"
+    assert svc.version_on("PSN-A", date(2026, 11, 22)) == 2
+
+
 def test_has_onboarded_needs_a_profile_origin_version(env):
     svc, *_ = env
     assert not svc.has_onboarded("PSN-A")
