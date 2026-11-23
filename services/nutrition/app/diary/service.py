@@ -12,22 +12,28 @@ import sqlite3
 from collections.abc import Callable
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 import httpx
 from nutrition_domain.day_summary import summarize_day
+from nutrition_domain.nutrient_totals import DayRow, average_period
 from nutrition_domain.free_sugars import FREE_SUGAR_MAP_VERSION, FreeSugarClass, classify, item_free_sugars_g
 from nutrition_domain.portions import to_grams
 from nutrition_domain.rules import effective_limit, trimester
 
+from .nutrients import average_json, day_totals, nutrient_blocks
 from ..providers.food_provider import FoodNotFound, FoodProvider, FoodRecord
 from ..service import AccessAuthorizer, _refuse_unless_allowed
+
+if TYPE_CHECKING:  # the profile service imports this module's exceptions
+    from ..profile.service import ProfileService
 
 MODES = ("GENERAL", "PREGNANCY")
 BLS_ATTRIBUTION = "Datos: Max Rubner-Institut, BLS 4.0"
 MAX_ITEMS = 30
 MAX_LABEL = 120
+MAX_PERIOD_DAYS = 31
 MAX_FUTURE = timedelta(minutes=10)  # clock skew allowance for consumed_at
 _ONE_DECIMAL = Decimal("0.1")
 
@@ -128,7 +134,7 @@ class DiaryService:
         self,
         store,
         provider: FoodProvider,
-        profiles,
+        profiles: ProfileService,
         *,
         authorizer: AccessAuthorizer,
         tz: str = "Europe/Berlin",
@@ -154,19 +160,11 @@ class DiaryService:
         _refuse_unless_allowed(decision)
 
     # ---- profile / mode ------------------------------------------------
-    def _profile(self, person: str) -> dict:
-        return self._profiles.get_profile(person) or {}
-
-    @staticmethod
-    def _mode_of(profile: dict) -> str:
-        return "PREGNANCY" if profile.get("context") == "PREGNANCY" else "GENERAL"
-
-    @staticmethod
-    def _due_of(profile: dict) -> date | None:
-        try:
-            return date.fromisoformat(profile.get("due_date"))
-        except (TypeError, ValueError):
-            return None
+    def _mode_on(self, person: str, day: date) -> tuple[str, date | None]:
+        inputs = self._profiles.inputs_on(person, day)
+        if inputs is None:
+            return "GENERAL", None
+        return ("PREGNANCY" if inputs.mode == "PREGNANCY" else "GENERAL"), inputs.due_date
 
     def _today(self) -> date:
         return self._clock().astimezone(self._tz).date()
@@ -260,21 +258,23 @@ class DiaryService:
         return dt
 
     # ---- day summary ---------------------------------------------------
-    def _day(self, person: str, day: date) -> dict:
-        profile = self._profile(person)
-        mode = self._mode_of(profile)
-        due = self._due_of(profile)
+    def _day_core(self, person: str, day: date) -> tuple[dict, list[dict], DayRow]:
+        """The day without its entries, plus its items and its row for period averages."""
+        mode, due = self._mode_on(person, day)
         entries = self._store.list_entries(person, day.isoformat())
         items = [i for e in entries for i in e["items"]]
         summary = summarize_day(
             day, [_opt_dec(i["free_sugars_g"]) for i in items],
             self._store.is_day_closed(person, day.isoformat()), effective_limit(day, mode))
+        targets = self._profiles.targets_on(person, day)
+        totals = day_totals(items)
         lim = summary.limit
         total = summary.free_sugars_known_g
-        return {
+        core = {
             "date": day.isoformat(),
             "mode": mode,
             "trimester": trimester(due, day) if mode == "PREGNANCY" and due else None,
+            "profile_version": self._profiles.version_on(person, day),
             "day_status": summary.day_status.value,
             "sugar_status": summary.sugar_status.value,
             "free_sugars_known_g": None if total is None else str(_one_decimal(total)),
@@ -287,10 +287,17 @@ class DiaryService:
                 "sources": [{"title": s.title, "url": s.url} for s in lim.sources],
                 "adaptation": lim.adaptation,
             },
-            "entries": [{"id": e["id"], "consumed_at": e["consumed_at"], "items": e["items"]}
-                        for e in entries],
-            "attribution": _attribution(items),
+            "nutrients": nutrient_blocks(totals, targets),
         }
+        return core, entries, DayRow(day, summary.day_status, totals, targets)
+
+    def _day(self, person: str, day: date) -> dict:
+        core, entries, _ = self._day_core(person, day)
+        items = [i for e in entries for i in e["items"]]
+        return {**core,
+                "entries": [{"id": e["id"], "consumed_at": e["consumed_at"], "items": e["items"]}
+                            for e in entries],
+                "attribution": _attribution(items)}
 
     # ---- public API ----------------------------------------------------
     def propose_intake(self, delegation, subject_person_id: str, items: list[dict],
@@ -322,7 +329,7 @@ class DiaryService:
                 raise DraftExpired("draft expired")
             entry_doc = {
                 "items": draft["items"], "day": draft["day"], "consumed_at": draft["consumed_at"],
-                "mode": self._mode_of(self._profile(subject_person_id)),
+                "mode": self._mode_on(subject_person_id, self._today())[0],
                 "confirmed_at": self._clock().astimezone(timezone.utc).isoformat(),
             }
             try:
@@ -389,17 +396,34 @@ class DiaryService:
             if mode != "PREGNANCY":
                 raise InvalidField("due_date", "due_date is only allowed with PREGNANCY")
             due = _parse_day(due_date, "due_date")
-        stored = self._profile(subject_person_id)
-        if not stored:
-            # Same shape ProfileIn gives; the Hub profile view rejects a profile without
-            # targets or target_source.
-            stored = {"preferences": None, "dislikes": None, "intolerances": None,
-                      "targets": {}, "target_source": "USER_CONFIGURED"}
-        profile = {**stored, "context": mode,
-                   "due_date": due.isoformat() if due else None}
-        self._profiles.upsert_profile(subject_person_id, profile)
-        return {"mode": mode, "due_date": profile["due_date"],
-                "trimester": trimester(due, self._today()) if due else None}
+        row = self._profiles.record_mode(subject_person_id, mode, due)
+        return {"mode": mode, "due_date": due.isoformat() if due else None,
+                "trimester": trimester(due, self._today()) if due else None,
+                "version": row["version"]}
+
+    def get_period_summary(self, delegation, subject_person_id: str, start: str | None = None,
+                           end: str | None = None) -> dict:
+        self._authorize(delegation, subject_person_id, ["VIEW"])
+        today = self._today()
+        first = None if start is None else _parse_day(start, "start")
+        last = today if end is None else _parse_day(end, "end")
+        if last > today:
+            raise InvalidField("end", "end cannot be in the future")
+        first = last - timedelta(days=6) if first is None else first
+        if first > last:
+            raise InvalidField("start", "start must not be after end")
+        if (last - first).days + 1 > MAX_PERIOD_DAYS:
+            raise InvalidField("start", f"a period covers at most {MAX_PERIOD_DAYS} days")
+        days, rows = [], []
+        for n in range((last - first).days + 1):
+            core, _, row = self._day_core(subject_person_id, first + timedelta(days=n))
+            days.append({k: core[k] for k in (
+                "date", "day_status", "mode", "trimester", "profile_version",
+                "free_sugars_known_g", "items_uncounted", "nutrients")})
+            rows.append(row)
+        return {"start": first.isoformat(), "end": last.isoformat(),
+                "has_profile": self._profiles.has_onboarded(subject_person_id),
+                "days": days, "averages": average_json(average_period(rows))}
 
 
 def _attribution(items: list[dict]) -> list[str]:

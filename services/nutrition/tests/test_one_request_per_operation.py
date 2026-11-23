@@ -123,8 +123,8 @@ COLA = {"label": "cola", "food_id": "syn-cola", "amount": 1, "unit": "small_glas
 
 def _diary_service(db, authorizer):
     return DiaryService(
-        SqliteDiaryStore(db), SyntheticFoodProvider(), SqliteNutritionRepository(db),
-        authorizer=authorizer,
+        SqliteDiaryStore(db), SyntheticFoodProvider(),
+        ProfileService(SqliteProfileStore(db), authorizer=authorizer), authorizer=authorizer,
     )
 
 
@@ -243,7 +243,12 @@ DIARY_OPERATIONS = {
         lambda d, ids: d.close_day(SESSION, SUBJECT, DATE), ["UPDATE", "VIEW"]),
     "set_mode": (
         lambda d, ids: d.set_mode(SESSION, SUBJECT, "GENERAL"), ["UPDATE", "VIEW"]),
+    "get_period_summary": (
+        lambda d, ids: d.get_period_summary(SESSION, SUBJECT), ["VIEW"]),
 }
+
+#: operations with no route or tool yet; Task 7 exposes them and empties this set
+NOT_YET_EXPOSED = {"get_period_summary"}
 
 
 def _authorizing_diary_methods() -> set[str]:
@@ -634,7 +639,7 @@ def test_every_diary_route_maps_to_a_diary_operation(http):
         if route.split(" ", 1)[1] in DIARY_ROUTE_METHODS
     }
     assert discovered == set(DIARY_ROUTE_METHODS), sorted(set(DIARY_ROUTE_METHODS) - discovered)
-    assert set(DIARY_ROUTE_METHODS.values()) == set(DIARY_OPERATIONS)
+    assert set(DIARY_ROUTE_METHODS.values()) | NOT_YET_EXPOSED == set(DIARY_OPERATIONS)
 
 
 # ==========================================================================
@@ -775,7 +780,7 @@ def test_one_home_request_per_mcp_tool_call(mcp, name):
 def test_every_diary_tool_maps_to_a_diary_operation(mcp):
     tools, _, _ = mcp
     assert set(DIARY_TOOL_METHODS) <= set(tools)
-    assert set(DIARY_TOOL_METHODS.values()) == set(DIARY_OPERATIONS)
+    assert set(DIARY_TOOL_METHODS.values()) | NOT_YET_EXPOSED == set(DIARY_OPERATIONS)
 
 
 # ==========================================================================

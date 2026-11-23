@@ -63,7 +63,7 @@ def build_diary_service():
     return DiaryService(
         SqliteDiaryStore(_DB),
         _build_provider(),
-        SqliteNutritionRepository(_DB),
+        build_profile_service(),
         authorizer=build_home_authorizer(),
         tz=tz,
     )
