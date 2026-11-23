@@ -5,10 +5,10 @@
 # Claude runs only the read-only ones (preflight, login-check, verify).
 #
 # Extract the merged commit on the node first, from the repo root:
-#   git archive <SHA> deploy/hermes | ssh -F C:/Users/D064974/.ssh/config episteck-node1 \
+#   git archive <SHA> deploy/hermes | ssh -F "$HOME/.ssh/config" episteck-node1 \
 #     'sudo -n install -d -m 755 /var/lib/episteck/hermes-ana && sudo -n tar -x -C /var/lib/episteck/hermes-ana'
 # then, one step at a time:
-#   ssh -F C:/Users/D064974/.ssh/config episteck-node1 'sudo -n bash -s -- <step> [arg]' < deploy/hermes/install-home-agent-ana.sh
+#   ssh -F "$HOME/.ssh/config" episteck-node1 'sudo -n bash -s -- <step> [arg]' < deploy/hermes/install-home-agent-ana.sh
 #
 # Steps: preflight | user | install | configure | env | telegram <id> | login | login-check
 #        | gateway | cron <HH:MM> | purge | verify | stop | rollback-config <dir>
@@ -58,7 +58,7 @@ CRON_PROMPT='Scheduled evening check-in. Follow the skill section "Evening check
 1. Call mcp__home__whoami once, then mcp__nutrition__get_day_summary once with subject_person_id set to its actor_person_id and no date. Call no other tool and save nothing.
 2. If day_status is COMPLETE, or a call returns an error other than an access refusal, your whole final response is exactly [SILENT].
 3. If a call returns an access refusal, reply with the permission line from the skill and stop.
-4. Otherwise write ONE short message in Spanish as that section says. It names the day it is about as day and month in Spanish words, no weekday (for example 20 de noviembre), taken from the date of get_day_summary. When profile_version is not null, also give energy and protein from nutrients against their targets. The message ends with exactly: ¿Eso fue todo hoy?'
+4. Otherwise write ONE short message in Spanish as that section says. It names the day it is about as day and month in Spanish words, no weekday (for example 20 de noviembre), taken from the date of get_day_summary. For energy_kcal and protein_g in nutrients, give known against target only when the target of that nutrient is not null, and leave out a nutrient whose target is null, even when profile_version is set. A day with no targets gets the free sugars part only. The message ends with exactly: ¿Eso fue todo hoy?'
 
 # Hermes' own config load/save (hermes_cli.config), run as the agent in its venv:
 #   set <yaml>   set every key of <yaml>, keep the rest of config.yaml, print the changed key paths

@@ -7,10 +7,10 @@
 # only the read-only steps (preflight, verify). Runbook: docs/runbooks/nutrition-profile-rollout.md.
 #
 # Extract the merged commit on the node first, from the repo root:
-#   git archive <SHA> deploy/hermes | ssh -F C:/Users/D064974/.ssh/config episteck-node1 \
+#   git archive <SHA> deploy/hermes | ssh -F "$HOME/.ssh/config" episteck-node1 \
 #     'sudo -n install -d -m 755 /var/lib/episteck/hermes-nutrition && sudo -n tar -x -C /var/lib/episteck/hermes-nutrition'
 # then, one step at a time:
-#   ssh -F C:/Users/D064974/.ssh/config episteck-node1 'sudo -n bash -s -- <step> [arg]' < deploy/hermes/install-olin-nutrition.sh
+#   ssh -F "$HOME/.ssh/config" episteck-node1 'sudo -n bash -s -- <step> [arg]' < deploy/hermes/install-olin-nutrition.sh
 #
 # Steps: preflight | install | cron <HH:MM> | verify | rollback-cron | rollback <backup-dir>
 # Never reads .env, auth.json, tokens or memory files. Never prints Ultron's notes, nor a
@@ -47,7 +47,7 @@ CRON_PROMPT='Scheduled evening check-in. Follow the skill section "Evening check
 1. Call mcp__home__whoami once, then mcp__nutrition__get_day_summary once with subject_person_id set to its actor_person_id and no date. Call no other tool and save nothing.
 2. If day_status is COMPLETE, or a call returns an error other than an access refusal, your whole final response is exactly [SILENT].
 3. If a call returns an access refusal, reply with the permission line from the skill and stop.
-4. Otherwise write ONE short message in English as that section says. It names the day it is about as day and month, no weekday (for example 20 November), taken from the date of get_day_summary. It gives the free sugars against the reference and the uncounted items, or says that nothing is logged yet. When profile_version is not null, it also gives energy and protein from nutrients against their targets. The message ends with exactly: Was that everything today?'
+4. Otherwise write ONE short message in English as that section says. It names the day it is about as day and month, no weekday (for example 20 November), taken from the date of get_day_summary. It gives the free sugars against the reference and the uncounted items, or says that nothing is logged yet. For energy_kcal and protein_g in nutrients, it gives known against target only when the target of that nutrient is not null, and leaves out a nutrient whose target is null, even when profile_version is set. A day with no targets gets the free sugars part only. The message ends with exactly: Was that everything today?'
 
 as_agent() {  # stdin is /dev/null so no command can swallow the rest of this piped script
   local u; u="$(id -u "$AGENT")"

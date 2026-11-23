@@ -286,9 +286,16 @@ def test_cron_prompt_is_english_and_ends_with_the_question():
     four = lines[4]
     assert four.startswith("4. Otherwise write ONE short message in English")
     for part in ("as day and month", "no weekday", "free sugars against the reference",
-                 "uncounted items", "When profile_version is not null",
-                 "energy and protein from nutrients against their targets"):
+                 "uncounted items"):
         assert part in four, part
+    # A mode-only or MIGRATED profile version has no targets: a nutrient goes in only with one (R15).
+    assert four.endswith(
+        "It gives the free sugars against the reference and the uncounted items, or says that "
+        "nothing is logged yet. For energy_kcal and protein_g in nutrients, it gives known against "
+        "target only when the target of that nutrient is not null, and leaves out a nutrient whose "
+        "target is null, even when profile_version is set. A day with no targets gets the free "
+        "sugars part only. The message ends with exactly: Was that everything today?")
+    assert "When profile_version is not null" not in prompt
     assert prompt.endswith("The message ends with exactly: Was that everything today?")
     assert "Spanish" not in prompt and "¿" not in prompt
     # The job list is searched for the job name: the prompt must not contain it.

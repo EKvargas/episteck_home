@@ -130,13 +130,82 @@ def test_yes_acts_on_the_last_question_for_either_draft():
 
 def test_pregnancy_guardrails():
     s = _flat(_section(_body(), "## Pregnancy"))
+    assert s.startswith("## Pregnancy In pregnancy mode:")
+    assert "No weight-loss goal, energy deficit or dieting advice" in s
     assert "En el embarazo no fijamos objetivos de peso ni de déficit." in s
     assert "Eso es mejor consultarlo con tu matrona o tu médico." in s
+
+
+def test_clinical_questions_outside_pregnancy_go_to_the_doctor():
+    s = _flat(_section(_body(), "## Health questions"))
+    assert "Outside pregnancy mode" in s and "clinical or medical questions" in s
+    assert "`Eso es mejor consultarlo con tu médico.`" in s
+    assert "matrona" not in s  # the midwife line stays in pregnancy mode
 
 
 def test_check_in_adds_energy_and_protein_with_a_profile():
     s = _flat(_section(_body(), "## Evening check-in (cron)"))
     assert "profile_version" in s and "energy" in s and "protein" in s and "[SILENT]" in s
+
+
+def test_check_in_gives_a_nutrient_only_when_its_target_is_not_null():
+    # A mode-only or MIGRATED profile version has no energy or protein targets (R15).
+    s = _flat(_section(_body(), "## Evening check-in (cron)"))
+    assert ("For `energy_kcal` and `protein_g` in `nutrients`, include `known` against `target` "
+            "only when that nutrient's `target` is not null; leave out a nutrient whose `target` "
+            "is null.") in s
+    assert "A non-null `profile_version` alone is not enough" in s
+    assert "A day with no targets gets the free-sugar message only." in s
+    assert "When `profile_version` is not null, also include" not in s
+
+
+def test_evaluate_meal_figures_need_every_food_to_report_the_nutrient():
+    numbers = _flat(_section(_body(), "## Numbers"))
+    assert "An `evaluate_meal` total counts only the foods that report that nutrient" in numbers
+    s = _flat(_section(_body(), "## Foods, meals, recipes and menus"))
+    assert "`evaluate_meal` adds up only the nutrients each food reports." in s
+    assert ("Quote its figure for a nutrient only when every food in the meal lists that nutrient "
+            "in `get_food_detail`'s `known_nutrients`; otherwise that nutrient reads `sin dato`.") in s
+    # The field the rule relies on is the one get_food_detail returns.
+    assert '"known_nutrients"' in NUTRITION_SERVER.read_text(encoding="utf-8")
+
+
+def test_plan_menu_input_shape_is_the_one_the_service_reads():
+    s = _flat(_section(_body(), "## Foods, meals, recipes and menus"))
+    assert ("`mcp__nutrition__plan_menu` takes `subject_person_id` and `meals`, a list of meals shaped "
+            '`{"label": "<name, e.g. desayuno>", "foods": [{"food_id": "<from search_foods>", '
+            '"grams": <number>}]}`') in s
+    assert '`mcp__nutrition__evaluate_meal` takes `foods`, a list of `{"food_id": ..., "grams": ...}`' in s
+    server = NUTRITION_SERVER.read_text(encoding="utf-8")
+    assert re.search(r"def plan_menu\(\s*subject_person_id: str, meals: list\[dict\]\s*\)", server)
+    assert re.search(r"def evaluate_meal\(foods: list\[dict\]\)", server)
+    service = (ROOT / "services" / "nutrition" / "app" / "service.py").read_text(encoding="utf-8")
+    for key in ('meal["foods"]', 'meal["label"]', 'food["food_id"]', 'food["grams"]'):
+        assert key in service, key
+
+
+def test_confirming_names_the_entry_day_not_today():
+    s = _flat(_section(_body(), "## Confirming"))
+    assert "the free sugars of the entry's day from the returned `day`" in s
+    assert "naming that day as day and month from its `date`" in s
+    assert "today's" not in s
+
+
+def test_invalid_field_reasons_cover_every_reason():
+    s = _flat(_section(_body(), "## Profile and onboarding"))
+    assert ("`NOT_ALLOWED_IN_MODE` in pregnancy mode only: "
+            "`En el embarazo no fijamos objetivos de peso ni de déficit.`") in s
+    assert "`FUTURE_DATE` on `birth_date`: ask for the birth date again." in s
+    assert "`MEASUREMENT_TOO_OLD`, and `FUTURE_DATE` on `weight_measured_on`" in s
+    catch_all = s[s.index("Any other reason"):]
+    for reason in ("`OVER_100`", "`UNKNOWN_FIELD`", "`TOO_LONG`", "`NOT_ALLOWED_IN_MODE` outside"):
+        assert reason in catch_all, reason
+    assert "this field was not accepted, and ask for it again" in catch_all
+    # Every reason the domain can raise is handled by name or by the catch-all.
+    domain = (ROOT / "packages" / "nutrition-domain" / "src" / "nutrition_domain" / "profile.py")
+    doc = re.search(r"Reasons: (.*?)\(INVALID", domain.read_text(encoding="utf-8"), re.S).group(1)
+    for reason in re.findall(r"[A-Z_0-9]+", doc):
+        assert f"`{reason}`" in s, reason
 
 
 def test_privacy_rule():
@@ -199,6 +268,7 @@ def test_soul_is_spanish_and_loads_the_skill_first():
     assert "Olin" in soul and "Ana" in soul
     assert "nutrición" in soul and "médic" in soul and "español" in soul
     assert "Solo te ayudo con tu nutrición." in soul
+    assert "«Solo te ayudo con tu nutrición.»" in soul  # quoted: the exact line to send
     assert not re.search(r"\b(the|you|and)\b", soul)
 
 
