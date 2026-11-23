@@ -146,14 +146,16 @@ class SqliteProfileStore:
                 continue
             if not isinstance(old, dict):
                 continue
+            mode = "PREGNANCY" if old.get("context") == "PREGNANCY" else "GENERAL"
             due = None
-            if isinstance(old.get("due_date"), str):
+            # A due date belongs to pregnancy mode only; elsewhere it would block every change.
+            if mode == "PREGNANCY" and isinstance(old.get("due_date"), str):
                 try:
                     due = date.fromisoformat(old["due_date"])
                 except ValueError:
                     due = None
             inputs = ProfileInputs(
-                mode="PREGNANCY" if old.get("context") == "PREGNANCY" else "GENERAL",
+                mode=mode,
                 due_date=due,
                 preferences=_text(old.get("preferences")),
                 dislikes=_text(old.get("dislikes")),

@@ -1,3 +1,5 @@
+import json
+import sqlite3
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
@@ -242,6 +244,22 @@ def test_unrelated_change_ignores_a_stale_weight_measurement(env):
     assert c["profile"]["inputs"]["weight_measured_on"] == "2026-11-23"
     assert store.latest("PSN-E")["doc"]["inputs"]["weight_measured_on"] == "2026-11-23"
     assert c["profile"]["food"]["intolerances"] == "lactosa"
+
+
+def test_migrated_general_row_keeps_no_due_date_and_accepts_later_changes(env, tmp_path):
+    svc, *_, store = env
+    c = sqlite3.connect(str(tmp_path / "n.sqlite"))
+    c.execute("CREATE TABLE profile(person_id TEXT PRIMARY KEY, doc TEXT NOT NULL, updated_at TEXT)")
+    c.execute("INSERT INTO profile VALUES(?,?,NULL)", (
+        "PSN-T", json.dumps({"context": "G1_5_SYNTHETIC", "due_date": "2027-05-15"})))
+    c.commit()
+    c.close()
+    assert store.migrate_legacy("2026-11-23") == 1
+    inputs = store.latest("PSN-T")["doc"]["inputs"]
+    assert inputs["mode"] == "GENERAL" and inputs["due_date"] is None
+    p = svc.propose_profile(S, "PSN-T", {"intolerances": "lactosa"})
+    c = svc.confirm_profile(S, "PSN-T", p["draft_id"])
+    assert c["profile"]["version"] == 2 and c["profile"]["due_date"] is None
 
 
 def test_stale_measurement_date_given_explicitly_is_refused(env):
