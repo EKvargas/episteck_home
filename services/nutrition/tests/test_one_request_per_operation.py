@@ -781,7 +781,7 @@ def test_every_profile_tool_maps_to_a_profile_operation(mcp):
 
 
 def test_propose_profile_asks_for_update_and_view_in_one_request(tmp_path):
-    """Both permissions, one request â€” not UPDATE alone, not two requests."""
+    """Both permissions, one request — not UPDATE alone, not two requests."""
     authorizer = AllowAllAuthorizer()
 
     _profile_service(str(tmp_path / "p.sqlite"), authorizer).propose_profile(
@@ -838,7 +838,7 @@ def test_propose_profile_authorizes_before_reading_the_profile(tmp_path):
 
 
 def test_plan_menu_composes_internally_rather_than_calling_authorized_methods(tmp_path):
-    """One VIEW, then the profile's internal targets read â€” not get_profile_view."""
+    """One VIEW, then the profile's internal targets read — not get_profile_view."""
     db = str(tmp_path / "n.sqlite")
     _seed_onboarded(db)
     authorizer = AllowAllAuthorizer()
@@ -849,9 +849,18 @@ def test_plan_menu_composes_internally_rather_than_calling_authorized_methods(tm
     # The composite must compare with the targets the public profile read shows.
     view = _profile_service(db, AllowAllAuthorizer()).get_profile_view(SESSION, SUBJECT)
     assert set(plan["gap_vs_reference"]) == set(view["targets_flat"])
-    for nutrient, target in view["targets_flat"].items():
-        consumed = Decimal(plan["day_total"].get(nutrient, "0"))
-        assert Decimal(plan["gap_vs_reference"][nutrient]) == Decimal(target) - consumed
+    # MENU is one food; a gap is known only for what that food reports (unknown is not zero).
+    reported = set(SyntheticFoodProvider().get_food("syn-yogurt").nutrients_per_100g)
+    known = [n for n in view["targets_flat"] if n in reported]
+    unknown = [n for n in view["targets_flat"] if n not in reported]
+    assert known and unknown, "the menu must exercise both branches"
+    for nutrient in known:
+        planned = Decimal(plan["day_total"][nutrient])
+        target = Decimal(view["targets_flat"][nutrient])
+        assert Decimal(plan["gap_vs_reference"][nutrient]) == target - planned
+    for nutrient in unknown:
+        assert plan["gap_vs_reference"][nutrient] is None
+    assert plan["unknown_in_menu"] == sorted(unknown)
 
 
 def test_plan_menu_survives_a_single_use_delegation(tmp_path):

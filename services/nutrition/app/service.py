@@ -161,7 +161,16 @@ class NutritionService:
         targets = self._targets_today(subject_person_id)
         day_meals = [self._to_confirmed(meal["foods"]) for meal in candidate_meals]
         total = calculate_daily_intake(day_meals)
-        gap = calculate_daily_gap(total, targets)
+        # Missing is unknown, never zero: a gap is known only when EVERY planned item's
+        # food reports the nutrient (the diary's KNOWN rule). Otherwise it is null.
+        items = [item for meal in day_meals for item in meal]
+        reported = (
+            set.intersection(*(set(item.fact.nutrients_per_100g) for item in items))
+            if items else set()
+        )
+        gap = calculate_daily_gap(
+            total, {nutrient: value for nutrient, value in targets.items() if nutrient in reported}
+        )
         return {
             "person_id": subject_person_id,
             "meals": [
@@ -170,8 +179,10 @@ class NutritionService:
             ],
             "day_total": {nutrient: str(value) for nutrient, value in total.items()},
             "gap_vs_reference": {
-                nutrient: str(value) for nutrient, value in gap.items()
+                nutrient: str(gap[nutrient]) if nutrient in gap else None
+                for nutrient in targets
             },
+            "unknown_in_menu": sorted(nutrient for nutrient in targets if nutrient not in gap),
             "disclaimer": "Plan compared against the person's targets in force today "
             "(DGE/EFSA reference values; energy and protein calculated from the profile). "
             "Not a medical recommendation.",
