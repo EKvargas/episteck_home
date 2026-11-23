@@ -15,12 +15,14 @@
 # Steps: preflight | install | cron <HH:MM> | verify | rollback-cron | rollback <backup-dir>
 # Never reads .env, auth.json, tokens or memory files. Never prints Ultron's notes, nor a
 # config.yaml value other than the nutrition server's url and enabled, skills.external_dirs and
-# timezone. Root never writes through a symlink under $NOTES: install and rollback refuse.
+# timezone. Root never writes through a symlink under /home/home-agent: install and rollback
+# refuse when a path they write, or a directory leading to it, is one (home_links).
 set -euo pipefail
 cd /
 
 AGENT=home-agent
-HHOME=/home/$AGENT/.hermes
+AGENT_HOME=/home/$AGENT
+HHOME=$AGENT_HOME/.hermes
 CONFIG=$HHOME/config.yaml
 HERMES=$HHOME/hermes-agent/venv/bin/hermes
 PY=/usr/bin/python3
@@ -71,17 +73,19 @@ need_notes() {
   [ -f "$NOTES/SKILL.md" ] && [ -f "$NOTES/references/nutrition-diary.md" ] \
     || { echo "Ultron's notes are not where this step expects them ($NOTES): nothing was changed" >&2; exit 2; }
 }
-notes_links() {  # the notes paths that are symlinks, on one line (empty when none)
+home_links() {  # the symlinks among the paths install or rollback writes as root or writes into,
+  # and the directories leading to them, all in the agent's home; on one line (empty when none)
   local p found=""
-  for p in "$NOTES" "$NOTES/SKILL.md" "$NOTES/references" "$NOTES/references/nutrition-diary.md"; do
+  for p in "$AGENT_HOME" "$HHOME" "$CONFIG" "$HHOME/skills" "$NOTES" "$NOTES/SKILL.md" \
+           "$NOTES/references" "$NOTES/references/nutrition-diary.md"; do
     if [ -L "$p" ]; then found="$found $p"; fi
   done
   echo "${found# }"
 }
 refuse_links() {  # root never writes through a symlink into the agent's home: stop before any change
-  local links; links="$(notes_links)"
+  local links; links="$(home_links)"
   if [ -n "$links" ]; then
-    echo "refusing: symlink under $NOTES ($links); nothing was changed. Look at it by hand." >&2
+    echo "refusing: symlink under $AGENT_HOME ($links); nothing was changed. Look at it by hand." >&2
     exit 1
   fi
 }
@@ -163,9 +167,9 @@ case "${1:-}" in
     echo "$CRON_NAME lines in 'hermes cron list --all': $(cron_count)"
     echo "== Ultron's notes: type, mode and owner (the text is never shown)"
     stat -c '%a %U:%G %F %n' "$NOTES" "$NOTES/SKILL.md" "$NOTES/references" "$NOTES/references/nutrition-diary.md" || true
-    links="$(notes_links)"
+    links="$(home_links)"
     if [ -n "$links" ]; then
-      bad "symlink under $NOTES ($links): install and rollback refuse"
+      bad "symlink under $AGENT_HOME ($links): install and rollback refuse"
     elif [ -f "$NOTES/SKILL.md" ]; then
       tmp="$(mktemp -d)"
       cp "$NOTES/SKILL.md" "$tmp/SKILL.md"
@@ -276,8 +280,8 @@ case "${1:-}" in
     if nutrition_keys; then ok "config.yaml: Ultron loads $SKILLS_ROOT and has the nutrition server"
     else bad "config.yaml: mcp_servers.nutrition.url or $SKILLS_ROOT in skills.external_dirs is missing"; fi
     echo "== Ultron's notes (drift is reported here, never fixed)"
-    links="$(notes_links)"
-    if [ -n "$links" ]; then bad "symlink under $NOTES: $links"; fi
+    links="$(home_links)"
+    if [ -n "$links" ]; then bad "symlink under $AGENT_HOME: $links"; fi
     for f in "$NOTES/SKILL.md" "$NOTES/references/nutrition-diary.md"; do
       mode="$(stat -c '%a %U:%G' "$f" 2>/dev/null || echo missing)"
       if [ "$mode" = "644 $AGENT:$AGENT" ]; then ok "$f is 644 $AGENT:$AGENT"

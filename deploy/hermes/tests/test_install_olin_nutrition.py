@@ -219,7 +219,7 @@ def test_preflight_is_read_only_and_dry_runs_the_helper_on_a_copy():
     pre = _case(_text(), "preflight")
     for part in ("need_src", '"$HERMES" --version', "nutrition_keys", 'tz="$(hermes_tz)"',
                  '[ "$(date +%z)" = "+0000" ]', '[ -e "$SKILL_DIR" ]', "$(cron_count)",
-                 'links="$(notes_links)"', 'tmp="$(mktemp -d)"', 'cp "$NOTES/SKILL.md" "$tmp/SKILL.md"',
+                 'links="$(home_links)"', 'tmp="$(mktemp -d)"', 'cp "$NOTES/SKILL.md" "$tmp/SKILL.md"',
                  '"$PY" -I "$SRC/ultron_nutrition_notes.py" "$tmp/SKILL.md" '
                  '"$SRC/home-agent/nutrition-pointer-section.md"',
                  'rm -f "$tmp/SKILL.md"', 'rmdir "$tmp"', "finish preflight"):
@@ -339,7 +339,7 @@ def test_verify_reports_drift_and_never_fixes():
                  'contains "$NOTES/SKILL.md" "$SRC/home-agent/nutrition-pointer-section.md"',
                  'grep -qF get_daily_nutrition_gap "$NOTES/SKILL.md"',
                  'cmp -s "$SRC/home-agent/nutrition-diary-pointer.md" "$NOTES/references/nutrition-diary.md"',
-                 'links="$(notes_links)"', "nutrition_keys", "cron_show",
+                 'links="$(home_links)"', "nutrition_keys", "cron_show",
                  "systemctl --user is-active --quiet hermes-gateway.service", "finish verify"):
         assert part in verify, part
     for line in _code_lines(verify):
@@ -386,6 +386,21 @@ def test_rollback_never_removes_the_skills_root():
 
 # --- safety ----------------------------------------------------------------------------------
 
+# Every path under the agent's home that install or rollback writes as root, or writes into, and
+# the directories leading to them (R3, R12), relative to /home/home-agent.
+HOME_CHAIN = ("", ".hermes", ".hermes/config.yaml", ".hermes/skills",
+              ".hermes/skills/episteck-home-agent", ".hermes/skills/episteck-home-agent/SKILL.md",
+              ".hermes/skills/episteck-home-agent/references",
+              ".hermes/skills/episteck-home-agent/references/nutrition-diary.md")
+
+
+def _home_tree(base: Path) -> Path:
+    home = base / "home-agent"
+    _notes_tree(home / ".hermes" / "skills")
+    (home / ".hermes" / "config.yaml").write_bytes(b"model: {}\n")
+    return home
+
+
 @needs_bash
 def test_symlinks_under_the_notes_stop_install_and_rollback(tmp_path):
     text = _text()
@@ -393,31 +408,44 @@ def test_symlinks_under_the_notes_stop_install_and_rollback(tmp_path):
         body = _case(text, step)
         first_change = min(body.index(m) for m in ("install -d", "cp -p", "cron_remove") if m in body)
         assert body.index("refuse_links") < first_change, step
-    assert 'links="$(notes_links)"' in _case(text, "preflight")
+    # Rollback writes config.yaml too: a link there would make root write (and chown) its target.
+    assert 'cp -p "$bk/config.yaml" "$CONFIG"' in _case(text, "rollback")
+    for step in ("preflight", "verify"):
+        assert 'links="$(home_links)"' in _case(text, step), step
     refuse = _function(text, "refuse_links")
-    assert "exit 1" in refuse and ">&2" in refuse
-    source = _function(text, "notes_links") + "\n" + refuse
+    assert 'links="$(home_links)"' in refuse and "exit 1" in refuse and ">&2" in refuse
+    guard = _function(text, "home_links")
+    listed = re.search(r"for p in (.*?); do", guard, re.S).group(1).replace("\\\n", " ").split()
+    assert listed == ['"$AGENT_HOME"', '"$HHOME"', '"$CONFIG"', '"$HHOME/skills"', '"$NOTES"',
+                      '"$NOTES/SKILL.md"', '"$NOTES/references"', '"$NOTES/references/nutrition-diary.md"']
+    # The script's own definitions, so the test walks the same chain the node has.
+    paths = [re.search(rf"^{name}=.*$", text, re.M).group(0)
+             for name in ("AGENT_HOME", "HHOME", "CONFIG", "NOTES")]
+    assert paths == ["AGENT_HOME=/home/$AGENT", "HHOME=$AGENT_HOME/.hermes", "CONFIG=$HHOME/config.yaml",
+                     "NOTES=/home/home-agent/.hermes/skills/episteck-home-agent"]
+    source = "\n".join([_function(text, "home_links"), refuse])
 
-    def run(notes: Path) -> subprocess.CompletedProcess:
-        return _bash(tmp_path, source, f"NOTES={_q(notes)}; refuse_links; echo passed")
+    def run(home: Path) -> subprocess.CompletedProcess:
+        setup = (f"AGENT_HOME={_q(home)}; {paths[1]}; {paths[2]}; "
+                 "NOTES=$HHOME/skills/episteck-home-agent")  # what NOTES is under AGENT_HOME
+        return _bash(tmp_path, source, f"{setup}; refuse_links; echo passed")
 
-    clean = _notes_tree(tmp_path / "clean")
-    result = run(clean)
+    result = run(_home_tree(tmp_path / "clean"))
     assert result.returncode == 0 and result.stdout == "passed\n", result.stderr
-    for i, rel in enumerate(("", "SKILL.md", "references", "references/nutrition-diary.md")):
+    for i, rel in enumerate(HOME_CHAIN):
         base = tmp_path / f"case{i}"
-        elsewhere = _notes_tree(base / "elsewhere")  # where a planted link would make root write
+        elsewhere = _home_tree(base / "elsewhere")  # where a planted link would make root write
         if rel:
-            notes = _notes_tree(base / "home")
-            if (notes / rel).is_dir():
-                shutil.rmtree(notes / rel)
+            home = _home_tree(base / "real")
+            if (home / rel).is_dir():
+                shutil.rmtree(home / rel)
             else:
-                (notes / rel).unlink()
-            _symlink(elsewhere / rel, notes / rel)
+                (home / rel).unlink()
+            _symlink(elsewhere / rel, home / rel)
         else:
-            notes = base / "linked-notes"
-            _symlink(elsewhere, notes)
-        result = run(notes)
+            home = base / "linked-home"
+            _symlink(elsewhere, home)
+        result = run(home)
         assert result.returncode != 0 and "passed" not in result.stdout, rel
         assert "refusing: symlink" in result.stderr and "nothing was changed" in result.stderr, rel
 
