@@ -22,7 +22,7 @@ ANA = HERMES / "home-agent-ana"
 INSTALL_REL = "deploy/hermes/install-home-agent-ana.sh"
 INSTALL = ROOT / INSTALL_REL
 CONFIG = ANA / "config-ana.yaml"
-SKILL = ANA / "skills" / "olin-nutrition" / "SKILL.md"
+SKILL = HERMES / "skills" / "olin-nutrition" / "SKILL.md"
 UNITS = ANA / "systemd"
 SERVICE = UNITS / "ana-media-purge.service"
 TIMER = UNITS / "ana-media-purge.timer"
@@ -212,11 +212,11 @@ def test_ana_skills_root_is_not_the_owners():
     assert yaml.safe_load(CONFIG.read_text(encoding="utf-8"))["skills"] == {"external_dirs": SKILLS_ROOT}
     configure = _case(text, "configure")
     assert 'install -d -m 755 -o root -g root /etc/episteck/hermes-ana "$SKILLS_ROOT" "$SKILL_DIR"' in configure
-    assert ('install -m 644 -o root -g root "$ANA_SRC/skills/olin-nutrition/SKILL.md" '
+    assert ('install -m 644 -o root -g root "$SHARED_SKILL" '
             '"$SKILL_DIR/SKILL.md"') in configure
     verify = _case(text, "verify")
     assert 'as_agent test -w "$SKILL_DIR/SKILL.md"' in verify
-    assert 'cmp -s "$ANA_SRC/skills/olin-nutrition/SKILL.md" "$SKILL_DIR/SKILL.md"' in verify
+    assert 'cmp -s "$SHARED_SKILL" "$SKILL_DIR/SKILL.md"' in verify
 
 
 @needs_bash
@@ -296,7 +296,7 @@ def test_checkin_prompt_names_a_skill_section_that_exists():
     assert "olin-nutrition-checkin" not in prompt
     cron = _case(text, "cron")
     assert '[ -f "$SKILL_DIR/SKILL.md" ]' in cron
-    assert 'cmp -s "$ANA_SRC/skills/olin-nutrition/SKILL.md" "$SKILL_DIR/SKILL.md"' in cron
+    assert 'cmp -s "$SHARED_SKILL" "$SKILL_DIR/SKILL.md"' in cron
     assert "grep -q '^## Evening check-in (cron)$' \"$SKILL_DIR/SKILL.md\"" in cron
     assert cron.index("grep -q '^## Evening check-in") < cron.index("cron create")
 

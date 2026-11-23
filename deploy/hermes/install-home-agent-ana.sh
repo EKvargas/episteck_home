@@ -30,6 +30,7 @@ VPY=$HHOME/hermes-agent/venv/bin/python
 UNIT_DIR=/home/$AGENT/.config/systemd/user
 SRC=/var/lib/episteck/hermes-ana/deploy/hermes
 ANA_SRC=$SRC/home-agent-ana
+SHARED_SKILL=$SRC/skills/olin-nutrition/SKILL.md
 SKILLS_ROOT=/etc/episteck/hermes-ana/skills
 SKILL_DIR=$SKILLS_ROOT/olin-nutrition
 GW=http://127.0.0.1:9937
@@ -131,13 +132,17 @@ finish() {  # every check has printed; exit 1 when one failed
 
 need_src() {
   local f
-  for f in config-ana.yaml SOUL.md skills/olin-nutrition/SKILL.md systemd/ana-media-purge.service \
+  for f in config-ana.yaml SOUL.md systemd/ana-media-purge.service \
            systemd/ana-media-purge.timer systemd/hermes-gateway-memory.conf; do
     if [ ! -f "$ANA_SRC/$f" ]; then
       echo "extract deploy/hermes of the merged commit into /var/lib/episteck/hermes-ana first ($f is missing)" >&2
       exit 2
     fi
   done
+  if [ ! -f "$SHARED_SKILL" ]; then
+    echo "extract deploy/hermes of the merged commit into /var/lib/episteck/hermes-ana first (skills/olin-nutrition/SKILL.md is missing)" >&2
+    exit 2
+  fi
 }
 need_user() {
   if ! id "$AGENT" >/dev/null 2>&1; then echo "run the user step first" >&2; exit 2; fi
@@ -335,7 +340,7 @@ case "${1:-}" in
     install -m 644 -o "$AGENT" -g "$AGENT" "$ANA_SRC/SOUL.md" "$HHOME/SOUL.md"
     # The skill is root-owned and read-only to Ana's agent: it cannot rewrite its own rules.
     install -d -m 755 -o root -g root /etc/episteck/hermes-ana "$SKILLS_ROOT" "$SKILL_DIR"
-    install -m 644 -o root -g root "$ANA_SRC/skills/olin-nutrition/SKILL.md" "$SKILL_DIR/SKILL.md"
+    install -m 644 -o root -g root "$SHARED_SKILL" "$SKILL_DIR/SKILL.md"
     echo "== config.yaml: the keys of config-ana.yaml (paths only)"
     agent_config set "$(< "$ANA_SRC/config-ana.yaml")" || bad "a config-ana.yaml key is not in effect"
     # On Telegram and in cron jobs only the skills and clarify toolsets stay; MCP tools stay.
@@ -471,7 +476,7 @@ case "${1:-}" in
     need_hermes
     # The job loads the installed skill: it must be this commit's and have the check-in section.
     [ -f "$SKILL_DIR/SKILL.md" ] || { echo "run configure first: the job loads $SKILL_DIR/SKILL.md" >&2; exit 2; }
-    cmp -s "$ANA_SRC/skills/olin-nutrition/SKILL.md" "$SKILL_DIR/SKILL.md" \
+    cmp -s "$SHARED_SKILL" "$SKILL_DIR/SKILL.md" \
       || { echo "the installed skill is not this commit's: run configure first" >&2; exit 2; }
     grep -q '^## Evening check-in (cron)$' "$SKILL_DIR/SKILL.md" \
       || { echo "the installed skill has no 'Evening check-in (cron)' section" >&2; exit 2; }
@@ -519,7 +524,7 @@ case "${1:-}" in
     if [ "$env_mode" = "600 $AGENT" ]; then ok ".env is 600 and $AGENT's"
     else bad ".env is '$env_mode', not 600 and $AGENT's"; fi
     if [ "$skill_mode" = "644 root:root" ] \
-      && cmp -s "$ANA_SRC/skills/olin-nutrition/SKILL.md" "$SKILL_DIR/SKILL.md"; then
+      && cmp -s "$SHARED_SKILL" "$SKILL_DIR/SKILL.md"; then
       ok "the skill is root's, 644, and this commit's"
     else
       bad "the skill is not root's 644 copy of this commit's"

@@ -8,18 +8,17 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 ANA = ROOT / "deploy" / "hermes" / "home-agent-ana"
-SKILL = ANA / "skills" / "olin-nutrition" / "SKILL.md"
+SKILL = ROOT / "deploy" / "hermes" / "skills" / "olin-nutrition" / "SKILL.md"
 SOUL = ANA / "SOUL.md"
 CONFIG = ANA / "config-ana.yaml"
 NUTRITION_SERVER = ROOT / "services" / "nutrition" / "app" / "mcp" / "server.py"
 HOME_SERVER = ROOT / "services" / "home-mcp" / "home_mcp" / "server.py"
 
-REQUIRED = [
-    "mcp__home__whoami", "mcp__nutrition__search_foods", "mcp__nutrition__propose_intake",
-    "mcp__nutrition__confirm_intake", "mcp__nutrition__correct_intake",
-    "mcp__nutrition__void_intake", "mcp__nutrition__get_day_summary",
-    "mcp__nutrition__close_day", "mcp__nutrition__set_nutrition_mode",
-]
+REQUIRED = ["mcp__home__whoami"] + [f"mcp__nutrition__{t}" for t in (
+    "search_foods", "get_food_detail", "evaluate_meal", "propose_intake", "confirm_intake",
+    "correct_intake", "void_intake", "get_diary_entry", "get_day_summary", "get_period_summary",
+    "close_day", "set_nutrition_mode", "get_nutrition_profile", "propose_profile",
+    "confirm_profile", "search_recipes", "get_meal_plan", "plan_menu")]
 
 
 def _split() -> tuple[str, str]:
@@ -59,7 +58,7 @@ def test_frontmatter_and_required_tools_exist():
     assert front["metadata"]["hermes"]["requires_tools"] == REQUIRED
     available = {_hermes_mcp_name("nutrition", t) for t in _mcp_tools(NUTRITION_SERVER)}
     available |= {_hermes_mcp_name("home", t) for t in _mcp_tools(HOME_SERVER)}
-    assert len(_mcp_tools(NUTRITION_SERVER)) == 21
+    assert len(_mcp_tools(NUTRITION_SERVER)) == 20
     for tool in REQUIRED:
         assert tool in available, tool
 
@@ -71,13 +70,78 @@ def test_no_finance_anywhere():
 
 def test_fixed_spanish_replies_are_present():
     body = _flat(_body())
-    for phrase in ("¿Lo guardo? (sí / corrige)", "¿Eso fue todo hoy?",
-                   "Todavía no leo fotos; dime qué es.", "sin dato", "Referencia general",
-                   "Eso es mejor consultarlo con tu matrona o tu médico.",
-                   "Solo te ayudo con tu diario de comidas.",
-                   "No tengo permiso para usar tu diario. Renuévalo en bff.home.episteck.com/runtime."):
+    for phrase in (
+            "¿Lo guardo? (sí / corrige)", "Guardado.", "¿Eso fue todo hoy?", "Día cerrado.",
+            "¿Qué quieres que confirme?", "sin dato", "Referencia general",
+            "Eso es mejor consultarlo con tu matrona o tu médico.",
+            "Todavía no leo fotos; dime qué es.",
+            "No tengo permiso para usar tu diario. Renuévalo en bff.home.episteck.com/runtime.",
+            "¿Confirmas que estás embarazada y que la fecha probable de parto es el <fecha>? (sí / no)",
+            "Para compararlo con tus objetivos necesito tu perfil. ¿Lo creamos ahora? Son unas ocho preguntas.",
+            "¿Cierro el <día> de <mes>? (sí / no)",
+            "Por ahora el perfil es solo para mayores de 19 años.",
+            "En el embarazo no fijamos objetivos de peso ni de déficit.",
+            "Todavía no registro el ejercicio; lo tendré cuando conectemos tu reloj."):
         assert phrase in body, phrase
 
+
+def test_scope_line_is_not_in_the_shared_skill():
+    assert "Solo te ayudo" not in _body()
+
+
+def test_the_skill_lives_in_one_shared_place():
+    assert not (ROOT / "deploy/hermes/home-agent-ana/skills").exists()
+
+
+def test_ana_installer_reads_the_shared_skill():
+    t = (ROOT / "deploy/hermes/install-home-agent-ana.sh").read_text(encoding="utf-8")
+    assert "SHARED_SKILL=$SRC/skills/olin-nutrition/SKILL.md" in t and "$ANA_SRC/skills" not in t
+
+
+def test_language_rule_is_explicit():
+    s = _flat(_section(_body(), "## Language"))
+    assert "persona" in s and "language the person writes in" in s and "verbatim" in s and "translate" in s
+
+
+def test_never_sums_nutrients_itself():
+    s = _flat(_section(_body(), "## Numbers"))
+    for tool in ("get_day_summary", "get_period_summary", "evaluate_meal", "plan_menu"):
+        assert tool in s
+    assert "never add up" in s.lower()
+
+
+def test_onboarding_flow():
+    s = _flat(_section(_body(), "## Profile and onboarding"))
+    for needle in ("propose_profile", "confirm_profile", "onboarded", "targets_after", "1.4", "1.6",
+                   "1.8", "2.0", "MAINTAIN", "LOSE_FAT", "BUILD_MUSCLE", "PERFORMANCE",
+                   "at most once", "UNDER_19", "NOT_ALLOWED_IN_MODE", "MEASUREMENT_TOO_OLD"):
+        assert needle in s, needle
+
+
+def test_reviews_use_the_period_tool_and_ask_before_closing_past_days():
+    s = _flat(_section(_body(), "## Reviews and recommendations"))
+    assert "get_period_summary" in s and "31" in s and "¿Cierro el" in s and "close_day" in s
+
+
+def test_yes_acts_on_the_last_question_for_either_draft():
+    s = _flat(_section(_body(), "## Yes and no"))
+    assert "last question" in s and "confirm_intake" in s and "confirm_profile" in s and "Never both" in s
+
+
+def test_pregnancy_guardrails():
+    s = _flat(_section(_body(), "## Pregnancy"))
+    assert "En el embarazo no fijamos objetivos de peso ni de déficit." in s
+    assert "Eso es mejor consultarlo con tu matrona o tu médico." in s
+
+
+def test_check_in_adds_energy_and_protein_with_a_profile():
+    s = _flat(_section(_body(), "## Evening check-in (cron)"))
+    assert "profile_version" in s and "energy" in s and "protein" in s and "[SILENT]" in s
+
+
+def test_privacy_rule():
+    s = _flat(_section(_body(), "## Privacy")).lower()
+    assert "memory" in s and "body data" in s
 
 def test_unknown_or_empty_is_never_zero():
     section = _flat(_section(_body(), "## Numbers"))
@@ -93,7 +157,7 @@ def test_ambiguous_yes_acts_on_the_last_question_only():
     assert "Día cerrado." in section
     assert "¿Qué quieres que confirme?" in section
     assert "Never both" in section
-    assert "`date` = the day that check-in named (YYYY-MM-DD)" in section
+    assert "`date` = the day that question named (YYYY-MM-DD)" in section
     assert "never today's date by default" in section
 
 
