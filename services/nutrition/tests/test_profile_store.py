@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 
 import pytest
 
+from nutrition_domain.target_method import METHOD_V1
+
 from app.store.profile_sqlite import SqliteProfileStore
 
 EXP = datetime(2026, 11, 24, 12, 0, tzinfo=timezone.utc)
@@ -125,6 +127,7 @@ def test_migrate_legacy_maps_rows_once(tmp_path):
     assert store.migrate_legacy("2026-11-23") == 2
     a = store.latest("a")
     assert a["origin"] == "MIGRATED" and a["valid_from"] == "2026-11-23"
+    assert a["method"] == METHOD_V1
     assert a["doc"]["inputs"]["mode"] == "PREGNANCY"
     assert a["doc"]["inputs"]["intolerances"] == "x"
     assert a["doc"]["inputs"]["due_date"] == "2027-05-15"

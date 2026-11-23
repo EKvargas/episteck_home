@@ -11,6 +11,7 @@ from datetime import date, datetime, timezone
 
 from nutrition_domain.profile import ProfileInputs, inputs_to_doc
 from nutrition_domain.profile_versions import ORIGINS
+from nutrition_domain.target_method import METHOD_V1
 
 
 def _utc_iso(value: datetime | str) -> str:
@@ -162,6 +163,6 @@ class SqliteProfileStore:
             with self._tx() as c:
                 if self._latest(c, row["person_id"]) is not None:
                     continue
-                self._append(c, row["person_id"], doc, today, "MIGRATED", "legacy")
+                self._append(c, row["person_id"], doc, today, "MIGRATED", METHOD_V1)
                 migrated += 1
         return migrated
