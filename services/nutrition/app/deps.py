@@ -67,3 +67,18 @@ def build_diary_service():
         authorizer=build_home_authorizer(),
         tz=tz,
     )
+
+
+def build_profile_service():
+    """Build the profile service and migrate legacy profiles once. A bad DIARY_TZ fails here."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from .profile.service import ProfileService
+    from .store.profile_sqlite import SqliteProfileStore
+
+    tz = os.environ.get("DIARY_TZ", "Europe/Berlin")
+    today = datetime.now(ZoneInfo(tz)).date().isoformat()
+    store = SqliteProfileStore(_DB)
+    store.migrate_legacy(today)
+    return ProfileService(store, authorizer=build_home_authorizer(), tz=tz)

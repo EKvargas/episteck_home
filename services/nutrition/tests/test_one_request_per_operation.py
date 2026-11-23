@@ -32,6 +32,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.diary.service import DiaryService
+from app.profile.service import ProfileService
+from app.store.profile_sqlite import SqliteProfileStore
 from app.home_control.client import AccessDecision
 from app.providers.synthetic import SyntheticFoodProvider
 from app.service import NutritionService
@@ -300,6 +302,96 @@ def test_every_diary_operation_survives_a_replay_aware_home(tmp_path, name):
     authorizer = ReplayAwareAuthorizer(allow=True)
 
     DIARY_OPERATIONS[name][0](_diary_service(db, authorizer), ids)  # must not raise
+
+    assert authorizer.home_calls == 1, name
+
+
+# ==========================================================================
+# THE INVENTORY — every person-sensitive PROFILE operation
+# ==========================================================================
+
+PROFILE_WIRE = {"birth_date": "1986-03-10", "sex": "MALE", "height_cm": "180",
+                "weight_kg": "82", "activity_pal": "1.6"}
+
+
+def _profile_service(db, authorizer):
+    return ProfileService(SqliteProfileStore(db), authorizer=authorizer)
+
+
+def _seed_profile(db) -> dict:
+    """An open draft, made outside the operation under test."""
+    seeding = _profile_service(db, AllowAllAuthorizer())
+    return {"draft": seeding.propose_profile("seed-token", SUBJECT, PROFILE_WIRE)["draft_id"]}
+
+
+#: method -> (invocation, the exact actions its ONE Home request must ask about)
+PROFILE_OPERATIONS = {
+    "get_profile_view": (
+        lambda p, ids: p.get_profile_view(SESSION, SUBJECT), ["VIEW"]),
+    "propose_profile": (
+        lambda p, ids: p.propose_profile(SESSION, SUBJECT, {"weight_kg": "80"}),
+        ["UPDATE", "VIEW"]),
+    "confirm_profile": (
+        lambda p, ids: p.confirm_profile(SESSION, SUBJECT, ids["draft"]), ["UPDATE", "VIEW"]),
+}
+
+
+def _authorizing_profile_methods() -> set[str]:
+    """Public ProfileService methods that authorize, found in the SOURCE, not a list."""
+    import ast
+    import pathlib
+
+    from app.profile import service as profile_module
+
+    tree = ast.parse(pathlib.Path(profile_module.__file__).read_text(encoding="utf-8"))
+    cls = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "ProfileService"
+    )
+    return {
+        node.name
+        for node in cls.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and not node.name.startswith("_")
+        and any(
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and call.func.attr == "_authorize"
+            for call in ast.walk(node)
+        )
+    }
+
+
+def test_every_authorizing_profile_method_is_covered():
+    discovered = _authorizing_profile_methods()
+    assert discovered, "discovery found no authorizing profile methods — the walker is broken"
+    assert discovered == set(PROFILE_OPERATIONS), (
+        f"profile inventory drifted: missing {sorted(discovered - set(PROFILE_OPERATIONS))}, "
+        f"stale {sorted(set(PROFILE_OPERATIONS) - discovered)}"
+    )
+
+
+@pytest.mark.parametrize("name", sorted(PROFILE_OPERATIONS))
+def test_one_home_request_per_profile_operation_with_its_planned_actions(tmp_path, name):
+    db = str(tmp_path / "p.sqlite")
+    ids = _seed_profile(db)
+    authorizer = ActionRecordingAuthorizer()
+    invoke, planned = PROFILE_OPERATIONS[name]
+
+    invoke(_profile_service(db, authorizer), ids)
+
+    assert authorizer.home_calls == 1, (name, authorizer.home_calls)
+    assert authorizer.actions == planned, (name, authorizer.actions)
+
+
+@pytest.mark.parametrize("name", sorted(PROFILE_OPERATIONS))
+def test_every_profile_operation_survives_a_replay_aware_home(tmp_path, name):
+    db = str(tmp_path / "p.sqlite")
+    ids = _seed_profile(db)
+    authorizer = ReplayAwareAuthorizer(allow=True)
+
+    PROFILE_OPERATIONS[name][0](_profile_service(db, authorizer), ids)  # must not raise
 
     assert authorizer.home_calls == 1, name
 
