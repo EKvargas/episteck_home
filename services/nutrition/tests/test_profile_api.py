@@ -67,7 +67,7 @@ def test_profile_invalid_maps_to_invalid_field(api):
     _, server, _ = api
     with _Session():
         out = _tool(server, "propose_profile")(P, {**WIRE, "height_cm": "10"})
-    assert out == {"error": "INVALID_FIELD", "field": "height_cm"}
+    assert out == {"error": "INVALID_FIELD", "field": "height_cm", "reason": "OUT_OF_RANGE"}
     # REST: the same mapper over the shared profile service
     main = api[0]
     import pytest
@@ -80,7 +80,22 @@ def test_profile_invalid_maps_to_invalid_field(api):
     with pytest.raises(HTTPException) as caught:
         main._diary_call(boom)
     assert (caught.value.status_code, caught.value.detail) == (
-        400, {"error": "INVALID_FIELD", "field": "height_cm"})
+        400, {"error": "INVALID_FIELD", "field": "height_cm", "reason": "INVALID"})
+
+    def under_19():
+        raise ProfileInvalid("birth_date", reason="UNDER_19")
+
+    with pytest.raises(HTTPException) as caught:
+        main._diary_call(under_19)
+    assert caught.value.detail == {"error": "INVALID_FIELD", "field": "birth_date", "reason": "UNDER_19"}
+
+
+def test_mcp_propose_goal_in_pregnancy_says_why(api):
+    _, server, _ = api
+    with _Session():
+        assert _tool(server, "set_nutrition_mode")(P, "PREGNANCY", "2027-05-15")["version"] == 1
+        out = _tool(server, "propose_profile")(P, {"goal": "MAINTAIN"})
+    assert out == {"error": "INVALID_FIELD", "field": "goal", "reason": "NOT_ALLOWED_IN_MODE"}
 
 
 def test_mcp_propose_confirm_round_trip(api):

@@ -191,7 +191,7 @@ class ProfileService:
     def _apply(latest_doc: dict | None, wire: dict, today: date):
         """Re-parse, apply and validate wire changes on a version doc."""
         if not wire:
-            raise ProfileInvalid("changes")
+            raise ProfileInvalid("changes", reason="NO_CHANGES")
         changes = parse_changes(wire)
         if "weight_kg" in changes and "weight_measured_on" not in changes:
             changes["weight_measured_on"] = today

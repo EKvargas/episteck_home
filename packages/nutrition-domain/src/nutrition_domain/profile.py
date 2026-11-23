@@ -1,4 +1,4 @@
-﻿"""Personal profile inputs: typing, parsing, validation and JSON-safe documents.
+"""Personal profile inputs: typing, parsing, validation and JSON-safe documents.
 
 Pure Python, no I/O. Errors carry the field name only, never the value.
 """
@@ -59,9 +59,22 @@ class ProfileInputs:
 
 
 class ProfileInvalid(ValueError):
-    def __init__(self, field: str, message: str | None = None):
+    """A refused profile input: the field name and a fixed reason code, never the value.
+
+    Reasons: INVALID_FORMAT, OUT_OF_RANGE, UNDER_19, OVER_100, FUTURE_DATE,
+    MEASUREMENT_TOO_OLD, NOT_ALLOWED_IN_MODE, UNKNOWN_FIELD, NO_CHANGES, TOO_LONG
+    (INVALID when none applies).
+    """
+
+    def __init__(self, field: str, message: str | None = None, *, reason: str = "INVALID"):
         super().__init__(message or f"invalid {field}")
         self.field = field
+        self.reason = reason
+
+
+_FORMAT = "INVALID_FORMAT"
+_RANGE = "OUT_OF_RANGE"
+_MODE = "NOT_ALLOWED_IN_MODE"
 
 
 def age_on(birth_date: date, on: date) -> int:
@@ -74,39 +87,43 @@ _MAX_MAGNITUDE = 1_000_000
 
 def _decimal(field: str, value: object) -> Decimal:
     if isinstance(value, bool):
-        raise ProfileInvalid(field)
+        raise ProfileInvalid(field, reason=_FORMAT)
     if isinstance(value, Decimal):
         number = value
     elif isinstance(value, int):
         if abs(value) > _MAX_MAGNITUDE:
-            raise ProfileInvalid(field)
+            raise ProfileInvalid(field, reason=_RANGE)
         number = Decimal(value)
     elif isinstance(value, float):
-        if not math.isfinite(value) or abs(value) > _MAX_MAGNITUDE:
-            raise ProfileInvalid(field)
+        if not math.isfinite(value):
+            raise ProfileInvalid(field, reason=_FORMAT)
+        if abs(value) > _MAX_MAGNITUDE:
+            raise ProfileInvalid(field, reason=_RANGE)
         number = Decimal(str(value))
     elif isinstance(value, str):
         text = value.strip()
         if not _NUMERIC_TEXT.fullmatch(text):
-            raise ProfileInvalid(field)
+            raise ProfileInvalid(field, reason=_FORMAT)
         number = Decimal(text.replace(",", "."))
     else:
-        raise ProfileInvalid(field)
-    if not number.is_finite() or abs(number) > _MAX_MAGNITUDE:
-        raise ProfileInvalid(field)
+        raise ProfileInvalid(field, reason=_FORMAT)
+    if not number.is_finite():
+        raise ProfileInvalid(field, reason=_FORMAT)
+    if abs(number) > _MAX_MAGNITUDE:
+        raise ProfileInvalid(field, reason=_RANGE)
     return number
 
 
 def _integer(field: str, value: object) -> int:
     if isinstance(value, bool):
-        raise ProfileInvalid(field)
+        raise ProfileInvalid(field, reason=_FORMAT)
     if isinstance(value, int):
         if abs(value) > _MAX_MAGNITUDE:
-            raise ProfileInvalid(field)
+            raise ProfileInvalid(field, reason=_RANGE)
         return value
     number = _decimal(field, value)
     if number != number.to_integral_value():
-        raise ProfileInvalid(field)
+        raise ProfileInvalid(field, reason=_FORMAT)
     return int(number)
 
 
@@ -114,11 +131,11 @@ def _date(field: str, value: object) -> date:
     if isinstance(value, date):
         return value
     if not isinstance(value, str):
-        raise ProfileInvalid(field)
+        raise ProfileInvalid(field, reason=_FORMAT)
     try:
         return date.fromisoformat(value.strip())
     except ValueError:
-        raise ProfileInvalid(field) from None
+        raise ProfileInvalid(field, reason=_FORMAT) from None
 
 
 def _enum(field: str, cls: type[Enum], value: object):
@@ -127,15 +144,15 @@ def _enum(field: str, cls: type[Enum], value: object):
     try:
         return cls(value)
     except ValueError:
-        raise ProfileInvalid(field) from None
+        raise ProfileInvalid(field, reason=_FORMAT) from None
 
 
 def _text(field: str, value: object) -> str | None:
     if not isinstance(value, str):
-        raise ProfileInvalid(field)
+        raise ProfileInvalid(field, reason=_FORMAT)
     text = value.strip()
     if len(text) > _TEXT_LIMITS[field]:
-        raise ProfileInvalid(field)
+        raise ProfileInvalid(field, reason="TOO_LONG")
     return text or None
 
 
@@ -144,7 +161,7 @@ def parse_changes(raw: dict) -> dict[str, object]:
     changes: dict[str, object] = {}
     for key, value in raw.items():
         if key not in CHANGEABLE_FIELDS:
-            raise ProfileInvalid(str(key))
+            raise ProfileInvalid(str(key), reason="UNKNOWN_FIELD")
         if value is None:
             changes[key] = None
         elif key in _DATE_FIELDS:
@@ -165,41 +182,53 @@ def parse_changes(raw: dict) -> dict[str, object]:
 def apply_changes(current: ProfileInputs | None, changes: dict[str, object]) -> ProfileInputs:
     for key in changes:
         if key not in CHANGEABLE_FIELDS:
-            raise ProfileInvalid(str(key))
+            raise ProfileInvalid(str(key), reason="UNKNOWN_FIELD")
     return replace(current or ProfileInputs(), **changes)
 
 
 def _in_range(field: str, value: Decimal | None, low: str, high: str) -> None:
     if value is not None and not (Decimal(low) <= value <= Decimal(high)):
-        raise ProfileInvalid(field)
+        raise ProfileInvalid(field, reason=_RANGE)
+
+
+def _check_birth_date(born: date, today: date) -> None:
+    if born > today:
+        raise ProfileInvalid("birth_date", reason="FUTURE_DATE")
+    age = age_on(born, today)
+    if age < 19:
+        raise ProfileInvalid("birth_date", reason="UNDER_19")
+    if age > 100:
+        raise ProfileInvalid("birth_date", reason="OVER_100")
 
 
 def validate_inputs(inputs: ProfileInputs, today: date) -> None:
     if inputs.mode not in _MODES:
-        raise ProfileInvalid("mode")
-    if inputs.birth_date is not None and not (19 <= age_on(inputs.birth_date, today) <= 100):
-        raise ProfileInvalid("birth_date")
+        raise ProfileInvalid("mode", reason=_FORMAT)
+    if inputs.birth_date is not None:
+        _check_birth_date(inputs.birth_date, today)
     _in_range("height_cm", inputs.height_cm, "120", "230")
     _in_range("weight_kg", inputs.weight_kg, "30", "250")
     _in_range("pre_pregnancy_weight_kg", inputs.pre_pregnancy_weight_kg, "30", "250")
     measured = inputs.weight_measured_on
-    if measured is not None and not (today - timedelta(days=90) <= measured <= today):
-        raise ProfileInvalid("weight_measured_on")
+    if measured is not None and measured > today:
+        raise ProfileInvalid("weight_measured_on", reason="FUTURE_DATE")
+    if measured is not None and measured < today - timedelta(days=90):
+        raise ProfileInvalid("weight_measured_on", reason="MEASUREMENT_TOO_OLD")
     if inputs.activity_pal is not None and inputs.activity_pal not in ACTIVITY_LEVELS:
-        raise ProfileInvalid("activity_pal")
+        raise ProfileInvalid("activity_pal", reason=_RANGE)
     sessions = inputs.training_sessions_per_week
     if sessions is not None and not (0 <= sessions <= 14):
-        raise ProfileInvalid("training_sessions_per_week")
+        raise ProfileInvalid("training_sessions_per_week", reason=_RANGE)
     if inputs.mode == "PREGNANCY":
         if inputs.goal is not None:
-            raise ProfileInvalid("goal")
+            raise ProfileInvalid("goal", reason=_MODE)
         if inputs.sex not in (None, Sex.FEMALE):
-            raise ProfileInvalid("sex")
+            raise ProfileInvalid("sex", reason=_MODE)
     else:
         if inputs.due_date is not None:
-            raise ProfileInvalid("due_date")
+            raise ProfileInvalid("due_date", reason=_MODE)
         if inputs.pre_pregnancy_weight_kg is not None:
-            raise ProfileInvalid("pre_pregnancy_weight_kg")
+            raise ProfileInvalid("pre_pregnancy_weight_kg", reason=_MODE)
 
 
 def inputs_to_doc(inputs: ProfileInputs) -> dict:

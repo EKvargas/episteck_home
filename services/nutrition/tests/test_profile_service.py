@@ -269,3 +269,15 @@ def test_stale_measurement_date_given_explicitly_is_refused(env):
     with pytest.raises(ProfileInvalid) as e:
         svc.propose_profile(S, "PSN-E", {"weight_measured_on": "2026-11-23"})
     assert e.value.field == "weight_measured_on"
+    assert e.value.reason == "MEASUREMENT_TOO_OLD"
+
+
+def test_refusals_carry_a_reason(env):
+    svc, *_, store = env
+    with pytest.raises(ProfileInvalid) as e:
+        svc.propose_profile(S, "PSN-E", {**ERICK_WIRE, "birth_date": "2010-01-01"})
+    assert (e.value.field, e.value.reason) == ("birth_date", "UNDER_19")
+    with pytest.raises(ProfileInvalid) as e:
+        svc.propose_profile(S, "PSN-E", {})
+    assert (e.value.field, e.value.reason) == ("changes", "NO_CHANGES")
+    assert store.list_versions("PSN-E") == []

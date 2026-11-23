@@ -164,7 +164,8 @@ def _diary_call(operation: Callable[[], Any]):
         raise HTTPException(503, "PROVIDER_UNAVAILABLE") from None
     except ProfileInvalid as error:
         raise HTTPException(
-            400, {"error": "INVALID_FIELD", "field": getattr(error, "field", None)}
+            400, {"error": "INVALID_FIELD", "field": getattr(error, "field", None),
+                  "reason": getattr(error, "reason", "INVALID")}
         ) from None
     except ValueError as error:
         # The field NAME only, never food text.

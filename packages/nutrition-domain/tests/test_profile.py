@@ -1,4 +1,4 @@
-﻿import json
+import json
 from dataclasses import replace
 from datetime import date
 from decimal import Decimal
@@ -111,6 +111,52 @@ def test_pregnancy_rules(inputs, field):
     with pytest.raises(ProfileInvalid) as e:
         validate_inputs(inputs, TODAY)
     assert e.value.field == field
+
+
+@pytest.mark.parametrize("inputs,field,reason", [
+    (ProfileInputs(birth_date=date(2008, 1, 1)), "birth_date", "UNDER_19"),
+    (ProfileInputs(birth_date=date(1920, 1, 1)), "birth_date", "OVER_100"),
+    (ProfileInputs(birth_date=date(2027, 1, 1)), "birth_date", "FUTURE_DATE"),
+    (ProfileInputs(height_cm=D("231")), "height_cm", "OUT_OF_RANGE"),
+    (ProfileInputs(weight_measured_on=date(2026, 11, 24)), "weight_measured_on", "FUTURE_DATE"),
+    (ProfileInputs(weight_measured_on=date(2026, 8, 24)), "weight_measured_on", "MEASUREMENT_TOO_OLD"),
+    (ProfileInputs(activity_pal=D("1.5")), "activity_pal", "OUT_OF_RANGE"),
+    (ProfileInputs(training_sessions_per_week=15), "training_sessions_per_week", "OUT_OF_RANGE"),
+    (ProfileInputs(mode="OTHER"), "mode", "INVALID_FORMAT"),
+    (ProfileInputs(mode="PREGNANCY", goal=Goal.LOSE_FAT), "goal", "NOT_ALLOWED_IN_MODE"),
+    (ProfileInputs(mode="PREGNANCY", sex=Sex.MALE), "sex", "NOT_ALLOWED_IN_MODE"),
+    (ProfileInputs(due_date=date(2027, 5, 15)), "due_date", "NOT_ALLOWED_IN_MODE"),
+    (ProfileInputs(pre_pregnancy_weight_kg=D("58")), "pre_pregnancy_weight_kg", "NOT_ALLOWED_IN_MODE"),
+])
+def test_validation_errors_carry_a_reason(inputs, field, reason):
+    with pytest.raises(ProfileInvalid) as e:
+        validate_inputs(inputs, TODAY)
+    assert (e.value.field, e.value.reason) == (field, reason)
+
+
+@pytest.mark.parametrize("raw,field,reason", [
+    ({"mode": "PREGNANCY"}, "mode", "UNKNOWN_FIELD"),
+    ({"weight_kg": "abc"}, "weight_kg", "INVALID_FORMAT"),
+    ({"weight_kg": True}, "weight_kg", "INVALID_FORMAT"),
+    ({"weight_kg": 10**4000}, "weight_kg", "OUT_OF_RANGE"),
+    ({"training_sessions_per_week": 2.5}, "training_sessions_per_week", "INVALID_FORMAT"),
+    ({"birth_date": "10.03.1986"}, "birth_date", "INVALID_FORMAT"),
+    ({"sex": "OTHER"}, "sex", "INVALID_FORMAT"),
+    ({"training_note": "x" * 121}, "training_note", "TOO_LONG"),
+    ({"dislikes": 5}, "dislikes", "INVALID_FORMAT"),
+])
+def test_parse_errors_carry_a_reason_never_the_value(raw, field, reason):
+    with pytest.raises(ProfileInvalid) as e:
+        parse_changes(raw)
+    assert (e.value.field, e.value.reason) == (field, reason)
+    assert str(raw[field])[:20] not in e.value.reason
+
+
+def test_reason_defaults_to_invalid_and_apply_names_unknown_fields():
+    assert ProfileInvalid("x").reason == "INVALID"
+    with pytest.raises(ProfileInvalid) as e:
+        apply_changes(None, {"mode": "PREGNANCY"})
+    assert e.value.reason == "UNKNOWN_FIELD"
 
 
 def test_pregnancy_valid():

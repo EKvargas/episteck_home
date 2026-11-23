@@ -153,7 +153,8 @@ def _diary_call(operation: Callable[[], Any]):
     except ProviderUnavailable:
         return {"error": "PROVIDER_UNAVAILABLE"}
     except ProfileInvalid as error:
-        return {"error": "INVALID_FIELD", "field": getattr(error, "field", None)}
+        return {"error": "INVALID_FIELD", "field": getattr(error, "field", None),
+                "reason": getattr(error, "reason", "INVALID")}
     except ValueError as error:
         return {"error": "INVALID_ITEM", "field": getattr(error, "field", None)}
 
@@ -313,7 +314,10 @@ _PROPOSE_PROFILE_DOC = """Draft a change to the person's profile (body data, act
     person targets_after with their sources, then ask "¿Lo guardo? (sí / corrige)".
     Call confirm_profile only after a yes; on a correction call propose_profile again.
     A draft saves nothing. Unknown or invalid input is returned as INVALID_FIELD with
-    the field name.
+    the field name and a reason code (for example UNDER_19: a profile is only for
+    adults from 19; MEASUREMENT_TOO_OLD: ask for a weight from the last 90 days;
+    NOT_ALLOWED_IN_MODE: the field does not apply in the current mode). Explain the
+    reason to the person in plain words.
     """
 
 
