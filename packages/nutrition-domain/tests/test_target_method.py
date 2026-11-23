@@ -1,3 +1,4 @@
+import re
 from dataclasses import replace
 from datetime import date
 from decimal import Decimal as D
@@ -112,6 +113,22 @@ def test_general_reference_covers_every_band_and_nutrient():
 def test_every_target_names_its_source():
     for s in (targets_for_day(ERICK, date(2026, 11, 23)), targets_for_day(ANA, date(2026, 11, 23))):
         assert all(t.source_org and t.source_ref and t.explanation for t in s.targets.values())
+
+
+def test_spanish_explanations_use_a_decimal_comma():
+    calm = replace(ERICK, training_sessions_per_week=0, goal=Goal.MAINTAIN)
+    sets = [targets_for_day(ERICK, date(2026, 11, 23)), targets_for_day(calm, date(2026, 11, 23)),
+            targets_for_day(ANA, date(2026, 6, 1)), targets_for_day(ANA, date(2026, 11, 23)),
+            targets_for_day(ANA, date(2027, 2, 20))]
+    for s in sets:
+        for t in s.targets.values():
+            assert not re.search(r"\d\.\d", t.explanation), (t.nutrient, t.explanation)
+    t = sets[0].targets
+    assert "4,0 µg" in t["vitamin_b12_ug"].explanation and t["vitamin_b12_ug"].display_value == "4.0"
+    assert "0,8 g" in sets[1].targets["protein_g"].explanation
+    assert "0,9 g" in sets[3].targets["protein_g"].explanation
+    assert "4,5 µg" in sets[3].targets["vitamin_b12_ug"].explanation
+    assert sets[3].targets["vitamin_b12_ug"].value == D("4.5")
 
 
 def test_unknown_method_is_refused():

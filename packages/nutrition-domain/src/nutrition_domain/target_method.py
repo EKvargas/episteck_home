@@ -77,6 +77,11 @@ def _whole(value: Decimal) -> str:
     return str(value.quantize(_ONE, rounding=ROUND_HALF_UP))
 
 
+def _es(value: Decimal | int) -> str:
+    """A number for Spanish explanation text: decimal comma (values keep the point)."""
+    return str(value).replace(".", ",")
+
+
 def resting_energy_kcal(sex: Sex, weight_kg: Decimal, height_cm: Decimal, age: int) -> Decimal:
     base = Decimal(10) * weight_kg + Decimal("6.25") * height_cm - Decimal(5) * age
     return base + (Decimal(5) if sex is Sex.MALE else Decimal(-161))
@@ -112,7 +117,7 @@ def _micro(nutrient: str, amount: Decimal, unit: str, org: str, ref: str, contex
     name = _NAMES_ES.get(nutrient, nutrient)
     shown_unit = "µg" if unit == "ug" else unit
     return Target(nutrient, _tenth(amount), str(amount), unit, "MIN", org, ref,
-                  f"Valor de referencia de {name}: {amount} {shown_unit} al día {context}.")
+                  f"Valor de referencia de {name}: {_es(amount)} {shown_unit} al día {context}.")
 
 
 def _energy_targets(inputs: ProfileInputs, day: date, tri: int | None, pregnancy: bool,
@@ -131,7 +136,7 @@ def _energy_targets(inputs: ProfileInputs, day: date, tri: int | None, pregnancy
         resting = resting_energy_kcal(Sex.FEMALE, inputs.pre_pregnancy_weight_kg, inputs.height_cm, age)
         extra = _PREGNANCY_ENERGY[tri]
         energy = resting * pal + extra
-        why = f"Gasto en reposo (Mifflin-St Jeor) por actividad, más {extra} kcal por el trimestre {tri}." if extra else \
+        why = f"Gasto en reposo (Mifflin-St Jeor) por actividad, más {_es(extra)} kcal por el trimestre {tri}." if extra else \
             "Gasto en reposo (Mifflin-St Jeor) por actividad, sin suplemento de embarazo."
         org, ref = f"{_MSJ_ORG}; {_DGE}", f"{_MSJ_REF}; {_ENERGY_URL}"
     else:
@@ -159,7 +164,7 @@ def _protein_target(inputs: ProfileInputs, day: date, tri: int | None, pregnancy
             return
         per_kg = _PREGNANCY_PROTEIN[tri]
         org, ref = _DGE, _PROTEIN_URL
-        why = f"{per_kg} g de proteína por kg de peso antes del embarazo."
+        why = f"{_es(per_kg)} g de proteína por kg de peso antes del embarazo."
         weight = inputs.pre_pregnancy_weight_kg
     else:
         sessions = inputs.training_sessions_per_week or 0
@@ -176,7 +181,7 @@ def _protein_target(inputs: ProfileInputs, day: date, tri: int | None, pregnancy
         else:
             per_kg = Decimal("1.0") if age_on(inputs.birth_date, day) >= 65 else Decimal("0.8")
             org, ref = _DGE, _PROTEIN_URL
-            why = f"{per_kg} g de proteína por kg de peso, valor de referencia para tu edad."
+            why = f"{_es(per_kg)} g de proteína por kg de peso, valor de referencia para tu edad."
     protein = per_kg * weight
     targets["protein_g"] = Target("protein_g", _tenth(protein), _whole(protein), "g", "MIN", org, ref, why)
 
@@ -199,7 +204,7 @@ def targets_for_day(inputs: ProfileInputs, day: date, method: str = METHOD_V1) -
         first = rule.sources[0]
         targets["free_sugars_g"] = Target(
             "free_sugars_g", rule.value_g, str(rule.value_g), "g", "MAX", first.title, first.url,
-            f"Máximo de {rule.value_g} g de azúcares libres al día (menos del 10 % de la energía).")
+            f"Máximo de {_es(rule.value_g)} g de azúcares libres al día (menos del 10 % de la energía).")
 
     if pregnancy:
         for nutrient, (amount, unit, org, ref, _stage) in PREGNANCY_REFERENCE.items():
