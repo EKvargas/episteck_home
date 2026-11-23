@@ -187,6 +187,15 @@ def test_has_onboarded_needs_a_profile_origin_version(env):
     assert svc.has_onboarded("PSN-B")
 
 
+def test_view_says_whether_the_person_is_onboarded(env):
+    svc, *_ = env
+    svc.record_mode("PSN-A", "PREGNANCY", date(2027, 5, 15))
+    v = svc.get_profile_view(S, "PSN-A")
+    assert v["origin"] == "MODE" and v["onboarded"] is False
+    v = _onboard(env, "PSN-A", ANA_WIRE)
+    assert v["onboarded"] is True and svc.get_profile_view(S, "PSN-A")["onboarded"] is True
+
+
 def test_record_mode_pregnancy_clears_goal_and_general_clears_due_date(env):
     svc, *_ = env
     _onboard(env, "PSN-A", {**ANA_WIRE, "goal": "MAINTAIN"})

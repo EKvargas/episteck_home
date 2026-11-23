@@ -43,7 +43,10 @@ def get_nutrition_profile(
 ) -> dict:
     """Read the person's current profile: inputs, mode, targets with their sources and history.
 
-    Returns {"error": "no profile"} when the person has not been onboarded yet.
+    The profile is returned whenever anything was saved for the person, even only a mode.
+    "onboarded": false means no profile has been confirmed yet (only the mode or older
+    migrated data exists): offer onboarding. {"error": "no profile"} only when nothing
+    exists for the person at all.
     """
     return _authorized(
         lambda: _profile.get_profile_view(_session(), subject_person_id)
@@ -118,7 +121,10 @@ def get_pregnancy_profile(
 ) -> dict:
     """Read the person's current profile, including pregnancy mode, trimester and targets.
 
-    Same result as get_nutrition_profile; {"error": "no profile"} when none exists.
+    Same result as get_nutrition_profile. The profile is returned whenever anything was
+    saved for the person, even only a mode. "onboarded": false means no profile has been
+    confirmed yet (only the mode or older migrated data exists): offer onboarding.
+    {"error": "no profile"} only when nothing exists for the person at all.
     """
     return _authorized(
         lambda: _profile.get_profile_view(_session(), subject_person_id)
@@ -329,7 +335,9 @@ def get_period_summary(
     start and end are YYYY-MM-DD local dates; leave both out for the last 7 days
     ending today. Never add up nutrients yourself: use these totals and averages.
     Only confirmed entries count; unknown values are null, never 0, and
-    items_uncounted says how many items could not be counted.
+    items_uncounted says how many items could not be counted. has_profile means the
+    person is onboarded (a profile has been confirmed); when it is false, energy and
+    protein have no targets yet and the person can be offered onboarding.
     """
     return _diary_call(lambda: _diary.get_period_summary(_session(), subject_person_id, start, end))
 

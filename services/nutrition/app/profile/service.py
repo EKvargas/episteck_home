@@ -136,7 +136,10 @@ class ProfileService:
         due = inputs.due_date
         return {
             "person_id": person, "version": version, "valid_from": valid_from.isoformat(),
-            "origin": origin, "mode": inputs.mode,
+            "origin": origin,
+            # False while only mode or migrated versions exist: offer onboarding.
+            "onboarded": self.has_onboarded(person),
+            "mode": inputs.mode,
             "due_date": due.isoformat() if due else None,
             "trimester": trimester(due, today) if inputs.mode == "PREGNANCY" and due else None,
             "inputs": {

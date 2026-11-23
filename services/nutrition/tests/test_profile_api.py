@@ -42,6 +42,16 @@ def test_get_profile_404_until_onboarded_then_view(api):
     assert body["target_set"]["method"] == "episteck-targets-1"
     assert "targets_flat" not in body
     assert all(isinstance(v, str) for v in body["targets"].values())
+    assert body["onboarded"] is True
+
+
+def test_get_profile_with_only_a_mode_version_is_not_onboarded(api):
+    _, server, client = api
+    assert client.put(f"/profile/{P}/mode", json={"mode": "GENERAL"}, headers=H).status_code == 200
+    body = client.get(f"/profile/{P}", headers=H).json()
+    assert body["origin"] == "MODE" and body["onboarded"] is False
+    with _Session():
+        assert _tool(server, "get_nutrition_profile")(P)["onboarded"] is False
 
 
 def test_period_route(api):
@@ -104,6 +114,9 @@ def test_new_tool_descriptions_guide_the_agent(api):
         assert needle in text, needle
     assert "confirm_profile" in text
     assert "Never add up nutrients yourself" in tools["get_period_summary"]
+    assert "has_profile" in tools["get_period_summary"] and "onboarded" in tools["get_period_summary"]
+    for name in ("get_nutrition_profile", "get_pregnancy_profile"):
+        assert '"onboarded": false' in tools[name] and "onboarding" in tools[name], name
     for name in ("propose_profile", "confirm_profile", "get_period_summary"):
         low = tools[name].lower()
         assert "delegation" not in low and "token" not in low, name
