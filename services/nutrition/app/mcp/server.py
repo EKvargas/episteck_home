@@ -244,7 +244,7 @@ def get_diary_entry(subject_person_id: str, entry_id: str) -> dict:
 
 @mcp.tool
 def get_day_summary(subject_person_id: str, date: str | None = None) -> dict:
-    """Read one day with the confirmed entries and free sugars.
+    """Read one day with the confirmed entries, free sugars and nutrient totals.
 
     date is YYYY-MM-DD (local date); leave it out for today in the diary's own timezone,
     so you never have to work out the date yourself.
@@ -252,6 +252,14 @@ def get_day_summary(subject_person_id: str, date: str | None = None) -> dict:
     Only confirmed entries count; drafts never do. free_sugars_known_g is the known
     sum against the daily limit; items_uncounted says how many items could not be
     counted. Unknown sugar is null, never 0.
+
+    profile_version is the profile version in force that day (null without one).
+    nutrients has one entry per nutrient (energy_kcal, protein_g, fat_g, carb_g,
+    fiber_g and the micronutrients) with: known, the known total (null = unknown,
+    never 0); items_uncounted, the items that could not be counted for it; status
+    (NONE, KNOWN or PARTIAL); target, that day's target (null without a profile,
+    when an input is missing, or for carb_g, which has no target); and percent of
+    the target (null when either is unknown). Never add up nutrients yourself.
     """
     return _diary_call(lambda: _diary.get_day_summary(_session(), subject_person_id, date))
 

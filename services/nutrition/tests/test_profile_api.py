@@ -117,6 +117,17 @@ def test_new_tool_descriptions_guide_the_agent(api):
     assert "has_profile" in tools["get_period_summary"] and "onboarded" in tools["get_period_summary"]
     for name in ("get_nutrition_profile", "get_pregnancy_profile"):
         assert '"onboarded": false' in tools[name] and "onboarding" in tools[name], name
+
+
+def test_day_summary_description_covers_the_nutrient_block(api):
+    _, server, _ = api
+    tools = {t.name: (t.description or "") for t in asyncio.run(server.mcp.list_tools())}
+    text = tools["get_day_summary"]
+    for needle in ("profile_version", "nutrients", "known", "null", "never 0", "items_uncounted",
+                   "status", "target", "without a profile", "percent"):
+        assert needle in text, needle
+    low = text.lower()
+    assert "delegation" not in low and "token" not in low
     for name in ("propose_profile", "confirm_profile", "get_period_summary"):
         low = tools[name].lower()
         assert "delegation" not in low and "token" not in low, name
