@@ -1,13 +1,12 @@
-"""Stage F tests: provider chain, unknown!=zero, provenance, unit norm, consent,
-pregnancy targets, menu eval, AI-not-authoritative. Uses a FAKE provider (no network)."""
-import tempfile, os
+"""Stage F tests: provider chain, unknown!=zero, provenance, unit norm, pregnancy
+reference values, menu eval, AI-not-authoritative. Uses a FAKE provider (no network)."""
 from decimal import Decimal
-from app.store.sqlite_repo import SqliteNutritionRepository
+from nutrition_domain.reference_values import PREGNANCY_REFERENCE
 from app.service import NutritionService
 from app.providers.food_provider import FoodProvider, FoodSearchHit, FoodRecord
 from app.providers.chain import ProviderChain
 from app.providers.nutrient_map import to_canonical
-from tests.support import AllowAllAuthorizer, DenyAllAuthorizer
+from tests.support import AllowAllAuthorizer
 
 class FakeUSDA(FoodProvider):
     name = "USDA_FDC"
@@ -26,11 +25,10 @@ class FakeOFF(FoodProvider):
         f=self.get_food(fid).nutrients_per_100g; k=Decimal(str(qty))/Decimal("100"); return {n:v*k for n,v in f.items()}
 
 def _svc(provider=None, authorizer=None):
-    fd,p=tempfile.mkstemp(suffix=".sqlite"); os.close(fd)
     return NutritionService(
-        SqliteNutritionRepository(p),
         provider or ProviderChain([FakeUSDA(), FakeOFF()]),
         authorizer=authorizer or AllowAllAuthorizer(),
+        targets_today=lambda person: {},
     )
 
 def test_chain_search_concatenates_both_sources():
@@ -56,33 +54,8 @@ def test_unit_normalization_fails_loud_on_unknown_path():
     try: to_canonical("1","g","kcal"); raise AssertionError("should fail")
     except ValueError: pass
 
-def test_home_authorization_required_for_pregnancy_profile():
-    s=_svc(authorizer=DenyAllAuthorizer())
-    try:
-        s.create_pregnancy_profile("p-real", "p-real"); raise AssertionError("should require authorization")
-    except PermissionError: pass
-    s=_svc()
-    prof=s.create_pregnancy_profile("p-real", "p-real", stage="2nd trimester", preferences="veg")
-    assert prof["context"]=="PREGNANCY" and prof["target_source"]=="REFERENCE_TARGET"
-
-def test_pregnancy_targets_have_reference_provenance():
-    s=_svc()
-    prof=s.create_pregnancy_profile("p2", "p2")
-    d=prof["targets_detail"]
-    assert d["folate_ug"]["value"]=="550" and d["folate_ug"]["source_org"].startswith("DGE")
-    assert d["iodine_ug"]["value"]=="220"
-    assert all(v["provenance"]=="REFERENCE_TARGET" for v in d.values())
-
-def test_gap_v2_marks_unknown_vs_known():
-    s=_svc(); s.create_pregnancy_profile("p3", "p3")
-    # eat egg (protein known, iron/folate unknown from this food)
-    s.record_actual("p3", "p3","2026-09-15",[{"food_id":"usda:1","grams":100}])
-    g=s.daily_gap_v2("p3", "p3","2026-09-15")
-    assert g["protein_g"]["status"]=="KNOWN"
-    assert g["iron_mg"]["status"]=="UNKNOWN" and g["iron_mg"]["consumed"] is None
-
 def test_menu_plan_is_proposal_not_medical():
-    s=_svc(); s.create_pregnancy_profile("p4", "p4")
+    s=_svc()
     plan=s.plan_menu("p4", "p4", [{"label":"lunch","foods":[{"food_id":"usda:1","grams":150}]}])
     assert plan["status"]=="PROPOSED"
     assert "Not a medical recommendation" in plan["disclaimer"]
@@ -94,6 +67,11 @@ def test_ai_change_proposal_not_authoritative():
 
 
 def test_reference_values_current():
-    from app.reference.pregnancy_targets import pregnancy_targets_map
-    m = pregnancy_targets_map()
+    m = {nutrient: row[0] for nutrient, row in PREGNANCY_REFERENCE.items()}
     assert m["iron_mg"] == Decimal("27") and m["iodine_ug"] == Decimal("220")
+    assert m["folate_ug"] == Decimal("550")
+
+
+def test_pregnancy_reference_values_name_their_source():
+    assert PREGNANCY_REFERENCE["folate_ug"][2].startswith("DGE")
+    assert all(org and ref for _, _, org, ref, _ in PREGNANCY_REFERENCE.values())

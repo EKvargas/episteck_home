@@ -12,14 +12,17 @@ from typing import Any
 
 from fastmcp import FastMCP
 
-from ..deps import build_diary_service, build_service
+from nutrition_domain.profile import ProfileInvalid
+
+from ..deps import build_diary_service, build_profile_service, build_service
 from ..diary.service import BLS_ATTRIBUTION, DraftExpired, DraftNotFound, EntryNotFound, ProviderUnavailable
 from ..session import NO_SESSION, current_delegation
 
 
 mcp = FastMCP("episteck-nutrition")
-_svc = build_service()
-_diary = build_diary_service()
+_profile = build_profile_service()
+_svc = build_service(_profile)
+_diary = build_diary_service(_profile)
 
 
 def _authorized(operation: Callable[[], Any]):
@@ -38,9 +41,15 @@ def _session() -> str | None:
 def get_nutrition_profile(
     subject_person_id: str
 ) -> dict:
-    """Read a profile after Home authorizes this exact actor and subject."""
+    """Read the person's current profile: inputs, mode, targets with their sources and history.
+
+    The profile is returned whenever anything was saved for the person, even only a mode.
+    "onboarded": false means no profile has been confirmed yet (only the mode or older
+    migrated data exists): offer onboarding. {"error": "no profile"} only when nothing
+    exists for the person at all.
+    """
     return _authorized(
-        lambda: _svc.get_profile(_session(), subject_person_id)
+        lambda: _profile.get_profile_view(_session(), subject_person_id)
         or {"error": "no profile"}
     )
 
@@ -49,53 +58,6 @@ def get_nutrition_profile(
 def evaluate_meal(foods: list[dict]) -> dict:
     """Deterministically compute nutrient totals for confirmed food amounts."""
     return _svc.evaluate_meal(foods)
-
-
-@mcp.tool
-def get_daily_nutrition_gap(
-    subject_person_id: str, date: str
-) -> dict:
-    """Read target, consumed, and remaining nutrients after Home authorization."""
-    return _authorized(
-        lambda: _svc.daily_gap(_session(), subject_person_id, date)
-    )
-
-
-@mcp.tool
-def record_planned_meal(
-    subject_person_id: str,
-    date: str,
-    foods: list[dict],
-    ref: str | None = None,
-) -> dict:
-    """Record intended intake after Home authorizes CREATE for actor and subject."""
-    return _authorized(
-        lambda: _svc.record_planned(_session(), subject_person_id, date, foods, ref)
-    )
-
-
-@mcp.tool
-def record_actual_intake(
-    subject_person_id: str,
-    date: str,
-    foods: list[dict],
-) -> dict:
-    """Record confirmed intake after Home authorizes CREATE for actor and subject."""
-    return _authorized(
-        lambda: _svc.record_actual(_session(), subject_person_id, date, foods)
-    )
-
-
-@mcp.tool
-def ate_as_planned(
-    subject_person_id: str,
-    date: str,
-    planned_id: str,
-) -> dict:
-    """Read a plan and create actual intake only after both Home decisions allow."""
-    return _authorized(
-        lambda: _svc.ate_as_planned(_session(), subject_person_id, date, planned_id)
-    )
 
 
 @mcp.tool
@@ -157,9 +119,15 @@ def get_food_detail(food_id: str) -> dict:
 def get_pregnancy_profile(
     subject_person_id: str
 ) -> dict:
-    """Read a synthetic pregnancy profile only after Home authorization."""
+    """Read the person's current profile, including pregnancy mode, trimester and targets.
+
+    Same result as get_nutrition_profile. The profile is returned whenever anything was
+    saved for the person, even only a mode. "onboarded": false means no profile has been
+    confirmed yet (only the mode or older migrated data exists): offer onboarding.
+    {"error": "no profile"} only when nothing exists for the person at all.
+    """
     return _authorized(
-        lambda: _svc.get_profile(_session(), subject_person_id)
+        lambda: _profile.get_profile_view(_session(), subject_person_id)
         or {"error": "no profile"}
     )
 
@@ -184,6 +152,9 @@ def _diary_call(operation: Callable[[], Any]):
         return {"error": "DRAFT_EXPIRED"}
     except ProviderUnavailable:
         return {"error": "PROVIDER_UNAVAILABLE"}
+    except ProfileInvalid as error:
+        return {"error": "INVALID_FIELD", "field": getattr(error, "field", None),
+                "reason": getattr(error, "reason", "INVALID")}
     except ValueError as error:
         return {"error": "INVALID_ITEM", "field": getattr(error, "field", None)}
 
@@ -274,7 +245,7 @@ def get_diary_entry(subject_person_id: str, entry_id: str) -> dict:
 
 @mcp.tool
 def get_day_summary(subject_person_id: str, date: str | None = None) -> dict:
-    """Read one day with the confirmed entries and free sugars.
+    """Read one day with the confirmed entries, free sugars and nutrient totals.
 
     date is YYYY-MM-DD (local date); leave it out for today in the diary's own timezone,
     so you never have to work out the date yourself.
@@ -282,6 +253,14 @@ def get_day_summary(subject_person_id: str, date: str | None = None) -> dict:
     Only confirmed entries count; drafts never do. free_sugars_known_g is the known
     sum against the daily limit; items_uncounted says how many items could not be
     counted. Unknown sugar is null, never 0.
+
+    profile_version is the profile version in force that day (null without one).
+    nutrients has one entry per nutrient (energy_kcal, protein_g, fat_g, carb_g,
+    fiber_g and the micronutrients) with: known, the known total (null = unknown,
+    never 0); items_uncounted, the items that could not be counted for it; status
+    (NONE, KNOWN or PARTIAL); target, that day's target (null without a profile,
+    when an input is missing, or for carb_g, which has no target); and percent of
+    the target (null when either is unknown). Never add up nutrients yourself.
     """
     return _diary_call(lambda: _diary.get_day_summary(_session(), subject_person_id, date))
 
@@ -310,6 +289,71 @@ def set_nutrition_mode(
     return _diary_call(
         lambda: _diary.set_mode(_session(), subject_person_id, mode, due_date)
     )
+
+
+_PROPOSE_PROFILE_DOC = """Draft a change to the person's profile (body data, activity, goal, food notes). Nothing is saved yet.
+
+    Send only the fields the person gave in this conversation; never guess or fill in
+    a field they did not mention. Numbers may use a decimal comma (82,5). ``changes``
+    is an object with any of these keys:
+      birth_date: YYYY-MM-DD.
+      sex: MALE or FEMALE.
+      height_cm, weight_kg: numbers.
+      weight_measured_on: YYYY-MM-DD, the day the weight was measured.
+      activity_pal: one of 1.4, 1.6, 1.8, 2.0. Choose the value from what the person
+        describes and always show the chosen value to the person.
+      training_sessions_per_week: whole number 0 to 14.
+      training_note: short free text about the training.
+      goal: MAINTAIN, LOSE_FAT, BUILD_MUSCLE or PERFORMANCE (not allowed in pregnancy).
+      pre_pregnancy_weight_kg: number, only in pregnancy mode.
+      preferences, dislikes, intolerances: free text.
+    Sending null for a field clears it. Mode and due date are not changed here; they
+    change only through set_nutrition_mode.
+
+    The result has draft_id, ``changed`` and the targets before and after. Show the
+    person targets_after with their sources, then ask "¿Lo guardo? (sí / corrige)".
+    Call confirm_profile only after a yes; on a correction call propose_profile again.
+    A draft saves nothing. Unknown or invalid input is returned as INVALID_FIELD with
+    the field name and a reason code (for example UNDER_19: a profile is only for
+    adults from 19; MEASUREMENT_TOO_OLD: ask for a weight from the last 90 days;
+    NOT_ALLOWED_IN_MODE: the field does not apply in the current mode). Explain the
+    reason to the person in plain words.
+    """
+
+
+@mcp.tool(description=_PROPOSE_PROFILE_DOC)
+def propose_profile(subject_person_id: str, changes: dict) -> dict:
+    return _diary_call(lambda: _profile.propose_profile(_session(), subject_person_id, changes))
+
+
+@mcp.tool
+def confirm_profile(subject_person_id: str, draft_id: str) -> dict:
+    """Save a profile draft as the person's new profile version.
+
+    Call this only after the person has clearly said yes to the proposed targets.
+    Repeating it for the same draft is safe. Drafts expire after 24 hours (error
+    DRAFT_EXPIRED); propose again in that case. The result is {"profile": ..., "created":
+    true or false}; created is false when this draft was already saved.
+    """
+    return _diary_call(lambda: _profile.confirm_profile(_session(), subject_person_id, draft_id))
+
+
+@mcp.tool
+def get_period_summary(
+    subject_person_id: str, start: str | None = None, end: str | None = None
+) -> dict:
+    """Read nutrient totals and averages over several days (at most 31).
+
+    start and end are YYYY-MM-DD local dates; leave both out for the last 7 days
+    ending today. Never add up nutrients yourself: use these totals and averages.
+    Only confirmed entries count; unknown values are null, never 0, and
+    items_uncounted says how many items could not be counted. Each day's free_sugars
+    gives the known grams, status and percent of that day's limit; averages include
+    free_sugars_g. has_profile means the
+    person is onboarded (a profile has been confirmed); when it is false, energy and
+    protein have no targets yet and the person can be offered onboarding.
+    """
+    return _diary_call(lambda: _diary.get_period_summary(_session(), subject_person_id, start, end))
 
 
 if __name__ == "__main__":

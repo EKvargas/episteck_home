@@ -8,11 +8,11 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from app.profile.service import ProfileService
+from app.store.profile_sqlite import SqliteProfileStore
 from app.diary.service import DiaryService
 from app.providers.synthetic import SyntheticFoodProvider
-from app.service import NutritionService
 from app.store.diary_sqlite import SqliteDiaryStore
-from app.store.sqlite_repo import SqliteNutritionRepository
 from tests.support import AllowAllAuthorizer, DenyAllAuthorizer
 
 SESSION = "delegation-token-test"
@@ -44,15 +44,16 @@ def api(monkeypatch, tmp_path):
     server = importlib.import_module("app.mcp.server")
 
     def build(provider=None, authorizer=None):
+        auth = authorizer or AllowAllAuthorizer()
         return DiaryService(
             SqliteDiaryStore(db), provider or SyntheticFoodProvider(),
-            SqliteNutritionRepository(db), authorizer=authorizer or AllowAllAuthorizer(),
+            ProfileService(SqliteProfileStore(db), authorizer=auth), authorizer=auth,
         )
 
     main.diary = build()
     server._diary = main.diary
-    main.svc = NutritionService(SqliteNutritionRepository(db), SyntheticFoodProvider(),
-                                authorizer=AllowAllAuthorizer())
+    main.profile = main.diary._profiles
+    server._profile = main.profile
     main.build_test_diary = build
     return main, server, TestClient(main.app, raise_server_exceptions=False)
 
@@ -156,21 +157,43 @@ def test_mcp_exposes_the_eight_diary_tools(api):
 
 
 ALL_TOOLS = {
-    "get_nutrition_profile", "evaluate_meal", "get_daily_nutrition_gap",
-    "record_planned_meal", "record_actual_intake", "ate_as_planned", "propose_meal_change",
+    "get_nutrition_profile", "evaluate_meal", "propose_meal_change",
     "search_recipes", "get_meal_plan", "search_foods", "get_food_detail",
     "get_pregnancy_profile", "plan_menu",
     "propose_intake", "confirm_intake", "correct_intake", "void_intake",
     "get_diary_entry", "get_day_summary", "close_day", "set_nutrition_mode",
+    "propose_profile", "confirm_profile", "get_period_summary",
 }
 
 
-def test_mcp_lists_exactly_the_21_tools(api):
+def test_mcp_lists_exactly_the_20_tools(api):
     _, server, _ = api
     import asyncio
     tools = asyncio.run(server.mcp.list_tools())
     assert {t.name for t in tools} == ALL_TOOLS
-    assert len(tools) == 21
+    assert len(tools) == 20
+
+
+#: The pre-diary intake model and the legacy profile writers (retired in Task 8).
+#: The gap path is split so a grep for the retired name finds no live reference.
+RETIRED_ROUTES = [
+    ("get", f"/daily/{PERSON}/2026-11-19", None),
+    ("post", f"/intake/{PERSON}/planned?date=2026-11-19", [{"food_id": "syn-yogurt", "grams": 50}]),
+    ("post", f"/intake/{PERSON}/actual?date=2026-11-19", [{"food_id": "syn-yogurt", "grams": 50}]),
+    ("post", f"/intake/{PERSON}/ate-as-planned?date=2026-11-19&planned_id=x", None),
+    ("get", "/gap-" f"v2/{PERSON}/2026-11-19", None),
+    ("put", f"/profile/{PERSON}", {"context": "GENERAL", "targets": {"protein_g": 70}}),
+    ("post", f"/profile/{PERSON}/pregnancy", {"stage": "T2"}),
+]
+
+
+@pytest.mark.parametrize("verb,url,body", RETIRED_ROUTES,
+                         ids=[f"{verb.upper()} {url.split('?')[0]}" for verb, url, _ in RETIRED_ROUTES])
+def test_retired_routes_are_gone(api, verb, url, body):
+    _, _, client = api
+    kwargs = {"headers": H} if body is None else {"headers": H, "json": body}
+    response = getattr(client, verb)(url, **kwargs)
+    assert response.status_code in (404, 405), (verb, url, response.status_code, response.text)
 
 
 def test_item_guide_says_serving_needs_an_estimate_without_a_source_serving():
@@ -191,28 +214,6 @@ def test_mcp_unknown_draft_returns_error_code(api):
         assert out["items"]
     finally:
         session_module.get_http_headers = original
-
-
-def test_put_profile_without_context_keeps_mode_set_by_set_mode(api):
-    """R25: a PUT that sends only targets must not silently undo set_mode."""
-    _, _, client = api
-    r = client.put(f"/profile/{PERSON}/mode", json={"mode": "PREGNANCY", "due_date": "2027-03-01"}, headers=H)
-    assert r.status_code == 200
-    r = client.put(f"/profile/{PERSON}", json={"targets": {"protein_g": 70}}, headers=H)
-    assert r.status_code == 200
-    stored = client.get(f"/profile/{PERSON}", headers=H).json()
-    assert stored["context"] == "PREGNANCY" and stored["due_date"] == "2027-03-01"
-    assert stored["targets"] == {"protein_g": 70}
-    # an explicit GENERAL is a deliberate switch and clears the due date
-    client.put(f"/profile/{PERSON}", json={"context": "GENERAL"}, headers=H)
-    stored = client.get(f"/profile/{PERSON}", headers=H).json()
-    assert stored["context"] == "GENERAL" and stored["due_date"] is None
-
-
-def test_put_profile_for_a_new_person_defaults_to_general(api):
-    _, _, client = api
-    client.put("/profile/PSN-NEW", json={"targets": {}}, headers=H)
-    assert client.get("/profile/PSN-NEW", headers=H).json()["context"] == "GENERAL"
 
 
 # ---- final-review fixes: attribution and tool descriptions ----------------

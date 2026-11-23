@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 import httpx
@@ -12,7 +12,8 @@ from app.providers.food_provider import FoodProvider, FoodRecord
 from app.providers.synthetic import SyntheticFoodProvider
 from app.service import AccessDenied
 from app.store.diary_sqlite import SqliteDiaryStore
-from app.store.sqlite_repo import SqliteNutritionRepository
+from app.profile.service import ProfileService
+from app.store.profile_sqlite import SqliteProfileStore
 from tests.support import AllowAllAuthorizer, DenyAllAuthorizer, RecordingAuthorizer
 
 S = "delegation-token"
@@ -58,7 +59,7 @@ def env(tmp_path):
     clock = Clock(datetime(2026, 11, 19, 10, 0, tzinfo=timezone.utc))
     auth = AllowAllAuthorizer()
     store = SqliteDiaryStore(db)
-    profiles = SqliteNutritionRepository(db)
+    profiles = ProfileService(SqliteProfileStore(db), authorizer=auth, clock=clock)
     svc = DiaryService(store, SyntheticFoodProvider(), profiles, authorizer=auth, clock=clock)
     return svc, auth, clock, db, store, profiles
 
@@ -428,14 +429,14 @@ def test_denied_creates_nothing(env):
         svc.propose_intake(S, "p1", [cola()], consumed_at=T)
     with pytest.raises(AccessDenied):
         svc.set_mode(S, "p1", "PREGNANCY", "2027-05-20")
-    assert draft_rows(db) == 0 and prov.calls == [] and profiles.get_profile("p1") is None
+    assert draft_rows(db) == 0 and prov.calls == [] and profiles.version_on("p1", date(2026, 11, 19)) is None
     assert deny.home_calls == 2
 
 
 def test_mode_stamp_and_trimester(env):
     svc = env[0]
     out = svc.set_mode(S, "p1", "PREGNANCY", "2027-05-20")
-    assert out == {"mode": "PREGNANCY", "due_date": "2027-05-20", "trimester": 2}
+    assert out == {"mode": "PREGNANCY", "due_date": "2027-05-20", "trimester": 2, "version": 1}
     e = confirm(svc, [cola()], consumed_at="2026-11-19T10:00:00+01:00")
     assert e["entry"]["mode"] == "PREGNANCY"
     assert e["day"]["trimester"] == 2 and e["day"]["mode"] == "PREGNANCY"
@@ -452,14 +453,15 @@ def test_limit_shape(env):
     assert svc.get_day_summary(S, "p1", "2026-11-17")["limit"] is None  # before valid_from
 
 
-def test_set_mode_merges_profile_and_validates(env):
+def test_set_mode_writes_versions_and_validates(env):
     svc, profiles = env[0], env[5]
-    profiles.upsert_profile("p1", {"context": "GENERAL", "weight_kg": 60})
-    svc.set_mode(S, "p1", "PREGNANCY", "2027-05-20")
-    assert profiles.get_profile("p1") == {"context": "PREGNANCY", "weight_kg": 60,
-                                          "due_date": "2027-05-20"}
-    assert svc.set_mode(S, "p1", "GENERAL") == {"mode": "GENERAL", "due_date": None, "trimester": None}
-    assert profiles.get_profile("p1")["due_date"] is None
+    today = date(2026, 11, 19)
+    r = svc.set_mode(S, "p1", "PREGNANCY", "2027-05-20")
+    assert r == {"mode": "PREGNANCY", "due_date": "2027-05-20", "trimester": 2, "version": 1}
+    assert profiles.inputs_on("p1", today).due_date == date(2027, 5, 20)
+    assert svc.set_mode(S, "p1", "GENERAL") == {"mode": "GENERAL", "due_date": None,
+                                                "trimester": None, "version": 2}
+    assert profiles.inputs_on("p1", today).due_date is None
     for args in [("LACTATION", None), ("GENERAL", "2027-05-20"), ("PREGNANCY", "soon"),
                  ("pregnancy", None)]:
         with pytest.raises(ValueError):
@@ -468,14 +470,11 @@ def test_set_mode_merges_profile_and_validates(env):
         svc.set_mode(S, "p1", "PREGNANCY", "20270520")
 
 
-def test_set_mode_creates_profile(env):
+def test_set_mode_without_due_date(env):
     svc, profiles = env[0], env[5]
     svc.set_mode(S, "p9", "PREGNANCY")
-    prof = profiles.get_profile("p9")
-    # The Hub profile view rejects a profile without targets or target_source.
-    assert prof["targets"] == {} and prof["target_source"] == "USER_CONFIGURED"
-    assert prof["context"] == "PREGNANCY" and prof["due_date"] is None
-    assert prof["preferences"] is None and prof["dislikes"] is None and prof["intolerances"] is None
+    inputs = profiles.inputs_on("p9", date(2026, 11, 19))
+    assert inputs.mode == "PREGNANCY" and inputs.due_date is None
 
 
 def test_bls_item_adds_attribution(env):

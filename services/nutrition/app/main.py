@@ -5,16 +5,19 @@ from collections.abc import Callable
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
-from .deps import build_diary_service, build_service
+from nutrition_domain.profile import ProfileInvalid
+
+from .deps import build_diary_service, build_profile_service, build_service
 from .diary.service import BLS_ATTRIBUTION, DraftExpired, DraftNotFound, EntryNotFound, ProviderUnavailable
 from .service import AccessDenied, PolicyUnavailable, SessionInvalid
 
 
 app = FastAPI(title="Episteck Nutrition", version="0.3.0")
-svc = build_service()
-diary = build_diary_service()
+profile = build_profile_service()
+svc = build_service(profile)
+diary = build_diary_service(profile)
 
 DELEGATION_HEADER = "X-Episteck-Delegation"
 
@@ -48,17 +51,6 @@ class FoodItem(BaseModel):
     grams: float
 
 
-class ProfileIn(BaseModel):
-    # None keeps the stored mode (so a PUT never silently undoes set_mode); see
-    # NutritionService.upsert_profile.
-    context: str | None = None
-    preferences: str | None = None
-    dislikes: str | None = None
-    intolerances: str | None = None
-    targets: dict[str, float] = Field(default_factory=dict)
-    target_source: str = "USER_CONFIGURED"
-
-
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -66,78 +58,19 @@ def health():
 
 @app.get("/profile/{person_id}")
 def get_profile(person_id: str, delegation: str | None = Depends(human_session)):
-    profile = _authorized(lambda: svc.get_profile(delegation, person_id))
-    if profile is None:
+    view = _authorized(lambda: profile.get_profile_view(delegation, person_id))
+    if view is None:
         raise HTTPException(404, "no profile")
-    return profile
-
-
-@app.put("/profile/{person_id}")
-def put_profile(person_id: str, body: ProfileIn, delegation: str | None = Depends(human_session)):
-    return _authorized(
-        lambda: svc.upsert_profile(delegation, person_id, body.model_dump())
-    )
+    # The deployed Hub reads a flat ``targets`` map; the structured set moves to ``target_set``.
+    body = {key: value for key, value in view.items() if key not in ("targets", "targets_flat")}
+    body["targets"] = view["targets_flat"]
+    body["target_set"] = view["targets"]
+    return body
 
 
 @app.post("/evaluate/meal")
 def evaluate_meal(foods: list[FoodItem]):
     return svc.evaluate_meal([food.model_dump() for food in foods])
-
-
-@app.get("/daily/{person_id}/{date}")
-def daily(person_id: str, date: str, delegation: str | None = Depends(human_session)):
-    """One delegated Home request, not two.
-
-    This used to call ``daily_intake`` and ``daily_gap``; both authorize, so a single
-    HTTP request spent the single-use delegation twice and the second was
-    replay-denied. ``svc.daily`` authorizes VIEW once and composes internally.
-    """
-    return _authorized(lambda: svc.daily(delegation, person_id, date))
-
-
-@app.post("/intake/{person_id}/planned")
-def planned(
-    person_id: str,
-    date: str,
-    foods: list[FoodItem],
-    delegation: str | None = Depends(human_session),
-    ref: str | None = None,
-):
-    return _authorized(
-        lambda: svc.record_planned(
-            delegation,
-            person_id,
-            date,
-            [food.model_dump() for food in foods],
-            ref,
-        )
-    )
-
-
-@app.post("/intake/{person_id}/actual")
-def actual(
-    person_id: str, date: str, foods: list[FoodItem], delegation: str | None = Depends(human_session)
-):
-    return _authorized(
-        lambda: svc.record_actual(
-            delegation,
-            person_id,
-            date,
-            [food.model_dump() for food in foods],
-        )
-    )
-
-
-@app.post("/intake/{person_id}/ate-as-planned")
-def ate(person_id: str, date: str, planned_id: str, delegation: str | None = Depends(human_session)):
-    try:
-        return _authorized(
-            lambda: svc.ate_as_planned(
-                delegation, person_id, date, planned_id
-            )
-        )
-    except KeyError as error:
-        raise HTTPException(404, str(error)) from error
 
 
 @app.post("/intake/propose-change")
@@ -159,33 +92,6 @@ def mealplan(
     return _authorized(
         lambda: svc.get_meal_plan(
             delegation, subject_person_id, start, end
-        )
-    )
-
-
-class PregnancyProfileIn(BaseModel):
-    stage: str | None = None
-    preferences: str = ""
-    dislikes: str = ""
-    intolerances: str = ""
-    avoided_foods: str = ""
-    user_goals: dict = Field(default_factory=dict)
-
-
-@app.post("/profile/{person_id}/pregnancy")
-def create_pregnancy(
-    person_id: str, body: PregnancyProfileIn, delegation: str | None = Depends(human_session)
-):
-    return _authorized(
-        lambda: svc.create_pregnancy_profile(
-            delegation,
-            person_id,
-            stage=body.stage,
-            preferences=body.preferences,
-            dislikes=body.dislikes,
-            intolerances=body.intolerances,
-            avoided_foods=body.avoided_foods,
-            user_goals=body.user_goals,
         )
     )
 
@@ -238,13 +144,6 @@ def plan_menu(person_id: str, meals: list[MealIn], delegation: str | None = Depe
     )
 
 
-@app.get("/gap-v2/{person_id}/{date}")
-def gap_v2(person_id: str, date: str, delegation: str | None = Depends(human_session)):
-    return _authorized(
-        lambda: svc.daily_gap_v2(delegation, person_id, date)
-    )
-
-
 # --------------------------------------------------------------------------
 # Food diary
 # --------------------------------------------------------------------------
@@ -263,6 +162,11 @@ def _diary_call(operation: Callable[[], Any]):
         raise HTTPException(409, "DRAFT_EXPIRED") from None
     except ProviderUnavailable:
         raise HTTPException(503, "PROVIDER_UNAVAILABLE") from None
+    except ProfileInvalid as error:
+        raise HTTPException(
+            400, {"error": "INVALID_FIELD", "field": getattr(error, "field", None),
+                  "reason": getattr(error, "reason", "INVALID")}
+        ) from None
     except ValueError as error:
         # The field NAME only, never food text.
         raise HTTPException(
@@ -332,6 +236,15 @@ def diary_entry(person_id: str, entry_id: str, delegation: str | None = Depends(
 def diary_today(person_id: str, delegation: str | None = Depends(human_session)):
     """Today in DIARY_TZ, so the caller never works out the local date itself."""
     return _diary_call(lambda: diary.get_day_summary(delegation, person_id))
+
+
+@app.get("/diary/{person_id}/period")
+def diary_period(
+    person_id: str, start: str | None = None, end: str | None = None,
+    delegation: str | None = Depends(human_session),
+):
+    """At most 31 days; the default is the last 7 days ending today."""
+    return _diary_call(lambda: diary.get_period_summary(delegation, person_id, start, end))
 
 
 @app.post("/diary/{person_id}/days/today/close")

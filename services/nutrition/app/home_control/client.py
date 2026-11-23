@@ -26,13 +26,13 @@ nothing and restores the flow.
 OPERATIONS NEEDING SEVERAL PERMISSIONS
 --------------------------------------
 Removing the second call is not enough on its own: some operations genuinely need more
-than one permission. ``ate_as_planned`` reads a planned meal (VIEW) and then creates an
-actual intake (CREATE), and it must not create one for a person whose plan it was not
-allowed to read.
+than one permission. ``propose_profile`` reads the current profile (VIEW) and then
+stores a draft change (UPDATE), and it must not store one for a person whose profile it
+was not allowed to read.
 
 ``check_access_many`` decides both in ONE delegated request. The constraint replay
 protection imposes is on the number of REQUESTS, not the number of decisions, so this
-satisfies it without weakening it. The alternative — asking for only CREATE, or
+satisfies it without weakening it. The alternative — asking for only UPDATE, or
 splitting into two requests — would either under-authorize or fail outright.
 
 OUTCOMES
@@ -211,8 +211,8 @@ class HomeControlPlaneClient:
     ) -> AccessDecision:
         """Authorize SEVERAL (domain, action) requirements in ONE delegated request.
 
-        An operation that needs two permissions — ``ate_as_planned`` reads a plan and
-        then creates intake — cannot make two ``check_access`` calls: the delegation is
+        An operation that needs two permissions — ``propose_profile`` reads the profile
+        and then stores a draft — cannot make two ``check_access`` calls: the delegation is
         single-use, so the second is replay-denied. This asks Home once and gets one
         overall answer, with replay protection unchanged.
 

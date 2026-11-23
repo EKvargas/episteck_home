@@ -130,11 +130,13 @@ def test_deps_ignores_bls_when_file_missing_or_synthetic(tmp_path, monkeypatch):
 def _service(tmp_path, provider):
     from datetime import datetime, timezone
     from app.diary.service import DiaryService
+    from app.profile.service import ProfileService
     from app.store.diary_sqlite import SqliteDiaryStore
-    from app.store.sqlite_repo import SqliteNutritionRepository
+    from app.store.profile_sqlite import SqliteProfileStore
     from tests.support import AllowAllAuthorizer
     db = str(tmp_path / "n.sqlite")
-    return DiaryService(SqliteDiaryStore(db), provider, SqliteNutritionRepository(db),
+    profiles = ProfileService(SqliteProfileStore(db), authorizer=AllowAllAuthorizer())
+    return DiaryService(SqliteDiaryStore(db), provider, profiles,
                         authorizer=AllowAllAuthorizer(),
                         clock=lambda: datetime(2026, 11, 19, 10, 0, tzinfo=timezone.utc)), db
 

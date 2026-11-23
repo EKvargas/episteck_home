@@ -14,6 +14,11 @@ The doubles in ``support.py`` could never have caught it — a double has no rep
 store, so both calls "succeeded". These tests therefore assert the *number* of
 delegated requests, which is the property that actually matters, and model a replay
 store so the old composition fails loudly.
+
+The operations first used here (``get_profile``, ``upsert_profile``, ``daily_gap``,
+``daily_intake``) were retired with the pre-diary intake model. Each property now runs
+against ``ProfileService.get_profile_view`` (VIEW), ``ProfileService.propose_profile``
+(UPDATE + VIEW) or ``NutritionService.plan_menu`` / ``get_meal_plan`` (VIEW).
 """
 from __future__ import annotations
 
@@ -21,9 +26,11 @@ import inspect
 
 import pytest
 
+from app import deps
 from app.home_control.client import AccessDecision
+from app.profile.service import ProfileService
 from app.service import NutritionService
-from app.store.sqlite_repo import SqliteNutritionRepository
+from app.store.profile_sqlite import SqliteProfileStore
 from app.providers.synthetic import SyntheticFoodProvider
 
 from tests.support import (
@@ -35,16 +42,24 @@ from tests.support import (
 )
 
 SUBJECT = "PSN-SUBJECT"
+CHANGE = {"weight_kg": "80"}
+MEALS = [{"label": "b", "foods": [{"food_id": "syn-yogurt", "grams": 40}]}]
 
 
 @pytest.fixture
-def repo(tmp_path):
-    return SqliteNutritionRepository(str(tmp_path / "n.sqlite"))
+def store(tmp_path):
+    return SqliteProfileStore(str(tmp_path / "n.sqlite"))
 
 
-def _service(repo, authorizer):
+def _service(store, authorizer):
+    return ProfileService(store, authorizer=authorizer)
+
+
+def _menu(store, authorizer):
+    """NutritionService wired as deps wires it, on the same authorizer."""
     return NutritionService(
-        repo, SyntheticFoodProvider(), authorizer=authorizer
+        SyntheticFoodProvider(), authorizer=authorizer,
+        targets_today=deps.targets_today_from(_service(store, authorizer)),
     )
 
 
@@ -76,6 +91,12 @@ class ReplayAwareAuthorizer:
             return denial
         return AccessDecision(self.allow, "allowed" if self.allow else "denied")
 
+    def check_access_many(self, subject, requirements, delegation=None):
+        denial = self._consume(delegation)
+        if denial is not None:
+            return denial
+        return AccessDecision(self.allow, "allowed" if self.allow else "denied")
+
 
 # ==========================================================================
 # 1. Exactly one Home call per operation
@@ -85,19 +106,18 @@ class ReplayAwareAuthorizer:
 @pytest.mark.parametrize(
     "operation",
     [
-        lambda s: s.get_profile(SESSION, SUBJECT),
-        lambda s: s.upsert_profile(SESSION, SUBJECT, {"context": "GENERAL"}),
-        lambda s: s.daily_gap(SESSION, SUBJECT, "2026-09-17"),
-        lambda s: s.daily_intake(SESSION, SUBJECT, "2026-09-17"),
+        lambda store, a: _service(store, a).get_profile_view(SESSION, SUBJECT),
+        lambda store, a: _service(store, a).propose_profile(SESSION, SUBJECT, CHANGE),
+        lambda store, a: _menu(store, a).plan_menu(SESSION, SUBJECT, MEALS),
+        lambda store, a: _menu(store, a).get_meal_plan(SESSION, SUBJECT, "2026-09-17", "2026-09-17"),
     ],
-    ids=["get_profile", "upsert_profile", "daily_gap", "daily_intake"],
+    ids=["get_profile_view", "propose_profile", "plan_menu", "get_meal_plan"],
 )
-def test_one_home_call_per_person_sensitive_operation(repo, operation):
+def test_one_home_call_per_person_sensitive_operation(store, operation):
     authorizer = AllowAllAuthorizer()
-    service = _service(repo, authorizer)
 
     try:
-        operation(service)
+        operation(store, authorizer)
     except PermissionError:  # pragma: no cover - allow-all should not deny
         pytest.fail("AllowAllAuthorizer should not deny")
 
@@ -106,16 +126,16 @@ def test_one_home_call_per_person_sensitive_operation(repo, operation):
     )
 
 
-def test_operation_succeeds_under_a_replay_aware_home(repo):
+def test_operation_succeeds_under_a_replay_aware_home(store):
     """The real constraint: one delegation, used once, must be enough."""
     authorizer = ReplayAwareAuthorizer(allow=True)
 
-    _service(repo, authorizer).get_profile(SESSION, SUBJECT)
+    _service(store, authorizer).get_profile_view(SESSION, SUBJECT)
 
     assert authorizer.home_calls == 1
 
 
-def test_old_two_call_composition_would_be_replay_denied(repo):
+def test_old_two_call_composition_would_be_replay_denied(store):
     """Reverting to resolve-then-authorize reproduces the production failure.
 
     Rather than asserting a claim about deleted code, this replays the old sequence
@@ -134,7 +154,7 @@ def test_old_two_call_composition_would_be_replay_denied(repo):
 
     # And the current single-call service is unaffected, on a fresh delegation.
     fresh = ReplayAwareAuthorizer(allow=True)
-    _service(repo, fresh).get_profile(SESSION, SUBJECT)
+    _service(store, fresh).get_profile_view(SESSION, SUBJECT)
     assert fresh.home_calls == 1
 
 
@@ -143,22 +163,20 @@ def test_old_two_call_composition_would_be_replay_denied(repo):
 # ==========================================================================
 
 
-def test_authorized_view_reads(repo):
+def test_authorized_view_reads(store):
     authorizer = RecordingAuthorizer(allow=True)
-    _service(repo, authorizer).get_profile(SESSION, SUBJECT)
+    _service(store, authorizer).get_profile_view(SESSION, SUBJECT)
     assert authorizer.calls == [(SUBJECT, "NUTRITION", "VIEW")]
 
 
-def test_unauthorized_update_denies(repo):
+def test_unauthorized_update_denies(store):
     authorizer = DenyAllAuthorizer()
     with pytest.raises(PermissionError):
-        _service(repo, authorizer).upsert_profile(
-            SESSION, SUBJECT, {"context": "GENERAL"}
-        )
-    assert authorizer.calls if hasattr(authorizer, "calls") else True
+        _service(store, authorizer).propose_profile(SESSION, SUBJECT, CHANGE)
+    assert authorizer.home_calls == 1
 
 
-def test_view_never_implies_update(repo):
+def test_view_never_implies_update(store):
     """A VIEW grant must not satisfy an UPDATE."""
 
     class ViewOnly:
@@ -171,17 +189,25 @@ def test_view_never_implies_update(repo):
             self.actions.append(action)
             return AccessDecision(action == "VIEW", f"only VIEW granted, saw {action}")
 
+        def check_access_many(self, subject, requirements, delegation=None):
+            self.home_calls += 1
+            actions = [action for _, action in requirements]
+            self.actions.extend(actions)
+            allowed = all(action == "VIEW" for action in actions)
+            return AccessDecision(allowed, f"only VIEW granted, saw {actions}")
+
     authorizer = ViewOnly()
-    service = _service(repo, authorizer)
+    service = _service(store, authorizer)
 
-    service.get_profile(SESSION, SUBJECT)  # VIEW allowed
+    service.get_profile_view(SESSION, SUBJECT)  # VIEW allowed
     with pytest.raises(PermissionError):
-        service.upsert_profile(SESSION, SUBJECT, {"context": "GENERAL"})
+        service.propose_profile(SESSION, SUBJECT, CHANGE)
 
-    assert authorizer.actions == ["VIEW", "UPDATE"]
+    assert authorizer.actions == ["VIEW", "UPDATE", "VIEW"]
+    assert authorizer.home_calls == 2
 
 
-def test_revoked_grant_denies_immediately(repo):
+def test_revoked_grant_denies_immediately(store):
     """A grant revoked between operations denies the very next one."""
 
     class RevocableAuthorizer:
@@ -196,12 +222,12 @@ def test_revoked_grant_denies_immediately(repo):
             return AccessDecision(True, "grant NUTRITION/VIEW")
 
     authorizer = RevocableAuthorizer()
-    service = _service(repo, authorizer)
+    service = _service(store, authorizer)
 
-    service.get_profile(SESSION, SUBJECT)
+    service.get_profile_view(SESSION, SUBJECT)
     authorizer.revoked = True
     with pytest.raises(PermissionError, match="fail closed"):
-        service.get_profile(SESSION, SUBJECT)
+        service.get_profile_view(SESSION, SUBJECT)
 
 
 # ==========================================================================
@@ -209,28 +235,28 @@ def test_revoked_grant_denies_immediately(repo):
 # ==========================================================================
 
 
-def test_missing_delegation_denies(repo):
+def test_missing_delegation_denies(store):
     authorizer = AllowAllAuthorizer()
     with pytest.raises(PermissionError):
-        _service(repo, authorizer).get_profile(None, SUBJECT)
+        _service(store, authorizer).get_profile_view(None, SUBJECT)
 
 
-def test_invalid_or_expired_delegation_denies(repo):
+def test_invalid_or_expired_delegation_denies(store):
     authorizer = UnresolvableSessionAuthorizer("delegation expired (fail closed)")
     with pytest.raises(PermissionError, match="expired"):
-        _service(repo, authorizer).get_profile(SESSION, SUBJECT)
+        _service(store, authorizer).get_profile_view(SESSION, SUBJECT)
 
 
-def test_replayed_delegation_denies(repo):
+def test_replayed_delegation_denies(store):
     authorizer = ReplayAwareAuthorizer(allow=True)
-    service = _service(repo, authorizer)
+    service = _service(store, authorizer)
 
-    service.get_profile(SESSION, SUBJECT)  # spends it
+    service.get_profile_view(SESSION, SUBJECT)  # spends it
     with pytest.raises(PermissionError, match="replay"):
-        service.get_profile(SESSION, SUBJECT)
+        service.get_profile_view(SESSION, SUBJECT)
 
 
-def test_home_unavailable_denies(repo):
+def test_home_unavailable_denies(store):
     class UnreachableHome:
         home_calls = 0
 
@@ -240,10 +266,10 @@ def test_home_unavailable_denies(repo):
             )
 
     with pytest.raises(PermissionError, match="indeterminate"):
-        _service(repo, UnreachableHome()).get_profile(SESSION, SUBJECT)
+        _service(store, UnreachableHome()).get_profile_view(SESSION, SUBJECT)
 
 
-def test_malformed_home_response_denies(repo):
+def test_malformed_home_response_denies(store):
     class MalformedHome:
         home_calls = 0
 
@@ -253,22 +279,22 @@ def test_malformed_home_response_denies(repo):
             )
 
     with pytest.raises(PermissionError):
-        _service(repo, MalformedHome()).get_profile(SESSION, SUBJECT)
+        _service(store, MalformedHome()).get_profile_view(SESSION, SUBJECT)
 
 
-def test_authorization_precedes_repository_access(repo):
+def test_authorization_precedes_repository_access(store):
     """A denial must happen before any sensitive read."""
     reads = {"count": 0}
-    original = repo.get_profile
+    original = store.list_versions
 
-    def counting_get_profile(person_id):
+    def counting_list_versions(person_id):
         reads["count"] += 1
         return original(person_id)
 
-    repo.get_profile = counting_get_profile
+    store.list_versions = counting_list_versions
 
     with pytest.raises(PermissionError):
-        _service(repo, DenyAllAuthorizer()).get_profile(SESSION, SUBJECT)
+        _service(store, DenyAllAuthorizer()).get_profile_view(SESSION, SUBJECT)
     assert reads["count"] == 0
 
 
@@ -277,7 +303,7 @@ def test_authorization_precedes_repository_access(repo):
 # ==========================================================================
 
 
-def test_service_exposes_no_actor_resolution(repo):
+def test_service_exposes_no_actor_resolution():
     assert not hasattr(NutritionService, "resolve_actor")
 
 
