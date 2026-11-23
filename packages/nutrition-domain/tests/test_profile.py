@@ -1,4 +1,4 @@
-import json
+﻿import json
 from dataclasses import replace
 from datetime import date
 from decimal import Decimal
@@ -36,7 +36,9 @@ def test_parse_types_and_rejects_unknown_keys():
 
 @pytest.mark.parametrize("key,value", [
     ("weight_kg", True), ("weight_kg", "abc"), ("weight_kg", "1,2,3"), ("weight_kg", "NaN"),
-    ("weight_kg", float("inf")), ("training_sessions_per_week", True),
+    ("weight_kg", float("inf")), ("weight_kg", "1e999999"), ("weight_kg", 10**4000),
+    ("weight_kg", 1e300), ("weight_kg", Decimal("1e999999")), ("weight_kg", "1_0"),
+    ("training_sessions_per_week", "1e999999"), ("training_sessions_per_week", 10**4000), ("training_sessions_per_week", True),
     ("training_sessions_per_week", 2.5), ("birth_date", "10.03.1986"), ("sex", "OTHER"),
     ("training_note", "x" * 121), ("preferences", "x" * 501), ("dislikes", 5),
 ])

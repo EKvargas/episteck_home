@@ -5,6 +5,8 @@ Pure Python, no I/O. Errors carry the field name only, never the value.
 
 from __future__ import annotations
 
+import math
+import re
 from dataclasses import dataclass, fields, replace
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
@@ -66,24 +68,31 @@ def age_on(birth_date: date, on: date) -> int:
     return on.year - birth_date.year - ((on.month, on.day) < (birth_date.month, birth_date.day))
 
 
+_NUMERIC_TEXT = re.compile(r"-?[0-9]{1,12}(?:[.,][0-9]{1,12})?")
+_MAX_MAGNITUDE = 1_000_000
+
+
 def _decimal(field: str, value: object) -> Decimal:
     if isinstance(value, bool):
         raise ProfileInvalid(field)
     if isinstance(value, Decimal):
         number = value
-    elif isinstance(value, (int, float)):
+    elif isinstance(value, int):
+        if abs(value) > _MAX_MAGNITUDE:
+            raise ProfileInvalid(field)
+        number = Decimal(value)
+    elif isinstance(value, float):
+        if not math.isfinite(value) or abs(value) > _MAX_MAGNITUDE:
+            raise ProfileInvalid(field)
         number = Decimal(str(value))
     elif isinstance(value, str):
         text = value.strip()
-        if text.count(",") + text.count(".") > 1:
+        if not _NUMERIC_TEXT.fullmatch(text):
             raise ProfileInvalid(field)
-        try:
-            number = Decimal(text.replace(",", "."))
-        except InvalidOperation:
-            raise ProfileInvalid(field) from None
+        number = Decimal(text.replace(",", "."))
     else:
         raise ProfileInvalid(field)
-    if not number.is_finite():
+    if not number.is_finite() or abs(number) > _MAX_MAGNITUDE:
         raise ProfileInvalid(field)
     return number
 
@@ -92,6 +101,8 @@ def _integer(field: str, value: object) -> int:
     if isinstance(value, bool):
         raise ProfileInvalid(field)
     if isinstance(value, int):
+        if abs(value) > _MAX_MAGNITUDE:
+            raise ProfileInvalid(field)
         return value
     number = _decimal(field, value)
     if number != number.to_integral_value():
