@@ -99,19 +99,29 @@ def test_script_is_strict_bash_lf_and_starts_at_root():
     assert text.startswith("#!/bin/bash\n")
     assert "set -x" not in text
     assert text.index("\nset -euo pipefail\n") < text.index("\ncd /\n") < text.index("\ncase ")
-    for step in ("preflight", "install", "cron", "verify", "rollback-cron", "rollback"):
+    for step in ("preflight", "install", "cron", "mirror", "verify", "rollback-cron", "rollback"):
         assert re.search(rf"^  {re.escape(step)}\)", text, re.M), step
-    # Every agent command runs through runuser with the user bus set and stdin pinned.
+    # Every agent command runs through runuser with the user bus set and stdin pinned: /dev/null,
+    # or for as_agent_from a file root names (a backup), never the script's own stdin.
     helper = _function(text, "as_agent")
+    fed = _function(text, "as_agent_from")
     for part in ("runuser -u", '"HOME=/home/$AGENT"', '"XDG_RUNTIME_DIR=/run/user/$u"',
-                 '"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$u/bus"', '"$@" </dev/null'):
-        assert part in helper, part
+                 '"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$u/bus"'):
+        assert part in helper and part in fed, part
+    assert '"$@" </dev/null' in helper
+    assert 'local src="$1" u; shift' in fed and '"$@" <"$src"' in fed
+    calls = [line for line in _code_lines(text) if re.search(r"\bas_agent_from ", line)]
+    assert len(calls) == 2
+    for line in calls:
+        assert re.search(r'as_agent_from "\$bk/[\w.-]+" ', line), line
     for line in _code_lines(text):
-        if '"$HERMES"' in line or "systemctl --user" in line:
+        runs = line.replace('[ -x "$VPY" ]', "")  # root only checks that the venv python exists
+        if '"$HERMES"' in runs or '"$VPY"' in runs or "systemctl --user" in runs:
             assert "as_agent " in line, line
-        assert not re.search(r"\brunuser\b", line) or line.strip() in helper, line
+        assert not re.search(r"\brunuser\b", line) or line.strip() in helper + fed, line
+        assert "/dev/stdin" not in line and "<&0" not in line, line
     unknown = _run_script("no-such-step")
-    assert unknown.returncode == 2 and b"usage:" in unknown.stderr
+    assert unknown.returncode == 2 and b"usage:" in unknown.stderr and b"mirror <on|off>" in unknown.stderr
 
 
 def test_skill_is_installed_root_owned_from_the_shared_source():
@@ -144,23 +154,62 @@ def test_backup_happens_before_any_change():
     assert inst.index("cp -p") < inst.index("install -m 644") < inst.index("ultron_nutrition_notes.py")
     assert 'bk="$BACKUPS/hermes-nutrition-$(date -u +%Y%m%dT%H%M%SZ)"' in inst
     first_change = inst.index("install -d -m 755")
-    assert (inst.index("refuse_links") < inst.index("nutrition_keys") < inst.index('install -d -m 700 "$bk"')
-            < inst.index("cp -p") < first_change)
+    assert (inst.index("refuse_links") < inst.index("nutrition_keys") < inst.index("plan1_live")
+            < inst.index('install -d -m 700 "$bk"') < inst.index("cp -p") < first_change)
     for src, dest in (('"$CONFIG"', '"$bk/config.yaml"'), ('"$NOTES/SKILL.md"', '"$bk/SKILL.md"'),
-                      ('"$NOTES/references/nutrition-diary.md"', '"$bk/nutrition-diary.md"')):
+                      ('"$NOTES/references/nutrition-diary.md"', '"$bk/nutrition-diary.md"'),
+                      ('"$SKILL_DIR/SKILL.md"', '"$bk/olin-nutrition-SKILL.md"')):
         assert inst.index(f"cp -p {src} {dest}") < first_change, src
         assert inst.index(f"same {src} {dest}") < first_change, src  # sha256 of copy and original
+    # The installed skill is backed up only when an earlier install left one.
+    assert inst.index('if [ -f "$SKILL_DIR/SKILL.md" ]; then') < inst.index('"$bk/olin-nutrition-SKILL.md"')
     before = inst[:first_change]
-    assert "backup mismatch" in before and "exit 1" in before
+    assert before.count("backup mismatch") == 2 and "exit 1" in before
     assert 'echo "backup OK: $bk  (rollback: rollback $bk)"' in before
     assert 'sha256sum < "$1")" = "$(sha256sum < "$2")"' in _function(t, "same")
+
+
+def test_install_warns_when_the_backup_holds_rewritten_notes():
+    inst = _case(_text(), "install")
+    check = inst.index('if contains "$bk/SKILL.md" "$SRC/home-agent/nutrition-pointer-section.md"; then')
+    assert inst.index('echo "backup OK: $bk') < check < inst.index("install -d -m 755")
+    assert ('echo "WARNING: this backup holds already-rewritten notes; roll back with the first '
+            'install\'s backup" >&2') in inst[check:]
+
+
+@needs_bash
+def test_install_refuses_unless_the_plan1_backend_is_live(tmp_path):
+    text = _text()
+    assert re.search(r"^PLAN1_TOOLS=\(propose_profile get_period_summary\)$", text, re.M)
+    inst = _case(text, "install")
+    refuse = inst[inst.index("plan1_live"):inst.index('bk="$BACKUPS')]
+    assert "exit 2" in refuse and "runbook C1" in refuse and "Nothing was changed" in refuse
+    probe = _function(text, "plan1_live")
+    assert 'as_agent "$HERMES" mcp test nutrition' in probe
+    # preflight only reports it: the backend is rolled out after C0.
+    pre = _case(text, "preflight")
+    line = next(ln for ln in pre.splitlines() if "plan1_live" in ln)
+    assert line.strip().startswith("if plan1_live; then echo") and "bad " not in line and "ok " not in line
+    assert "install refuses until it is" in pre
+    source = (f"{_function(text, 'plan1_live')}\nPLAN1_TOOLS=(propose_profile get_period_summary)\n"
+              'as_agent() { cat mcp.txt; }\nHERMES=hermes')
+
+    def live(listing: str) -> int:
+        (tmp_path / "mcp.txt").write_text(listing, encoding="utf-8")
+        return _bash(tmp_path, source, "plan1_live").returncode
+
+    assert live("Tools (20): close_day propose_profile get_period_summary void_intake\n") == 0
+    assert live("Tools (13): close_day get_day_summary void_intake\n") == 1
+    assert live("Tools (19): propose_profile void_intake\n") == 1
+    assert live("401 Unauthorized\n") == 1
 
 
 @needs_bash
 def test_helper_exit_3_stops_the_install(tmp_path):
     inst = _case(_text(), "install")
-    call = inst.index('"$PY" -I "$SRC/ultron_nutrition_notes.py" "$NOTES/SKILL.md" '
-                      '"$SRC/home-agent/nutrition-pointer-section.md"')
+    # The helper writes into the agent's home, so it runs as the agent (stdin /dev/null).
+    call = inst.index('out="$(as_agent "$PY" -I "$SRC/ultron_nutrition_notes.py" "$NOTES/SKILL.md" '
+                      '"$SRC/home-agent/nutrition-pointer-section.md" 2>&1)" || rc=$?')
     start = inst.rindex("rc=0", 0, call)
     end = inst.index("\n    fi\n", call) + len("\n    fi")
     block = inst[start:end]
@@ -172,16 +221,19 @@ def test_helper_exit_3_stops_the_install(tmp_path):
     (src / "home-agent").mkdir(parents=True)
     (src / "ultron_nutrition_notes.py").write_bytes(HELPER.read_bytes())
     (src / "home-agent" / "nutrition-pointer-section.md").write_bytes(POINTER_SECTION.read_bytes())
-    setup = f"PY={PY}; SRC={_q(src)}; bk={BK}"
+    # Stand-in for as_agent (no runuser here): logs what ran as the agent, stdin /dev/null.
+    setup = (f"PY={PY}; SRC={_q(src)}; bk={BK}\n"
+             'as_agent() { printf "%s\\n" "${@: -2:1}" >> as-agent.log; "$@" </dev/null; }')
 
     def run(notes: Path) -> subprocess.CompletedProcess:
-        return _bash(tmp_path, f"{setup}; NOTES={_q(notes)}", f"{block}\necho continued")
+        return _bash(tmp_path, f"{setup}\nNOTES={_q(notes)}", f"{block}\necho continued")
 
     good = _notes_tree(tmp_path / "good")
     result = run(good)
     assert result.returncode == 0, result.stderr
     assert result.stdout == "continued\n"  # the change list is printed after the block
     assert "## Nutrition\n" in (good / "SKILL.md").read_text(encoding="utf-8")
+    assert (tmp_path / "as-agent.log").read_text(encoding="utf-8") == f"{(good / 'SKILL.md').as_posix()}\n"
     changed = _notes_tree(tmp_path / "changed")
     by_hand = NOTES_SAMPLE.replace("## Nutrition intake capture", "## Food")
     (changed / "SKILL.md").write_bytes(by_hand.encode("utf-8"))
@@ -200,10 +252,16 @@ def test_helper_exit_3_stops_the_install(tmp_path):
 def test_install_changes_no_config_key_and_keeps_note_owners():
     text = _text()
     inst = _case(text, "install")
-    assert "config set" not in text and "save_config" not in text
+    assert "config set" not in text
+    # Only the mirror step saves config.yaml, through MIRROR_PY; install never does.
+    mirror_py = re.search(r"^MIRROR_PY='([^']*)'$", text, re.M | re.S).group(0)
+    assert text.count("save_config") == mirror_py.count("save_config") == 2  # import and call
+    assert "MIRROR_PY" not in inst and "save_config" not in inst
     helper = inst.index("ultron_nutrition_notes.py")
-    diary = inst.index('install -o "$AGENT" -g "$AGENT" -m 644 "$SRC/home-agent/nutrition-diary-pointer.md" '
+    # Written as the agent: the file is home-agent's, no chown by root.
+    diary = inst.index('as_agent install -m 644 "$SRC/home-agent/nutrition-diary-pointer.md" '
                        '"$NOTES/references/nutrition-diary.md"')
+    assert 'install -o "$AGENT"' not in text
     unchanged = inst.index('cmp -s "$bk/config.yaml" "$CONFIG"')
     restart = inst.index("restart_gateway")
     assert helper < diary < unchanged < restart
@@ -215,10 +273,41 @@ def test_install_changes_no_config_key_and_keeps_note_owners():
     assert POINTER_SECTION.read_text(encoding="utf-8").startswith("## Nutrition\n")
 
 
+AGENT_PATHS = re.compile(r'"\$(NOTES|CONFIG|HHOME|AGENT_HOME)\b')
+
+
+def test_root_never_writes_into_the_agents_home():
+    # Ultron can run code, so it could swap a path for a symlink between a check and a write
+    # (R16): every write into /home/home-agent runs as home-agent; root only reads, into backups.
+    text = _text()
+    writes = re.compile(r"\b(cp|install|mv|tee|rm|rmdir|chmod|chown|ln|touch|truncate)\b|"
+                        r"sed -i|ultron_nutrition_notes\.py|MIRROR_PY|>>? *\"\$")
+    seen = 0
+    for step in ("install", "mirror", "rollback"):
+        for line in _code_lines(_case(text, step)):
+            if not (AGENT_PATHS.search(line) or "MIRROR_PY" in line) or not writes.search(line):
+                continue
+            targets = re.findall(r'"([^"]+)"', line)
+            if "ultron_nutrition_notes.py" in line or "MIRROR_PY" in line or "tee" in line:
+                into_home = True  # the helper, the config save and tee write the agent's files
+            else:
+                into_home = bool(targets) and AGENT_PATHS.match(f'"{targets[-1]}')
+            if into_home:
+                seen += 1
+                assert re.search(r"(^|\$\()\s*as_agent(_from)? ", line.strip()), (step, line)
+            else:  # a backup: root reads the agent's file into its own 0700 directory
+                assert targets[-1].startswith("$bk/") and re.match(r"\s*cp -p ", line), (step, line)
+    assert seen == 5  # helper, diary pointer, MIRROR_PY, and the two notes restores
+    # The old root writes are gone.
+    for line in _code_lines(text):
+        assert not re.search(r'cp -p "\$bk/[^"]*" "\$(NOTES|CONFIG)', line), line
+
+
 def test_preflight_is_read_only_and_dry_runs_the_helper_on_a_copy():
     pre = _case(_text(), "preflight")
     for part in ("need_src", '"$HERMES" --version', "nutrition_keys", 'tz="$(hermes_tz)"',
                  '[ "$(date +%z)" = "+0000" ]', '[ -e "$SKILL_DIR" ]', "$(cron_count)",
+                 'echo "cron.mirror_delivery: $(mirror_value)', "if plan1_live; then echo",
                  'links="$(home_links)"', 'tmp="$(mktemp -d)"', 'cp "$NOTES/SKILL.md" "$tmp/SKILL.md"',
                  '"$PY" -I "$SRC/ultron_nutrition_notes.py" "$tmp/SKILL.md" '
                  '"$SRC/home-agent/nutrition-pointer-section.md"',
@@ -347,6 +436,7 @@ def test_verify_reports_drift_and_never_fixes():
                  'grep -qF get_daily_nutrition_gap "$NOTES/SKILL.md"',
                  'cmp -s "$SRC/home-agent/nutrition-diary-pointer.md" "$NOTES/references/nutrition-diary.md"',
                  'links="$(home_links)"', "nutrition_keys", "cron_show",
+                 'echo "cron.mirror_delivery: $(mirror_value)',
                  "systemctl --user is-active --quiet hermes-gateway.service", "finish verify"):
         assert part in verify, part
     for line in _code_lines(verify):
@@ -361,15 +451,21 @@ def test_rollback_restores_notes_and_removes_the_job_first():
     marks = [rb.index('"$BACKUPS"/hermes-nutrition-*)'),
              rb.index("for f in config.yaml SKILL.md nutrition-diary.md; do"),
              rb.index("refuse_links"), rb.index("cron_remove"),
-             rb.index('cp -p "$bk/SKILL.md" "$NOTES/SKILL.md"'),
-             rb.index('cp -p "$bk/nutrition-diary.md" "$NOTES/references/nutrition-diary.md"'),
+             rb.index('as_agent_from "$bk/SKILL.md" tee "$NOTES/SKILL.md" >/dev/null'),
+             rb.index('as_agent_from "$bk/nutrition-diary.md" tee "$NOTES/references/nutrition-diary.md" '
+                      '>/dev/null'),
              rb.index('same "$bk/SKILL.md" "$NOTES/SKILL.md"'),
-             rb.index('cmp -s "$bk/config.yaml" "$CONFIG"'), rb.index('cp -p "$bk/config.yaml" "$CONFIG"'),
+             rb.index('cmp -s "$bk/config.yaml" "$CONFIG"'),
+             rb.index('if [ -f "$bk/olin-nutrition-SKILL.md" ]; then'),
+             rb.index('install -m 644 -o root -g root "$bk/olin-nutrition-SKILL.md" "$SKILL_DIR/SKILL.md"'),
              rb.index('rm -f "$SKILL_DIR/SKILL.md"'), rb.index('rmdir "$SKILL_DIR"'),
-             rb.index("restart_gateway")]
+             rb.index("restart_gateway"), rb.index('if [ "$WARNINGS" -gt 0 ]; then')]
     assert marks == sorted(marks)
     assert 'same "$bk/nutrition-diary.md" "$NOTES/references/nutrition-diary.md"' in rb
     assert "stat -c '%a %U:%G %n' \"$NOTES/SKILL.md\" \"$NOTES/references/nutrition-diary.md\"" in rb
+    # config.yaml is compared, never written (R17): install never changes it.
+    assert '"$CONFIG"' in rb and not re.search(r'(cp|install|tee|mv)\b[^\n]*"\$CONFIG"', rb)
+    assert ('warn "config.yaml differs from the install-time backup in $bk; not touched"') in rb
     assert _case(text, "rollback-cron").strip() == "rollback-cron)\n    cron_remove"
     for args in (("rollback",), ("rollback", "/tmp/x"),
                  ("rollback", "/var/backups/episteck/hermes-b9-20261123T000000Z")):
@@ -377,6 +473,109 @@ def test_rollback_restores_notes_and_removes_the_job_first():
         assert result.returncode == 2 and b"usage: rollback <backup-dir" in result.stderr, args
     result = _run_script("rollback", BK)  # the right name, but no such directory here
     assert result.returncode == 1 and b"no config.yaml in" in result.stderr
+
+
+def _rollback(tmp_path: Path, *, config_changed=False, cron_fails=False, earlier_skill=None,
+              extra_in_skill_dir=False) -> tuple[subprocess.CompletedProcess, dict]:
+    """Run the script's rollback step on a sample tree. Stand-ins replace what needs the node:
+    runuser (as_agent_from runs the command as the test user, stdin from the named file), the
+    job, the gateway restart, and install's -o/-g."""
+    text = _text()
+    backups, home, etc = tmp_path / "backups", tmp_path / "home", tmp_path / "etc"
+    bk = backups / "hermes-nutrition-20261123T000000Z"
+    notes = home / "notes"
+    (notes / "references").mkdir(parents=True)
+    bk.mkdir(parents=True)
+    skill_dir = etc / "skills" / "olin-nutrition"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_bytes(b"this commit's skill\n")
+    if extra_in_skill_dir:
+        (skill_dir / "notes.txt").write_bytes(b"someone else's\n")
+    files = {"config": home / "config.yaml", "notes": notes / "SKILL.md",
+             "diary": notes / "references" / "nutrition-diary.md", "skill": skill_dir / "SKILL.md",
+             "bk": bk, "skill_dir": skill_dir}
+    (bk / "config.yaml").write_bytes(b"model: {}\ncron:\n  catch_up_missed: true\n")
+    (bk / "SKILL.md").write_bytes(NOTES_SAMPLE.encode("utf-8"))
+    (bk / "nutrition-diary.md").write_bytes(b"# old diary workflows\n")
+    if earlier_skill is not None:
+        (bk / "olin-nutrition-SKILL.md").write_bytes(earlier_skill)
+    live_config = b"model: {}\ncron:\n  catch_up_missed: true\n  mirror_delivery: true\n" \
+        if config_changed else (bk / "config.yaml").read_bytes()
+    files["config"].write_bytes(live_config)
+    files["notes"].write_bytes(b"# Episteck Home Agent\n\n## Nutrition\n\npointer\n")
+    files["diary"].write_bytes(DIARY_POINTER.read_bytes())
+    stand_ins = "\n".join([
+        "refuse_links() { :; }",
+        f'cron_remove() {{ echo cron_remove; return {1 if cron_fails else 0}; }}',
+        "restart_gateway() { echo restarted; }",
+        'as_agent_from() { local src="$1"; shift; printf "%s %s\\n" "$src" "${@: -1}" >> agent.log; '
+        '"$@" <"$src"; }',
+        'install() { local d=0 a=(); while [ $# -gt 0 ]; do case "$1" in -o|-g|-m) shift 2 ;; '
+        '-d) d=1; shift ;; *) a+=("$1"); shift ;; esac; done; '
+        'if [ "$d" = 1 ]; then mkdir -p "${a[@]}"; else cp "${a[0]}" "${a[1]}"; fi; }',
+    ])
+    source = "\n".join([f"PY={PY}", "WARNINGS=0", _function(text, "warn"), _function(text, "same"),
+                        stand_ins, f"BACKUPS={_q(backups)}", f"NOTES={_q(notes)}",
+                        f"CONFIG={_q(files['config'])}", f"SKILL_DIR={_q(skill_dir)}",
+                        "AGENT=home-agent", "CRON_NAME=olin-nutrition-checkin"])
+    body = _case(text, "rollback")
+    call = f'set -- rollback {_q(bk)}\ncase "$1" in\n{body}\n    ;;\nesac'
+    return _bash(tmp_path, source, call), files
+
+
+@needs_bash
+def test_rollback_restores_the_notes_as_the_agent_and_removes_the_skill(tmp_path):
+    result, f = _rollback(tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.index("cron_remove") < result.stdout.index("restarted")
+    assert result.stdout.endswith("restarted\nrollback: done\n")
+    assert "notes restored byte for byte, owner and mode as in the backup:" in result.stdout
+    assert f["notes"].read_bytes() == (f["bk"] / "SKILL.md").read_bytes()
+    assert f["diary"].read_bytes() == (f["bk"] / "nutrition-diary.md").read_bytes()
+    # Both writes went through the agent-side helper, fed from the backup files.
+    log = (tmp_path / "agent.log").read_text(encoding="utf-8").splitlines()
+    assert log == [f"{(f['bk'] / 'SKILL.md').as_posix()} {f['notes'].as_posix()}",
+                   f"{(f['bk'] / 'nutrition-diary.md').as_posix()} {f['diary'].as_posix()}"]
+    assert not f["skill_dir"].exists()  # no earlier skill in the backup: the skill goes
+    assert "config.yaml is as in the backup" in result.stdout and "WARNING" not in result.stderr
+
+
+@needs_bash
+def test_rollback_never_restores_config_and_exits_1_after_the_restart_on_a_warning(tmp_path):
+    result, f = _rollback(tmp_path, config_changed=True, cron_fails=True,
+                          earlier_skill=b"the earlier install's skill\n")
+    assert result.returncode == 1
+    changed = f["config"].read_bytes()
+    assert b"mirror_delivery: true" in changed  # someone else's change stays (R17)
+    assert (f"WARNING: config.yaml differs from the install-time backup in {f['bk'].as_posix()}; "
+            "not touched") in result.stderr
+    assert "WARNING: olin-nutrition-checkin is still scheduled" in result.stderr
+    assert "rollback: 2 warning(s) above (the gateway was restarted)" in result.stderr
+    assert result.stdout.endswith("restarted\n")  # the restart ran before the exit 1
+    assert f["notes"].read_bytes() == (f["bk"] / "SKILL.md").read_bytes()
+    # The earlier install's skill comes back instead of being deleted.
+    assert f["skill"].read_bytes() == b"the earlier install's skill\n"
+    assert "restored from the earlier install" in result.stdout
+
+
+@needs_bash
+def test_rollback_reports_notes_that_differ_and_a_skill_dir_that_is_not_empty(tmp_path):
+    result, f = _rollback(tmp_path, extra_in_skill_dir=True)
+    assert result.returncode == 0, result.stderr
+    assert f"note: {f['skill_dir'].as_posix()} is not empty, so it stays" in result.stdout
+    assert not f["skill"].exists() and (f["skill_dir"] / "notes.txt").exists()
+    # Notes that do not match the backup after the writes are a warning (counted, so exit 1).
+    text = _text()
+    rb = _case(text, "rollback")
+    check = rb[rb.index('    if same "$bk/SKILL.md"'):rb.index("    stat -c '%a %U:%G %n'")]
+    source = "\n".join([f"PY={PY}", "WARNINGS=0", _function(text, "warn"), _function(text, "same"),
+                        f"NOTES={_q(f['notes'].parent)}", f"bk={_q(f['bk'])}"])
+    out = _bash(tmp_path, source, f'{check}\necho "warnings=$WARNINGS"')
+    assert out.returncode == 0 and out.stdout.endswith("warnings=0\n"), out.stderr
+    f["diary"].write_bytes(b"changed after the restore\n")
+    out = _bash(tmp_path, source, f'{check}\necho "warnings=$WARNINGS"')
+    assert out.returncode == 0 and out.stdout == "warnings=1\n", out.stderr
+    assert "WARNING: the notes differ from the backup" in out.stderr
 
 
 def test_rollback_never_removes_the_skills_root():
@@ -393,8 +592,9 @@ def test_rollback_never_removes_the_skills_root():
 
 # --- safety ----------------------------------------------------------------------------------
 
-# Every path under the agent's home that install or rollback writes as root, or writes into, and
-# the directories leading to them (R3, R12), relative to /home/home-agent.
+# Every path under the agent's home that install, mirror or rollback writes (as the agent) or
+# reads as root for a backup, and the directories leading to them (R3, R12), relative to
+# /home/home-agent. The refusal is defence in depth: root no longer writes there (R16).
 HOME_CHAIN = ("", ".hermes", ".hermes/config.yaml", ".hermes/skills",
               ".hermes/skills/episteck-home-agent", ".hermes/skills/episteck-home-agent/SKILL.md",
               ".hermes/skills/episteck-home-agent/references",
@@ -411,12 +611,11 @@ def _home_tree(base: Path) -> Path:
 @needs_bash
 def test_symlinks_under_the_notes_stop_install_and_rollback(tmp_path):
     text = _text()
-    for step in ("install", "rollback"):
+    for step in ("install", "mirror", "rollback"):
         body = _case(text, step)
-        first_change = min(body.index(m) for m in ("install -d", "cp -p", "cron_remove") if m in body)
+        first_change = min(body.index(m) for m in ("install -d", "cp -p", "cron_remove", "as_agent")
+                           if m in body)
         assert body.index("refuse_links") < first_change, step
-    # Rollback writes config.yaml too: a link there would make root write (and chown) its target.
-    assert 'cp -p "$bk/config.yaml" "$CONFIG"' in _case(text, "rollback")
     for step in ("preflight", "verify"):
         assert 'links="$(home_links)"' in _case(text, step), step
     refuse = _function(text, "refuse_links")
@@ -467,8 +666,10 @@ def test_never_reads_secrets(tmp_path):
     for line in _code_lines(text):
         if not private.search(line):
             continue
+        # The one tee: the agent writes a backup back into its notes, its output thrown away.
+        shown = re.sub(r'as_agent_from "\$bk/[\w.-]+" tee "\$NOTES/[\w./-]+" >/dev/null', "", line)
         assert not re.search(r"\b(cat|less|more|head|tail|tee|xxd|od|strings|base64|diff|awk|sed)\b",
-                             line), line
+                             shown), line
         assert "$(<" not in line, line
         if re.search(r"\bgrep\b", line):
             assert re.search(r"grep -[a-zA-Z]*[qc]", line), line
@@ -521,3 +722,105 @@ def test_config_readers_print_only_the_named_keys(tmp_path):
     assert run(live, "hermes_tz").stdout == "\n"
     assert run(live + "timezone: UTC\n", "hermes_tz").stdout == "UTC\n"
     assert run(live + "timezone: Europe/Berlin\n", "hermes_tz").stdout == "Europe/Berlin\n"
+
+
+# --- the mirror step (R18) ---------------------------------------------------------------------
+
+@needs_bash
+def test_mirror_value_prints_only_that_key(tmp_path):
+    text = _text()
+    source = f"PY={PY}; CONFIG={_q(tmp_path / 'config.yaml')}\n" + _function(text, "mirror_value")
+
+    def value(config: str) -> str:
+        (tmp_path / "config.yaml").write_bytes(config.encode("utf-8"))
+        result = _bash(tmp_path, source, "mirror_value")
+        assert result.returncode == 0, result.stderr
+        return result.stdout
+
+    secret = "model:\n  api_key: SECRET-MODEL\n"
+    assert value(secret) == "unset\n"
+    assert value(secret + "cron:\n  catch_up_missed: true\n") == "unset\n"
+    assert value(secret + "cron:\n  mirror_delivery: true\n") == "true\n"
+    assert value(secret + "cron:\n  mirror_delivery: false\n") == "false\n"
+    assert value(secret + "cron:\n  mirror_delivery: maybe\n") == "not a boolean\n"
+    for step in ("preflight", "verify"):
+        assert 'echo "cron.mirror_delivery: $(mirror_value)' in _case(text, step), step
+
+
+@needs_bash
+def test_config_drift_names_other_changed_keys_never_values(tmp_path):
+    source = f"PY={PY}\n" + _function(_text(), "config_drift")
+    before = ("model:\n  default: gpt\n  api_key: SECRET-A\nmcp_servers:\n  finance:\n"
+              "    url: http://127.0.0.1:9934/gateway/finance/\ncron:\n  catch_up_missed: true\n")
+
+    def drift(after: str, old: str = before) -> subprocess.CompletedProcess:
+        (tmp_path / "before.yaml").write_bytes(old.encode("utf-8"))
+        (tmp_path / "after.yaml").write_bytes(after.encode("utf-8"))
+        return _bash(tmp_path, source, "config_drift before.yaml after.yaml")
+
+    same = drift(before.replace("catch_up_missed: true\n", "catch_up_missed: true\n  mirror_delivery: true\n"))
+    assert (same.returncode, same.stdout) == (0, "no other key changed\n"), same.stderr
+    # A cron block that only gains the key, or a re-ordered file, is no drift either.
+    bare = "model:\n  default: gpt\n"
+    assert drift("cron:\n  mirror_delivery: true\nmodel:\n  default: gpt\n", bare).returncode == 0
+    assert drift("model: {default: gpt}\ncron: {}\n", bare).returncode == 0
+    changed = drift(before.replace("SECRET-A", "SECRET-B").replace("catch_up_missed: true", "catch_up_missed: false")
+                    + "timezone: UTC\n")
+    assert changed.returncode == 1
+    assert changed.stdout == "other keys changed: cron.catch_up_missed, model.api_key, timezone\n"
+    assert "SECRET" not in changed.stdout + changed.stderr
+    dropped = drift(before.replace("  finance:\n    url: http://127.0.0.1:9934/gateway/finance/\n", "  {}\n"))
+    assert dropped.returncode == 1 and "mcp_servers" in dropped.stdout
+
+
+@needs_bash
+def test_mirror_step_backs_up_sets_one_key_checks_and_restarts():
+    text = _text()
+    mirror = _case(text, "mirror")
+    marks = [mirror.index('case "${2:-}" in'), mirror.index("refuse_links"),
+             mirror.index('[ -x "$VPY" ]'), mirror.index('before="$(mirror_value)"'),
+             mirror.index('bk="$BACKUPS/hermes-nutrition-mirror-$(date -u +%Y%m%dT%H%M%SZ)"'),
+             mirror.index('install -d -m 700 "$bk"'), mirror.index('cp -p "$CONFIG" "$bk/config.yaml"'),
+             mirror.index('same "$CONFIG" "$bk/config.yaml"'), mirror.index('echo "backup OK: $bk'),
+             mirror.index('as_agent "$VPY" -I -c "$MIRROR_PY" "$want"'),
+             mirror.index('[ "$(mirror_value)" = "$val" ]'),
+             mirror.index('config_drift "$bk/config.yaml" "$CONFIG"'), mirror.index("restart_gateway")]
+    assert marks == sorted(marks)
+    # Each check after the save stops before the restart.
+    after_save = mirror[marks[9]:marks[-1]]
+    assert after_save.count("exit 1") == 3 and after_save.count("the gateway was not restarted") == 3
+    assert "on) want=on; val=true ;;" in mirror and "off) want=off; val=false ;;" in mirror
+    # A rollback with this directory refuses: it holds config.yaml only.
+    assert "hermes-nutrition-mirror-" in mirror and "config.yaml only" in mirror
+    for bad in ((), ("yes",), ("ON",), ("true",)):
+        result = _run_script("mirror", *bad)
+        assert result.returncode == 2 and b"usage: mirror <on|off>" in result.stderr, bad
+
+
+def test_mirror_sets_only_its_key_through_hermes_config(tmp_path):
+    from test_install_home_agent_ana import _STUB_CONFIG
+    yaml = pytest.importorskip("yaml")
+    program = re.search(r"^MIRROR_PY='([^']*)'$", _text(), re.M | re.S).group(1)
+    (tmp_path / "hermes_cli").mkdir()
+    (tmp_path / "hermes_cli" / "__init__.py").write_text("", encoding="utf-8")
+    (tmp_path / "hermes_cli" / "config.py").write_text(_STUB_CONFIG, encoding="utf-8")
+    (tmp_path / "config.yaml").write_text("model:\n  default: other\ncron:\n  catch_up_missed: true\n"
+                                          "keep_me: 7\n", encoding="utf-8")
+
+    def run(arg: str) -> tuple[int, str]:
+        result = subprocess.run([sys.executable, "-c", program, arg], cwd=tmp_path,
+                                capture_output=True, text=True, encoding="utf-8")
+        return result.returncode, result.stdout
+
+    assert run("on") == (0, "changed: cron.mirror_delivery\ncron.mirror_delivery in effect: true\n")
+    saved = yaml.safe_load((tmp_path / "config.yaml").read_text(encoding="utf-8"))
+    assert saved == {"model": {"default": "other"}, "cron": {"catch_up_missed": True, "mirror_delivery": True},
+                     "keep_me": 7}
+    assert yaml.safe_load((tmp_path / "preserved.json").read_text()) == [["cron", "mirror_delivery"]]
+    assert run("on") == (0, "changed: nothing\ncron.mirror_delivery in effect: true\n")
+    assert run("off") == (0, "changed: cron.mirror_delivery\ncron.mirror_delivery in effect: false\n")
+    # No cron block at all: one is added with only this key.
+    (tmp_path / "config.yaml").write_text("keep_me: 7\n", encoding="utf-8")
+    assert run("on")[0] == 0
+    assert yaml.safe_load((tmp_path / "config.yaml").read_text(encoding="utf-8")) == {
+        "keep_me": 7, "cron": {"mirror_delivery": True}}

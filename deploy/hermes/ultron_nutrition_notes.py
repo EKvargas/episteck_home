@@ -6,6 +6,8 @@ Usage (stdlib only):
 Replaces the nutrition section of the agent's standing skill with the pointer section and removes
 every line naming the retired tool. Prints one change per line (or `no changes`); never file content.
 Exit 0 = rewritten or already current, 2 = usage, 3 = stop: the file was left untouched.
+The installer runs it as the agent that owns the notes (home-agent), never as root: the agent can
+swap a path for a symlink, so a root write there could land anywhere.
 """
 from __future__ import annotations
 
