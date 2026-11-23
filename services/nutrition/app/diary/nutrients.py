@@ -9,7 +9,8 @@ from collections.abc import Sequence
 from decimal import Decimal
 
 from nutrition_domain.nutrient_totals import (
-    DAY_NUTRIENTS, ItemFacts, NutrientAverage, NutrientTotal, percent_of_target, total_nutrients,
+    DAY_NUTRIENTS, ItemFacts, NutrientAverage, NutrientTotal, percent_of, percent_of_target,
+    total_nutrients,
 )
 from nutrition_domain.target_method import TargetSet
 
@@ -46,6 +47,18 @@ def nutrient_blocks(totals: dict[str, NutrientTotal], targets: TargetSet | None)
             "percent": None if pct is None else str(pct),
         }
     return blocks
+
+
+def free_sugar_block(total: NutrientTotal, limit_g: Decimal | None) -> dict:
+    """A day's free sugars against that day's limit; unknown stays null, never 0."""
+    pct = percent_of(total.known, limit_g)
+    return {
+        "known": None if total.known is None else str(total.known),
+        "items_uncounted": total.items_uncounted,
+        "status": total.status,
+        "limit_g": None if limit_g is None else str(limit_g),
+        "percent": None if pct is None else str(pct),
+    }
 
 
 def average_json(averages: dict[str, NutrientAverage]) -> dict:

@@ -335,7 +335,9 @@ def get_period_summary(
     start and end are YYYY-MM-DD local dates; leave both out for the last 7 days
     ending today. Never add up nutrients yourself: use these totals and averages.
     Only confirmed entries count; unknown values are null, never 0, and
-    items_uncounted says how many items could not be counted. has_profile means the
+    items_uncounted says how many items could not be counted. Each day's free_sugars
+    gives the known grams, status and percent of that day's limit; averages include
+    free_sugars_g. has_profile means the
     person is onboarded (a profile has been confirmed); when it is false, energy and
     protein have no targets yet and the person can be offered onboarding.
     """

@@ -133,5 +133,35 @@ def test_period_uses_each_days_targets_across_a_change(env):
     assert avg["average_percent"] == "100" and avg["days_used"] == 3
 
 
+def test_period_reports_free_sugars_per_day_and_on_average(env):
+    svc = env[0]
+    cola = {"label": "Cola", "food_id": "syn-cola", "unit": "g", "stated": True}
+    unknown = {"label": "Algo", "food_id": None, "amount": 1, "unit": "portion", "grams_estimate": 100}
+    _log(svc, [{**cola, "amount": 200}], "2026-11-21T12:00")
+    svc.close_day(SESSION, P, "2026-11-21")
+    _log(svc, [{**cola, "amount": 100}, unknown], "2026-11-22T12:00")
+    svc.close_day(SESSION, P, "2026-11-22")
+    _log(svc, [{**cola, "amount": 300}], "2026-11-23T08:00")
+    p = svc.get_period_summary(SESSION, P, "2026-11-21", "2026-11-23")
+    assert [d["day_status"] for d in p["days"]] == ["COMPLETE", "COMPLETE", "OPEN"]
+    assert [d["free_sugars"] for d in p["days"]] == [
+        {"known": "21.2", "items_uncounted": 0, "status": "KNOWN", "limit_g": "50", "percent": "42"},
+        {"known": "10.6", "items_uncounted": 1, "status": "PARTIAL", "limit_g": "50", "percent": "21"},
+        {"known": "31.8", "items_uncounted": 0, "status": "KNOWN", "limit_g": "50", "percent": "64"},
+    ]
+    assert [(d["free_sugars_known_g"], d["items_uncounted"]) for d in p["days"]] == [
+        ("21.2", 0), ("10.6", 1), ("31.8", 0)]  # the existing keys stay
+    assert p["averages"]["free_sugars_g"] == {
+        "average_known": "21.2", "average_percent": "42", "days_used": 1,
+        "left_out": {"open": 1, "no_entries": 0, "partial": 1}}
+
+
+def test_period_free_sugars_on_a_day_without_entries_stay_unknown(env):
+    p = env[0].get_period_summary(SESSION, P, "2026-11-23", "2026-11-23")
+    assert p["days"][0]["free_sugars"] == {
+        "known": None, "items_uncounted": 0, "status": "NONE", "limit_g": "50", "percent": None}
+    assert p["averages"]["free_sugars_g"]["average_known"] is None
+
+
 def test_period_without_profile_says_so(env):
     assert env[0].get_period_summary(SESSION, P)["has_profile"] is False

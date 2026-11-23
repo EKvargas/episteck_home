@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
@@ -41,12 +41,17 @@ class NutrientTotal:
         return "PARTIAL" if self.items_uncounted > 0 else "KNOWN"
 
 
+FREE_SUGARS = "free_sugars_g"
+
+
 @dataclass(frozen=True)
 class DayRow:
     day: date
     day_status: DayStatus
     totals: dict[str, NutrientTotal]
     targets: TargetSet | None
+    free_sugars: NutrientTotal | None = None  # None = not given, counted as no items
+    free_sugar_limit_g: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -75,41 +80,67 @@ def total_nutrients(items: Sequence[ItemFacts]) -> dict[str, NutrientTotal]:
     return result
 
 
-def percent_of_target(known: Decimal | None, target: Target | None) -> Decimal | None:
-    if known is None or target is None or target.value == 0:
+def percent_of(known: Decimal | None, reference: Decimal | None) -> Decimal | None:
+    """Known amount as a whole percentage of a target or limit value; unknown stays None."""
+    if known is None or reference is None or reference == 0:
         return None
-    return (known * _HUNDRED / target.value).quantize(_ONE, rounding=ROUND_HALF_UP)
+    return (known * _HUNDRED / reference).quantize(_ONE, rounding=ROUND_HALF_UP)
+
+
+def percent_of_target(known: Decimal | None, target: Target | None) -> Decimal | None:
+    return percent_of(known, None if target is None else target.value)
+
+
+def _average(
+    nutrient: str,
+    rows: Sequence[DayRow],
+    total_of: Callable[[DayRow], NutrientTotal],
+    reference_of: Callable[[DayRow], Decimal | None],
+) -> NutrientAverage:
+    knowns: list[Decimal] = []
+    percents: list[Decimal] = []
+    left_open = left_none = left_partial = 0
+    for row in rows:
+        total = total_of(row)
+        if row.day_status == DayStatus.OPEN:
+            left_open += 1
+        elif row.day_status == DayStatus.NO_ENTRIES or total.status == "NONE":
+            left_none += 1
+        elif total.status == "PARTIAL":
+            left_partial += 1
+        else:
+            knowns.append(total.known)  # type: ignore[arg-type]
+            pct = percent_of(total.known, reference_of(row))
+            if pct is not None:
+                percents.append(pct)
+    average_known = (
+        (sum(knowns, Decimal(0)) / len(knowns)).quantize(_TENTH, rounding=ROUND_HALF_UP)
+        if knowns else None
+    )
+    average_percent = (
+        (sum(percents, Decimal(0)) / len(percents)).quantize(_ONE, rounding=ROUND_HALF_UP)
+        if percents else None
+    )
+    return NutrientAverage(
+        nutrient, average_known, average_percent, len(knowns), left_open, left_none, left_partial
+    )
+
+
+def _target_value(row: DayRow, nutrient: str) -> Decimal | None:
+    target = row.targets.targets.get(nutrient) if row.targets else None
+    return None if target is None else target.value
 
 
 def average_period(rows: Sequence[DayRow]) -> dict[str, NutrientAverage]:
-    result: dict[str, NutrientAverage] = {}
-    for nutrient in DAY_NUTRIENTS:
-        knowns: list[Decimal] = []
-        percents: list[Decimal] = []
-        left_open = left_none = left_partial = 0
-        for row in rows:
-            total = row.totals[nutrient]
-            if row.day_status == DayStatus.OPEN:
-                left_open += 1
-            elif row.day_status == DayStatus.NO_ENTRIES or total.status == "NONE":
-                left_none += 1
-            elif total.status == "PARTIAL":
-                left_partial += 1
-            else:
-                knowns.append(total.known)  # type: ignore[arg-type]
-                target = row.targets.targets.get(nutrient) if row.targets else None
-                pct = percent_of_target(total.known, target)
-                if pct is not None:
-                    percents.append(pct)
-        average_known = (
-            (sum(knowns, Decimal(0)) / len(knowns)).quantize(_TENTH, rounding=ROUND_HALF_UP)
-            if knowns else None
-        )
-        average_percent = (
-            (sum(percents, Decimal(0)) / len(percents)).quantize(_ONE, rounding=ROUND_HALF_UP)
-            if percents else None
-        )
-        result[nutrient] = NutrientAverage(
-            nutrient, average_known, average_percent, len(knowns), left_open, left_none, left_partial
-        )
-    return result
+    return {
+        nutrient: _average(nutrient, rows, lambda r, n=nutrient: r.totals[n],
+                           lambda r, n=nutrient: _target_value(r, n))
+        for nutrient in DAY_NUTRIENTS
+    }
+
+
+def average_free_sugars(rows: Sequence[DayRow]) -> NutrientAverage:
+    """Free sugars over COMPLETE, fully known days, each against that day's own limit."""
+    no_items = NutrientTotal(FREE_SUGARS, None, 0, 0)
+    return _average(FREE_SUGARS, rows, lambda r: r.free_sugars or no_items,
+                    lambda r: r.free_sugar_limit_g)

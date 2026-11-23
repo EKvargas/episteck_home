@@ -7,6 +7,7 @@ from nutrition_domain.nutrient_totals import (
     DayRow,
     ItemFacts,
     NutrientTotal,
+    average_free_sugars,
     average_period,
     percent_of_target,
     total_nutrients,
@@ -91,6 +92,29 @@ def test_complete_day_without_items_counts_as_no_entries():
 def test_average_without_any_target_has_no_percent():
     a = average_period([_row("2026-11-20", COMPLETE, energy="2000")])["energy_kcal"]
     assert a.average_known == D("2000.0") and a.average_percent is None
+
+
+def _sugar_row(day, status, known, items, uncounted, limit="50"):
+    sugars = NutrientTotal("free_sugars_g", None if known is None else D(known), items, uncounted)
+    return DayRow(date.fromisoformat(day), status, total_nutrients([]), None, sugars,
+                  None if limit is None else D(limit))
+
+
+def test_free_sugar_average_uses_complete_known_days_against_each_days_limit():
+    rows = [_sugar_row("2026-11-20", COMPLETE, "25.0", 1, 0),
+            _sugar_row("2026-11-21", COMPLETE, "40.0", 1, 0, limit="40"),
+            _sugar_row("2026-11-22", COMPLETE, "10.0", 2, 1),
+            _sugar_row("2026-11-23", OPEN, "5.0", 1, 0),
+            _sugar_row("2026-11-24", NO_ENTRIES, None, 0, 0)]
+    a = average_free_sugars(rows)
+    assert a.nutrient == "free_sugars_g"
+    assert a.average_known == D("32.5") and a.average_percent == D("75")  # (50 % + 100 %) / 2
+    assert (a.days_used, a.left_out_open, a.left_out_no_entries, a.left_out_partial) == (2, 1, 1, 1)
+
+
+def test_free_sugar_percent_without_a_limit_is_unknown():
+    a = average_free_sugars([_sugar_row("2026-11-20", COMPLETE, "25.0", 1, 0, limit=None)])
+    assert a.average_known == D("25.0") and a.average_percent is None
 
 
 def test_total_status_property():

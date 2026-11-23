@@ -17,12 +17,14 @@ from zoneinfo import ZoneInfo
 
 import httpx
 from nutrition_domain.day_summary import summarize_day
-from nutrition_domain.nutrient_totals import DayRow, average_period
+from nutrition_domain.nutrient_totals import (
+    FREE_SUGARS, DayRow, NutrientTotal, average_free_sugars, average_period,
+)
 from nutrition_domain.free_sugars import FREE_SUGAR_MAP_VERSION, FreeSugarClass, classify, item_free_sugars_g
 from nutrition_domain.portions import to_grams
 from nutrition_domain.rules import effective_limit, trimester
 
-from .nutrients import average_json, day_totals, nutrient_blocks
+from .nutrients import average_json, day_totals, free_sugar_block, nutrient_blocks
 from ..providers.food_provider import FoodNotFound, FoodProvider, FoodRecord
 from ..service import AccessAuthorizer, _refuse_unless_allowed
 
@@ -289,7 +291,11 @@ class DiaryService:
             },
             "nutrients": nutrient_blocks(totals, targets),
         }
-        return core, entries, DayRow(day, summary.day_status, totals, targets)
+        sugars = NutrientTotal(FREE_SUGARS, None if total is None else _one_decimal(total),
+                               summary.items_total, summary.items_uncounted)
+        row = DayRow(day, summary.day_status, totals, targets, sugars,
+                     None if lim is None else lim.value_g)
+        return core, entries, row
 
     def _day(self, person: str, day: date) -> dict:
         core, entries, _ = self._day_core(person, day)
@@ -417,13 +423,15 @@ class DiaryService:
         days, rows = [], []
         for n in range((last - first).days + 1):
             core, _, row = self._day_core(subject_person_id, first + timedelta(days=n))
-            days.append({k: core[k] for k in (
+            days.append({**{k: core[k] for k in (
                 "date", "day_status", "mode", "trimester", "profile_version",
-                "free_sugars_known_g", "items_uncounted", "nutrients")})
+                "free_sugars_known_g", "items_uncounted", "nutrients")},
+                "free_sugars": free_sugar_block(row.free_sugars, row.free_sugar_limit_g)})
             rows.append(row)
+        averages = {**average_period(rows), FREE_SUGARS: average_free_sugars(rows)}
         return {"start": first.isoformat(), "end": last.isoformat(),
                 "has_profile": self._profiles.has_onboarded(subject_person_id),
-                "days": days, "averages": average_json(average_period(rows))}
+                "days": days, "averages": average_json(averages)}
 
 
 def _attribution(items: list[dict]) -> list[str]:
