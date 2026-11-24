@@ -255,7 +255,7 @@ Plan 3 adds three read-only Hub pages: Perfil (`/app/nutrition`), Hoy (`/app/nut
    - Ana's Hoy shows `Energía: … de 2.250 kcal`.
    - Ana's Días (7 days) matches what her bot says for the same days.
    - Erick's Perfil shows the onboarding offer until he onboards (C3), then his targets.
-   - Erick, without a consent grant, gets `Acceso restringido` on Ana's Perfil and Días, and the reverse.
+   - Cross-person check, as the first person (Erick) and then as the other (Ana), with no consent grant between them: open the other person's pages as `/app/nutrition?person=<other PSN>` and `/app/nutrition/dias?person=<other PSN>`. Pass: either the denial (`Acceso restringido` on Perfil, `No tienes acceso a este historial de días.` on Días) or the page switching to the viewer's own data (Home lists no relationship between them, so `?person=` is treated as stale). Fail: any of the other person's data on screen.
 
 7. `[CLAUDE VERIFY]` The Hub logs carry only `nutrition.<view> outcome=<KIND>` lines for these pages. Count the outcomes (counts only; no IDs, names or numbers):
 
@@ -263,7 +263,13 @@ Plan 3 adds three read-only Hub pages: Perfil (`/app/nutrition`), Hoy (`/app/nut
    $SSH 'cd /; sudo -n -u svc-home-hub env XDG_RUNTIME_DIR=/run/user/$(id -u svc-home-hub) podman logs svc-home-hub 2>&1 | grep -o "nutrition\.[a-z]* outcome=[A-Z_]*" | sort | uniq -c'
    ```
 
-**Verification:** `ROLL home-hub verify` is `PASS`, the anonymous `/app/nutrition/dias` check returns 307, the phone checks pass, and the logs show only outcome lines.
+   Negative check: the nutrition log lines carry no IDs or numbers. Expect `0`:
+
+   ```bash
+   $SSH 'cd /; sudo -n -u svc-home-hub env XDG_RUNTIME_DIR=/run/user/$(id -u svc-home-hub) podman logs svc-home-hub 2>&1 | grep "nutrition\." | grep -cE "PSN-|[0-9]{3,}"'
+   ```
+
+**Verification:** `ROLL home-hub verify` is `PASS`, the anonymous `/app/nutrition/dias` check returns 307, the phone checks pass, the logs show only outcome lines, and the negative log check prints `0`.
 **Rollback:** `ROLL home-hub rollback <backup dir>` (the directory `apply` printed). Nutrition and the agents are untouched by this stage.
 
 ## Acceptance checklist
