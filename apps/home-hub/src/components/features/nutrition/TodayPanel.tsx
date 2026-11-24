@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { TodayPanelModel } from './today-panel-model';
+import { ChatPrompt } from './ChatPrompt';
 import { RetryButton } from './RetryButton';
 import styles from './TodayPanel.module.css';
 
@@ -66,6 +67,27 @@ export function TodayPanel({ model, signInHref, compact = false }: {
                   max={model.meter.limitG}
                   value={Math.min(model.meter.valueG, model.meter.limitG)}
                   aria-label={model.sugarLine}
+                />
+              )}
+              {model.nutrientLines.map((n) => (
+                <div key={n.label} className={styles.nutrient}>
+                  <p className={styles.nutrientLine}>{n.line}</p>
+                  {n.meter && (
+                    <meter
+                      className={styles.nutrientMeter}
+                      min={0}
+                      max={n.meter.max}
+                      value={n.meter.value}
+                      aria-label={n.line}
+                    />
+                  )}
+                </div>
+              ))}
+              {model.profileHint && (
+                <ChatPrompt
+                  label="Copiar «Quiero crear mi perfil»"
+                  prompt="Quiero crear mi perfil"
+                  lead="Crea tu perfil en el chat para ver energía, proteína y fibra frente a tus objetivos."
                 />
               )}
               <p className={styles.status}>{model.statusLine}</p>

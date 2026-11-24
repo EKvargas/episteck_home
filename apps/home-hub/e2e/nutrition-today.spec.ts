@@ -48,9 +48,34 @@ test('a partial day lists entries with ~, "1 alimento sin contar" and the BLS at
   await expect(panel(page)).toContainText('sin dato');
   await expect(panel(page)).toContainText('Referencia general: 50 g de azúcares libres al día (OMS, DGE). No es una indicación médica.');
   await expect(panel(page)).toContainText('Bundeslebensmittelschlüssel (BLS)');
-  await expect(panel(page).locator('meter')).toHaveAttribute('max', '50');
-  await expect(panel(page).locator('meter')).toHaveAttribute('value', '17');
+  await expect(panel(page).getByRole('meter', { name: 'Azúcares libres: 17 g de 50 g' })).toHaveAttribute('max', '50');
+  await expect(panel(page).getByRole('meter', { name: 'Azúcares libres: 17 g de 50 g' })).toHaveAttribute('value', '17');
   expect(await text()).not.toMatch(/(^|\D)0 g/);
+});
+
+test('Hoy reads energy, protein and fiber against the day targets and never shows 0', async ({ page }) => {
+  await signIn(page, 'today-partial', newRun());
+  await page.goto('/app/nutrition/hoy');
+  await expect(panel(page)).toContainText('Energía: 436 de 2.250 kcal');
+  await expect(panel(page)).toContainText('Proteína: 12 de 60 g');
+  await expect(panel(page)).toContainText('Fibra: 3 de 30 g (1 sin contar)');
+  await expect(panel(page).getByRole('meter', { name: 'Energía: 436 de 2.250 kcal' })).toBeVisible();
+  const text = await panel(page).innerText();
+  expect(text).not.toMatch(/(^|\D)0 (g|kcal)/);
+  expect(text).not.toContain('Crea tu perfil');
+
+  await signIn(page, 'today-empty', newRun());
+  await page.goto('/app/nutrition/hoy');
+  await expect(panel(page)).toContainText('Energía: sin registros todavía');
+  expect(await panel(page).innerText()).not.toMatch(/(^|\D)0 (g|kcal)/);
+});
+
+test('without a profile Hoy shows the hint and no Energía line', async ({ page }) => {
+  await signIn(page, 'today-no-profile', newRun());
+  await page.goto('/app/nutrition/hoy');
+  await expect(panel(page)).toContainText('Crea tu perfil en el chat para ver energía, proteína y fibra frente a tus objetivos.');
+  await expect(panel(page).getByRole('button', { name: 'Copiar «Quiero crear mi perfil»' })).toBeVisible();
+  expect(await panel(page).innerText()).not.toContain('Energía:');
 });
 
 test('denied shows the Spanish denied copy; a 500 offers retry', async ({ page, request }) => {

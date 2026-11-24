@@ -18,7 +18,9 @@ function scripted(...responses: Array<Response | Error>) {
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
 const minted = () => json(200, { delegation: 'tok-opaque', audience: 'svc-nutrition', expires_at: 1 });
+const NONE = { known: null, items_total: 0, items_uncounted: 0, status: 'NONE', target: null, percent: null };
 const DAY = {
+  profile_version: null, nutrients: { energy_kcal: NONE, protein_g: NONE, fiber_g: NONE },
   date: '2026-11-20', mode: 'GENERAL', trimester: null, day_status: 'NO_ENTRIES', sugar_status: 'NONE',
   free_sugars_known_g: null, items_total: 0, items_uncounted: 0, limit: null, entries: [], attribution: [],
 };

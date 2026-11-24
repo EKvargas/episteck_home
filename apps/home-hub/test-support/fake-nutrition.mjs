@@ -57,14 +57,30 @@ const LONG_TEXT = {
   },
 };
 
+const block = (known, target, over = {}) => ({
+  known, items_total: known === null ? 0 : 2, items_uncounted: 0, status: known === null ? 'NONE' : 'KNOWN', target, percent: null, ...over,
+});
+const T_ENERGY = { value: '2250', display_value: '2250', unit: 'kcal', kind: 'ABOUT' };
+const T_PROTEIN = { value: '60', display_value: '60', unit: 'g', kind: 'MIN' };
+const T_FIBER = { value: '30', display_value: '30', unit: 'g', kind: 'MIN' };
 const EMPTY_DAY = {
+  profile_version: 2,
+  nutrients: {
+    energy_kcal: block(null, T_ENERGY), protein_g: block(null, T_PROTEIN), fiber_g: block(null, T_FIBER),
+    fat_g: block(null, null),
+  },
   date: '2026-11-18', mode: 'GENERAL', trimester: null, day_status: 'NO_ENTRIES', sugar_status: 'NONE',
   free_sugars_known_g: null, items_total: 0, items_uncounted: 0,
   limit: { value_g: '50', sources: [{ title: 'WHO', url: 'https://example.test/who' }] },
   entries: [], attribution: [],
 };
 const PARTIAL_DAY = {
-  ...EMPTY_DAY, day_status: 'OPEN', sugar_status: 'PARTIAL', free_sugars_known_g: '17.0', items_total: 2, items_uncounted: 1,
+  ...EMPTY_DAY,
+  nutrients: {
+    ...EMPTY_DAY.nutrients,
+    energy_kcal: block('436.0', T_ENERGY), protein_g: block('12.4', T_PROTEIN),
+    fiber_g: block('3.0', T_FIBER, { status: 'PARTIAL', items_uncounted: 1 }),
+  }, day_status: 'OPEN', sugar_status: 'PARTIAL', free_sugars_known_g: '17.0', items_total: 2, items_uncounted: 1,
   entries: [
     { id: 'e-1', consumed_at: '2026-11-18T09:15:00+01:00', items: [{
       label: 'Zumo', amount: '1', unit: 'glass', grams: '200', conversion: { method: 'PRESET' },
@@ -76,6 +92,12 @@ const PARTIAL_DAY = {
     }] },
   ],
   attribution: ['Bundeslebensmittelschlüssel (BLS) 4.0, Max Rubner-Institut'],
+};
+
+const NO_PROFILE_DAY = {
+  ...EMPTY_DAY, day_status: 'OPEN', profile_version: null,
+  nutrients: { ...PARTIAL_DAY.nutrients, energy_kcal: block('436.0', null), protein_g: block('12.4', null), fiber_g: block('3.0', null) },
+  entries: PARTIAL_DAY.entries, free_sugars_known_g: '17.0', sugar_status: 'PARTIAL', items_total: 2, items_uncounted: 1,
 };
 
 createServer((request, response) => {
@@ -106,6 +128,7 @@ createServer((request, response) => {
       case 'today-two-subjects':
         return match[1] === 'PSN-00001' ? json(200, PARTIAL_DAY) : json(403, { detail: 'ACCESS_DENIED' });
       case 'today-updated': return json(200, list.length === 1 ? EMPTY_DAY : PARTIAL_DAY);
+      case 'today-no-profile': return json(200, NO_PROFILE_DAY);
       case 'today-partial': return json(200, PARTIAL_DAY);
       case 'today-denied': return json(403, { detail: 'ACCESS_DENIED' });
       case 'today-error': return json(500, { detail: 'boom' });

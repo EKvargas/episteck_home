@@ -19,7 +19,23 @@ export interface DiaryItem {
 export interface DiaryEntry { id: string; consumedAt: string; items: DiaryItem[] }
 /** value_g on the wire. */
 export interface DiaryLimit { valueG: string; sources: { title: string; url: string }[] }
+export type DayNutrient = 'energy_kcal' | 'protein_g' | 'fiber_g';
+/** The nutrients Hoy shows, in display order. Others on the wire are ignored. */
+export const DAY_NUTRIENTS_SHOWN: readonly DayNutrient[] = ['energy_kcal', 'protein_g', 'fiber_g'];
+export interface NutrientBlock {
+  /** Sum of the known amounts; null means unknown, never zero. */
+  known: string | null;
+  itemsTotal: number;
+  itemsUncounted: number;
+  status: 'NONE' | 'KNOWN' | 'PARTIAL';
+  target: { value: string; displayValue: string; unit: string; kind: 'ABOUT' | 'MIN' | 'MAX' } | null;
+  percent: string | null;
+}
 export interface DiaryDay {
+  /** profile_version; null when the person has no profile version yet. */
+  profileVersion: number | null;
+  /** The three nutrients Hoy shows, from day.nutrients. */
+  nutrients: Record<DayNutrient, NutrientBlock>;
   date: string;
   mode: 'GENERAL' | 'PREGNANCY';
   trimester: 1 | 2 | 3 | null;
@@ -85,6 +101,39 @@ function amount(value: unknown): string {
   return decimal(value, 'amount');
 }
 
+const NUTRIENT_STATUSES: readonly string[] = ['NONE', 'KNOWN', 'PARTIAL'];
+const TARGET_KINDS: readonly string[] = ['ABOUT', 'MIN', 'MAX'];
+
+function parseTarget(raw: unknown, what: string): NutrientBlock['target'] {
+  if (raw === null || raw === undefined) return null;
+  const target = obj(raw, what);
+  const display = target.display_value;
+  // Free text: str(Decimal) may emit exponent form, so only length is checked.
+  if (typeof display !== 'string' || display.length === 0 || display.length > 40) bad(`${what} display_value`);
+  const kind = target.kind;
+  if (typeof kind !== 'string' || !TARGET_KINDS.includes(kind)) bad(`${what} kind`);
+  return {
+    value: decimal(target.value, `${what} value`),
+    displayValue: display as string,
+    unit: str(target.unit, `${what} unit`),
+    kind: kind as 'ABOUT' | 'MIN' | 'MAX',
+  };
+}
+
+export function parseNutrientBlock(raw: unknown, what: string): NutrientBlock {
+  const block = obj(raw, what);
+  const status = block.status;
+  if (typeof status !== 'string' || !NUTRIENT_STATUSES.includes(status)) bad(`${what} status`);
+  return {
+    known: decimalOrNull(block.known, `${what} known`),
+    itemsTotal: count(block.items_total, `${what} items_total`),
+    itemsUncounted: count(block.items_uncounted, `${what} items_uncounted`),
+    status: status as NutrientBlock['status'],
+    target: parseTarget(block.target, `${what} target`),
+    percent: decimalOrNull(block.percent, `${what} percent`),
+  };
+}
+
 function parseItem(raw: unknown): DiaryItem {
   const item = obj(raw, 'item');
   const method = obj(item.conversion, 'conversion').method;
@@ -131,7 +180,13 @@ export function parseDayWire(body: unknown): DiaryDay {
   if (typeof sugarStatus !== 'string' || !SUGAR_STATUSES.includes(sugarStatus)) bad('sugar_status');
   const trimester = day.trimester ?? null;
   if (trimester !== null && trimester !== 1 && trimester !== 2 && trimester !== 3) bad('trimester');
+  const wireNutrients = obj(day.nutrients, 'nutrients');
+  const profileVersion = day.profile_version === undefined ? null : day.profile_version;
+  const nutrients = {} as Record<DayNutrient, NutrientBlock>;
+  for (const code of DAY_NUTRIENTS_SHOWN) nutrients[code] = parseNutrientBlock(wireNutrients[code], code);
   return {
+    profileVersion: profileVersion === null ? null : count(profileVersion, 'profile_version'),
+    nutrients,
     date: str(day.date, 'date'),
     mode: mode as DiaryDay['mode'],
     trimester: trimester as DiaryDay['trimester'],

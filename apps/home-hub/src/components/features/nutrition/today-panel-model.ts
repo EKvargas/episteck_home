@@ -1,6 +1,9 @@
-import type { DiaryDay, DiaryItem } from '../../../integration/nutrition/diary-contract.ts';
+import { DAY_NUTRIENTS_SHOWN, type DiaryDay, type DiaryItem } from '../../../integration/nutrition/diary-contract.ts';
+import { amount, nutrientLabel, unitLabel } from '../../../integration/nutrition/nutrition-format.ts';
 import type { DataEnvelope } from '../../../integration/state/DataEnvelope.ts';
 import type { SafeUIErrorCode } from '../../../integration/state/SafeUIErrorCode.ts';
+
+type TodayPanelModelToday = Extract<TodayPanelModel, { kind: 'TODAY' }>;
 
 export type TodayPanelModel =
   | { kind: 'LOADING' | 'DENIED' | 'SESSION' | 'UNAVAILABLE' | 'INVALID' | 'NOT_CONFIGURED' }
@@ -9,6 +12,9 @@ export type TodayPanelModel =
       heading: string;
       sugarLine: string;
       meter: { valueG: number; limitG: number } | null;
+      nutrientLines: { label: string; line: string; meter: { value: number; max: number } | null }[];
+      /** True when the energy target is null: the person has no profile targets yet. */
+      profileHint: boolean;
       statusLine: string;
       entries: { time: string; items: { text: string; sugar: string; nutrientNote: string | null }[] }[];
       hasUnmatchedFood: boolean;
@@ -75,6 +81,29 @@ function nutrientNote(item: DiaryItem): string | null {
     : 'Alimento identificado con azúcares libres desconocidos';
 }
 
+function nutrientLines(day: DiaryDay): TodayPanelModelToday['nutrientLines'] {
+  const lines: TodayPanelModelToday['nutrientLines'] = [];
+  for (const code of DAY_NUTRIENTS_SHOWN) {
+    const block = day.nutrients[code];
+    if (block.target === null) continue;
+    const label = nutrientLabel(code);
+    if (day.dayStatus === 'NO_ENTRIES') {
+      lines.push({ label, line: `${label}: sin registros todavía`, meter: null });
+    } else if (block.known === null) {
+      lines.push({ label, line: `${label}: sin dato`, meter: null });
+    } else {
+      const { value, displayValue, unit } = block.target;
+      const uncounted = block.status === 'PARTIAL' ? ` (${block.itemsUncounted} sin contar)` : '';
+      lines.push({
+        label,
+        line: `${label}: ${amount(block.known, unit)} de ${amount(displayValue, unit)} ${unitLabel(unit)}${uncounted}`,
+        meter: { value: Math.min(Number(block.known), Number(value)), max: Number(value) },
+      });
+    }
+  }
+  return lines;
+}
+
 function toToday(day: DiaryDay): TodayPanelModel {
   const hasFigure = day.dayStatus !== 'NO_ENTRIES' && day.freeSugarsKnownG !== null && day.limit !== null;
   return {
@@ -82,6 +111,8 @@ function toToday(day: DiaryDay): TodayPanelModel {
     heading: heading(day),
     sugarLine: sugarLine(day),
     meter: hasFigure ? { valueG: Number(day.freeSugarsKnownG), limitG: Number(day.limit?.valueG) } : null,
+    nutrientLines: nutrientLines(day),
+    profileHint: day.nutrients.energy_kcal.target === null,
     statusLine: statusLine(day),
     entries: day.entries.map((entry) => ({
       time: CLOCK.format(new Date(entry.consumedAt)),
