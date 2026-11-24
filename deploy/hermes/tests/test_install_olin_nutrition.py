@@ -167,6 +167,8 @@ def test_backup_happens_before_any_change():
         assert inst.index(f"agent_copy {src} {dest}") < inst.index(f"same_as_agent {src} {dest}"), src
     skill = ('"$SKILL_DIR/SKILL.md"', '"$bk/olin-nutrition-SKILL.md"')
     assert inst.index("cp -p %s %s" % skill) < first_change
+    stopped = ("cannot record the notes' owner and mode in $bk: nothing was changed")
+    assert inst.index(owner_mode) < inst.index(stopped) < first_change  # a failed stat says so
     assert inst.index("same %s %s" % skill) < first_change
     # The installed skill is backed up only when an earlier install left one.
     assert inst.index('if [ -f "$SKILL_DIR/SKILL.md" ]; then') < inst.index('"$bk/olin-nutrition-SKILL.md"')
@@ -667,6 +669,19 @@ def test_root_never_copies_out_of_the_agents_home():
             if targets and targets[-1].startswith("$bk/"):
                 assert targets[-1][len("$bk/"):] in root_made, (step, line)
     assert copied == {"config.yaml", "SKILL.md", "nutrition-diary.md", "config-after.yaml"}
+    # In these steps no line that names the config or a note and reads it (in either argument
+    # order) runs as root: it goes through the agent. stat (metadata) is allowed; the key readers
+    # and verify are out of scope (they never name "$CONFIG" here).
+    reads = re.compile(r"\b(same|cmp|cp|sha256sum|md5sum|cat|grep|diff|head|tail|sed|awk|xxd|od)\b")
+    named = re.compile(r"\$\{?(NOTES|CONFIG)\b")
+    agent = re.compile(r"\b(as_agent|as_agent_from|agent_copy|same_as_agent)\b")
+    for step in ("preflight", "install", "mirror", "rollback"):
+        for line in _code_lines(_case(text, step)):
+            if "stat -c" in line:  # metadata only; a cmp after it reads stat's output and a backup
+                assert not re.search(r'cmp [^|]*"\$(NOTES|CONFIG)', line.split("|", 1)[-1]), (step, line)
+                continue
+            if named.search(line) and reads.search(line) and not line.lstrip().startswith("echo"):
+                assert agent.search(line), (step, line)
     assert 'agent_copy "$NOTES/SKILL.md" "$tmp/SKILL.md"' in _case(text, "preflight")
     assert 'cp -p "$SKILL_DIR/SKILL.md" "$bk/olin-nutrition-SKILL.md"' in _case(text, "install")
     assert 'as_agent cat -- "$1" > "$2"' in _function(text, "agent_copy")
@@ -686,27 +701,35 @@ def test_agent_copy_and_same_as_agent_read_as_the_agent(tmp_path):
     assert copy.returncode == 0, copy.stderr
     assert (tmp_path / "copy").read_bytes() == b"the agent's bytes\n"
     assert (tmp_path / "as-agent.log").read_text(encoding="utf-8") == "cat -- agent-file\n"
-    gone = _bash(tmp_path, source, "agent_copy no-such-file copy2")  # the agent cannot read it
-    assert gone.returncode != 0
+    # The script calls both helpers where set -e does not apply (&& chains, if): so do these
+    # cases, otherwise errexit would stop the shell inside a helper and hide a missing guard.
+    gone = _bash(tmp_path, source, 'if agent_copy no-such-file copy2; then echo ok; else echo failed; fi')
+    assert gone.stdout == "failed\n"  # the agent cannot read it
+    chained = _bash(tmp_path, source, 'agent_copy no-such-file copy3 && echo ok || echo failed')
+    assert chained.stdout == "failed\n"
     (tmp_path / "as-agent.log").unlink()
 
-    def same(agent_file: str, root_file: str, prefix: str = "") -> int:
-        return _bash(tmp_path, source, f"{prefix}same_as_agent {agent_file} {root_file}").returncode
+    def same(agent_file: str, root_file: str, prefix: str = "") -> str:
+        result = _bash(tmp_path, source, f"{prefix}if same_as_agent {agent_file} {root_file}; "
+                                         "then echo equal; else echo unequal; fi")
+        assert result.returncode == 0, result.stderr
+        return result.stdout.strip()
 
-    assert same("agent-file", "root-same") == 0
+    assert same("agent-file", "root-same") == "equal"
     assert (tmp_path / "as-agent.log").read_text(encoding="utf-8") == "sha256sum -- agent-file\n"
-    assert same("agent-file", "root-other") != 0
-    assert same("no-such-file", "root-same") != 0
-    assert same("no-such-file", "root-empty") != 0  # never equal by accident
+    assert same("agent-file", "root-other") == "unequal"
+    assert same("no-such-file", "root-same") == "unequal"
+    assert same("no-such-file", "root-empty") == "unequal"  # never equal by accident
+    assert same("no-such-file", "no-such-root-file") == "unequal"  # both unreadable: empty hashes
     # The agent prints nothing (an unreadable file seen through a stand-in): still unequal.
-    assert same("agent-file", "root-empty", prefix="as_agent() { :; }\n") != 0
-    assert same("agent-file", "no-such-root-file") != 0
+    assert same("agent-file", "root-empty", prefix="as_agent() { :; }\n") == "unequal"
+    assert same("agent-file", "no-such-root-file") == "unequal"
 
 
 # --- safety ----------------------------------------------------------------------------------
 
-# Every path under the agent's home that install, mirror or rollback writes (as the agent) or
-# reads as root for a backup, and the directories leading to them (R3, R12), relative to
+# Every path under the agent's home that install, mirror or rollback writes (as the agent), and
+# the directories leading to them (R3, R12); root only stats them or runs key checks. Relative to
 # /home/home-agent. The refusal is defence in depth: root no longer writes there (R16).
 HOME_CHAIN = ("", ".hermes", ".hermes/config.yaml", ".hermes/skills",
               ".hermes/skills/episteck-home-agent", ".hermes/skills/episteck-home-agent/SKILL.md",
@@ -901,10 +924,16 @@ def test_mirror_step_backs_up_sets_one_key_checks_and_restarts():
              mirror.index('config_drift "$bk/config.yaml" "$bk/config-after.yaml"'),
              mirror.index("restart_gateway")]
     assert marks == sorted(marks)
-    assert 'cmp -s "$bk/config.yaml" "$CONFIG"' not in mirror  # compared as two root files
+    assert 'config_drift "$bk/config.yaml" "$CONFIG"' not in mirror  # compared as two root files
     # Each check after the save stops before the restart.
     after_save = mirror[marks[9]:marks[-1]]
-    assert after_save.count("exit 1") == 3 and after_save.count("the gateway was not restarted") == 3
+    assert after_save.count("exit 1") == 4 and after_save.count("the gateway was not restarted") == 4
+    # A failed read of config.yaml after the change has its own message and stops before the drift check.
+    read = ('agent_copy "$CONFIG" "$bk/config-after.yaml" \\\n'
+            '      || { echo "could not read config.yaml as $AGENT after the change: the gateway was '
+            'not restarted (backup: $bk)" >&2; exit 1; }')
+    assert read in mirror
+    assert mirror.index(read) < mirror.index('config_drift "$bk/config.yaml" "$bk/config-after.yaml"')
     assert "on) want=on; val=true ;;" in mirror and "off) want=off; val=false ;;" in mirror
     # A rollback with this directory refuses: it holds config.yaml only.
     assert "hermes-nutrition-mirror-" in mirror and "config.yaml only" in mirror

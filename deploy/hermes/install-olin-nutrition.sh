@@ -124,9 +124,9 @@ need_notes() {
   [ -f "$NOTES/SKILL.md" ] && [ -f "$NOTES/references/nutrition-diary.md" ] \
     || { echo "Ultron's notes are not where this step expects them ($NOTES): nothing was changed" >&2; exit 2; }
 }
-home_links() {  # the symlinks among the paths install, mirror or rollback writes (as the agent) or
-  # reads (as root, for a backup), and the directories leading to them, all in the agent's home;
-  # on one line (empty when none)
+home_links() {  # the symlinks among the paths install, mirror or rollback writes (as the agent) and
+  # the directories leading to them, all in the agent's home (root only stats them or runs key
+  # checks there); on one line (empty when none)
   local p found=""
   for p in "$AGENT_HOME" "$HHOME" "$CONFIG" "$HHOME/skills" "$NOTES" "$NOTES/SKILL.md" \
            "$NOTES/references" "$NOTES/references/nutrition-diary.md"; do
@@ -305,7 +305,8 @@ case "${1:-}" in
     # Owner and mode of the notes are recorded first (metadata only; rollback compares them).
     bk="$BACKUPS/hermes-nutrition-$(date -u +%Y%m%dT%H%M%SZ)"
     install -d -m 700 "$bk"
-    stat -c '%a %U:%G' "$NOTES/SKILL.md" "$NOTES/references/nutrition-diary.md" > "$bk/notes-owner-mode"
+    stat -c '%a %U:%G' "$NOTES/SKILL.md" "$NOTES/references/nutrition-diary.md" > "$bk/notes-owner-mode" \
+      || { echo "cannot record the notes' owner and mode in $bk: nothing was changed" >&2; exit 1; }
     agent_copy "$CONFIG" "$bk/config.yaml" \
       && agent_copy "$NOTES/SKILL.md" "$bk/SKILL.md" \
       && agent_copy "$NOTES/references/nutrition-diary.md" "$bk/nutrition-diary.md" \
@@ -408,7 +409,9 @@ case "${1:-}" in
       || { echo "cron.mirror_delivery is not $val in effect: the gateway was not restarted (backup: $bk)" >&2; exit 1; }
     [ "$(mirror_value)" = "$val" ] \
       || { echo "config.yaml does not say cron.mirror_delivery: $val: the gateway was not restarted (backup: $bk)" >&2; exit 1; }
-    agent_copy "$CONFIG" "$bk/config-after.yaml" && config_drift "$bk/config.yaml" "$bk/config-after.yaml" \
+    agent_copy "$CONFIG" "$bk/config-after.yaml" \
+      || { echo "could not read config.yaml as $AGENT after the change: the gateway was not restarted (backup: $bk)" >&2; exit 1; }
+    config_drift "$bk/config.yaml" "$bk/config-after.yaml" \
       || { echo "a key other than cron.mirror_delivery changed (paths above): the gateway was not restarted; compare with $bk/config.yaml" >&2; exit 1; }
     restart_gateway
     if [ "$before" = true ]; then back=on; else back=off; fi

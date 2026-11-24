@@ -8,7 +8,7 @@ One-sentence summary: roll out the Nutrition backend with profile versions and o
 
 ## When to Use
 
-After the owner has merged plan 2 to `main` and names the rollout. `SHA` is the merge commit; it contains plan 1. Run the stages in order. A failed check stops the rollout at that stage, and that stage's Rollback is the only thing to run.
+After the owner has merged the backup-as-agent fix (`fix/nutrition-backup-as-agent`) to `main` and names the rollout. `SHA` is the merge commit of that fix (or a later one); it contains plans 1 and 2. Run the stages in order. A failed check stops the rollout at that stage, and that stage's Rollback is the only thing to run.
 
 ## Who runs what
 
