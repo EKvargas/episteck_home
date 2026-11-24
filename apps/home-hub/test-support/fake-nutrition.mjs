@@ -1,12 +1,60 @@
 import { createServer } from 'node:http';
 
 const calls = new Map();
+const ENERGY = {
+  nutrient: 'energy_kcal', value: '2241.6', display_value: '2250', unit: 'kcal', kind: 'ABOUT',
+  source_org: 'Mifflin-St Jeor (1990); DGE/D-A-CH', source_ref: 'Am J Clin Nutr 51(2):241-247',
+  explanation: 'Gasto en reposo (Mifflin-St Jeor) por actividad, más 250 kcal por el trimestre 2.',
+};
+const PROTEIN = {
+  nutrient: 'protein_g', value: '65', display_value: '65', unit: 'g', kind: 'MIN',
+  source_org: 'DGE/D-A-CH', source_ref: 'DGE 2017',
+  explanation: 'Referencia para el embarazo, 2.º trimestre.',
+};
+// The full profile view of Ana. The flat `targets` map, `context` and `target_source` are legacy
+// fields the Hub must ignore; the sentinels prove it.
 const PRESENT = {
-  context: 'PREGNANCY',
-  target_source: 'REFERENCE_TARGET',
-  targets: { calcium_mg: '1000', iron_mg: '27' },
-  preferences: 'PRIVATE_PREF_SENTINEL',
-  dislikes: 'PRIVATE_DISLIKE_SENTINEL',
+  person_id: 'PSN-00001', version: 2, valid_from: '2026-11-24', origin: 'PROFILE', onboarded: true,
+  mode: 'PREGNANCY', due_date: '2027-03-01', trimester: 2,
+  inputs: {
+    birth_date: '1990-05-01', age: 36, sex: 'FEMALE', height_cm: '165', weight_kg: '62.5',
+    weight_measured_on: '2026-11-20', activity_pal: '1.6', training_sessions_per_week: 2,
+    training_note: 'Yoga', goal: 'MAINTAIN', pre_pregnancy_weight_kg: '58',
+    UNKNOWN_FIELD_SENTINEL: 'x',
+  },
+  food: { preferences: 'PRIVATE_PREF_SENTINEL', dislikes: 'PRIVATE_DISLIKE_SENTINEL', intolerances: 'lactosa' },
+  targets: { energy_kcal: '9999.9', calcium_mg: '1000' },
+  target_set: {
+    method: 'episteck-targets-1', on: '2026-11-24', items: [{ ...ENERGY }, { ...PROTEIN }],
+    missing: [],
+  },
+  history: [
+    { version: 1, valid_from: '2026-11-24', origin: 'MODE', changed: ['mode', 'due_date'] },
+    { version: 2, valid_from: '2026-11-24', origin: 'PROFILE', changed: ['height_cm'] },
+  ],
+  context: 'PREGNANCY', target_source: 'REFERENCE_TARGET',
+  UNKNOWN_FIELD_SENTINEL: 'x',
+};
+const MODE_ONLY = {
+  ...PRESENT, version: 1, origin: 'MODE', onboarded: false,
+  inputs: {
+    birth_date: null, age: null, sex: null, height_cm: null, weight_kg: null, weight_measured_on: null,
+    activity_pal: null, training_sessions_per_week: null, training_note: null, goal: null,
+    pre_pregnancy_weight_kg: null,
+  },
+  food: { preferences: null, dislikes: null, intolerances: null },
+  targets: {},
+  target_set: { method: 'episteck-targets-1', on: '2026-11-24', items: [], missing: [] },
+  history: [PRESENT.history[0]],
+};
+const LONG_TEXT = {
+  ...PRESENT,
+  inputs: { ...PRESENT.inputs, training_note: 'T'.repeat(120) },
+  food: {
+    preferences: 'P'.repeat(500),
+    dislikes: 'dislike '.repeat(60).trim().slice(0, 500),
+    intolerances: 'I'.repeat(500),
+  },
 };
 
 const EMPTY_DAY = {
@@ -66,6 +114,8 @@ createServer((request, response) => {
   }
   switch (scenario) {
     case 'present': return json(200, PRESENT);
+    case 'mode-only': return json(200, MODE_ONLY);
+    case 'long-text': return json(200, LONG_TEXT);
     case '403': return json(403, { detail: 'ACCESS_DENIED' });
     case '401': return json(401, { detail: 'SESSION_INVALID' });
     case '503': return json(503, { detail: 'SERVICE_UNAVAILABLE' });

@@ -107,7 +107,7 @@ test('mobile Home shows the diary summary and opens the live diary in one tap', 
   await page.getByRole('link', { name: 'Perfil y objetivos' }).click();
   await expect(page).toHaveURL(/\/app\/nutrition\?person=PSN-00001$/);
   await expect(nutritionLink).toHaveAttribute('aria-current', 'location');
-  await expect(page.getByTestId('profile-panel')).toContainText('No nutrition profile');
+  await expect(page.getByTestId('profile-panel')).toContainText('Sin perfil de nutrición');
 });
 
 test('a Telegram action copies a generic prompt without personal diary data', async ({ page, context }) => {

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
 import { useAppContext } from '@/components/providers/AppProvider';
+import { useCopyResult } from './ChatPrompt';
 import styles from './NutritionActions.module.css';
 
 const groups = [
@@ -49,16 +49,7 @@ const groups = [
 
 export function NutritionActions() {
   const { activeContext, viewer } = useAppContext();
-  const [copyResult, setCopyResult] = useState<{ title: string; copied: boolean } | null>(null);
-
-  async function copyPrompt(title: string, prompt: string) {
-    try {
-      await navigator.clipboard.writeText(prompt);
-      setCopyResult({ title, copied: true });
-    } catch {
-      setCopyResult({ title, copied: false });
-    }
-  }
+  const { result: copyResult, copy } = useCopyResult();
 
   if (activeContext.personId !== viewer.id) {
     return (
@@ -86,11 +77,11 @@ export function NutritionActions() {
                   <button
                     type="button"
                     aria-label={`Copiar ejemplo para ${action.title.toLowerCase()}`}
-                    onClick={() => void copyPrompt(action.title, action.prompt)}
+                    onClick={() => void copy(action.title, action.prompt)}
                   >
                     Copiar ejemplo
                   </button>
-                  {copyResult?.title === action.title && (
+                  {copyResult?.key === action.title && (
                     <p className={styles.note} role="status">
                       {copyResult.copied ? 'Ejemplo copiado.' : 'Selecciona el texto del ejemplo para copiarlo.'}
                     </p>

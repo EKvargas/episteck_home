@@ -1,83 +1,140 @@
 import { Fragment, type ReactNode } from 'react';
 import type { ProfilePanelModel } from '@/integration/nutrition/profile-panel-model';
+import { ChatPrompt } from './ChatPrompt';
 import { RetryButton } from './RetryButton';
 import styles from './ProfilePanel.module.css';
 
-function Frame({ title, role, tone, busy, children }: {
-  title: string; role?: 'status' | 'alert'; tone?: 'warn'; busy?: boolean; children?: ReactNode;
+const CREATE_PROMPT = { label: 'Copiar «Quiero crear mi perfil»', prompt: 'Quiero crear mi perfil' };
+const CHANGE_LABEL = 'Cambiar en el chat';
+const CHANGE_BASICS = 'Quiero cambiar mi perfil: [dato] ahora es [valor]. Muéstrame los objetivos nuevos antes de guardar.';
+const CHANGE_FOOD = 'Quiero cambiar mis preferencias de comida: [lo que me gusta, lo que no me gusta o intolerancias]. Muéstramelo antes de guardar.';
+
+function Frame({ title, pill, role, tone, busy, children }: {
+  title: string; pill?: string | null; role?: 'status' | 'alert'; tone?: 'warn'; busy?: boolean; children?: ReactNode;
 }) {
   return (
     <section
       className={`${styles.panel} ${tone === 'warn' ? styles.warn : ''}`}
       role={role}
       aria-busy={busy || undefined}
+      lang="es"
       data-testid="profile-panel"
     >
-      <h2 className={styles.title}>{title}</h2>
+      <h2 className={styles.title}>
+        {title}
+        {pill && <span className={styles.pill}>{pill}</span>}
+      </h2>
       {children}
     </section>
   );
 }
 
-const who = (name: string | null) => name ?? 'this person';
+function Card({ id, title, aside, children }: { id: string; title: string; aside?: string; children: ReactNode }) {
+  return (
+    <section className={styles.card} aria-labelledby={id}>
+      <div className={styles.cardHead}>
+        <h3 id={id} className={styles.cardTitle}>{title}</h3>
+        {aside && <span className={styles.aside}>{aside}</span>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Facts({ rows }: { rows: { label: string; value: string }[] }) {
+  return (
+    <dl className={styles.facts}>
+      {rows.map((row) => (
+        <Fragment key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></Fragment>
+      ))}
+    </dl>
+  );
+}
 
 export function ProfilePanel({ model, signInHref }: { model: ProfilePanelModel; signInHref: string }) {
   switch (model.kind) {
     case 'LOADING':
       return (
-        <Frame title="Checking Nutrition profile…" role="status" busy>
-          <p className={styles.body}>Looking up the profile for {who(model.subjectName)}.</p>
+        <Frame title="Cargando el perfil…" role="status" busy>
           <div className={styles.skeleton} aria-hidden="true" />
         </Frame>
       );
     case 'PROFILE':
       return (
-        <Frame title={`Perfil de ${who(model.subjectName)}`}>
-          <dl className={styles.facts} lang="es">
-            {model.basics.map((b) => (
-              <Fragment key={b.label}><dt>{b.label}</dt><dd>{b.value}</dd></Fragment>
-            ))}
-          </dl>
+        <Frame title={model.subjectName ? `Perfil de ${model.subjectName}` : 'Perfil'} pill={model.modePill}>
+          {!model.onboarded && (
+            <div className={styles.offer}>
+              <p className={styles.body}>
+                Todavía no hay perfil completo. Tu bot te hace unas ocho preguntas y calcula tus objetivos.
+              </p>
+              <ChatPrompt {...CREATE_PROMPT} />
+            </div>
+          )}
+          <Card id="perfil-basicos" title="Datos básicos">
+            <Facts rows={model.basics} />
+            <ChatPrompt label={CHANGE_LABEL} prompt={CHANGE_BASICS} />
+          </Card>
+          <Card id="perfil-comida" title="Comida">
+            <Facts rows={model.food} />
+            <ChatPrompt label={CHANGE_LABEL} prompt={CHANGE_FOOD} />
+          </Card>
+          <Card id="perfil-objetivos" title="Objetivos diarios" aside={model.targetsSince}>
+            {model.targets.length > 0 && (
+              <ul className={styles.targets}>
+                {model.targets.map((t) => (
+                  <li key={t.label} className={styles.target}>
+                    <span className={styles.targetLabel}>{t.label}</span>
+                    <span className={styles.targetValue}>{t.value}</span>
+                    <span className={styles.targetSource}>{t.source}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {model.missing.map((line) => <p key={line} className={styles.missing}>{line}</p>)}
+            <p className={styles.note}>{model.note}</p>
+          </Card>
+          <Card id="perfil-historial" title="Historial">
+            <ul className={styles.history}>
+              {model.history.map((line, index) => <li key={`${index}-${line}`}>{line}</li>)}
+            </ul>
+          </Card>
         </Frame>
       );
     case 'ABSENT':
       return (
-        <Frame title={`No nutrition profile for ${who(model.subjectName)}`} role="status">
-          <p className={styles.body}>Nothing has been set up in Nutrition for this person yet.</p>
+        <Frame title="Sin perfil de nutrición" role="status">
+          <p className={styles.body}>Tu bot te hace unas ocho preguntas y calcula tus objetivos.</p>
+          <ChatPrompt {...CREATE_PROMPT} />
         </Frame>
       );
     case 'DENIED':
       return (
-        <Frame title="Access restricted" role="alert" tone="warn">
-          <p className={styles.body}>Nutrition information for {who(model.subjectName)} is not available to you.</p>
+        <Frame title="Acceso restringido" role="alert" tone="warn">
+          <p className={styles.body}>No tienes acceso al perfil de nutrición de {model.subjectName ?? 'esta persona'}.</p>
         </Frame>
       );
     case 'SESSION':
       return (
-        <Frame title="Your session has expired" role="alert" tone="warn">
-          <p className={styles.body}>Sign in again to see Nutrition information.</p>
-          <a className={styles.retry} href={signInHref}>Sign in again</a>
+        <Frame title="Tu sesión ha caducado" role="alert" tone="warn">
+          <a className={styles.retry} href={signInHref}>Iniciar sesión</a>
         </Frame>
       );
     case 'UNAVAILABLE':
       return (
-        <Frame title="Nutrition is temporarily unavailable" role="alert" tone="warn">
-          <p className={styles.body}>We could not reach Nutrition for {who(model.subjectName)}. Nothing is shown rather than guessing.</p>
-          <RetryButton />
+        <Frame title="Nutrición no responde ahora" role="alert" tone="warn">
+          <p className={styles.body}>No se muestra nada antes que adivinar.</p>
+          <RetryButton label="Reintentar" pendingLabel="Reintentando…" />
         </Frame>
       );
     case 'INVALID':
       return (
-        <Frame title="This profile could not be shown safely" role="alert" tone="warn">
-          <p className={styles.body}>Nutrition answered with something unexpected, so it was not displayed.</p>
-          <RetryButton />
+        <Frame title="No se pudo mostrar el perfil con seguridad" role="alert" tone="warn">
+          <RetryButton label="Reintentar" pendingLabel="Reintentando…" />
         </Frame>
       );
     case 'NOT_CONFIGURED':
       return (
-        <Frame title="Nutrition is not set up on this Hub" role="alert" tone="warn">
-          <p className={styles.body}>Ask the Episteck team to finish the Nutrition connection.</p>
-        </Frame>
+        <Frame title="Nutrición no está configurada en este Hub" role="alert" tone="warn" />
       );
     default: {
       const unmapped: never = model;
