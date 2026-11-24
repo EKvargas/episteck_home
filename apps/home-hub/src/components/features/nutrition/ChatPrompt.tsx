@@ -19,16 +19,17 @@ export function useCopyResult() {
 }
 
 /**
- * A copy-ready message for the viewer's own Nutrition chat. It renders only when the viewer is the
+ * A copy-ready message (with an optional lead sentence addressed to the subject) for the viewer's own Nutrition chat. It renders only when the viewer is the
  * subject: a prompt shown while looking at someone else's data would go to the viewer's own bot.
  */
-export function ChatPrompt({ label, prompt }: { label: string; prompt: string }) {
+export function ChatPrompt({ label, prompt, lead }: { label: string; prompt: string; lead?: string }) {
   const { activeContext, viewer } = useAppContext();
   const { result, copy } = useCopyResult();
   if (activeContext.personId !== viewer.id) return null;
 
   return (
     <div className={styles.chatPrompt} lang="es">
+      {lead && <p className={styles.lead}>{lead}</p>}
       <button type="button" className={styles.button} onClick={() => void copy(prompt, prompt)}>
         {label}
       </button>

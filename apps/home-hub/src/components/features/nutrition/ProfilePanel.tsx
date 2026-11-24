@@ -5,6 +5,7 @@ import { RetryButton } from './RetryButton';
 import styles from './ProfilePanel.module.css';
 
 const CREATE_PROMPT = { label: 'Copiar «Quiero crear mi perfil»', prompt: 'Quiero crear mi perfil' };
+const BOT_LEAD = 'Tu bot te hace unas ocho preguntas y calcula tus objetivos.';
 const CHANGE_LABEL = 'Cambiar en el chat';
 const CHANGE_BASICS = 'Quiero cambiar mi perfil: [dato] ahora es [valor]. Muéstrame los objetivos nuevos antes de guardar.';
 const CHANGE_FOOD = 'Quiero cambiar mis preferencias de comida: [lo que me gusta, lo que no me gusta o intolerancias]. Muéstramelo antes de guardar.';
@@ -64,10 +65,8 @@ export function ProfilePanel({ model, signInHref }: { model: ProfilePanelModel; 
         <Frame title={model.subjectName ? `Perfil de ${model.subjectName}` : 'Perfil'} pill={model.modePill}>
           {!model.onboarded && (
             <div className={styles.offer}>
-              <p className={styles.body}>
-                Todavía no hay perfil completo. Tu bot te hace unas ocho preguntas y calcula tus objetivos.
-              </p>
-              <ChatPrompt {...CREATE_PROMPT} />
+              <p className={styles.body}>Todavía no hay perfil completo.</p>
+              <ChatPrompt {...CREATE_PROMPT} lead={BOT_LEAD} />
             </div>
           )}
           <Card id="perfil-basicos" title="Datos básicos">
@@ -103,8 +102,7 @@ export function ProfilePanel({ model, signInHref }: { model: ProfilePanelModel; 
     case 'ABSENT':
       return (
         <Frame title="Sin perfil de nutrición" role="status">
-          <p className={styles.body}>Tu bot te hace unas ocho preguntas y calcula tus objetivos.</p>
-          <ChatPrompt {...CREATE_PROMPT} />
+          <ChatPrompt {...CREATE_PROMPT} lead={BOT_LEAD} />
         </Frame>
       );
     case 'DENIED':

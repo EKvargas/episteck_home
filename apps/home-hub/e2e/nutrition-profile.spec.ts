@@ -263,7 +263,8 @@ test('switching subject re-reads for the new subject; Back restores the earlier 
 test('a mode-only profile offers onboarding and still shows the due date', async ({ page }) => {
   await signIn(page, 'mode-only', newRun());
   await page.goto('/app/nutrition');
-  await expect(panel(page)).toContainText('Todavía no hay perfil completo. Tu bot te hace unas ocho preguntas y calcula tus objetivos.');
+  await expect(panel(page)).toContainText('Todavía no hay perfil completo.');
+  await expect(panel(page)).toContainText('Tu bot te hace unas ocho preguntas y calcula tus objetivos.');
   await expect(panel(page)).toContainText('Embarazo · 2.º trimestre');
   await expect(panel(page)).toContainText('1 mar 2027');
   await expect(panel(page)).not.toContainText('Sin perfil de nutrición');
@@ -288,6 +289,22 @@ test("another subject's Perfil shows no chat prompts", async ({ page }) => {
   await expect(panel(page)).toContainText('Datos básicos');
   await expect(page.getByRole('button', { name: 'Cambiar en el chat' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Copiar «Quiero crear mi perfil»' })).toHaveCount(0);
+});
+
+test("another subject's Perfil omits the text addressed to the subject (ABSENT and mode-only)", async ({ page }) => {
+  await signIn(page, 'absent', newRun());
+  await page.goto('/app/nutrition');
+  await expect(panel(page)).toContainText('Tu bot te hace unas ocho preguntas');
+  await page.goto('/app/nutrition?person=PSN-00007');
+  await expect(panel(page)).toContainText('Sin perfil de nutrición');
+  await expect(panel(page)).not.toContainText('Tu bot te hace');
+  await signIn(page, 'mode-only', newRun());
+  await page.goto('/app/nutrition');
+  await expect(panel(page)).toContainText('Tu bot te hace unas ocho preguntas');
+  await page.goto('/app/nutrition?person=PSN-00007');
+  await expect(panel(page)).toContainText('Todavía no hay perfil completo.');
+  await expect(panel(page)).toContainText('Datos básicos');
+  await expect(panel(page)).not.toContainText('Tu bot te hace');
 });
 
 test('Perfil at 390 px never scrolls sideways', async ({ page }) => {

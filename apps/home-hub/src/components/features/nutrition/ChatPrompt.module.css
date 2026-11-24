@@ -27,6 +27,12 @@
   outline-offset: 2px;
 }
 
+.lead {
+  margin: 0;
+  color: var(--olin-text-muted);
+  max-width: 40rem;
+}
+
 .status {
   margin: 0;
   font-size: 0.875rem;
