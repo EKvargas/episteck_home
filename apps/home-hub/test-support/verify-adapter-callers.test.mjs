@@ -10,6 +10,8 @@ const APP_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const GOOD_SERVER = "import 'server-only';\nimport { loadNutritionProfile } from './profile-loader';\nexport async function readNutritionProfile(context) {\n  assertIssuedContext(context);\n  return cookies();\n}\n";
 const ALLOWED = 'src/app/nutrition/LiveProfilePanel.tsx';
 const GOOD_DIARY_SERVER = "import 'server-only';\nimport { loadDiaryToday } from './diary-loader';\nexport async function readDiaryToday(context) {\n  assertIssuedContext(context);\n  return cookies();\n}\n";
+const GOOD_PERIOD_SERVER = "import 'server-only';\nimport { loadDiaryPeriod } from './period-loader';\nexport async function readDiaryPeriod(context) {\n  assertIssuedContext(context);\n  return cookies();\n}\n";
+const PERIOD_ALLOWED = 'src/app/nutrition/dias/LivePeriodPanel.tsx';
 const DIARY_ALLOWED = 'src/app/nutrition/hoy/LiveTodayPanel.tsx';
 
 async function tree(files) {
@@ -25,6 +27,7 @@ async function violationsFor(files) {
   const root = await tree({
     'src/integration/nutrition/profile.server.ts': GOOD_SERVER,
     'src/integration/nutrition/diary.server.ts': GOOD_DIARY_SERVER,
+    'src/integration/nutrition/period.server.ts': GOOD_PERIOD_SERVER,
     ...files,
   });
   try { return await findViolations(root); } finally { await rm(root, { recursive: true, force: true }); }
@@ -67,7 +70,7 @@ test('the allowed importer must not be a client component', async () => {
 });
 
 test('profile.server.ts must verify the context before reading cookies', async () => {
-  const root = await tree({ 'src/integration/nutrition/diary.server.ts': GOOD_DIARY_SERVER, 'src/integration/nutrition/profile.server.ts': "export async function readNutritionProfile(context) {\n  const c = cookies();\n  assertIssuedContext(context);\n}\n" });
+  const root = await tree({ 'src/integration/nutrition/diary.server.ts': GOOD_DIARY_SERVER, 'src/integration/nutrition/period.server.ts': GOOD_PERIOD_SERVER, 'src/integration/nutrition/profile.server.ts': "export async function readNutritionProfile(context) {\n  const c = cookies();\n  assertIssuedContext(context);\n}\n" });
   try { assert.equal((await findViolations(root)).length, 1); } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -123,8 +126,8 @@ test('a tree with only profile.server.ts reports diary.server.ts as missing', as
   const root = await tree({ 'src/integration/nutrition/profile.server.ts': GOOD_SERVER });
   try {
     const v = await findViolations(root);
-    assert.equal(v.length, 1);
-    assert.match(v[0], /diary\.server\.ts: not found/);
+    assert.equal(v.length, 2);
+    assert.match(v.join(' '), /diary\.server\.ts: not found/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -132,7 +135,35 @@ test('a tree with only diary.server.ts reports profile.server.ts as missing', as
   const root = await tree({ 'src/integration/nutrition/diary.server.ts': GOOD_DIARY_SERVER });
   try {
     const v = await findViolations(root);
+    assert.equal(v.length, 2);
+    assert.match(v.join(' '), /profile\.server\.ts: not found/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('LivePeriodPanel may import period.server; no other panel may', async () => {
+  assert.deepEqual(await violationsFor({
+    [PERIOD_ALLOWED]: "import { readDiaryPeriod } from '@/integration/nutrition/period.server';\n",
+  }), []);
+  assert.equal((await violationsFor({ [DIARY_ALLOWED]: "import { readDiaryPeriod } from '@/integration/nutrition/period.server';\n" })).length, 1);
+  assert.equal((await violationsFor({ [PERIOD_ALLOWED]: "import { readDiaryToday } from '@/integration/nutrition/diary.server';\n" })).length, 1);
+});
+
+test('period-loader is reachable only through period.server, which checks the context first', async () => {
+  const v = await violationsFor({ 'src/app/nutrition/dias/page.tsx': "import { loadDiaryPeriod } from '@/integration/nutrition/period-loader';\n" });
+  assert.equal(v.length, 1);
+  assert.match(v[0], /period-loader/);
+  const bad = await violationsFor({ 'src/integration/nutrition/period.server.ts': "export async function readDiaryPeriod(context) {\n  const c = cookies();\n  assertIssuedContext(context);\n}\n" });
+  assert.equal(bad.length, 1);
+});
+
+test('a tree with only profile.server.ts and diary.server.ts reports period.server.ts as missing', async () => {
+  const root = await tree({
+    'src/integration/nutrition/profile.server.ts': GOOD_SERVER,
+    'src/integration/nutrition/diary.server.ts': GOOD_DIARY_SERVER,
+  });
+  try {
+    const v = await findViolations(root);
     assert.equal(v.length, 1);
-    assert.match(v[0], /profile\.server\.ts: not found/);
+    assert.match(v[0], /period\.server\.ts: not found/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

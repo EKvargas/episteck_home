@@ -64,17 +64,17 @@ function bad(what: string): never {
   throw new TypeError(`diary: invalid ${what}`);
 }
 
-function obj(value: unknown, what: string): Record<string, unknown> {
+export function obj(value: unknown, what: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) bad(what);
   return value as Record<string, unknown>;
 }
 
-function arr(value: unknown, what: string): unknown[] {
+export function arr(value: unknown, what: string): unknown[] {
   if (!Array.isArray(value)) bad(what);
   return value as unknown[];
 }
 
-function str(value: unknown, what: string): string {
+export function str(value: unknown, what: string): string {
   if (typeof value !== 'string' || value.length === 0) bad(what);
   return value as string;
 }
@@ -84,11 +84,11 @@ function decimal(value: unknown, what: string): string {
   return value as string;
 }
 
-function decimalOrNull(value: unknown, what: string): string | null {
+export function decimalOrNull(value: unknown, what: string): string | null {
   return value === null || value === undefined ? null : decimal(value, what);
 }
 
-function count(value: unknown, what: string): number {
+export function count(value: unknown, what: string): number {
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) bad(what);
   return value as number;
 }

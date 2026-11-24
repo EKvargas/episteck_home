@@ -129,7 +129,7 @@ test('mobile Home shows the diary summary and opens the live diary in one tap', 
   await page.getByRole('link', { name: 'Acciones en Telegram' }).click();
   await expect(page.getByRole('region', { name: 'Acciones en Telegram' })).toBeFocused();
   await expect(page.getByRole('heading', { name: 'Acciones en Telegram' })).toBeInViewport();
-  await page.getByRole('link', { name: 'Perfil y objetivos' }).click();
+  await page.getByRole('link', { name: 'Perfil', exact: true }).click();
   await expect(page).toHaveURL(/\/app\/nutrition\?person=PSN-00001$/);
   await expect(nutritionLink).toHaveAttribute('aria-current', 'location');
   await expect(page.getByTestId('profile-panel')).toContainText('Sin perfil de nutrición');

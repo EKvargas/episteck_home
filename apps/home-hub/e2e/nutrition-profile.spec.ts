@@ -215,7 +215,7 @@ test('a hung Nutrition upstream streams a skeleton, then times out to unavailabl
   test.setTimeout(30_000);
   await signIn(page, 'hang', newRun());
   await page.goto('/app/nutrition', { waitUntil: 'commit' });
-  await expect(page.getByRole('heading', { name: 'Perfil y objetivos' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Nutrición' })).toBeVisible();
   await expect(panel(page)).toContainText('Cargando el perfil…');
   await expect(panel(page)).toContainText('Nutrición no responde ahora', { timeout: 15_000 });
 });

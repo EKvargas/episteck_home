@@ -6,11 +6,17 @@ import { DefaultRelationshipSwitcher } from '@/components/slots/default/DefaultR
 import { HUB_BASE_PATH } from '@/integration/basePath';
 import styles from './page.module.css';
 
-export function NutritionHeader({ view }: { view: 'home' | 'diary' | 'profile' }) {
+const TABS = [
+  { view: 'profile', label: 'Perfil', path: '/nutrition' },
+  { view: 'diary', label: 'Hoy', path: '/nutrition/hoy' },
+  { view: 'days', label: 'Días', path: '/nutrition/dias' },
+] as const;
+
+export function NutritionHeader({ view }: { view: 'home' | 'profile' | 'diary' | 'days' }) {
   const { activeContext, setContext, availableContexts, viewer } = useAppContext();
   const selected = useSearchParams().has('person');
   const person = selected ? `?person=${encodeURIComponent(activeContext.personId)}` : '';
-  const heading = view === 'home' ? `Good afternoon, ${viewer.name}` : view === 'profile' ? 'Perfil y objetivos' : 'Nutrición';
+  const heading = view === 'home' ? `Good afternoon, ${viewer.name}` : 'Nutrición';
   return (
     <>
       <header className={styles.header}>
@@ -27,19 +33,23 @@ export function NutritionHeader({ view }: { view: 'home' | 'diary' | 'profile' }
       </header>
       {view !== 'home' && (
         <nav lang="es" aria-label="Nutrición" className={styles.pageLinks}>
-          {view === 'profile' ? (
-            <a href={`${HUB_BASE_PATH}/nutrition/hoy${person}`}>Hoy</a>
-          ) : (
-            <>
-              <a href={`${HUB_BASE_PATH}/nutrition${person}`}>Perfil y objetivos</a>
-              <a href="#acciones-en-telegram" onClick={(event) => {
-                const section = document.getElementById('acciones-en-telegram');
-                if (!section) return;
-                event.preventDefault();
-                section.focus({ preventScroll: true });
-                section.scrollIntoView();
-              }}>Acciones en Telegram</a>
-            </>
+          {TABS.map((tab) => (
+            <a
+              key={tab.view}
+              href={`${HUB_BASE_PATH}${tab.path}${person}`}
+              aria-current={tab.view === view ? 'page' : undefined}
+            >
+              {tab.label}
+            </a>
+          ))}
+          {view === 'diary' && (
+            <a href="#acciones-en-telegram" onClick={(event) => {
+              const section = document.getElementById('acciones-en-telegram');
+              if (!section) return;
+              event.preventDefault();
+              section.focus({ preventScroll: true });
+              section.scrollIntoView();
+            }}>Acciones en Telegram</a>
           )}
         </nav>
       )}

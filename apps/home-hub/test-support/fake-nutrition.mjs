@@ -100,6 +100,46 @@ const NO_PROFILE_DAY = {
   entries: PARTIAL_DAY.entries, free_sugars_known_g: '17.0', sugar_status: 'PARTIAL', items_total: 2, items_uncounted: 1,
 };
 
+const pblock = (known, percent, over = {}) => ({
+  known, items_total: known === null ? 0 : 2, items_uncounted: 0, status: known === null ? 'NONE' : 'KNOWN',
+  target: percent === null ? null : { value: '2250', display_value: '2250', unit: 'kcal', kind: 'ABOUT' },
+  percent, ...over,
+});
+const pavg = (known, percent, used) => ({
+  average_known: known, average_percent: percent, days_used: used, left_out: { open: 1, no_entries: 0, partial: 0 },
+});
+const pday = (date, dayStatus, nutrients, free) => ({
+  date, day_status: dayStatus, mode: 'GENERAL', trimester: null, profile_version: 2,
+  free_sugars_known_g: free.known, items_uncounted: 0, nutrients, free_sugars: free,
+});
+const NO_FREE = { known: null, items_uncounted: 0, status: 'NONE', limit_g: null, percent: null };
+const PERIOD_THREE = {
+  start: '2026-11-20', end: '2026-11-22', has_profile: true,
+  days: [
+    pday('2026-11-20', 'COMPLETE',
+      { energy_kcal: pblock('2510', '90'), protein_g: pblock('98.4', '120'), fiber_g: pblock('24.0', '80'), fat_g: pblock('80', null) },
+      { known: '17.0', items_uncounted: 0, status: 'KNOWN', limit_g: '50', percent: '34' }),
+    pday('2026-11-21', 'COMPLETE',
+      { energy_kcal: pblock('2240', '80'), protein_g: pblock('82', '102'), fiber_g: pblock('20.0', '67') }, NO_FREE),
+    pday('2026-11-22', 'OPEN',
+      { energy_kcal: pblock('1200', '53'), protein_g: pblock('40', null, { status: 'PARTIAL' }), fiber_g: pblock(null, null) },
+      { known: '12.0', items_uncounted: 1, status: 'PARTIAL', limit_g: '50', percent: null }),
+  ],
+  averages: {
+    energy_kcal: pavg('2375', '85', 2), protein_g: pavg('90', '111', 2), fiber_g: pavg('22.0', '73', 2),
+    free_sugars_g: pavg(null, null, 0), fat_g: pavg('80', null, 1),
+  },
+};
+const stripPercents = (d) => ({
+  ...d,
+  nutrients: Object.fromEntries(Object.entries(d.nutrients).map(([k, b]) => [k, { ...b, target: null, percent: null }])),
+  free_sugars: { ...d.free_sugars, limit_g: null, percent: null },
+});
+const PERIOD_NO_PROFILE = {
+  ...PERIOD_THREE, has_profile: false, days: PERIOD_THREE.days.map(stripPercents),
+  averages: Object.fromEntries(Object.entries(PERIOD_THREE.averages).map(([k, a]) => [k, { ...a, average_percent: null }])),
+};
+
 createServer((request, response) => {
   const url = new URL(request.url ?? '/', 'http://127.0.0.1:9930');
   if (url.pathname === '/health') {
@@ -111,7 +151,8 @@ createServer((request, response) => {
     response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ calls: calls.get(run) ?? [] }));
     return;
   }
-  const match = /^\/profile\/([A-Za-z0-9-]+)$/.exec(url.pathname) ?? /^\/diary\/([A-Za-z0-9-]+)\/days\/today$/.exec(url.pathname);
+  const match = /^\/profile\/([A-Za-z0-9-]+)$/.exec(url.pathname) ?? /^\/diary\/([A-Za-z0-9-]+)\/days\/today$/.exec(url.pathname)
+    ?? /^\/diary\/([A-Za-z0-9-]+)\/period$/.exec(url.pathname);
   if (!match || request.method !== 'GET') {
     response.writeHead(404).end();
     return;
@@ -119,10 +160,19 @@ createServer((request, response) => {
   const token = request.headers['x-episteck-delegation'];
   const [, scenario = 'absent', run = 'none'] = typeof token === 'string' ? token.split('.') : [];
   const list = calls.get(run) ?? [];
-  list.push({ path: url.pathname, hasCookie: 'cookie' in request.headers });
+  list.push({ path: url.pathname + url.search, hasCookie: 'cookie' in request.headers });
   calls.set(run, list);
 
   const json = (status, body) => response.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body));
+  if (url.pathname.endsWith('/period')) {
+    switch (scenario) {
+      case 'days-three': return json(200, PERIOD_THREE);
+      case 'days-no-profile': return json(200, PERIOD_NO_PROFILE);
+      case 'days-denied': return json(403, { detail: 'ACCESS_DENIED' });
+      case 'days-error': return json(500, { detail: 'boom' });
+      default: return json(404, { detail: 'no period' });
+    }
+  }
   if (url.pathname.startsWith('/diary/')) {
     switch (scenario) {
       case 'today-two-subjects':
