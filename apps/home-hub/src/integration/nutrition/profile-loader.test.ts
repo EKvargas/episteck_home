@@ -30,7 +30,7 @@ const PROFILE = {
   food: { preferences: 'private', dislikes: null, intolerances: null },
   targets: { calcium_mg: '1000' },
   target_set: {
-    method: 'MIFFLIN_ST_JEOR', on: '2026-11-24',
+    method: 'episteck-targets-1', on: '2026-11-24',
     items: [{ nutrient: 'calcium_mg', value: '1000', display_value: '1000', unit: 'mg', kind: 'MIN', source_org: 'DGE', source_ref: 'D-A-CH', explanation: 'x' }],
     missing: [],
   },
@@ -66,7 +66,7 @@ test('authorized present profile: one mint, one Nutrition call, minimized data',
         },
         food: { preferences: 'private', dislikes: null, intolerances: null },
         targets: {
-          method: 'MIFFLIN_ST_JEOR', on: '2026-11-24',
+          method: 'episteck-targets-1', on: '2026-11-24',
           items: [{ nutrient: 'calcium_mg', value: '1000', displayValue: '1000', unit: 'mg', kind: 'MIN', sourceOrg: 'DGE', sourceRef: 'D-A-CH', explanation: 'x' }],
           missing: [],
         },

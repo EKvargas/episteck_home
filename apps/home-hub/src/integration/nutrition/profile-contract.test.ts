@@ -24,7 +24,7 @@ function wire(): Body {
     food: { preferences: 'pescado', dislikes: null, intolerances: 'lactosa' },
     targets: { energy_kcal: '2241.6' },
     target_set: {
-      method: 'MIFFLIN_ST_JEOR', on: '2026-11-24', items: [{ ...ENERGY }],
+      method: 'episteck-targets-1', on: '2026-11-24', items: [{ ...ENERGY }],
       missing: [{ nutrient: 'protein_g', fields: ['weight_kg'] }],
     },
     history: [
@@ -70,7 +70,7 @@ test('a mode-only body (onboarded false, no energy target) is PRESENT, not ABSEN
     pre_pregnancy_weight_kg: null,
   };
   body.food = { preferences: null, dislikes: null, intolerances: null };
-  body.target_set = { method: 'MIFFLIN_ST_JEOR', on: '2026-11-24', items: [], missing: [] };
+  body.target_set = { method: 'episteck-targets-1', on: '2026-11-24', items: [], missing: [] };
   body.history = [body.history[0]];
   const p = present(parseProfileWire(body));
   assert.equal(p.onboarded, false);
@@ -78,6 +78,14 @@ test('a mode-only body (onboarded false, no energy target) is PRESENT, not ABSEN
   assert.equal(p.dueDate, '2027-03-01');
   assert.deepEqual(p.targets.items, []);
   assert.equal(p.inputs.age, null);
+});
+
+test('the live method id and a free-text display_value pass', () => {
+  const body = wire();
+  body.target_set.items[0].display_value = '2.25E+3';
+  const p = present(parseProfileWire(body));
+  assert.equal(p.targets.method, 'episteck-targets-1');
+  assert.equal(p.targets.items[0].displayValue, '2.25E+3');
 });
 
 test('a null version is accepted', () => {

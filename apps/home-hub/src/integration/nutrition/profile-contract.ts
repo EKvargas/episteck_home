@@ -53,7 +53,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const DECIMAL = /^\d+(\.\d+)?$/;
 const NUTRIENT = /^[a-z0-9_]{1,40}$/;
 const ORIGIN = /^[A-Z_]{1,32}$/;
-const METHOD = /^[A-Za-z0-9_]{1,40}$/;
+const METHOD = /^[A-Za-z0-9_-]{1,40}$/;
 const FIELD = /^[a-z0-9_]{1,40}$/;
 const MAX_FOOD_TEXT = 500;
 const MAX_TRAINING_NOTE = 120;
@@ -140,7 +140,7 @@ function mapTarget(raw: unknown): ProfileTarget {
   return {
     nutrient: patterned(t.nutrient, NUTRIENT, 'nutrient'),
     value: decimal(t.value, 'target value'),
-    displayValue: decimal(t.display_value, 'target display value'),
+    displayValue: text(t.display_value, MAX_SHORT, 'target display value'),
     unit: text(t.unit, MAX_SHORT, 'unit'),
     kind: oneOf(t.kind, ['ABOUT', 'MIN', 'MAX'] as const, 'kind'),
     sourceOrg: text(t.source_org, MAX_TARGET_TEXT, 'source_org'),
