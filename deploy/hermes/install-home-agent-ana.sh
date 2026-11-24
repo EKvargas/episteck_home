@@ -5,10 +5,10 @@
 # Claude runs only the read-only ones (preflight, login-check, verify).
 #
 # Extract the merged commit on the node first, from the repo root:
-#   git archive <SHA> deploy/hermes | ssh -F C:/Users/D064974/.ssh/config episteck-node1 \
+#   git archive <SHA> deploy/hermes | ssh -F "$HOME/.ssh/config" episteck-node1 \
 #     'sudo -n install -d -m 755 /var/lib/episteck/hermes-ana && sudo -n tar -x -C /var/lib/episteck/hermes-ana'
 # then, one step at a time:
-#   ssh -F C:/Users/D064974/.ssh/config episteck-node1 'sudo -n bash -s -- <step> [arg]' < deploy/hermes/install-home-agent-ana.sh
+#   ssh -F "$HOME/.ssh/config" episteck-node1 'sudo -n bash -s -- <step> [arg]' < deploy/hermes/install-home-agent-ana.sh
 #
 # Steps: preflight | user | install | configure | env | telegram <id> | login | login-check
 #        | gateway | cron <HH:MM> | purge | verify | stop | rollback-config <dir>
@@ -30,6 +30,7 @@ VPY=$HHOME/hermes-agent/venv/bin/python
 UNIT_DIR=/home/$AGENT/.config/systemd/user
 SRC=/var/lib/episteck/hermes-ana/deploy/hermes
 ANA_SRC=$SRC/home-agent-ana
+SHARED_SKILL=$SRC/skills/olin-nutrition/SKILL.md
 SKILLS_ROOT=/etc/episteck/hermes-ana/skills
 SKILL_DIR=$SKILLS_ROOT/olin-nutrition
 GW=http://127.0.0.1:9937
@@ -57,7 +58,7 @@ CRON_PROMPT='Scheduled evening check-in. Follow the skill section "Evening check
 1. Call mcp__home__whoami once, then mcp__nutrition__get_day_summary once with subject_person_id set to its actor_person_id and no date. Call no other tool and save nothing.
 2. If day_status is COMPLETE, or a call returns an error other than an access refusal, your whole final response is exactly [SILENT].
 3. If a call returns an access refusal, reply with the permission line from the skill and stop.
-4. Otherwise write ONE short message in Spanish as that section says. It names the day it is about as day and month in Spanish words, no weekday (for example 20 de noviembre), taken from the date of get_day_summary, and ends with exactly: ¿Eso fue todo hoy?'
+4. Otherwise write ONE short message in Spanish as that section says. It names the day it is about as day and month in Spanish words, no weekday (for example 20 de noviembre), taken from the date of get_day_summary. For energy_kcal and protein_g in nutrients, give known against target only when the target of that nutrient is not null, and leave out a nutrient whose target is null, even when profile_version is set. A day with no targets gets the free sugars part only. The message ends with exactly: ¿Eso fue todo hoy?'
 
 # Hermes' own config load/save (hermes_cli.config), run as the agent in its venv:
 #   set <yaml>   set every key of <yaml>, keep the rest of config.yaml, print the changed key paths
@@ -131,13 +132,17 @@ finish() {  # every check has printed; exit 1 when one failed
 
 need_src() {
   local f
-  for f in config-ana.yaml SOUL.md skills/olin-nutrition/SKILL.md systemd/ana-media-purge.service \
+  for f in config-ana.yaml SOUL.md systemd/ana-media-purge.service \
            systemd/ana-media-purge.timer systemd/hermes-gateway-memory.conf; do
     if [ ! -f "$ANA_SRC/$f" ]; then
       echo "extract deploy/hermes of the merged commit into /var/lib/episteck/hermes-ana first ($f is missing)" >&2
       exit 2
     fi
   done
+  if [ ! -f "$SHARED_SKILL" ]; then
+    echo "extract deploy/hermes of the merged commit into /var/lib/episteck/hermes-ana first (skills/olin-nutrition/SKILL.md is missing)" >&2
+    exit 2
+  fi
 }
 need_user() {
   if ! id "$AGENT" >/dev/null 2>&1; then echo "run the user step first" >&2; exit 2; fi
@@ -335,7 +340,7 @@ case "${1:-}" in
     install -m 644 -o "$AGENT" -g "$AGENT" "$ANA_SRC/SOUL.md" "$HHOME/SOUL.md"
     # The skill is root-owned and read-only to Ana's agent: it cannot rewrite its own rules.
     install -d -m 755 -o root -g root /etc/episteck/hermes-ana "$SKILLS_ROOT" "$SKILL_DIR"
-    install -m 644 -o root -g root "$ANA_SRC/skills/olin-nutrition/SKILL.md" "$SKILL_DIR/SKILL.md"
+    install -m 644 -o root -g root "$SHARED_SKILL" "$SKILL_DIR/SKILL.md"
     echo "== config.yaml: the keys of config-ana.yaml (paths only)"
     agent_config set "$(< "$ANA_SRC/config-ana.yaml")" || bad "a config-ana.yaml key is not in effect"
     # On Telegram and in cron jobs only the skills and clarify toolsets stay; MCP tools stay.
@@ -471,7 +476,7 @@ case "${1:-}" in
     need_hermes
     # The job loads the installed skill: it must be this commit's and have the check-in section.
     [ -f "$SKILL_DIR/SKILL.md" ] || { echo "run configure first: the job loads $SKILL_DIR/SKILL.md" >&2; exit 2; }
-    cmp -s "$ANA_SRC/skills/olin-nutrition/SKILL.md" "$SKILL_DIR/SKILL.md" \
+    cmp -s "$SHARED_SKILL" "$SKILL_DIR/SKILL.md" \
       || { echo "the installed skill is not this commit's: run configure first" >&2; exit 2; }
     grep -q '^## Evening check-in (cron)$' "$SKILL_DIR/SKILL.md" \
       || { echo "the installed skill has no 'Evening check-in (cron)' section" >&2; exit 2; }
@@ -519,7 +524,7 @@ case "${1:-}" in
     if [ "$env_mode" = "600 $AGENT" ]; then ok ".env is 600 and $AGENT's"
     else bad ".env is '$env_mode', not 600 and $AGENT's"; fi
     if [ "$skill_mode" = "644 root:root" ] \
-      && cmp -s "$ANA_SRC/skills/olin-nutrition/SKILL.md" "$SKILL_DIR/SKILL.md"; then
+      && cmp -s "$SHARED_SKILL" "$SKILL_DIR/SKILL.md"; then
       ok "the skill is root's, 644, and this commit's"
     else
       bad "the skill is not root's 644 copy of this commit's"
