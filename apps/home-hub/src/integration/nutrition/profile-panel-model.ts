@@ -1,6 +1,6 @@
 import type { DataEnvelope } from '../state/DataEnvelope.ts';
 import { isSafeUIErrorCode, type SafeUIErrorCode } from '../state/SafeUIErrorCode.ts';
-import type { ProfileSummary } from './profile-contract.ts';
+import type { ProfileRead } from './profile-contract.ts';
 
 export type ProfilePanelModel =
   | { kind: 'LOADING'; subjectName: string | null }
@@ -13,13 +13,9 @@ export type ProfilePanelModel =
   | { kind: 'NOT_CONFIGURED' };
 
 const CONTEXT_LABELS: Record<string, string> = { PREGNANCY: 'Pregnancy', GENERAL: 'General' };
-const TARGET_SOURCE_LABELS: Record<string, string> = {
-  REFERENCE_TARGET: 'Reference targets',
-  USER_CONFIGURED: 'Personalized targets',
-};
 
 /** Fixed-vocabulary label for the one log line per read. Never IDs, names, or body content. */
-export function outcomeLabel(envelope: DataEnvelope<ProfileSummary>): string {
+export function outcomeLabel(envelope: DataEnvelope<ProfileRead>): string {
   if (envelope.delivery === 'READY' && envelope.data) return envelope.data.presence;
   if (envelope.delivery === 'ERROR' && isSafeUIErrorCode(envelope.errorCode)) return envelope.errorCode;
   return 'UNEXPECTED';
@@ -61,7 +57,7 @@ function errorModel(code: SafeUIErrorCode | undefined, subjectName: string | nul
 
 /** Map one adapter envelope to exactly one deliberate panel. Pure; no React, no server imports. */
 export function toProfilePanelModel(
-  envelope: DataEnvelope<ProfileSummary>,
+  envelope: DataEnvelope<ProfileRead>,
   subjectName: string | null,
 ): ProfilePanelModel {
   switch (envelope.delivery) {
@@ -79,9 +75,9 @@ export function toProfilePanelModel(
       return {
         kind: 'PRESENT',
         subjectName,
-        contextLabel: label(CONTEXT_LABELS, data.context),
-        targetSourceLabel: label(TARGET_SOURCE_LABELS, data.targetSource),
-        targetCount: data.targetCount,
+        contextLabel: label(CONTEXT_LABELS, data.profile.mode),
+        targetSourceLabel: 'Reference targets',
+        targetCount: data.profile.targets.items.length,
       };
     }
     default: {

@@ -2,29 +2,46 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { DataEnvelope } from '../state/DataEnvelope.ts';
 import type { SafeUIErrorCode } from '../state/SafeUIErrorCode.ts';
-import type { ProfileSummary } from './profile-contract.ts';
+import type { Mode, ProfileRead } from './profile-contract.ts';
 import { humanizeCode, outcomeLabel, toProfilePanelModel } from './profile-panel-model.ts';
 
-const ready = (data: ProfileSummary): DataEnvelope<ProfileSummary> =>
+function present(mode: Mode, itemCount: number): ProfileRead {
+  const item = { nutrient: 'energy_kcal', value: '2000', displayValue: '2000', unit: 'kcal', kind: 'ABOUT' as const, sourceOrg: 'o', sourceRef: 'r', explanation: 'e' };
+  return {
+    presence: 'PRESENT',
+    profile: {
+      version: 1, validFrom: '2026-11-24', origin: 'PROFILE', onboarded: true, mode, dueDate: null, trimester: null,
+      inputs: {
+        birthDate: null, age: null, sex: null, heightCm: null, weightKg: null, weightMeasuredOn: null,
+        activityPal: null, trainingSessionsPerWeek: null, trainingNote: null, goal: null, prePregnancyWeightKg: null,
+      },
+      food: { preferences: null, dislikes: null, intolerances: null },
+      targets: { method: 'M', on: '2026-11-24', items: Array.from({ length: itemCount }, () => item), missing: [] },
+      history: [],
+    },
+  };
+}
+
+const ready = (data: ProfileRead): DataEnvelope<ProfileRead> =>
   ({ delivery: 'READY', authorization: 'GRANTED', freshness: 'FRESH', environment: 'LIVE', data });
-const error = (errorCode: SafeUIErrorCode): DataEnvelope<ProfileSummary> =>
+const error = (errorCode: SafeUIErrorCode): DataEnvelope<ProfileRead> =>
   ({ delivery: 'ERROR', authorization: errorCode === 'ACCESS_DENIED' ? 'DENIED' : 'INDETERMINATE', freshness: 'UNKNOWN', environment: 'LIVE', errorCode });
 
 test('PRESENT maps known codes to labels and keeps only the summary', () => {
   assert.deepEqual(
-    toProfilePanelModel(ready({ presence: 'PRESENT', context: 'PREGNANCY', targetSource: 'REFERENCE_TARGET', targetCount: 4 }), 'Erick'),
+    toProfilePanelModel(ready(present('PREGNANCY', 4)), 'Erick'),
     { kind: 'PRESENT', subjectName: 'Erick', contextLabel: 'Pregnancy', targetSourceLabel: 'Reference targets', targetCount: 4 },
   );
 });
 
-test('unknown future codes fall back to a readable label instead of failing', () => {
-  const model = toProfilePanelModel(ready({ presence: 'PRESENT', context: 'POST_PARTUM', targetSource: 'COACH_SET', targetCount: 1 }), null);
+test('an unknown future mode falls back to a readable label instead of failing', () => {
+  const model = toProfilePanelModel(ready(present('POST_PARTUM' as Mode, 1)), null);
   assert.equal(model.kind === 'PRESENT' && model.contextLabel, 'Post partum');
-  assert.equal(model.kind === 'PRESENT' && model.targetSourceLabel, 'Coach set');
+  assert.equal(model.kind === 'PRESENT' && model.targetSourceLabel, 'Reference targets');
 });
 
 test('a PRESENT profile with zero targets stays PRESENT (not ABSENT)', () => {
-  const model = toProfilePanelModel(ready({ presence: 'PRESENT', context: 'GENERAL', targetSource: 'USER_CONFIGURED', targetCount: 0 }), 'Erick');
+  const model = toProfilePanelModel(ready(present('GENERAL', 0)), 'Erick');
   assert.equal(model.kind, 'PRESENT');
   assert.equal(model.kind === 'PRESENT' && model.targetCount, 0);
 });
@@ -71,14 +88,14 @@ test('a LOADING envelope maps to LOADING', () => {
 
 test('outcomeLabel is a fixed vocabulary that never carries identifiers or codes from the body', () => {
   assert.equal(outcomeLabel(ready({ presence: 'ABSENT' })), 'ABSENT');
-  assert.equal(outcomeLabel(ready({ presence: 'PRESENT', context: 'PREGNANCY', targetSource: 'REFERENCE_TARGET', targetCount: 2 })), 'PRESENT');
+  assert.equal(outcomeLabel(ready(present('PREGNANCY', 2))), 'PRESENT');
   for (const [code] of errors) assert.equal(outcomeLabel(error(code)), code);
   assert.equal(outcomeLabel({ delivery: 'LOADING', authorization: 'INDETERMINATE', freshness: 'UNKNOWN', environment: 'LIVE' }), 'UNEXPECTED');
   assert.equal(outcomeLabel({ delivery: 'ERROR', authorization: 'INDETERMINATE', freshness: 'UNKNOWN', environment: 'LIVE' }), 'UNEXPECTED');
 });
 
 test('the model never carries target values or raw upstream fields', () => {
-  const model = toProfilePanelModel(ready({ presence: 'PRESENT', context: 'GENERAL', targetSource: 'USER_CONFIGURED', targetCount: 2 }), 'E');
+  const model = toProfilePanelModel(ready(present('GENERAL', 2)), 'E');
   assert.deepEqual(Object.keys(model).sort(), ['contextLabel', 'kind', 'subjectName', 'targetCount', 'targetSourceLabel']);
 });
 

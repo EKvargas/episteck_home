@@ -20,7 +20,23 @@ function scripted(...responses: Array<Response | Error>) {
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
 const minted = () => json(200, { delegation: 'tok-opaque', audience: 'svc-nutrition', expires_at: 1 });
-const PROFILE = { context: 'PREGNANCY', target_source: 'REFERENCE_TARGET', targets: { calcium_mg: '1000' }, preferences: 'private' };
+const PROFILE = {
+  person_id: 'PSN-00013', version: 2, valid_from: '2026-11-24', origin: 'PROFILE', onboarded: true,
+  mode: 'PREGNANCY', due_date: '2027-03-01', trimester: 2,
+  inputs: {
+    birth_date: null, age: null, sex: null, height_cm: null, weight_kg: null, weight_measured_on: null,
+    activity_pal: null, training_sessions_per_week: null, training_note: null, goal: null, pre_pregnancy_weight_kg: null,
+  },
+  food: { preferences: 'private', dislikes: null, intolerances: null },
+  targets: { calcium_mg: '1000' },
+  target_set: {
+    method: 'MIFFLIN_ST_JEOR', on: '2026-11-24',
+    items: [{ nutrient: 'calcium_mg', value: '1000', display_value: '1000', unit: 'mg', kind: 'MIN', source_org: 'DGE', source_ref: 'D-A-CH', explanation: 'x' }],
+    missing: [],
+  },
+  history: [{ version: 2, valid_from: '2026-11-24', origin: 'PROFILE', changed: [] }],
+  context: 'PREGNANCY', target_source: 'REFERENCE_TARGET',
+};
 const live = {
   mode: 'LIVE' as const,
   personId: 'PSN-00013',
@@ -39,7 +55,24 @@ test('authorized present profile: one mint, one Nutrition call, minimized data',
   assert.equal(calls[1].init?.method, 'GET');
   assert.deepEqual(result, {
     delivery: 'READY', authorization: 'GRANTED', freshness: 'FRESH', environment: 'LIVE',
-    data: { presence: 'PRESENT', context: 'PREGNANCY', targetSource: 'REFERENCE_TARGET', targetCount: 1 },
+    data: {
+      presence: 'PRESENT',
+      profile: {
+        version: 2, validFrom: '2026-11-24', origin: 'PROFILE', onboarded: true, mode: 'PREGNANCY',
+        dueDate: '2027-03-01', trimester: 2,
+        inputs: {
+          birthDate: null, age: null, sex: null, heightCm: null, weightKg: null, weightMeasuredOn: null,
+          activityPal: null, trainingSessionsPerWeek: null, trainingNote: null, goal: null, prePregnancyWeightKg: null,
+        },
+        food: { preferences: 'private', dislikes: null, intolerances: null },
+        targets: {
+          method: 'MIFFLIN_ST_JEOR', on: '2026-11-24',
+          items: [{ nutrient: 'calcium_mg', value: '1000', displayValue: '1000', unit: 'mg', kind: 'MIN', sourceOrg: 'DGE', sourceRef: 'D-A-CH', explanation: 'x' }],
+          missing: [],
+        },
+        history: [{ version: 2, validFrom: '2026-11-24', origin: 'PROFILE', changed: [] }],
+      },
+    },
   });
 });
 

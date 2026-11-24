@@ -9,7 +9,7 @@ import {
   readJson,
   readyEnvelope,
 } from './nutrition-delegation.ts';
-import { isAbsentProfileBody, parseProfileWire, type ProfileSummary } from './profile-contract.ts';
+import { isAbsentProfileBody, parseProfileWire, type ProfileRead } from './profile-contract.ts';
 
 export interface LoadNutritionProfileOptions {
   mode: 'MOCK' | 'LIVE';
@@ -22,10 +22,10 @@ export interface LoadNutritionProfileOptions {
   timeoutMs?: number;
 }
 
-type Envelope = DataEnvelope<ProfileSummary>;
+type Envelope = DataEnvelope<ProfileRead>;
 
-const ready = (data: ProfileSummary, environment: 'MOCK' | 'LIVE'): Envelope => readyEnvelope(data, environment);
-const failed = (errorCode: SafeUIErrorCode): Envelope => failedEnvelope<ProfileSummary>(errorCode);
+const ready = (data: ProfileRead, environment: 'MOCK' | 'LIVE'): Envelope => readyEnvelope(data, environment);
+const failed = (errorCode: SafeUIErrorCode): Envelope => failedEnvelope<ProfileRead>(errorCode);
 
 /** Cancel the unread body, then fail. */
 function reject(response: Response, errorCode: SafeUIErrorCode): Envelope {
@@ -34,7 +34,7 @@ function reject(response: Response, errorCode: SafeUIErrorCode): Envelope {
 }
 
 /**
- * Read one Person's Nutrition profile summary for the current session.
+ * Read one Person's Nutrition profile for the current session.
  * No actor, domain, or action input exists: Home derives the actor, Nutrition fixes
  * NUTRITION/VIEW, and the subject is the already-validated active context.
  */
