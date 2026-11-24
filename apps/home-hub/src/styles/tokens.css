@@ -2,9 +2,10 @@
 
 /* Core Spacing and Typography (Theme-agnostic primitives) */
 :root {
-  --ep-font-sans: var(--ep-font-sans);
-  --ep-font-serif: var(--ep-font-serif, var(--ep-font-sans));
-  
+  /* --ep-font-sans / --ep-font-serif (and the other --ep-font-* families) are
+     defined by the next/font variable classes on <html> in app/layout.tsx.
+     Do not redeclare them here: a self-referencing custom property is a cycle
+     and computes to the guaranteed-invalid value. */
   --ep-space-1: 4px;
   --ep-space-2: 8px;
   --ep-space-3: 12px;
