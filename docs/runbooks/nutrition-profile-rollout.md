@@ -224,6 +224,48 @@ Later, once: when Ana reaches pregnancy week 28, her energy target steps up to t
 
 **Rollback:** C4's, C2's, C1's, in that order. Do not roll back C1 or C2 while Ana's B6 mode changes are live: C1's rollback puts back the image that predates them and loses the mode changes made on the new image. The owner decides first.
 
+## C6. Hub (plan 3)
+
+Plan 3 adds three read-only Hub pages: Perfil (`/app/nutrition`), Hoy (`/app/nutrition/hoy`) and Días (`/app/nutrition/dias`, live in LIVE mode). `SHA` here is plan 3's merge commit. The Hub running today is `1ff95d8`; no Hub change has landed on `main` since. Nutrition and the agents are untouched by this stage.
+
+1. `[PREP]` Record the running Hub image (read-only baseline; on 2026-11-24 it is `1ff95d8`):
+
+   ```bash
+   ROLL home-hub baseline
+   ```
+
+2. `[OPERATOR]` Build the Hub image from `SHA` (not used until `apply`):
+
+   ```bash
+   ROLL home-hub build $SHA
+   ```
+
+3. `[CLAUDE VERIFY]` Preview (read-only): `ROLL home-hub preview $SHA`. The `Image=` line is the only difference. Anything else stops the rollout.
+
+4. `[OPERATOR]` Apply: `ROLL home-hub apply $SHA`. It backs up the Quadlet and prints the rollback command. Keep the printed backup directory.
+
+5. `[CLAUDE VERIFY]` `ROLL home-hub verify` is `PASS`, and anonymous `/app/nutrition/dias` returns 307:
+
+   ```bash
+   $SSH 'curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:9940/app/nutrition/dias'
+   ```
+
+6. `[OPERATOR INPUT]` Phone checks (spec 7, acceptance 2 to 6):
+   - Ana's Perfil shows `Embarazo · 2.º trimestre`, `≈ 2.250 kcal` with its source line, and `24 nov: perfil creado por chat`.
+   - Ana's Hoy shows `Energía: … de 2.250 kcal`.
+   - Ana's Días (7 days) matches what her bot says for the same days.
+   - Erick's Perfil shows the onboarding offer until he onboards (C3), then his targets.
+   - Erick, without a consent grant, gets `Acceso restringido` on Ana's Perfil and Días, and the reverse.
+
+7. `[CLAUDE VERIFY]` The Hub logs carry only `nutrition.<view> outcome=<KIND>` lines for these pages. Count the outcomes (counts only; no IDs, names or numbers):
+
+   ```bash
+   $SSH 'cd /; sudo -n -u svc-home-hub env XDG_RUNTIME_DIR=/run/user/$(id -u svc-home-hub) podman logs svc-home-hub 2>&1 | grep -o "nutrition\.[a-z]* outcome=[A-Z_]*" | sort | uniq -c'
+   ```
+
+**Verification:** `ROLL home-hub verify` is `PASS`, the anonymous `/app/nutrition/dias` check returns 307, the phone checks pass, and the logs show only outcome lines.
+**Rollback:** `ROLL home-hub rollback <backup dir>` (the directory `apply` printed). Nutrition and the agents are untouched by this stage.
+
 ## Acceptance checklist
 
 - [ ] C0: baselines and counts recorded; both preflights pass.
@@ -232,3 +274,4 @@ Later, once: when Ana reaches pregnancy week 28, her energy target steps up to t
 - [ ] C3: all seven checks pass.
 - [ ] C4: `ANA verify` passes; `ANA cron` re-run; second-trimester supplement shown.
 - [ ] C5: seven days, no restarts, no errors; the third-trimester supplement checked at week 28.
+- [ ] C6: ROLL home-hub verify PASS; anonymous /app/nutrition/dias 307; Ana's Perfil, Hoy and Días checked on her phone; access refused across people without consent.

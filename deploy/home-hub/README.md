@@ -357,6 +357,8 @@ live. #109 fixes the demo banner that showed on `/app/nutrition/` after hydratio
 Rollback: `sudo bash ~/ops-2026-10-25/olin-ops.sh hub-rollback`. It restores the
 `d91341d` Quadlet from the backup above.
 
+Nutrition plan 3 (2026-11-24): the Hub serves `/app/nutrition` (Perfil), `/app/nutrition/hoy` (Hoy) and `/app/nutrition/dias` (Días); `/app/nutrition/dias` is live in LIVE mode. Rollout steps are in `docs/runbooks/nutrition-profile-rollout.md`, section C6.
+
 ## Live rollout record (2026-09-27)
 
 Target: `ubuntu-4gb-nbg1-1` in Nuremberg. The deployed repository baseline was
