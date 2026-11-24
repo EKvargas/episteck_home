@@ -111,7 +111,7 @@ def test_script_is_strict_bash_lf_and_starts_at_root():
     assert '"$@" </dev/null' in helper
     assert 'local src="$1" u; shift' in fed and '"$@" <"$src"' in fed
     calls = [line for line in _code_lines(text) if re.search(r"\bas_agent_from ", line)]
-    assert len(calls) == 2
+    assert len(calls) == 4  # two restores and two config comparisons, each fed from a backup
     for line in calls:
         assert re.search(r'as_agent_from "\$bk/[\w.-]+" ', line), line
     for line in _code_lines(text):
@@ -151,16 +151,25 @@ def test_skill_is_installed_root_owned_from_the_shared_source():
 def test_backup_happens_before_any_change():
     t = SCRIPT.read_text(encoding="utf-8")
     inst = _case(t, "install")
-    assert inst.index("cp -p") < inst.index("install -m 644") < inst.index("ultron_nutrition_notes.py")
+    assert inst.index("agent_copy") < inst.index("install -m 644") < inst.index("ultron_nutrition_notes.py")
     assert 'bk="$BACKUPS/hermes-nutrition-$(date -u +%Y%m%dT%H%M%SZ)"' in inst
     first_change = inst.index("install -d -m 755")
+    owner_mode = ("stat -c '%a %U:%G' \"$NOTES/SKILL.md\" \"$NOTES/references/nutrition-diary.md\" "
+                  '> "$bk/notes-owner-mode"')
     assert (inst.index("refuse_links") < inst.index("nutrition_keys") < inst.index("plan1_live")
-            < inst.index('install -d -m 700 "$bk"') < inst.index("cp -p") < first_change)
+            < inst.index('install -d -m 700 "$bk"') < inst.index(owner_mode) < inst.index("agent_copy")
+            < first_change)
+    # Ultron's files are read by the agent (agent_copy, same_as_agent); the skill in /etc is root's.
     for src, dest in (('"$CONFIG"', '"$bk/config.yaml"'), ('"$NOTES/SKILL.md"', '"$bk/SKILL.md"'),
-                      ('"$NOTES/references/nutrition-diary.md"', '"$bk/nutrition-diary.md"'),
-                      ('"$SKILL_DIR/SKILL.md"', '"$bk/olin-nutrition-SKILL.md"')):
-        assert inst.index(f"cp -p {src} {dest}") < first_change, src
-        assert inst.index(f"same {src} {dest}") < first_change, src  # sha256 of copy and original
+                      ('"$NOTES/references/nutrition-diary.md"', '"$bk/nutrition-diary.md"')):
+        assert inst.index(f"agent_copy {src} {dest}") < first_change, src
+        assert inst.index(f"same_as_agent {src} {dest}") < first_change, src  # sha256 of copy and original
+        assert inst.index(f"agent_copy {src} {dest}") < inst.index(f"same_as_agent {src} {dest}"), src
+    skill = ('"$SKILL_DIR/SKILL.md"', '"$bk/olin-nutrition-SKILL.md"')
+    assert inst.index("cp -p %s %s" % skill) < first_change
+    stopped = ("cannot record the notes' owner and mode in $bk: nothing was changed")
+    assert inst.index(owner_mode) < inst.index(stopped) < first_change  # a failed stat says so
+    assert inst.index("same %s %s" % skill) < first_change
     # The installed skill is backed up only when an earlier install left one.
     assert inst.index('if [ -f "$SKILL_DIR/SKILL.md" ]; then') < inst.index('"$bk/olin-nutrition-SKILL.md"')
     before = inst[:first_change]
@@ -262,7 +271,7 @@ def test_install_changes_no_config_key_and_keeps_note_owners():
     diary = inst.index('as_agent install -m 644 "$SRC/home-agent/nutrition-diary-pointer.md" '
                        '"$NOTES/references/nutrition-diary.md"')
     assert 'install -o "$AGENT"' not in text
-    unchanged = inst.index('cmp -s "$bk/config.yaml" "$CONFIG"')
+    unchanged = inst.index('as_agent_from "$bk/config.yaml" cmp -s - "$CONFIG"')
     restart = inst.index("restart_gateway")
     assert helper < diary < unchanged < restart
     assert "exit 1" in inst[unchanged:restart]
@@ -278,7 +287,7 @@ AGENT_PATHS = re.compile(r'"\$(NOTES|CONFIG|HHOME|AGENT_HOME)\b')
 
 def test_root_never_writes_into_the_agents_home():
     # Ultron can run code, so it could swap a path for a symlink between a check and a write
-    # (R16): every write into /home/home-agent runs as home-agent; root only reads, into backups.
+    # (R16): every write into /home/home-agent runs as home-agent; root copies nothing out of it.
     text = _text()
     writes = re.compile(r"\b(cp|install|mv|tee|rm|rmdir|chmod|chown|ln|touch|truncate)\b|"
                         r"sed -i|ultron_nutrition_notes\.py|MIRROR_PY|>>? *\"\$")
@@ -295,8 +304,8 @@ def test_root_never_writes_into_the_agents_home():
             if into_home:
                 seen += 1
                 assert re.search(r"(^|\$\()\s*as_agent(_from)? ", line.strip()), (step, line)
-            else:  # a backup: root reads the agent's file into its own 0700 directory
-                assert targets[-1].startswith("$bk/") and re.match(r"\s*cp -p ", line), (step, line)
+            else:  # the notes' owner and mode, as metadata, into root's own 0700 backup directory
+                assert targets[-1] == "$bk/notes-owner-mode" and re.match(r"\s*stat -c ", line), (step, line)
     assert seen == 5  # helper, diary pointer, MIRROR_PY, and the two notes restores
     # The old root writes are gone.
     for line in _code_lines(text):
@@ -308,13 +317,14 @@ def test_preflight_is_read_only_and_dry_runs_the_helper_on_a_copy():
     for part in ("need_src", '"$HERMES" --version', "nutrition_keys", 'tz="$(hermes_tz)"',
                  '[ "$(date +%z)" = "+0000" ]', '[ -e "$SKILL_DIR" ]', "$(cron_count)",
                  'echo "cron.mirror_delivery: $(mirror_value)', "if plan1_live; then echo",
-                 'links="$(home_links)"', 'tmp="$(mktemp -d)"', 'cp "$NOTES/SKILL.md" "$tmp/SKILL.md"',
+                 'links="$(home_links)"', 'tmp="$(mktemp -d)"', 'agent_copy "$NOTES/SKILL.md" "$tmp/SKILL.md"',
+                 "the helper dry run is skipped",
                  '"$PY" -I "$SRC/ultron_nutrition_notes.py" "$tmp/SKILL.md" '
                  '"$SRC/home-agent/nutrition-pointer-section.md"',
                  'rm -f "$tmp/SKILL.md"', 'rmdir "$tmp"', "finish preflight"):
         assert part in pre, part
-    # The copy is made only when no notes path is a symlink.
-    assert pre.index('if [ -n "$links" ]; then') < pre.index('cp "$NOTES/SKILL.md"')
+    # The copy is made (by the agent) only when no notes path is a symlink.
+    assert pre.index('if [ -n "$links" ]; then') < pre.index('agent_copy "$NOTES/SKILL.md"')
     for line in _code_lines(pre):
         assert not re.search(r"\binstall -|cp -p|cron create|cron_remove|restart_gateway|config set|"
                              r"\bchmod\b|\bchown\b", line), line
@@ -449,19 +459,22 @@ def test_rollback_restores_notes_and_removes_the_job_first():
     text = _text()
     rb = _case(text, "rollback")
     marks = [rb.index('"$BACKUPS"/hermes-nutrition-*)'),
-             rb.index("for f in config.yaml SKILL.md nutrition-diary.md; do"),
+             rb.index("for f in config.yaml SKILL.md nutrition-diary.md notes-owner-mode; do"),
              rb.index("refuse_links"), rb.index("cron_remove"),
              rb.index('as_agent_from "$bk/SKILL.md" tee "$NOTES/SKILL.md" >/dev/null'),
              rb.index('as_agent_from "$bk/nutrition-diary.md" tee "$NOTES/references/nutrition-diary.md" '
                       '>/dev/null'),
-             rb.index('same "$bk/SKILL.md" "$NOTES/SKILL.md"'),
-             rb.index('cmp -s "$bk/config.yaml" "$CONFIG"'),
+             rb.index('same_as_agent "$NOTES/SKILL.md" "$bk/SKILL.md"'),
+             rb.index('as_agent_from "$bk/config.yaml" cmp -s - "$CONFIG"'),
              rb.index('if [ -f "$bk/olin-nutrition-SKILL.md" ]; then'),
              rb.index('install -m 644 -o root -g root "$bk/olin-nutrition-SKILL.md" "$SKILL_DIR/SKILL.md"'),
              rb.index('rm -f "$SKILL_DIR/SKILL.md"'), rb.index('rmdir "$SKILL_DIR"'),
              rb.index("restart_gateway"), rb.index('if [ "$WARNINGS" -gt 0 ]; then')]
     assert marks == sorted(marks)
-    assert 'same "$bk/nutrition-diary.md" "$NOTES/references/nutrition-diary.md"' in rb
+    assert 'same_as_agent "$NOTES/references/nutrition-diary.md" "$bk/nutrition-diary.md"' in rb
+    # Owner and mode of the restored notes are compared with what install recorded.
+    assert ("stat -c '%a %U:%G' \"$NOTES/SKILL.md\" \"$NOTES/references/nutrition-diary.md\" "
+            '| cmp -s - "$bk/notes-owner-mode"') in rb
     assert "stat -c '%a %U:%G %n' \"$NOTES/SKILL.md\" \"$NOTES/references/nutrition-diary.md\"" in rb
     # config.yaml is compared, never written (R17): install never changes it.
     assert '"$CONFIG"' in rb and not re.search(r'(cp|install|tee|mv)\b[^\n]*"\$CONFIG"', rb)
@@ -475,11 +488,19 @@ def test_rollback_restores_notes_and_removes_the_job_first():
     assert result.returncode == 1 and b"no config.yaml in" in result.stderr
 
 
+def _owner_mode(tmp_path: Path, *paths: Path) -> bytes:
+    """What `stat -c '%a %U:%G'` prints for these files here (install records it in the backup)."""
+    result = _bash(tmp_path, "", "stat -c '%a %U:%G' " + " ".join(_q(p) for p in paths))
+    assert result.returncode == 0, result.stderr
+    return result.stdout.encode("utf-8")
+
+
 def _rollback(tmp_path: Path, *, config_changed=False, cron_fails=False, earlier_skill=None,
-              extra_in_skill_dir=False) -> tuple[subprocess.CompletedProcess, dict]:
+              extra_in_skill_dir=False, owner_mode="same") -> tuple[subprocess.CompletedProcess, dict]:
     """Run the script's rollback step on a sample tree. Stand-ins replace what needs the node:
-    runuser (as_agent_from runs the command as the test user, stdin from the named file), the
-    job, the gateway restart, and install's -o/-g."""
+    runuser (as_agent and as_agent_from run the command as the test user; as_agent_from takes its
+    stdin from the named file), the job, the gateway restart, and install's -o/-g. `owner_mode` is
+    the backup's notes-owner-mode: "same" as the restored notes, "differs", or "missing"."""
     text = _text()
     backups, home, etc = tmp_path / "backups", tmp_path / "home", tmp_path / "etc"
     bk = backups / "hermes-nutrition-20261123T000000Z"
@@ -504,8 +525,13 @@ def _rollback(tmp_path: Path, *, config_changed=False, cron_fails=False, earlier
     files["config"].write_bytes(live_config)
     files["notes"].write_bytes(b"# Episteck Home Agent\n\n## Nutrition\n\npointer\n")
     files["diary"].write_bytes(DIARY_POINTER.read_bytes())
+    if owner_mode == "same":
+        (bk / "notes-owner-mode").write_bytes(_owner_mode(tmp_path, files["notes"], files["diary"]))
+    elif owner_mode == "differs":
+        (bk / "notes-owner-mode").write_bytes(b"600 root:root\n600 root:root\n")
     stand_ins = "\n".join([
         "refuse_links() { :; }",
+        'as_agent() { printf "%s\\n" "${@: -1}" >> as-agent.log; "$@" </dev/null; }',
         f'cron_remove() {{ echo cron_remove; return {1 if cron_fails else 0}; }}',
         "restart_gateway() { echo restarted; }",
         'as_agent_from() { local src="$1"; shift; printf "%s %s\\n" "$src" "${@: -1}" >> agent.log; '
@@ -515,7 +541,7 @@ def _rollback(tmp_path: Path, *, config_changed=False, cron_fails=False, earlier
         'if [ "$d" = 1 ]; then mkdir -p "${a[@]}"; else cp "${a[0]}" "${a[1]}"; fi; }',
     ])
     source = "\n".join([f"PY={PY}", "WARNINGS=0", _function(text, "warn"), _function(text, "same"),
-                        stand_ins, f"BACKUPS={_q(backups)}", f"NOTES={_q(notes)}",
+                        _function(text, "same_as_agent"), stand_ins, f"BACKUPS={_q(backups)}", f"NOTES={_q(notes)}",
                         f"CONFIG={_q(files['config'])}", f"SKILL_DIR={_q(skill_dir)}",
                         "AGENT=home-agent", "CRON_NAME=olin-nutrition-checkin"])
     body = _case(text, "rollback")
@@ -535,7 +561,11 @@ def test_rollback_restores_the_notes_as_the_agent_and_removes_the_skill(tmp_path
     # Both writes went through the agent-side helper, fed from the backup files.
     log = (tmp_path / "agent.log").read_text(encoding="utf-8").splitlines()
     assert log == [f"{(f['bk'] / 'SKILL.md').as_posix()} {f['notes'].as_posix()}",
-                   f"{(f['bk'] / 'nutrition-diary.md').as_posix()} {f['diary'].as_posix()}"]
+                   f"{(f['bk'] / 'nutrition-diary.md').as_posix()} {f['diary'].as_posix()}",
+                   f"{(f['bk'] / 'config.yaml').as_posix()} {f['config'].as_posix()}"]
+    # The restored notes were hashed by the agent, never by root: the two sources it read.
+    hashed = (tmp_path / "as-agent.log").read_text(encoding="utf-8").splitlines()
+    assert hashed == [f["notes"].as_posix(), f["diary"].as_posix()]
     assert not f["skill_dir"].exists()  # no earlier skill in the backup: the skill goes
     assert "config.yaml is as in the backup" in result.stdout and "WARNING" not in result.stderr
 
@@ -567,8 +597,9 @@ def test_rollback_reports_notes_that_differ_and_a_skill_dir_that_is_not_empty(tm
     # Notes that do not match the backup after the writes are a warning (counted, so exit 1).
     text = _text()
     rb = _case(text, "rollback")
-    check = rb[rb.index('    if same "$bk/SKILL.md"'):rb.index("    stat -c '%a %U:%G %n'")]
-    source = "\n".join([f"PY={PY}", "WARNINGS=0", _function(text, "warn"), _function(text, "same"),
+    check = rb[rb.index('    if same_as_agent "$NOTES/SKILL.md"'):rb.index("    stat -c '%a %U:%G %n'")]
+    source = "\n".join([f"PY={PY}", "WARNINGS=0", _function(text, "warn"),
+                        _function(text, "same_as_agent"), 'as_agent() { "$@" </dev/null; }',
                         f"NOTES={_q(f['notes'].parent)}", f"bk={_q(f['bk'])}"])
     out = _bash(tmp_path, source, f'{check}\necho "warnings=$WARNINGS"')
     assert out.returncode == 0 and out.stdout.endswith("warnings=0\n"), out.stderr
@@ -576,6 +607,29 @@ def test_rollback_reports_notes_that_differ_and_a_skill_dir_that_is_not_empty(tm
     out = _bash(tmp_path, source, f'{check}\necho "warnings=$WARNINGS"')
     assert out.returncode == 0 and out.stdout == "warnings=1\n", out.stderr
     assert "WARNING: the notes differ from the backup" in out.stderr
+
+
+@needs_bash
+def test_rollback_warns_when_owner_or_mode_differ_from_what_install_recorded(tmp_path):
+    result, f = _rollback(tmp_path, owner_mode="differs")
+    assert result.returncode == 1, result.stdout
+    assert f["notes"].read_bytes() == (f["bk"] / "SKILL.md").read_bytes()  # content restored
+    assert "WARNING: the notes differ from the backup in" in result.stderr
+    assert "(content, owner or mode)" in result.stderr
+    assert "notes restored byte for byte" not in result.stdout
+    assert "rollback: 1 warning(s) above (the gateway was restarted)" in result.stderr
+    assert result.stdout.endswith("restarted\n")
+
+
+@needs_bash
+def test_rollback_refuses_a_backup_without_notes_owner_mode_before_any_change(tmp_path):
+    result, f = _rollback(tmp_path, owner_mode="missing")
+    assert result.returncode == 1
+    assert f"no notes-owner-mode in {f['bk'].as_posix()}: nothing was changed" in result.stderr
+    assert result.stdout == ""  # no job removal, no restore, no restart
+    assert not (tmp_path / "agent.log").exists() and not (tmp_path / "as-agent.log").exists()
+    assert f["notes"].read_bytes() == b"# Episteck Home Agent\n\n## Nutrition\n\npointer\n"
+    assert f["skill"].exists()
 
 
 def test_rollback_never_removes_the_skills_root():
@@ -590,10 +644,92 @@ def test_rollback_never_removes_the_skills_root():
     assert "$SKILLS_ROOT" not in _case(text, "rollback")  # it holds olin-finance
 
 
+# --- reading Ultron's files as Ultron ------------------------------------------------------------
+
+def test_root_never_copies_out_of_the_agents_home():
+    # Ultron can swap a path for a symlink after refuse_links ran: a root `cp` would follow it and
+    # put a file only root can read into the backup (and a later rollback into Ultron's notes).
+    # So the agent reads and root only receives the bytes.
+    text = _text()
+    for line in _code_lines(text):
+        assert not re.search(r'\bcp\b[^\n]*"\$(CONFIG|NOTES|HHOME|AGENT_HOME)', line), line
+        assert not re.search(r'\bsame "\$(CONFIG|NOTES)', line), line
+        assert not re.search(r'sha256sum < "\$(CONFIG|NOTES)', line), line
+        assert 'cmp -s "$bk/config.yaml" "$CONFIG"' not in line, line
+    # Every write into a backup directory is the agent's bytes (agent_copy), except the root-owned
+    # skill from /etc and the notes' owner and mode (metadata only).
+    root_made = {"olin-nutrition-SKILL.md", "notes-owner-mode"}
+    copied = set()
+    for step in ("preflight", "install", "mirror", "rollback"):
+        for line in _code_lines(_case(text, step)):
+            copied.update(re.findall(r'agent_copy "[^"]+" "\$(?:bk|tmp)/([\w.-]+)"', line))
+            if not re.search(r'\b(cp|install|mv|tee)\b|[^&0-9]>>? *"', line):
+                continue
+            targets = re.findall(r'"([^"]+)"', line)
+            if targets and targets[-1].startswith("$bk/"):
+                assert targets[-1][len("$bk/"):] in root_made, (step, line)
+    assert copied == {"config.yaml", "SKILL.md", "nutrition-diary.md", "config-after.yaml"}
+    # In these steps no line that names the config or a note and reads it (in either argument
+    # order) runs as root: it goes through the agent. stat (metadata) is allowed; the key readers
+    # and verify are out of scope (they never name "$CONFIG" here).
+    reads = re.compile(r"\b(same|cmp|cp|sha256sum|md5sum|cat|grep|diff|head|tail|sed|awk|xxd|od)\b")
+    named = re.compile(r"\$\{?(NOTES|CONFIG)\b")
+    agent = re.compile(r"\b(as_agent|as_agent_from|agent_copy|same_as_agent)\b")
+    for step in ("preflight", "install", "mirror", "rollback"):
+        for line in _code_lines(_case(text, step)):
+            if "stat -c" in line:  # metadata only; a cmp after it reads stat's output and a backup
+                assert not re.search(r'cmp [^|]*"\$(NOTES|CONFIG)', line.split("|", 1)[-1]), (step, line)
+                continue
+            if named.search(line) and reads.search(line) and not line.lstrip().startswith("echo"):
+                assert agent.search(line), (step, line)
+    assert 'agent_copy "$NOTES/SKILL.md" "$tmp/SKILL.md"' in _case(text, "preflight")
+    assert 'cp -p "$SKILL_DIR/SKILL.md" "$bk/olin-nutrition-SKILL.md"' in _case(text, "install")
+    assert 'as_agent cat -- "$1" > "$2"' in _function(text, "agent_copy")
+    assert 'as_agent sha256sum -- "$1"' in _function(text, "same_as_agent")
+
+
+@needs_bash
+def test_agent_copy_and_same_as_agent_read_as_the_agent(tmp_path):
+    text = _text()
+    source = "\n".join([_function(text, "agent_copy"), _function(text, "same_as_agent"),
+                        'as_agent() { printf "%s\\n" "$*" >> as-agent.log; "$@" </dev/null; }'])
+    (tmp_path / "agent-file").write_bytes(b"the agent's bytes\n")
+    (tmp_path / "root-same").write_bytes(b"the agent's bytes\n")
+    (tmp_path / "root-other").write_bytes(b"something else\n")
+    (tmp_path / "root-empty").write_bytes(b"")
+    copy = _bash(tmp_path, source, "agent_copy agent-file copy")
+    assert copy.returncode == 0, copy.stderr
+    assert (tmp_path / "copy").read_bytes() == b"the agent's bytes\n"
+    assert (tmp_path / "as-agent.log").read_text(encoding="utf-8") == "cat -- agent-file\n"
+    # The script calls both helpers where set -e does not apply (&& chains, if): so do these
+    # cases, otherwise errexit would stop the shell inside a helper and hide a missing guard.
+    gone = _bash(tmp_path, source, 'if agent_copy no-such-file copy2; then echo ok; else echo failed; fi')
+    assert gone.stdout == "failed\n"  # the agent cannot read it
+    chained = _bash(tmp_path, source, 'agent_copy no-such-file copy3 && echo ok || echo failed')
+    assert chained.stdout == "failed\n"
+    (tmp_path / "as-agent.log").unlink()
+
+    def same(agent_file: str, root_file: str, prefix: str = "") -> str:
+        result = _bash(tmp_path, source, f"{prefix}if same_as_agent {agent_file} {root_file}; "
+                                         "then echo equal; else echo unequal; fi")
+        assert result.returncode == 0, result.stderr
+        return result.stdout.strip()
+
+    assert same("agent-file", "root-same") == "equal"
+    assert (tmp_path / "as-agent.log").read_text(encoding="utf-8") == "sha256sum -- agent-file\n"
+    assert same("agent-file", "root-other") == "unequal"
+    assert same("no-such-file", "root-same") == "unequal"
+    assert same("no-such-file", "root-empty") == "unequal"  # never equal by accident
+    assert same("no-such-file", "no-such-root-file") == "unequal"  # both unreadable: empty hashes
+    # The agent prints nothing (an unreadable file seen through a stand-in): still unequal.
+    assert same("agent-file", "root-empty", prefix="as_agent() { :; }\n") == "unequal"
+    assert same("agent-file", "no-such-root-file") == "unequal"
+
+
 # --- safety ----------------------------------------------------------------------------------
 
-# Every path under the agent's home that install, mirror or rollback writes (as the agent) or
-# reads as root for a backup, and the directories leading to them (R3, R12), relative to
+# Every path under the agent's home that install, mirror or rollback writes (as the agent), and
+# the directories leading to them (R3, R12); root only stats them or runs key checks. Relative to
 # /home/home-agent. The refusal is defence in depth: root no longer writes there (R16).
 HOME_CHAIN = ("", ".hermes", ".hermes/config.yaml", ".hermes/skills",
               ".hermes/skills/episteck-home-agent", ".hermes/skills/episteck-home-agent/SKILL.md",
@@ -613,7 +749,7 @@ def test_symlinks_under_the_notes_stop_install_and_rollback(tmp_path):
     text = _text()
     for step in ("install", "mirror", "rollback"):
         body = _case(text, step)
-        first_change = min(body.index(m) for m in ("install -d", "cp -p", "cron_remove", "as_agent")
+        first_change = min(body.index(m) for m in ("install -d", "cp -p", "cron_remove", "as_agent", "agent_copy")
                            if m in body)
         assert body.index("refuse_links") < first_change, step
     for step in ("preflight", "verify"):
@@ -780,15 +916,24 @@ def test_mirror_step_backs_up_sets_one_key_checks_and_restarts():
     marks = [mirror.index('case "${2:-}" in'), mirror.index("refuse_links"),
              mirror.index('[ -x "$VPY" ]'), mirror.index('before="$(mirror_value)"'),
              mirror.index('bk="$BACKUPS/hermes-nutrition-mirror-$(date -u +%Y%m%dT%H%M%SZ)"'),
-             mirror.index('install -d -m 700 "$bk"'), mirror.index('cp -p "$CONFIG" "$bk/config.yaml"'),
-             mirror.index('same "$CONFIG" "$bk/config.yaml"'), mirror.index('echo "backup OK: $bk'),
+             mirror.index('install -d -m 700 "$bk"'), mirror.index('agent_copy "$CONFIG" "$bk/config.yaml"'),
+             mirror.index('same_as_agent "$CONFIG" "$bk/config.yaml"'), mirror.index('echo "backup OK: $bk'),
              mirror.index('as_agent "$VPY" -I -c "$MIRROR_PY" "$want"'),
              mirror.index('[ "$(mirror_value)" = "$val" ]'),
-             mirror.index('config_drift "$bk/config.yaml" "$CONFIG"'), mirror.index("restart_gateway")]
+             mirror.index('agent_copy "$CONFIG" "$bk/config-after.yaml"'),
+             mirror.index('config_drift "$bk/config.yaml" "$bk/config-after.yaml"'),
+             mirror.index("restart_gateway")]
     assert marks == sorted(marks)
+    assert 'config_drift "$bk/config.yaml" "$CONFIG"' not in mirror  # compared as two root files
     # Each check after the save stops before the restart.
     after_save = mirror[marks[9]:marks[-1]]
-    assert after_save.count("exit 1") == 3 and after_save.count("the gateway was not restarted") == 3
+    assert after_save.count("exit 1") == 4 and after_save.count("the gateway was not restarted") == 4
+    # A failed read of config.yaml after the change has its own message and stops before the drift check.
+    read = ('agent_copy "$CONFIG" "$bk/config-after.yaml" \\\n'
+            '      || { echo "could not read config.yaml as $AGENT after the change: the gateway was '
+            'not restarted (backup: $bk)" >&2; exit 1; }')
+    assert read in mirror
+    assert mirror.index(read) < mirror.index('config_drift "$bk/config.yaml" "$bk/config-after.yaml"')
     assert "on) want=on; val=true ;;" in mirror and "off) want=off; val=false ;;" in mirror
     # A rollback with this directory refuses: it holds config.yaml only.
     assert "hermes-nutrition-mirror-" in mirror and "config.yaml only" in mirror

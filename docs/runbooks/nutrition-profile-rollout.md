@@ -1,6 +1,6 @@
 # Runbook: Nutrition profile and onboarding rollout (backend, Ultron, Ana)
 
-**Status:** prepared. Plan 1 (backend) is merged on `main`; plan 2 (agents, this runbook) is on branch `feature/nutrition-profile-agents`. Nothing here has run on the node.
+**Status:** prepared. Plan 1 (backend) and plan 2 (agents, this runbook) are merged on `main`; `SHA` is the merge commit of the backup-as-agent fix (`fix/nutrition-backup-as-agent`) or a later one. Nothing here has run on the node.
 **Node:** `episteck-node1` (Nuremberg). **Date written:** 2026-11-23.
 **Design:** `docs/superpowers/specs/2026-11-23-nutrition-profile-onboarding-design.md`, sections 6.8, 6.9 and 7.
 
@@ -8,7 +8,7 @@ One-sentence summary: roll out the Nutrition backend with profile versions and o
 
 ## When to Use
 
-After the owner has merged plan 2 to `main` and names the rollout. `SHA` is the merge commit; it contains plan 1. Run the stages in order. A failed check stops the rollout at that stage, and that stage's Rollback is the only thing to run.
+After the owner has merged the backup-as-agent fix (`fix/nutrition-backup-as-agent`) to `main` and names the rollout. `SHA` is the merge commit of that fix (or a later one); it contains plans 1 and 2. Run the stages in order. A failed check stops the rollout at that stage, and that stage's Rollback is the only thing to run.
 
 ## Who runs what
 
