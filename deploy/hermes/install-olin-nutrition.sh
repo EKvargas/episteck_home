@@ -19,8 +19,12 @@
 # config.yaml value other than the nutrition server's url and enabled, skills.external_dirs,
 # timezone and cron.mirror_delivery. Root never writes into /home/home-agent: every write there
 # runs as home-agent (as_agent, as_agent_from), since Ultron can run code and could swap a path
-# for a symlink. As defence in depth, install, mirror and rollback still refuse when a path they
-# write, or a directory leading to it, is a symlink (home_links).
+# for a symlink. Root also never copies a file out of it: backups and content comparisons read as
+# home-agent (agent_copy, same_as_agent), so a swapped symlink yields only what Ultron can read
+# already. Root still opens config.yaml and the notes for read-only checks that print a named key
+# or an ok/PROBLEM line (nutrition_keys, hermes_tz, mirror_value, verify), never their text.
+# As defence in depth, install, mirror and rollback still refuse when a path they write, or a
+# directory leading to it, is a symlink (home_links).
 set -euo pipefail
 cd /
 
@@ -87,6 +91,19 @@ as_agent_from() {  # <file> <command...>: as_agent with stdin from that file, wh
   u="$(id -u "$AGENT")"
   runuser -u "$AGENT" -- env "HOME=/home/$AGENT" "XDG_RUNTIME_DIR=/run/user/$u" \
     "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$u/bus" "$@" <"$src"
+}
+agent_copy() {  # <path in the agent's home> <dest>: the agent opens the source with its own rights;
+  # root only creates <dest> (in a root-only directory). Non-zero when the agent cannot read it.
+  as_agent cat -- "$1" > "$2"
+}
+same_as_agent() {  # <path in the agent's home> <root file>: same sha256, the first read by the agent;
+  # a missing or unreadable source is never equal
+  local a b
+  a="$(as_agent sha256sum -- "$1")" || return 1
+  b="$(sha256sum < "$2")" || return 1
+  a="${a%% *}"
+  b="${b%% *}"
+  [ -n "$a" ] && [ "$a" = "$b" ]
 }
 restart_gateway() {
   as_agent systemctl --user restart hermes-gateway.service
@@ -258,15 +275,18 @@ case "${1:-}" in
       bad "symlink under $AGENT_HOME ($links): install and rollback refuse"
     elif [ -f "$NOTES/SKILL.md" ]; then
       tmp="$(mktemp -d)"
-      cp "$NOTES/SKILL.md" "$tmp/SKILL.md"
-      rc=0
-      out="$("$PY" -I "$SRC/ultron_nutrition_notes.py" "$tmp/SKILL.md" "$SRC/home-agent/nutrition-pointer-section.md" </dev/null 2>&1)" || rc=$?
+      if agent_copy "$NOTES/SKILL.md" "$tmp/SKILL.md"; then
+        rc=0
+        out="$("$PY" -I "$SRC/ultron_nutrition_notes.py" "$tmp/SKILL.md" "$SRC/home-agent/nutrition-pointer-section.md" </dev/null 2>&1)" || rc=$?
+        echo "== the notes helper on a copy of $NOTES/SKILL.md (its change list, never the text)"
+        printf '%s\n' "${out//"$tmp/SKILL.md"/"$NOTES/SKILL.md"}"
+        if [ "$rc" -eq 0 ]; then ok "the helper can rewrite the notes"
+        else bad "the helper stops on these notes (exit $rc): install would stop there too"; fi
+      else
+        bad "$AGENT cannot read $NOTES/SKILL.md: the helper dry run is skipped"
+      fi
       rm -f "$tmp/SKILL.md"
       rmdir "$tmp"
-      echo "== the notes helper on a copy of $NOTES/SKILL.md (its change list, never the text)"
-      printf '%s\n' "${out//"$tmp/SKILL.md"/"$NOTES/SKILL.md"}"
-      if [ "$rc" -eq 0 ]; then ok "the helper can rewrite the notes"
-      else bad "the helper stops on these notes (exit $rc): install would stop there too"; fi
     else
       bad "no $NOTES/SKILL.md"
     fi
@@ -281,14 +301,16 @@ case "${1:-}" in
       || { echo "config.yaml lacks mcp_servers.nutrition.url or $SKILLS_ROOT in skills.external_dirs: nothing was changed" >&2; exit 2; }
     plan1_live \
       || { echo "the live nutrition server does not list ${PLAN1_TOOLS[*]}: roll out the plan 1 backend first (runbook C1). Nothing was changed" >&2; exit 2; }
-    # Root only reads the agent's files here, into a root-only directory.
+    # The agent reads its own files; root only receives the bytes, into a root-only directory.
+    # Owner and mode of the notes are recorded first (metadata only; rollback compares them).
     bk="$BACKUPS/hermes-nutrition-$(date -u +%Y%m%dT%H%M%SZ)"
     install -d -m 700 "$bk"
-    cp -p "$CONFIG" "$bk/config.yaml"
-    cp -p "$NOTES/SKILL.md" "$bk/SKILL.md"
-    cp -p "$NOTES/references/nutrition-diary.md" "$bk/nutrition-diary.md"
-    same "$CONFIG" "$bk/config.yaml" && same "$NOTES/SKILL.md" "$bk/SKILL.md" \
-      && same "$NOTES/references/nutrition-diary.md" "$bk/nutrition-diary.md" \
+    stat -c '%a %U:%G' "$NOTES/SKILL.md" "$NOTES/references/nutrition-diary.md" > "$bk/notes-owner-mode"
+    agent_copy "$CONFIG" "$bk/config.yaml" \
+      && agent_copy "$NOTES/SKILL.md" "$bk/SKILL.md" \
+      && agent_copy "$NOTES/references/nutrition-diary.md" "$bk/nutrition-diary.md" \
+      && same_as_agent "$CONFIG" "$bk/config.yaml" && same_as_agent "$NOTES/SKILL.md" "$bk/SKILL.md" \
+      && same_as_agent "$NOTES/references/nutrition-diary.md" "$bk/nutrition-diary.md" \
       || { echo "backup mismatch in $bk: nothing was changed" >&2; exit 1; }
     if [ -f "$SKILL_DIR/SKILL.md" ]; then  # an earlier install's skill: rollback puts it back
       cp -p "$SKILL_DIR/SKILL.md" "$bk/olin-nutrition-SKILL.md"
@@ -318,7 +340,7 @@ case "${1:-}" in
     # As the agent too: the new file is home-agent's, 644.
     as_agent install -m 644 "$SRC/home-agent/nutrition-diary-pointer.md" "$NOTES/references/nutrition-diary.md"
     stat -c '%a %U:%G %n' "$NOTES/SKILL.md" "$NOTES/references/nutrition-diary.md"
-    cmp -s "$bk/config.yaml" "$CONFIG" \
+    as_agent_from "$bk/config.yaml" cmp -s - "$CONFIG" \
       || { echo "config.yaml changed since the backup, not by this step: look before restarting the gateway (rollback: rollback $bk)" >&2; exit 1; }
     echo "config.yaml unchanged: no key changed"
     restart_gateway
@@ -379,15 +401,14 @@ case "${1:-}" in
     fi
     bk="$BACKUPS/hermes-nutrition-mirror-$(date -u +%Y%m%dT%H%M%SZ)"
     install -d -m 700 "$bk"
-    cp -p "$CONFIG" "$bk/config.yaml"
-    same "$CONFIG" "$bk/config.yaml" || { echo "backup mismatch in $bk: nothing was changed" >&2; exit 1; }
+    agent_copy "$CONFIG" "$bk/config.yaml" && same_as_agent "$CONFIG" "$bk/config.yaml" || { echo "backup mismatch in $bk: nothing was changed" >&2; exit 1; }
     echo "backup OK: $bk  (config.yaml only; cron.mirror_delivery was $before)"
     echo "== config.yaml: cron.mirror_delivery through Hermes' own load/save, as $AGENT"
     as_agent "$VPY" -I -c "$MIRROR_PY" "$want" \
       || { echo "cron.mirror_delivery is not $val in effect: the gateway was not restarted (backup: $bk)" >&2; exit 1; }
     [ "$(mirror_value)" = "$val" ] \
       || { echo "config.yaml does not say cron.mirror_delivery: $val: the gateway was not restarted (backup: $bk)" >&2; exit 1; }
-    config_drift "$bk/config.yaml" "$CONFIG" \
+    agent_copy "$CONFIG" "$bk/config-after.yaml" && config_drift "$bk/config.yaml" "$bk/config-after.yaml" \
       || { echo "a key other than cron.mirror_delivery changed (paths above): the gateway was not restarted; compare with $bk/config.yaml" >&2; exit 1; }
     restart_gateway
     if [ "$before" = true ]; then back=on; else back=off; fi
@@ -463,7 +484,7 @@ case "${1:-}" in
       "$BACKUPS"/hermes-nutrition-*) ;;
       *) echo "usage: rollback <backup-dir printed by install> ($BACKUPS/hermes-nutrition-<stamp>)" >&2; exit 2 ;;
     esac
-    for f in config.yaml SKILL.md nutrition-diary.md; do
+    for f in config.yaml SKILL.md nutrition-diary.md notes-owner-mode; do
       [ -f "$bk/$f" ] || { echo "no $f in $bk: nothing was changed" >&2; exit 1; }
     done
     refuse_links
@@ -475,10 +496,9 @@ case "${1:-}" in
       || warn "could not write $NOTES/SKILL.md as $AGENT"
     as_agent_from "$bk/nutrition-diary.md" tee "$NOTES/references/nutrition-diary.md" >/dev/null \
       || warn "could not write $NOTES/references/nutrition-diary.md as $AGENT"
-    if same "$bk/SKILL.md" "$NOTES/SKILL.md" \
-      && same "$bk/nutrition-diary.md" "$NOTES/references/nutrition-diary.md" \
-      && [ "$(stat -c '%a %U:%G' "$bk/SKILL.md" "$bk/nutrition-diary.md")" \
-           = "$(stat -c '%a %U:%G' "$NOTES/SKILL.md" "$NOTES/references/nutrition-diary.md")" ]; then
+    if same_as_agent "$NOTES/SKILL.md" "$bk/SKILL.md" \
+      && same_as_agent "$NOTES/references/nutrition-diary.md" "$bk/nutrition-diary.md" \
+      && stat -c '%a %U:%G' "$NOTES/SKILL.md" "$NOTES/references/nutrition-diary.md" | cmp -s - "$bk/notes-owner-mode"; then
       echo "notes restored byte for byte, owner and mode as in the backup:"
     else
       warn "the notes differ from the backup in $bk (content, owner or mode)"
@@ -486,7 +506,7 @@ case "${1:-}" in
     stat -c '%a %U:%G %n' "$NOTES/SKILL.md" "$NOTES/references/nutrition-diary.md" || true
     # config.yaml is never restored: install does not change it, so a difference is someone
     # else's (Finance, a model change, the mirror step) and stays.
-    if cmp -s "$bk/config.yaml" "$CONFIG"; then
+    if as_agent_from "$bk/config.yaml" cmp -s - "$CONFIG"; then
       echo "config.yaml is as in the backup"
     else
       warn "config.yaml differs from the install-time backup in $bk; not touched"
