@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import type { ProfilePanelModel } from '@/integration/nutrition/profile-panel-model';
 import { RetryButton } from './RetryButton';
 import styles from './ProfilePanel.module.css';
@@ -30,17 +30,14 @@ export function ProfilePanel({ model, signInHref }: { model: ProfilePanelModel; 
           <div className={styles.skeleton} aria-hidden="true" />
         </Frame>
       );
-    case 'PRESENT':
+    case 'PROFILE':
       return (
-        <Frame title="Nutrition profile on file">
-          <dl className={styles.facts}>
-            <dt>Person</dt><dd>{who(model.subjectName)}</dd>
-            <dt>Profile type</dt><dd>{model.contextLabel}</dd>
-            <dt>Target source</dt><dd>{model.targetSourceLabel}</dd>
-            <dt>Targets</dt><dd>{model.targetCount === 0 ? 'None configured' : `${model.targetCount} configured`}</dd>
+        <Frame title={`Perfil de ${who(model.subjectName)}`}>
+          <dl className={styles.facts} lang="es">
+            {model.basics.map((b) => (
+              <Fragment key={b.label}><dt>{b.label}</dt><dd>{b.value}</dd></Fragment>
+            ))}
           </dl>
-          <p className={styles.body}>Target values are not shown on this page yet.</p>
-          <p className={styles.badge}>Source: Nutrition service</p>
         </Frame>
       );
     case 'ABSENT':
