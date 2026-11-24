@@ -7,6 +7,13 @@ no rounding (rounding belongs to display).
   FREE      free sugars = total sugars (drinks, juices, sweets, cakes, jam, ...)
   NOT_FREE  free sugars = 0 (whole fruit, vegetables, plain milk, staples)
   UNKNOWN   not counted, unless the source states added sugars
+
+Whatever the class, a food with at most 0.5 g of total sugars per 100 g has 0 g of free
+sugars: free sugars are part of total sugars, and EU law already calls such a food
+"sugars-free" (Regulation (EC) No 1924/2006, Annex).
+
+episteck-fs-2 (2026-11-24) adds that rule, the USDA Survey (FNDDS) food groups (WWEIA food
+categories 2021-2023, USDA ARS, November 2024) and SR Legacy "Cereal Grains and Pasta".
 """
 
 from __future__ import annotations
@@ -16,7 +23,10 @@ from collections.abc import Mapping
 from decimal import Decimal
 from enum import Enum
 
-FREE_SUGAR_MAP_VERSION = "episteck-fs-1"
+FREE_SUGAR_MAP_VERSION = "episteck-fs-2"
+
+# At or below this many grams of total sugars per 100 g a food has no free sugars.
+NEGLIGIBLE_SUGARS_PER_100G = Decimal("0.5")
 
 
 class FreeSugarClass(str, Enum):
@@ -60,7 +70,33 @@ _USDA: dict[str, FreeSugarClass] = {
     "Pork Products": _NOT_FREE,
     "Poultry Products": _NOT_FREE,
     "Lamb, Veal, and Game Products": _NOT_FREE,
+    "Cereal Grains and Pasta": _NOT_FREE,  # rice, pasta, flours, oats; cereals are separate
 }
+
+# --- USDA Survey (FNDDS): wweiaFoodCategory.wweiaFoodCategoryDescription ---
+# Only groups that are sweet by definition, or plain staples. Groups that mix sweet and
+# unsweet foods (coffee, tea, yogurt, cream cheese with whipped cream, cereals, bars,
+# smoothies, vegetable juice) stay UNKNOWN.
+_WWEIA_FREE = frozenset({
+    "Cakes and pies", "Cookies and brownies", "Doughnuts, sweet rolls, pastries",
+    "Candy containing chocolate", "Candy not containing chocolate",
+    "Ice cream and frozen dairy desserts", "Pudding", "Gelatins, ices, sorbets",
+    "Sugars and honey", "Jams, syrups, toppings",
+    "Soft drinks", "Fruit drinks", "Sport and energy drinks",
+    "Citrus juice", "Apple juice", "Other fruit juice",
+    "Flavored milk, whole", "Flavored milk, reduced fat", "Flavored milk, lowfat",
+    "Flavored milk, nonfat",
+})
+_WWEIA_NOT_FREE = frozenset({
+    "Milk, whole", "Milk, reduced fat", "Milk, lowfat", "Milk, nonfat",
+    "Cheese", "Cottage/ricotta cheese", "Rice", "Pasta, noodles, cooked grains",
+})
+# A staple whose name says it is sweetened or flavoured is not plain: it stays UNKNOWN.
+_FNDDS_NEGATIVE = re.compile(
+    r"unsweetened|no sugar added|no added sugar|sugar[- ]free|without sugar", re.IGNORECASE)
+_FNDDS_SWEET_WORD = re.compile(
+    r"sweet|sugar|syrup|honey|glaze|candied|caramel|chocolate|flavou?red|fruit|jam|jelly",
+    re.IGNORECASE)
 
 # --- BLS 4.0: first letter of the code (meanings read from the data) ---
 _BLS_LETTER: dict[str, FreeSugarClass] = {
@@ -135,10 +171,22 @@ def _classify_bls(letter: str | None, name: str | None) -> FreeSugarClass:
     return default
 
 
+def _classify_wweia(category: str | None, name: str | None) -> FreeSugarClass:
+    if category in _WWEIA_FREE:
+        return _FREE
+    if category in _WWEIA_NOT_FREE:
+        plain = _FNDDS_NEGATIVE.sub(" ", name or "")
+        return _UNKNOWN if _FNDDS_SWEET_WORD.search(plain) else _NOT_FREE
+    return _UNKNOWN
+
+
 def classify(source: str, category: str | None, name: str | None = None) -> FreeSugarClass:
-    """Classify a food. `name` is used only for BLS, whose code letter is coarse."""
+    """Classify a food. `name` is used for BLS, whose code letter is coarse, and for
+    USDA Survey (FNDDS) staples, whose name can say they are sweetened."""
     if source in ("OPEN_FOOD_FACTS", "SYNTHETIC"):
         return _classify_off(category)
+    if source == "USDA_FDC:Survey (FNDDS)":
+        return _classify_wweia(category, name)
     if source.split(":", 1)[0] == "USDA_FDC":
         return _USDA.get(category or "", _UNKNOWN)
     if source == "BLS":
@@ -151,6 +199,9 @@ def item_free_sugars_g(
 ) -> Decimal | None:
     """Free sugars in `grams` of food; None when unknown. Never 0 for unknown."""
     if cls is FreeSugarClass.NOT_FREE:
+        return Decimal(0)
+    total = nutrients_per_100g.get("sugars_total_g")
+    if total is not None and total <= NEGLIGIBLE_SUGARS_PER_100G:
         return Decimal(0)
     key = "sugars_total_g" if cls is FreeSugarClass.FREE else "sugars_added_g"
     per_100g = nutrients_per_100g.get(key)

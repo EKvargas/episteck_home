@@ -104,7 +104,7 @@ def test_frozen_item_shape(env):
     item = env[0].propose_intake(S, "p1", [cola()], consumed_at=T)["items"][0]
     assert item["food_name"] == "Cola (synthetic)"
     assert item["conversion"]["method"] == "PRESET"
-    assert item["free_sugar_class"] == "FREE" and item["free_sugar_map_version"] == "episteck-fs-1"
+    assert item["free_sugar_class"] == "FREE" and item["free_sugar_map_version"] == "episteck-fs-2"
     assert item["facts"]["source"] == "SYNTHETIC" and item["facts"]["category"] == "en:sodas"
     assert item["facts"]["nutrients_per_100g"]["sugars_total_g"] == "10.6"
     assert item["facts"]["retrieved_at"].startswith("2026-11-19T10:00:00")
@@ -600,3 +600,18 @@ def test_provider_parse_error_is_provider_unavailable(env):
     with pytest.raises(ProviderUnavailable):
         with_provider(env, prov).propose_intake(S, "p1", [gram_item("f", 1)], consumed_at=T)
     assert draft_rows(env[3]) == 0
+
+
+def test_fndds_cheesecake_and_black_coffee_get_free_sugars(env):
+    cake = FoodRecord("usda:2707861", "Cheesecake, plain", {"sugars_total_g": Decimal("26.6")},
+                      "USDA_FDC:Survey (FNDDS)", "2707861", category="Cakes and pies")
+    coffee = FoodRecord("usda:2710375", "Coffee, brewed", {"sugars_total_g": Decimal("0.0")},
+                        "USDA_FDC:Survey (FNDDS)", "2710375", category="Coffee")
+    svc = with_provider(env, FakeProvider({"cake": cake, "coffee": coffee}))
+    d = svc.propose_intake(S, "p1", [gram_item("cake", 80), gram_item("coffee", 240)], consumed_at=T)
+    cake_item, coffee_item = d["items"]
+    assert cake_item["free_sugar_class"] == "FREE" and cake_item["free_sugars_g"] == "21.3"
+    assert coffee_item["free_sugar_class"] == "UNKNOWN" and coffee_item["free_sugars_g"] == "0.0"
+    day = svc.confirm_intake(S, "p1", d["draft_id"])["day"]
+    assert day["free_sugars_known_g"] == "21.3" and day["items_uncounted"] == 0
+    assert day["sugar_status"] == "KNOWN"
