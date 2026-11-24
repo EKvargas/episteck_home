@@ -43,7 +43,10 @@ class UsdaFoodProvider(FoodProvider):
                     nutrients[canon] = to_canonical(amount, usda_unit, CANONICAL_UNITS[canon])
                 except ValueError:
                     continue  # unknown conversion -> leave nutrient UNKNOWN (absent)
-        category = (data.get("foodCategory") or {}).get("description") or None
+        # SR Legacy and Foundation carry foodCategory; Survey (FNDDS) carries a WWEIA food group.
+        category = ((data.get("foodCategory") or {}).get("description")
+                    or (data.get("wweiaFoodCategory") or {}).get("wweiaFoodCategoryDescription")
+                    or None)
         serving_g = None
         for portion in data.get("foodPortions") or []:
             if portion.get("gramWeight") is not None:

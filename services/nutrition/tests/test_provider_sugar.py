@@ -82,3 +82,15 @@ def test_off_added_sugars_mapped():
 
 def test_off_serving_in_ml_is_not_a_gram_serving():
     assert _off(serving_quantity=330, serving_quantity_unit="ml").get_food("off:1").serving_g is None
+
+
+def test_usda_fndds_category_comes_from_the_wweia_food_group():
+    p = UsdaFoodProvider(api_key="k")
+    p._c = _client({
+        "fdcId": 2707861, "description": "Cheesecake, plain", "dataType": "Survey (FNDDS)",
+        "wweiaFoodCategory": {"wweiaFoodCategoryDescription": "Cakes and pies", "wweiaFoodCategoryCode": 3303270},
+        "foodNutrients": [{"nutrient": {"number": "269"}, "amount": 26.6}],
+    })
+    rec = p.get_food("usda:2707861")
+    assert rec.category == "Cakes and pies"
+    assert rec.source == "USDA_FDC:Survey (FNDDS)"
