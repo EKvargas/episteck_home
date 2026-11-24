@@ -33,6 +33,9 @@
   color: var(--olin-text-main);
 }
 .meter { width: 100%; max-width: 32rem; height: 1.25rem; display: block; margin-bottom: 14px; }
+.nutrient { margin-bottom: 12px; }
+.nutrientLine { margin: 0 0 4px; color: var(--olin-text-main); overflow-wrap: anywhere; }
+.nutrientMeter { width: 100%; max-width: 32rem; height: 0.75rem; display: block; }
 .status { margin: 0 0 8px; font-weight: 600; color: var(--olin-text-main); }
 .reference { margin: 0; max-width: 45ch; color: var(--olin-text-muted); }
 .reference + .reference { margin-top: 0.5rem; }

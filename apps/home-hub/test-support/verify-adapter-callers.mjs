@@ -21,6 +21,14 @@ const PAIRS = [
     loaderPattern: /diary-loader/,
     allowed: ['src/app/nutrition/hoy/LiveTodayPanel.tsx'],
   },
+  {
+    name: 'period',
+    adapter: 'src/integration/nutrition/period.server.ts',
+    loader: 'src/integration/nutrition/period-loader.ts',
+    adapterPattern: /period\.server/,
+    loaderPattern: /period-loader/,
+    allowed: ['src/app/nutrition/dias/LivePeriodPanel.tsx'],
+  },
 ];
 const USE_SERVER = /^\s*['"]use server['"]/m;
 const USE_CLIENT = /^\s*['"]use client['"]/m;
@@ -99,5 +107,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.stderr.write(`${violations.join('\n')}\n`);
     process.exit(1);
   }
-  process.stdout.write('Adapter callers verified: only the allowed server component reaches profile.server, and only profile.server and diary.server reach their loaders.\n');
+  process.stdout.write('Adapter callers verified: only the allowed server component reaches profile.server, and only profile.server, diary.server and period.server reach their loaders.\n');
 }

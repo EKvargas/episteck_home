@@ -32,7 +32,10 @@ function reject(response: Response, code: SafeUIErrorCode): Envelope {
 }
 
 function emptyDay(): DiaryDay {
+  const none = { known: null, itemsTotal: 0, itemsUncounted: 0, status: 'NONE', target: null, percent: null } as const;
   return {
+    profileVersion: null,
+    nutrients: { energy_kcal: none, protein_g: none, fiber_g: none },
     date: '', mode: 'GENERAL', trimester: null, dayStatus: 'NO_ENTRIES', sugarStatus: 'NONE',
     freeSugarsKnownG: null, itemsTotal: 0, itemsUncounted: 0, limit: null, entries: [], attribution: [],
   };

@@ -4,7 +4,7 @@ import { assertIssuedContext, type F3ActiveContext } from '../home/active-contex
 import { SERVER_CONFIGURATION } from '../state/Environment.server';
 import { loadNutritionProfile } from './profile-loader';
 
-/** Server-only: read the active Person's Nutrition profile summary for this request. */
+/** Server-only: read the active Person's Nutrition profile for this request. */
 export async function readNutritionProfile(context: F3ActiveContext) {
   assertIssuedContext(context);
   const cookieValue = SERVER_CONFIGURATION.mode === 'LIVE'

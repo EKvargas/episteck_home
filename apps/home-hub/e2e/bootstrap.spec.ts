@@ -31,12 +31,12 @@ test('prototype routes label domain content and make no consent or live-source c
   await setSessionCookie(page, 'authenticated');
   const forbiddenClaims = /Consent Granted|Consent required|Full Clinical Consent|authorized|Active care consent|Care Circle Access|Home Secure|Source: FHIR Gateway|Source: Device Gateway|Provenance: svc-nutrition|Live Status|live data|Active Care Link|Shared with you/i;
   const demoNote = page.getByRole('note', { name: 'Demo mock data' });
-  async function settled(path: string, subject: string) {
+  async function settled(path: string) {
     if (path === '/app') {
       await expect(page.getByTestId('today-panel')).toContainText('Sin registros hoy');
       await expect(demoNote).toHaveCount(0);
     } else if (path === '/app/nutrition') {
-      await expect(page.getByTestId('profile-panel')).toContainText(`No nutrition profile for ${subject}`);
+      await expect(page.getByTestId('profile-panel')).toContainText('Sin perfil de nutrición');
       await expect(page.getByText('svc-nutrition', { exact: true })).toHaveCount(0);
     } else await expect(demoNote).toBeVisible();
   }
@@ -45,13 +45,13 @@ test('prototype routes label domain content and make no consent or live-source c
     '/app/calendar', '/app/memory', '/app/ask', '/app/kiosk', '/app/settings/privacy',
   ]) {
     await page.goto(path);
-    await settled(path, 'Synthetic Viewer');
+    await settled(path);
     expect(await page.locator('body').innerText(), path).not.toMatch(forbiddenClaims);
   }
   for (const path of ['/app', '/app/health', '/app/nutrition']) {
     await page.goto(path);
     await page.getByRole('tab', { name: 'Synthetic Care Context' }).click();
-    await settled(path, 'Synthetic Care Context');
+    await settled(path);
     expect(await page.locator('body').innerText(), `${path} care context`).not.toMatch(forbiddenClaims);
   }
   // The pregnancy page keeps its demo banner in LIVE; the mock dashboard renders only in care context.

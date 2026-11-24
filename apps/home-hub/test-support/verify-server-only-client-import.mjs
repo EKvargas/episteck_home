@@ -19,6 +19,7 @@ const PROBES = [
   ['@/integration/home/bootstrap.server', 'getBootstrapForRequest'],
   ['@/integration/nutrition/profile.server', 'readNutritionProfile'],
   ['@/integration/nutrition/diary.server', 'readDiaryToday'],
+  ['@/integration/nutrition/period.server', 'readDiaryPeriod'],
 ];
 
 for (const [modulePath, exportName] of PROBES) {
