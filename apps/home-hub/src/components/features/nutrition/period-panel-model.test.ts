@@ -99,15 +99,19 @@ test('without a profile: no percentages and the hint', () => {
       protein_g: { ...d.nutrients.protein_g, percent: null },
       fiber_g: { ...d.nutrients.fiber_g, percent: null },
     },
-    freeSugars: { ...d.freeSugars, percent: null },
   }));
   const averages = {
     energy_kcal: avg('2375', null, 2), protein_g: avg('90', null, 2), fiber_g: avg('24.0', null, 2),
-    free_sugars_g: avg('17.0', null, 2),
+    free_sugars_g: avg('17.0', '34', 2),
   };
   const m = period(toPeriodPanelModel(ready(threeDays({ hasProfile: false, days, averages })), 3));
   assert.equal(m.profileHint, true);
-  assert.doesNotMatch(JSON.stringify(m), /%/);
+  // Energy, protein and fiber carry no percent; the free-sugar limit always applies, so sugars keep theirs.
+  for (const cells of [m.rows[0].cells, m.average.cells]) {
+    for (const cell of cells.slice(0, 3)) assert.doesNotMatch(cell.detail ?? '', /%/);
+  }
+  assert.match(m.rows[0].cells[3].detail ?? '', /34 %/);
+  assert.match(m.average.cells[3].detail ?? '', /34 %/);
   assert.equal(m.average.cells[0].detail, '2 días');
   assert.equal(period(toPeriodPanelModel(ready(threeDays()), 3)).profileHint, false);
 });

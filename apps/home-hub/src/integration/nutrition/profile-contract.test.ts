@@ -116,6 +116,11 @@ test('text over the limits is rejected', () => {
     mutate(body);
     assert.throws(() => parseProfileWire(body), ProfileContractError, name);
   }
+  const emoji = wire();
+  emoji.inputs.training_note = '🏃'.repeat(120);
+  assert.doesNotThrow(() => parseProfileWire(emoji), '120 code points');
+  emoji.inputs.training_note = '🏃'.repeat(121);
+  assert.throws(() => parseProfileWire(emoji), ProfileContractError, '121 code points');
   const edge = wire();
   edge.food.preferences = 'a'.repeat(500);
   edge.inputs.training_note = 'a'.repeat(120);

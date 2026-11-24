@@ -121,13 +121,13 @@ export function ProfilePanel({ model, signInHref }: { model: ProfilePanelModel; 
       return (
         <Frame title="Nutrición no responde ahora" role="alert" tone="warn">
           <p className={styles.body}>No se muestra nada antes que adivinar.</p>
-          <RetryButton label="Reintentar" pendingLabel="Reintentando…" />
+          <RetryButton />
         </Frame>
       );
     case 'INVALID':
       return (
         <Frame title="No se pudo mostrar el perfil con seguridad" role="alert" tone="warn">
-          <RetryButton label="Reintentar" pendingLabel="Reintentando…" />
+          <RetryButton />
         </Frame>
       );
     case 'NOT_CONFIGURED':

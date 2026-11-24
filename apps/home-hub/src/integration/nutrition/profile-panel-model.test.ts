@@ -3,7 +3,7 @@ import test from 'node:test';
 import type { DataEnvelope } from '../state/DataEnvelope.ts';
 import type { SafeUIErrorCode } from '../state/SafeUIErrorCode.ts';
 import type { NutritionProfile, ProfileRead, ProfileTarget } from './profile-contract.ts';
-import { humanizeCode, outcomeLabel, toProfilePanelModel, type ProfilePanelModel } from './profile-panel-model.ts';
+import { outcomeLabel, toProfilePanelModel, type ProfilePanelModel } from './profile-panel-model.ts';
 
 const target = (nutrient: string, displayValue: string, unit: string, kind: ProfileTarget['kind'] = 'ABOUT',
   explanation = 'e.', sourceOrg = 'DGE'): ProfileTarget =>
@@ -147,6 +147,27 @@ test('history lists at most 5, caps field labels at 3 with an ellipsis, deduplic
   assert.equal(m.history[2], '24 nov: perfil actualizado por chat (entrenamiento)');
 });
 
+test('a later PROFILE version with no changed fields has no empty parentheses', () => {
+  const p = base({ history: [
+    { version: 2, validFrom: '2026-11-24', origin: 'PROFILE', changed: [] },
+    { version: 1, validFrom: '2026-11-20', origin: 'PROFILE', changed: ['height_cm'] },
+  ] });
+  const m = profile(toProfilePanelModel(ready(read(p)), 'E'));
+  assert.equal(m.history[0], '24 nov: perfil actualizado por chat');
+});
+
+test('measurements use es-ES decimals and activity levels compare numerically', () => {
+  const p = base({ inputs: { ...NO_INPUTS, heightCm: '165.0', weightKg: '62.5', prePregnancyWeightKg: '58.25', activityPal: '2' } });
+  const m = profile(toProfilePanelModel(ready(read(p)), 'E'));
+  const v = Object.fromEntries(m.basics.map((b) => [b.label, b.value]));
+  assert.equal(v['Altura'], '165 cm');
+  assert.equal(v['Peso'], '62,5 kg');
+  assert.equal(v['Actividad diaria'], 'Trabajo físico intenso (2,0)');
+  const q = base({ inputs: { ...NO_INPUTS, activityPal: '1.60' } });
+  const w = Object.fromEntries(profile(toProfilePanelModel(ready(read(q)), 'E')).basics.map((b) => [b.label, b.value]));
+  assert.equal(w['Actividad diaria'], 'Sentado, con algo de caminar o estar de pie (1,6)');
+});
+
 test('food fields: null reads —, text is kept as given', () => {
   const p = base({ food: { preferences: 'Mucha verdura', dislikes: null, intolerances: 'Lactosa' } });
   const m = profile(toProfilePanelModel(ready(read(p)), 'E'));
@@ -214,7 +235,3 @@ test('outcomeLabel is a fixed vocabulary that never carries identifiers or codes
   assert.equal(outcomeLabel({ delivery: 'ERROR', authorization: 'INDETERMINATE', freshness: 'UNKNOWN', environment: 'LIVE' }), 'UNEXPECTED');
 });
 
-test('humanizeCode', () => {
-  assert.equal(humanizeCode('SOME_CODE'), 'Some code');
-  assert.equal(humanizeCode('X'), 'X');
-});

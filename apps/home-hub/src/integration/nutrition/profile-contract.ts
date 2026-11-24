@@ -91,7 +91,7 @@ function patterned(value: unknown, pattern: RegExp, what: string): string {
 }
 
 function text(value: unknown, max: number, what: string): string {
-  return typeof value === 'string' && value.length <= max ? value : fail(what);
+  return typeof value === 'string' && [...value].length <= max ? value : fail(what);
 }
 
 function nullable<T>(value: unknown, read: (v: unknown) => T): T | null {

@@ -88,16 +88,20 @@ test('rows and the average read as in the model; nothing reads 0', async ({ page
   await expect(panel(page)).toContainText('Llega en el proyecto 3, para que los confirmes o descartes.');
   const text = await panel(page).innerText();
   expect(text).not.toMatch(/(^|\D)0 (g|kcal|%)/);
-  expect(text).not.toContain('Sin perfil no hay objetivos');
+  expect(text).not.toContain('Sin perfil completo no hay objetivos');
 });
 
 test('without a profile the hint shows and no % appears', async ({ page }) => {
   await signIn(page, 'days-no-profile', newRun());
   await page.goto('/app/nutrition/dias');
-  await expect(panel(page)).toContainText('Sin perfil no hay objetivos con que comparar.');
+  await expect(panel(page)).toContainText('Sin perfil completo no hay objetivos de energía ni proteína con que comparar.');
   await expect(panel(page).getByRole('button', { name: /Quiero crear mi perfil/ })).toBeVisible();
   await expect(row(page, 'Vie 20')).toContainText('2.510');
-  expect(await page.getByRole('table').innerText()).not.toContain('%');
+  // No profile: no percent for Energía, Prot. or Fibra (Media row included); the free-sugar limit still gives Azúcares a percent.
+  for (const r of [row(page, 'Vie 20'), row(page, 'Sáb 21'), row(page, 'Dom 22'), row(page, 'Media')]) {
+    for (const index of [1, 2, 3]) expect(await r.getByRole('cell').nth(index - 1).innerText()).not.toContain('%');
+  }
+  expect(await row(page, 'Vie 20').getByRole('cell').nth(3).innerText()).toContain('%');
 });
 
 test('denied and error states are in Spanish; error offers Reintentar', async ({ page, request }) => {

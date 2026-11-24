@@ -88,7 +88,7 @@ test('denied shows the Spanish denied copy; a 500 offers retry', async ({ page, 
   await signIn(page, 'today-error', run);
   await page.goto('/app/nutrition/hoy');
   await expect(panel(page)).toContainText('El diario no responde ahora. Inténtalo de nuevo.');
-  await page.getByRole('button', { name: 'Try again' }).click();
+  await page.getByRole('button', { name: 'Reintentar' }).click();
   await expect.poll(async () => (await observed(request, run)).mints).toBe(2);
 });
 

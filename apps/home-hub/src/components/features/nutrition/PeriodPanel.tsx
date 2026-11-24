@@ -93,7 +93,7 @@ export function PeriodPanel({ model, signInHref }: { model: PeriodPanelModel; si
       return (
         <Frame role="alert" tone="warn">
           <p className={styles.body}>El historial de días no responde ahora. Inténtalo de nuevo.</p>
-          <RetryButton label="Reintentar" pendingLabel="Reintentando…" className={styles.retry} />
+          <RetryButton className={styles.retry} />
         </Frame>
       );
     case 'INVALID':
@@ -124,7 +124,7 @@ export function PeriodPanel({ model, signInHref }: { model: PeriodPanelModel; si
             </p>
             {model.profileHint && (
               <div className={styles.hint}>
-                <p className={styles.note}>Sin perfil no hay objetivos con que comparar.</p>
+                <p className={styles.note}>Sin perfil completo no hay objetivos de energía ni proteína con que comparar.</p>
                 <ChatPrompt label="Copiar «Quiero crear mi perfil»" prompt="Quiero crear mi perfil" />
               </div>
             )}

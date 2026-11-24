@@ -243,21 +243,26 @@ test('actor-shaped query noise cannot change the subject', async ({ page, reques
 
 test('switching subject re-reads for the new subject; Back restores the earlier panel without a new read', async ({ page, request }) => {
   const run = newRun();
-  const cookieValue = await signIn(page, 'absent', run);
+  const cookieValue = await signIn(page, 'present', run);
   const hubBodies = await captureHubBodies(page);
+  const other = 'Perfil de Synthetic Care Context';
+  const viewer = 'Perfil de Synthetic Viewer';
   await page.goto('/app/nutrition?person=PSN-00007');
-  await expect(panel(page)).toContainText('Sin perfil de nutrición');
+  await expect(panel(page)).toContainText(other);
+  await expect(panel(page)).not.toContainText(viewer);
   await page.getByRole('tab', { name: /Synthetic Viewer/ }).click();
   await expect(page).toHaveURL(/person=PSN-00001$/);
-  await expect(panel(page)).toContainText('Sin perfil de nutrición');
+  await expect(panel(page)).toContainText(viewer);
+  await expect(panel(page)).not.toContainText(other);
   await page.goBack();
   await expect(page).toHaveURL(/person=PSN-00007$/);
-  await expect(panel(page)).toContainText('Sin perfil de nutrición');
+  await expect(panel(page)).toContainText(other);
+  await expect(panel(page)).not.toContainText(viewer);
   await page.waitForLoadState('networkidle');
   // Pinned (spec Invariants (b)): Next restores the history entry from its client router cache, so Back makes no new read.
   const paths = (await observed(request, run)).calls.map((call) => call.path);
   expect(paths).toEqual(['/profile/PSN-00007', '/profile/PSN-00001']);
-  expectNoSecrets(await hubBodies({ rscContaining: 'Sin perfil de nutrición' }), cookieValue);
+  expectNoSecrets(await hubBodies({ rscContaining: 'Perfil de Synthetic' }), cookieValue);
 });
 
 test('a mode-only profile offers onboarding and still shows the due date', async ({ page }) => {

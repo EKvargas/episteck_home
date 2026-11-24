@@ -12,6 +12,11 @@ export function amount(decimal: string, unit: string): string {
   return unit === 'kcal' || n >= 10 ? WHOLE.format(n) : ONE_DECIMAL.format(n);
 }
 
+/** Body measurements (cm, kg): es-ES, at most one decimal, no forced decimals. Non-decimal text is shown as given. */
+export function measurement(decimal: string): string {
+  return PLAIN_DECIMAL.test(decimal) ? ONE_DECIMAL.format(Number(decimal)) : decimal;
+}
+
 export function unitLabel(unit: string): string {
   return unit === 'ug' ? 'µg' : unit;
 }

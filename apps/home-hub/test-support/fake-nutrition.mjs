@@ -130,10 +130,10 @@ const PERIOD_THREE = {
     free_sugars_g: pavg(null, null, 0), fat_g: pavg('80', null, 1),
   },
 };
+// No profile: no targets or percents for energy, protein, fiber; the free-sugar limit still applies.
 const stripPercents = (d) => ({
   ...d,
   nutrients: Object.fromEntries(Object.entries(d.nutrients).map(([k, b]) => [k, { ...b, target: null, percent: null }])),
-  free_sugars: { ...d.free_sugars, limit_g: null, percent: null },
 });
 const PERIOD_NO_PROFILE = {
   ...PERIOD_THREE, has_profile: false, days: PERIOD_THREE.days.map(stripPercents),

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  TRIMESTERS, amount, fieldLabel, longDate, nutrientLabel, shortDate, targetValue, unitLabel, weekdayDay,
+  TRIMESTERS, amount, measurement, fieldLabel, longDate, nutrientLabel, shortDate, targetValue, unitLabel, weekdayDay,
 } from './nutrition-format.ts';
 
 test('amount groups thousands and rounds by unit', () => {
@@ -34,4 +34,12 @@ test('labels fall back to a readable form', () => {
   assert.equal(unitLabel('ug'), 'µg');
   assert.equal(unitLabel('mg'), 'mg');
   assert.equal(TRIMESTERS[2], '2.º trimestre');
+});
+
+test('measurement uses es-ES, at most one decimal, no forced decimals', () => {
+  assert.equal(measurement('62.5'), '62,5');
+  assert.equal(measurement('165'), '165');
+  assert.equal(measurement('64.0'), '64');
+  assert.equal(measurement('1234.5'), '1.234,5');
+  assert.equal(measurement('abc'), 'abc');
 });
