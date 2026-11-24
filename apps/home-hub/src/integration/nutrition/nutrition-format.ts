@@ -115,3 +115,37 @@ export const TRIMESTERS: Record<1 | 2 | 3, string> = {
   2: '2.º trimestre',
   3: '3.er trimestre',
 };
+
+/** Sentence form of a nutrient name: 'energía', 'vitamina D', 'DHA', 'azúcares libres'. */
+export function nutrientName(code: string): string {
+  const label = nutrientLabel(code);
+  if (label === label.toUpperCase()) return label;
+  if (code === 'free_sugars_g') return label.toLowerCase();
+  return label.charAt(0).toLowerCase() + label.slice(1);
+}
+
+/** Unit suffix of a nutrient code: 'iron_mg' -> 'mg'. */
+export function unitOf(code: string): string {
+  return code.slice(code.lastIndexOf('_') + 1);
+}
+
+/** '', 'a', 'a y b', 'a, b y c'. */
+export function spanishList(names: string[]): string {
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}`;
+}
+
+export function weekdayInitial(iso: string): string {
+  return new Intl.DateTimeFormat('es-ES', { weekday: 'narrow', timeZone: 'UTC' }).format(utcDate(iso)).toUpperCase();
+}
+
+export function dayOfMonth(iso: string): string {
+  return parts(iso, { day: 'numeric' }).day;
+}
+
+/** 'HH:MM' in Europe/Berlin. */
+export function berlinClock(at: Date): string {
+  return new Intl.DateTimeFormat('es-ES', {
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Europe/Berlin',
+  }).format(at);
+}

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   TRIMESTERS, amount, measurement, fieldLabel, longDate, nutrientLabel, shortDate, targetValue, unitLabel, weekdayDay,
+  nutrientName, unitOf, spanishList, weekdayInitial, dayOfMonth, berlinClock,
 } from './nutrition-format.ts';
 
 test('amount groups thousands and rounds by unit', () => {
@@ -42,4 +43,24 @@ test('measurement uses es-ES, at most one decimal, no forced decimals', () => {
   assert.equal(measurement('64.0'), '64');
   assert.equal(measurement('1234.5'), '1.234,5');
   assert.equal(measurement('abc'), 'abc');
+});
+
+test('sentence names keep acronyms and the vitamin letter', () => {
+  assert.equal(nutrientName('energy_kcal'), 'energía');
+  assert.equal(nutrientName('vitamin_d_ug'), 'vitamina D');
+  assert.equal(nutrientName('dha_g'), 'DHA');
+  assert.equal(nutrientName('free_sugars_g'), 'azúcares libres');
+});
+test('units, lists, weekday initials and the Berlin clock', () => {
+  assert.equal(unitOf('folate_ug'), 'ug');
+  assert.equal(unitOf('energy_kcal'), 'kcal');
+  assert.equal(spanishList([]), '');
+  assert.equal(spanishList(['a']), 'a');
+  assert.equal(spanishList(['proteína', 'fibra']), 'proteína y fibra');
+  assert.equal(spanishList(['a', 'b', 'c']), 'a, b y c');
+  assert.equal(weekdayInitial('2026-11-18'), 'X');
+  assert.equal(weekdayInitial('2026-11-20'), 'V');
+  assert.equal(dayOfMonth('2026-11-08'), '8');
+  assert.equal(berlinClock(new Date('2026-11-24T13:05:00Z')), '14:05');
+  assert.equal(berlinClock(new Date('2026-07-01T13:05:00Z')), '15:05');
 });
