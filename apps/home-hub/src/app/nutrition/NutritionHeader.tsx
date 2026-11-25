@@ -7,12 +7,12 @@ import { HUB_BASE_PATH } from '@/integration/basePath';
 import styles from './page.module.css';
 
 const TABS = [
-  { view: 'profile', label: 'Perfil', path: '/nutrition' },
+  { view: 'profile', label: 'Perfil', path: '/nutrition/perfil' },
   { view: 'diary', label: 'Hoy', path: '/nutrition/hoy' },
   { view: 'days', label: 'Días', path: '/nutrition/dias' },
 ] as const;
 
-export function NutritionHeader({ view }: { view: 'home' | 'profile' | 'diary' | 'days' }) {
+export function NutritionHeader({ view }: { view: 'home' | 'profile' | 'diary' | 'days' | 'help' }) {
   const { activeContext, setContext, availableContexts, viewer } = useAppContext();
   const selected = useSearchParams().has('person');
   const person = selected ? `?person=${encodeURIComponent(activeContext.personId)}` : '';
@@ -42,15 +42,6 @@ export function NutritionHeader({ view }: { view: 'home' | 'profile' | 'diary' |
               {tab.label}
             </a>
           ))}
-          {view === 'diary' && (
-            <a href="#acciones-en-telegram" onClick={(event) => {
-              const section = document.getElementById('acciones-en-telegram');
-              if (!section) return;
-              event.preventDefault();
-              section.focus({ preventScroll: true });
-              section.scrollIntoView();
-            }}>Acciones en Telegram</a>
-          )}
         </nav>
       )}
     </>

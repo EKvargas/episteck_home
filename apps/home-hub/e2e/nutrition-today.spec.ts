@@ -1,24 +1,5 @@
-import { randomUUID } from 'node:crypto';
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-
-const HUB = 'http://127.0.0.1:3322';
-const BFF = 'http://127.0.0.1:3323';
-const NUTRITION = 'http://127.0.0.1:9930';
-const newRun = () => randomUUID().replace(/-/g, '');
-
-async function signIn(page: Page, scenario: string, run: string) {
-  const value = `authenticated-nutr-${scenario}-run${run}`;
-  await page.context().addCookies([{
-    name: 'episteck_home_session', value, url: HUB, httpOnly: true, sameSite: 'Lax',
-  }]);
-  return value;
-}
-
-async function observed(request: APIRequestContext, run: string) {
-  const mints = (await (await request.get(`${BFF}/__test/mints/${run}`)).json()).count as number;
-  const calls = (await (await request.get(`${NUTRITION}/__test/calls/${run}`)).json()).calls as Array<{ path: string; hasCookie: boolean }>;
-  return { mints, calls };
-}
+import { expect, test, type Page } from '@playwright/test';
+import { newRun, observed, signIn } from './nutrition-support';
 
 const panel = (page: Page) => page.getByTestId('today-panel');
 
@@ -99,14 +80,6 @@ test('no demo banner on /app/nutrition/hoy in LIVE', async ({ page }) => {
   await expect(page.getByRole('note', { name: 'Demo mock data' })).toHaveCount(0);
 });
 
-test('the Nutrition page links to Hoy and keeps ?person=', async ({ page }) => {
-  await signIn(page, 'today-empty', newRun());
-  await page.goto('/app/nutrition');
-  await expect(page.getByRole('link', { name: 'Hoy', exact: true })).toHaveAttribute('href', /\/nutrition\/hoy$/);
-  await page.goto('/app/nutrition?person=PSN-00007');
-  await expect(page.getByRole('link', { name: 'Hoy', exact: true })).toHaveAttribute('href', /\/nutrition\/hoy\?person=PSN-00007$/);
-});
-
 test('mobile Home shows the diary summary and opens the live diary in one tap', async ({ page, request }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const run = newRun();
@@ -121,16 +94,13 @@ test('mobile Home shows the diary summary and opens the live diary in one tap', 
   await expect(page.getByRole('heading', { name: 'Acciones en Telegram' })).toBeVisible();
   expect((await observed(request, run)).calls).toEqual([{ path: '/diary/PSN-00001/days/today', hasCookie: false }]);
 
-  const nutritionLink = page.getByRole('link', { name: 'Nutrition', exact: true });
+  const nutritionLink = page.getByRole('link', { name: 'Nutrición', exact: true });
   await nutritionLink.click();
   await expect(page).toHaveURL(/\/app\/nutrition\/hoy\?person=PSN-00001$/);
   await expect(nutritionLink).toHaveAttribute('aria-current', 'page');
   await expect(panel(page)).toContainText('Zumo');
-  await page.getByRole('link', { name: 'Acciones en Telegram' }).click();
-  await expect(page.getByRole('region', { name: 'Acciones en Telegram' })).toBeFocused();
-  await expect(page.getByRole('heading', { name: 'Acciones en Telegram' })).toBeInViewport();
   await page.getByRole('link', { name: 'Perfil', exact: true }).click();
-  await expect(page).toHaveURL(/\/app\/nutrition\?person=PSN-00001$/);
+  await expect(page).toHaveURL(/\/app\/nutrition\/perfil\?person=PSN-00001$/);
   await expect(nutritionLink).toHaveAttribute('aria-current', 'location');
   await expect(page.getByTestId('profile-panel')).toContainText('Sin perfil de nutrición');
 });
@@ -138,7 +108,7 @@ test('mobile Home shows the diary summary and opens the live diary in one tap', 
 test('a Telegram action copies a generic prompt without personal diary data', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await signIn(page, 'today-partial', newRun());
-  await page.goto('/app/nutrition/hoy');
+  await page.goto('/app/nutrition/ayuda');
   await page.getByText('Registrar una comida', { exact: true }).click();
   await page.getByRole('button', { name: 'Copiar ejemplo para registrar una comida' }).click();
   await expect(page.getByText('Ejemplo copiado.')).toBeVisible();

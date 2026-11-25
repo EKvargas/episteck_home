@@ -14,7 +14,7 @@ test('a care Person survives refresh and child navigation after validation', asy
   await expect(page.getByRole('tab', { name: /Synthetic Care Context/ })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('tab', { name: /Synthetic Care Context/ })).toBeVisible();
-  await page.getByRole('link', { name: 'Nutrition', exact: true }).first().click();
+  await page.getByRole('link', { name: 'Nutrición', exact: true }).first().click();
   await expect(page).toHaveURL(/\/app\/nutrition\/hoy\?person=PSN-00007$/);
   await expect(page.getByRole('tab', { name: /Synthetic Care Context/ })).toBeVisible();
 });

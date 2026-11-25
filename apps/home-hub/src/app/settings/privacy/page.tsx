@@ -24,6 +24,9 @@ export default function PrivacySettingsPage() {
         <Link href={`/settings/privacy?person=${encodeURIComponent(activeContext.personId)}`} className={`${styles.tabLink} ${styles.tabLinkActive}`}>
           Privacy &amp; Data
         </Link>
+        <Link href={`/nutrition/perfil?person=${encodeURIComponent(activeContext.personId)}`} prefetch={false} className={styles.tabLink}>
+          Perfil de nutrición
+        </Link>
       </nav>
 
       {/* Compact Memory Status Card */}

@@ -4,14 +4,14 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useOptionalAppContext } from '@/components/providers/AppProvider';
 import styles from './Navigation.module.css';
-import { House, Heartbeat, Gear, AppleLogo, Brain } from '@phosphor-icons/react';
+import { House, Heartbeat, Gear, ForkKnife, Brain } from '@phosphor-icons/react';
 
 const navLinks = [
-  { href: '/', label: 'Today', Icon: House },
-  { href: '/memory', label: 'Memory', Icon: Brain },
-  { href: '/nutrition', label: 'Nutrition', Icon: AppleLogo },
-  { href: '/health', label: 'Health', Icon: Heartbeat },
-  { href: '/settings/appearance', label: 'Settings', Icon: Gear },
+  { href: '/', label: 'Inicio', Icon: House },
+  { href: '/memory', label: 'Memoria', Icon: Brain },
+  { href: '/nutrition', label: 'Nutrición', Icon: ForkKnife },
+  { href: '/health', label: 'Salud', Icon: Heartbeat },
+  { href: '/settings/appearance', label: 'Ajustes', Icon: Gear },
 ];
 
 export function BottomNav() {

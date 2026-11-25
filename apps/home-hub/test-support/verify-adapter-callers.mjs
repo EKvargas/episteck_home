@@ -2,7 +2,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export const ALLOWED_ADAPTER_IMPORTERS = ['src/app/nutrition/LiveProfilePanel.tsx'];
+export const ALLOWED_ADAPTER_IMPORTERS = ['src/app/nutrition/perfil/LiveProfilePanel.tsx'];
 /** Each Nutrition read is a pair: one server adapter, one loader only that adapter may reach. */
 const PAIRS = [
   {

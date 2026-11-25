@@ -3,7 +3,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useOptionalAppContext } from '@/components/providers/AppProvider';
-import { House, Heartbeat, AppleLogo, Gear, Calendar, Brain } from '@phosphor-icons/react';
+import { House, Heartbeat, ForkKnife, Gear, Calendar, Brain } from '@phosphor-icons/react';
 import styles from './Navigation.module.css';
 
 export function Sidebar({ isCollapsed }: { isCollapsed?: boolean }) {
@@ -12,12 +12,12 @@ export function Sidebar({ isCollapsed }: { isCollapsed?: boolean }) {
 
   const getLinks = () => {
     return [
-      { path: '/', label: 'Today', icon: <House weight="fill" size={20} /> },
-      { path: '/memory', label: 'Memory', icon: <Brain size={20} /> },
-      { path: '/nutrition', label: 'Nutrition', icon: <AppleLogo size={20} /> },
-      { path: '/health', label: 'Health', icon: <Heartbeat size={20} /> },
-      { path: '/calendar', label: 'Calendar', icon: <Calendar size={20} /> },
-      { path: '/settings/appearance', label: 'Settings', icon: <Gear size={20} /> },
+      { path: '/', label: 'Inicio', icon: <House weight="fill" size={20} /> },
+      { path: '/memory', label: 'Memoria', icon: <Brain size={20} /> },
+      { path: '/nutrition', label: 'Nutrición', icon: <ForkKnife size={20} /> },
+      { path: '/health', label: 'Salud', icon: <Heartbeat size={20} /> },
+      { path: '/calendar', label: 'Calendario', icon: <Calendar size={20} /> },
+      { path: '/settings/appearance', label: 'Ajustes', icon: <Gear size={20} /> },
     ];
   };
 

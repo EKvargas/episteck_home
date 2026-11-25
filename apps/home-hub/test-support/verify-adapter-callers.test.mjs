@@ -8,7 +8,7 @@ import { findViolations } from './verify-adapter-callers.mjs';
 
 const APP_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const GOOD_SERVER = "import 'server-only';\nimport { loadNutritionProfile } from './profile-loader';\nexport async function readNutritionProfile(context) {\n  assertIssuedContext(context);\n  return cookies();\n}\n";
-const ALLOWED = 'src/app/nutrition/LiveProfilePanel.tsx';
+const ALLOWED = 'src/app/nutrition/perfil/LiveProfilePanel.tsx';
 const GOOD_DIARY_SERVER = "import 'server-only';\nimport { loadDiaryToday } from './diary-loader';\nexport async function readDiaryToday(context) {\n  assertIssuedContext(context);\n  return cookies();\n}\n";
 const GOOD_PERIOD_SERVER = "import 'server-only';\nimport { loadDiaryPeriod } from './period-loader';\nexport async function readDiaryPeriod(context) {\n  assertIssuedContext(context);\n  return cookies();\n}\n";
 const PERIOD_ALLOWED = 'src/app/nutrition/dias/LivePeriodPanel.tsx';

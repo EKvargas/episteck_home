@@ -1,35 +1,8 @@
-import { randomUUID } from 'node:crypto';
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-
-const HUB = 'http://127.0.0.1:3322';
-const BFF = 'http://127.0.0.1:3323';
-const NUTRITION = 'http://127.0.0.1:9930';
-const newRun = () => randomUUID().replace(/-/g, '');
-
-async function signIn(page: Page, scenario: string, run: string) {
-  await page.context().addCookies([{
-    name: 'episteck_home_session', value: `authenticated-nutr-${scenario}-run${run}`,
-    url: HUB, httpOnly: true, sameSite: 'Lax',
-  }]);
-}
-
-async function observed(request: APIRequestContext, run: string) {
-  const mints = (await (await request.get(`${BFF}/__test/mints/${run}`)).json()).count as number;
-  const calls = (await (await request.get(`${NUTRITION}/__test/calls/${run}`)).json()).calls as Array<{ path: string; hasCookie: boolean }>;
-  return { mints, calls };
-}
+import { expect, test, type Page } from '@playwright/test';
+import { berlinDaysAgo, newRun, observed, signIn } from './nutrition-support';
 
 const panel = (page: Page) => page.getByTestId('period-panel');
 const row = (page: Page, day: string) => page.getByRole('row').filter({ has: page.getByRole('rowheader', { name: new RegExp(`^${day}`) }) });
-
-/** The Berlin date `back` days before today, computed independently of the Hub. */
-function berlinDaysAgo(back: number): string {
-  const now = new Date();
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(now).map((p) => [p.type, p.value]));
-  return new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day) - back)).toISOString().slice(0, 10);
-}
 
 test('7 days by default: one mint, one period call with a start, no cookie, no demo banner', async ({ page, request }) => {
   const run = newRun();
@@ -142,12 +115,12 @@ test('tabs Perfil · Hoy · Días link to each other and keep ?person=', async (
   await expect(page.getByRole('heading', { level: 1, name: 'Nutrición' })).toBeVisible();
   const tabs = page.getByRole('navigation', { name: 'Nutrición' });
   await expect(tabs.getByRole('link', { name: 'Días', exact: true })).toHaveAttribute('aria-current', 'page');
-  await expect(tabs.getByRole('link', { name: 'Perfil', exact: true })).toHaveAttribute('href', /\/nutrition\?person=PSN-00001$/);
+  await expect(tabs.getByRole('link', { name: 'Perfil', exact: true })).toHaveAttribute('href', /\/nutrition\/perfil\?person=PSN-00001$/);
   await expect(tabs.getByRole('link', { name: 'Hoy', exact: true })).toHaveAttribute('href', /\/nutrition\/hoy\?person=PSN-00001$/);
   await expect(tabs.getByRole('link', { name: 'Días', exact: true })).toHaveAttribute('href', /\/nutrition\/dias\?person=PSN-00001$/);
   await expect(tabs.getByRole('link', { name: 'Acciones en Telegram' })).toHaveCount(0);
 
-  await page.goto('/app/nutrition');
+  await page.goto('/app/nutrition/perfil');
   await expect(tabs.getByRole('link', { name: 'Perfil', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(tabs.getByRole('link', { name: 'Días', exact: true })).toHaveAttribute('href', /\/nutrition\/dias$/);
 });

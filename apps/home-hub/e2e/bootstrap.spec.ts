@@ -22,7 +22,7 @@ test('authenticated bootstrap shows the BFF viewer and discoverable contexts', a
 test('generated internal navigation stays under /app', async ({ page }) => {
   await setSessionCookie(page, 'authenticated');
   await page.goto('/app');
-  await page.getByRole('link', { name: 'Memory' }).click();
+  await page.getByRole('link', { name: 'Memoria' }).click();
   await expect(page).toHaveURL(/\/app\/memory\?person=PSN-00001$/);
   await expect(page.getByRole('heading', { name: 'Memory' })).toBeVisible();
 });
@@ -35,20 +35,20 @@ test('prototype routes label domain content and make no consent or live-source c
     if (path === '/app') {
       await expect(page.getByTestId('today-panel')).toContainText('Sin registros hoy');
       await expect(demoNote).toHaveCount(0);
-    } else if (path === '/app/nutrition') {
+    } else if (path === '/app/nutrition/perfil') {
       await expect(page.getByTestId('profile-panel')).toContainText('Sin perfil de nutrición');
       await expect(page.getByText('svc-nutrition', { exact: true })).toHaveCount(0);
     } else await expect(demoNote).toBeVisible();
   }
   for (const path of [
-    '/app', '/app/health', '/app/nutrition', '/app/nutrition/pregnancy',
+    '/app', '/app/health', '/app/nutrition/perfil', '/app/nutrition/pregnancy',
     '/app/calendar', '/app/memory', '/app/ask', '/app/kiosk', '/app/settings/privacy',
   ]) {
     await page.goto(path);
     await settled(path);
     expect(await page.locator('body').innerText(), path).not.toMatch(forbiddenClaims);
   }
-  for (const path of ['/app', '/app/health', '/app/nutrition']) {
+  for (const path of ['/app', '/app/health', '/app/nutrition/perfil']) {
     await page.goto(path);
     await page.getByRole('tab', { name: 'Synthetic Care Context' }).click();
     await settled(path);
@@ -162,7 +162,7 @@ test('only the Hub session cookie reaches the BFF', async ({ page, request }) =>
 
 test('401 redirects once to the origin root /login', async ({ request }) => {
   for (const path of [
-    '/app', '/app/', '/app/nutrition', '/app/nutrition/pregnancy',
+    '/app', '/app/', '/app/nutrition', '/app/nutrition/perfil', '/app/nutrition/pregnancy',
     '/app/kiosk', '/app/a/b/c/d/e/f/g',
   ]) {
     const response = await request.get(`http://127.0.0.1:3322${path}?next=https%3A%2F%2Fevil.example`, {
