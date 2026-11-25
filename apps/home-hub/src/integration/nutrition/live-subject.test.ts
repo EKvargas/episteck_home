@@ -50,3 +50,19 @@ test('actor-shaped query noise cannot change the subject', () => {
   assert.equal(picked.context.personId, 'PSN-00001');
   assert.equal(picked.stale, false);
 });
+
+test('self is true only for the viewer; linkPerson only when the URL names a person', () => {
+  const own = pickSubject(bootstrap, {});
+  assert.equal(own.self, true);
+  assert.equal(own.linkPerson, null);
+  const named = pickSubject(bootstrap, { person: 'PSN-00001' });
+  assert.equal(named.self, true);
+  assert.equal(named.linkPerson, 'PSN-00001');
+  const other = pickSubject(bootstrap, { person: 'PSN-00002' });
+  assert.equal(other.self, false);
+  assert.equal(other.linkPerson, 'PSN-00002');
+  // a stale selector falls back to self; the link then names that fallback
+  const stale = pickSubject(bootstrap, { person: 'PSN-00999' });
+  assert.equal(stale.self, true);
+  assert.equal(stale.linkPerson, 'PSN-00001');
+});

@@ -7,7 +7,7 @@ export type SearchParamsRecord = Record<string, string | string[] | undefined>;
 export function pickSubject(
   bootstrap: BootstrapContext,
   searchParams: SearchParamsRecord,
-): { context: F3ActiveContext; subjectName: string | null; stale: boolean } {
+): { context: F3ActiveContext; subjectName: string | null; stale: boolean; self: boolean; linkPerson: string | null } {
   const raw = searchParams.person;
   const query = new URLSearchParams();
   for (const value of raw === undefined ? [] : Array.isArray(raw) ? raw : [raw]) query.append('person', value);
@@ -15,5 +15,12 @@ export function pickSubject(
   const named = bootstrap.personContexts.find((person) => person.personId === activeContext.personId)?.displayName;
   const subjectName = named
     ?? (activeContext.personId === bootstrap.viewer.personId ? bootstrap.viewer.displayName : null);
-  return { context: activeContext, subjectName, stale: status === 'STALE_CONTEXT' };
+  return {
+    context: activeContext,
+    subjectName,
+    stale: status === 'STALE_CONTEXT',
+    self: activeContext.personId === bootstrap.viewer.personId,
+    // Links between nutrition pages carry `person` only when this URL does.
+    linkPerson: raw === undefined ? null : activeContext.personId,
+  };
 }

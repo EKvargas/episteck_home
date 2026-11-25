@@ -167,3 +167,15 @@ test('a tree with only profile.server.ts and diary.server.ts reports period.serv
     assert.match(v[0], /period\.server\.ts: not found/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test('LiveWeeklyPanel may import period.server; LiveTodayPanel still may not', async () => {
+  const WEEKLY_ALLOWED = 'src/app/nutrition/hoy/LiveWeeklyPanel.tsx';
+  assert.deepEqual(await violationsFor({
+    [WEEKLY_ALLOWED]: "import { readDiaryPeriod } from '@/integration/nutrition/period.server';\n",
+  }), []);
+  const today = await violationsFor({ [DIARY_ALLOWED]: "import { readDiaryPeriod } from '@/integration/nutrition/period.server';\n" });
+  assert.equal(today.length, 1);
+  assert.match(today[0], /LiveTodayPanel/);
+  // the weekly panel may not read the day or the profile
+  assert.equal((await violationsFor({ [WEEKLY_ALLOWED]: "import { readDiaryToday } from '@/integration/nutrition/diary.server';\n" })).length, 1);
+});

@@ -1,10 +1,12 @@
 import { Suspense } from 'react';
 import { TodayPanel } from '@/components/features/nutrition/TodayPanel';
+import { WeeklyPanel } from '@/components/features/nutrition/WeeklyPanel';
 import { UNKNOWN_CHIP } from '@/integration/nutrition/profile-chip';
 import { SERVER_CONFIGURATION } from '@/integration/state/Environment.server';
 import { NutritionHeader } from '../NutritionHeader';
 import styles from '../page.module.css';
 import { LiveTodayPanel } from './LiveTodayPanel';
+import { LiveWeeklyPanel, WEEKLY_TITLE } from './LiveWeeklyPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +34,14 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           </>
         }
       >
-        <LiveTodayPanel searchParams={params} />
+        <LiveTodayPanel
+          searchParams={params}
+          weekly={(
+            <Suspense fallback={<WeeklyPanel model={{ kind: 'LOADING' }} title={WEEKLY_TITLE} />}>
+              <LiveWeeklyPanel searchParams={params} />
+            </Suspense>
+          )}
+        />
       </Suspense>
     </div>
   );

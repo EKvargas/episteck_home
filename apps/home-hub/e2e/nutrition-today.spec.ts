@@ -1,7 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
-import { newRun, observed, signIn } from './nutrition-support';
+import { berlinDaysAgo, HUB, newRun, observed, signIn } from './nutrition-support';
 
 const panel = (page: Page) => page.getByTestId('today-panel');
+const weekly = (page: Page) => page.getByTestId('weekly-panel');
+const byPath = (calls: Array<{ path: string; hasCookie: boolean }>) => [...calls].sort((a, b) => a.path.localeCompare(b.path));
 
 test('an empty day shows "Sin registros hoy" and never "0 g"; one mint and one diary call without a cookie', async ({ page, request }) => {
   const run = newRun();
@@ -14,8 +16,11 @@ test('an empty day shows "Sin registros hoy" and never "0 g"; one mint and one d
   await expect(panel(page)).toHaveAttribute('lang', 'es');
   expect(response?.headers()['cache-control']).toContain('no-store');
   const { mints, calls } = await observed(request, run);
-  expect(mints).toBe(1);
-  expect(calls).toEqual([{ path: '/diary/PSN-00001/days/today', hasCookie: false }]);
+  expect(mints).toBe(2);
+  expect(byPath(calls)).toEqual([
+    { path: '/diary/PSN-00001/days/today', hasCookie: false },
+    { path: `/diary/PSN-00001/period?start=${berlinDaysAgo(6)}`, hasCookie: false },
+  ]);
 });
 
 test('a partial day lists entries with ~, "1 alimento sin contar" and the BLS attribution', async ({ page }) => {
@@ -70,7 +75,7 @@ test('denied shows the Spanish denied copy; a 500 offers retry', async ({ page, 
   await page.goto('/app/nutrition/hoy');
   await expect(panel(page)).toContainText('El diario no responde ahora. Inténtalo de nuevo.');
   await page.getByRole('button', { name: 'Reintentar' }).click();
-  await expect.poll(async () => (await observed(request, run)).mints).toBe(2);
+  await expect.poll(async () => (await observed(request, run)).mints).toBe(4);
 });
 
 test('no demo banner on /app/nutrition/hoy in LIVE', async ({ page }) => {
@@ -123,5 +128,88 @@ test('refreshing Hoy fetches the latest diary after a meal changes in Telegram',
   await expect(panel(page)).toContainText('Sin registros hoy');
   await page.getByRole('button', { name: 'Actualizar diario' }).click();
   await expect(panel(page)).toContainText('Pan integral');
-  expect((await observed(request, run)).mints).toBe(2);
+  expect((await observed(request, run)).mints).toBe(4);
+});
+
+test('Hoy: two panels, two mints, one day GET and one 7-day period GET, no cookie, one bootstrap', async ({ page, request }) => {
+  const run = newRun();
+  await signIn(page, 'today-pregnancy', run);
+  // Document only: no hydration and no /api/context, so the counters see the server render alone.
+  const response = await page.request.get(`${HUB}/app/nutrition/hoy`);
+  expect(response.status()).toBe(200);
+  const html = await response.text();
+  expect(html).toContain('Corto: hierro, folato, vitamina D, colina');
+  const { mints, calls, bootstraps } = await observed(request, run);
+  expect(mints).toBe(2);
+  expect(bootstraps).toBe(1);
+  expect(byPath(calls)).toEqual([
+    { path: '/diary/PSN-00001/days/today', hasCookie: false },
+    { path: `/diary/PSN-00001/period?start=${berlinDaysAgo(6)}`, hasCookie: false },
+  ]);
+
+  // The same render in a browser: the week reads as three groups and no panel retried.
+  const browserRun = newRun();
+  await signIn(page, 'today-pregnancy', browserRun);
+  await page.goto('/app/nutrition/hoy');
+  await expect(weekly(page)).toContainText('Corto: hierro, folato, vitamina D, colina');
+  await expect(weekly(page)).toContainText('Bien: 3');
+  await expect(weekly(page)).toContainText('Faltan datos: 3');
+  await expect(weekly(page)).toHaveAttribute('lang', 'es');
+  await expect(weekly(page).getByRole('heading', { name: 'Vitaminas y minerales · últimos 7 días' })).toBeVisible();
+  expect((await observed(request, browserRun)).mints).toBe(2);
+});
+
+test('a vitamin group opens inline and each nutrient links to its detail', async ({ page }) => {
+  await signIn(page, 'today-pregnancy', newRun());
+  await page.goto('/app/nutrition/hoy');
+  const iron = weekly(page).getByRole('link', { name: /Hierro/ });
+  await expect(iron).toBeHidden();
+  await weekly(page).getByText('Corto: hierro, folato, vitamina D, colina').click();
+  await expect(iron).toBeVisible();
+  await expect(iron).toHaveAttribute('href', '/app/nutrition/nutriente/iron_mg?rango=7');
+  await expect(iron).toContainText('media 9,8 mg');
+  await expect(iron).toContainText('objetivo ≥ 27 mg');
+  await expect(iron).toContainText('corto');
+  await expect(iron).toContainText('con 4 días');
+  expect((await iron.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await weekly(page).getByText('Faltan datos: 3').click();
+  await expect(weekly(page)).toContainText('pocos días (2)');
+  await expect(weekly(page)).toContainText('pocos días (1)');
+  await expect(weekly(page)).toContainText('media sin dato');
+});
+
+test('each panel degrades on its own', async ({ page }) => {
+  await signIn(page, 'today-week-error', newRun());
+  await page.goto('/app/nutrition/hoy');
+  await expect(panel(page)).toContainText('Pan integral');
+  await expect(weekly(page)).toContainText('El resumen de la semana no responde ahora.');
+  await expect(weekly(page).getByRole('button', { name: 'Reintentar' })).toBeVisible();
+
+  await signIn(page, 'today-error', newRun());
+  await page.goto('/app/nutrition/hoy');
+  await expect(panel(page)).toContainText('El diario no responde ahora. Inténtalo de nuevo.');
+  await expect(weekly(page)).toContainText('Sin objetivo: 10');
+});
+
+test('a denied week reads its own copy, never the raw code', async ({ page }) => {
+  await signIn(page, 'today-denied', newRun());
+  await page.goto('/app/nutrition/hoy');
+  await expect(weekly(page)).toContainText('No tienes acceso a este resumen.');
+  await expect(panel(page)).toContainText('No tienes acceso a este diario.');
+  expect(await page.locator('body').innerText()).not.toContain('ACCESS_DENIED');
+});
+
+test('the weekly panel at 390 px never scrolls sideways', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(page, 'today-pregnancy', newRun());
+  await page.goto('/app/nutrition/hoy');
+  await expect(weekly(page)).toContainText('Corto: hierro');
+  for (const text of ['Corto: hierro, folato, vitamina D, colina', 'Bien: 3', 'Faltan datos: 3']) {
+    await weekly(page).getByText(text).click();
+  }
+  await expect(weekly(page).getByRole('link', { name: /DHA/ })).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+  const box = await weekly(page).boundingBox();
+  expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(390);
 });

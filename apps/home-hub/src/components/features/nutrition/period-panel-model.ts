@@ -3,6 +3,7 @@ import { amount, weekdayDay } from '../../../integration/nutrition/nutrition-for
 import type { PeriodAverage, PeriodDay, PeriodSummary } from '../../../integration/nutrition/period-contract.ts';
 import type { RangeDays } from '../../../integration/nutrition/period-range.ts';
 import type { DataEnvelope } from '../../../integration/state/DataEnvelope.ts';
+import { panelError } from './panel-error.ts';
 import type { SafeUIErrorCode } from '../../../integration/state/SafeUIErrorCode.ts';
 
 export type Cell = { value: string; detail: string | null; unknown: boolean };
@@ -82,19 +83,7 @@ function toPeriod(summary: PeriodSummary, range: RangeDays): PeriodPanelModel {
 }
 
 function errorModel(code: SafeUIErrorCode | undefined): PeriodPanelModel {
-  switch (code) {
-    case 'ACCESS_DENIED':
-      return { kind: 'DENIED' };
-    case 'SESSION_INVALID':
-    case 'SESSION_REQUIRED':
-      return { kind: 'SESSION' };
-    case 'NOT_CONFIGURED':
-      return { kind: 'NOT_CONFIGURED' };
-    case 'INVALID_RESPONSE':
-      return { kind: 'INVALID' };
-    default:
-      return { kind: 'UNAVAILABLE' };
-  }
+  return { kind: panelError(code) };
 }
 
 /** Fixed-vocabulary label for the one log line per read. */

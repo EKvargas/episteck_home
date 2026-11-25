@@ -27,7 +27,7 @@ const PAIRS = [
     loader: 'src/integration/nutrition/period-loader.ts',
     adapterPattern: /period\.server/,
     loaderPattern: /period-loader/,
-    allowed: ['src/app/nutrition/dias/LivePeriodPanel.tsx'],
+    allowed: ['src/app/nutrition/dias/LivePeriodPanel.tsx', 'src/app/nutrition/hoy/LiveWeeklyPanel.tsx'],
   },
 ];
 const USE_SERVER = /^\s*['"]use server['"]/m;

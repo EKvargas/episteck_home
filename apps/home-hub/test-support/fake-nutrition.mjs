@@ -52,7 +52,8 @@ createServer((request, response) => {
     switch (scenario) {
       case 'today-two-subjects':
         return match[1] === 'PSN-00001' ? json(200, PARTIAL_DAY) : json(403, { detail: 'ACCESS_DENIED' });
-      case 'today-updated': return json(200, list.length === 1 ? EMPTY_DAY : PARTIAL_DAY);
+      case 'today-updated': // count day reads only: the weekly panel reads the period for the same run
+        return json(200, list.filter((call) => call.path.includes('/days/today')).length === 1 ? EMPTY_DAY : PARTIAL_DAY);
       case 'today-no-profile': return json(200, NO_PROFILE_DAY);
       case 'today-partial':
       case 'today-week-error': return json(200, PARTIAL_DAY);

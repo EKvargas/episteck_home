@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { unstable_rethrow } from 'next/navigation';
 import { TodayPanel } from '@/components/features/nutrition/TodayPanel';
 import { todayOutcome, toTodayPanelModel, type TodayPanelModel } from '@/components/features/nutrition/today-panel-model';
@@ -31,7 +32,11 @@ async function resolvePanel(searchParams: SearchParams): Promise<Resolved> {
   return { model, chip: model.kind === 'TODAY' && envelope.data ? chipFromDay(envelope.data) : UNKNOWN_CHIP };
 }
 
-export async function LiveTodayPanel({ searchParams, compact }: { searchParams: SearchParams; compact?: boolean }) {
+export async function LiveTodayPanel({ searchParams, compact, weekly }: {
+  searchParams: SearchParams;
+  compact?: boolean;
+  weekly?: ReactNode;
+}) {
   const signInHref = new URL('/login', SERVER_CONFIGURATION.publicOrigin).toString();
   let resolved: Resolved;
   try {
@@ -41,7 +46,7 @@ export async function LiveTodayPanel({ searchParams, compact }: { searchParams: 
     resolved = { model: { kind: 'UNAVAILABLE' }, chip: UNKNOWN_CHIP };
   }
   logOutcome(todayOutcome(resolved.model));
-  const panel = <TodayPanel model={resolved.model} signInHref={signInHref} compact={compact} />;
+  const panel = <TodayPanel model={resolved.model} signInHref={signInHref} compact={compact} weekly={weekly} />;
   if (compact) return panel;
   return (
     <>

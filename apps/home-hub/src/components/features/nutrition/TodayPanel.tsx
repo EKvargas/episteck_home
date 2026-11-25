@@ -20,10 +20,26 @@ function Frame({ role, tone, busy, children }: {
   );
 }
 
-export function TodayPanel({ model, signInHref, compact = false }: {
+/** `weekly` renders after the day content for every day state, so a failed day never hides it. */
+export function TodayPanel({ model, signInHref, compact = false, weekly }: {
   model: TodayPanelModel;
   signInHref: string;
   compact?: boolean;
+  weekly?: ReactNode;
+}) {
+  if (weekly === undefined) return <TodayContent model={model} signInHref={signInHref} compact={compact} />;
+  return (
+    <>
+      <TodayContent model={model} signInHref={signInHref} compact={compact} />
+      {weekly}
+    </>
+  );
+}
+
+function TodayContent({ model, signInHref, compact }: {
+  model: TodayPanelModel;
+  signInHref: string;
+  compact: boolean;
 }) {
   switch (model.kind) {
     case 'LOADING':
