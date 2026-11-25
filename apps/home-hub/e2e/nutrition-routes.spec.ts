@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { HUB, newRun, observed, signIn } from './nutrition-support';
+import { expectTouchTarget, HUB, newRun, observed, signIn } from './nutrition-support';
 
 test('/app/nutrition redirects to Hoy keeping ?person=, before any Nutrition read', async ({ page, request }) => {
   const run = newRun();
@@ -33,6 +33,11 @@ test('¿Cómo anoto? holds the Telegram actions and reads nothing from Nutrition
   await page.goto('/app/nutrition/ayuda');
   await expect(page.getByRole('heading', { name: '¿Cómo anoto?' })).toBeVisible();
   await expect(page.getByText('Registrar una comida', { exact: true })).toBeVisible();
+  // Each example opens from a drawn caret like Hoy's and Perfil's, never the native marker, on a 44 px summary.
+  const summary = page.locator('summary', { hasText: 'Registrar una comida' });
+  expectTouchTarget(await summary.boundingBox());
+  await expect(summary.locator('svg[aria-hidden="true"]')).toHaveCount(1);
+  expect(await summary.evaluate((el) => getComputedStyle(el).display)).not.toBe('list-item');
   await expect(page.getByRole('note', { name: 'Demo mock data' })).toHaveCount(0);
   const tabs = page.getByRole('navigation', { name: 'Nutrición' });
   await expect(tabs.locator('[aria-current]')).toHaveCount(0);

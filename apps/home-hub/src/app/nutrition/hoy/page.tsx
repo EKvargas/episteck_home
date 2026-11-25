@@ -16,7 +16,7 @@ type SearchParams = Record<string, string | string[] | undefined>;
 export default async function TodayPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   if (SERVER_CONFIGURATION.mode === 'MOCK') {
     return (
-      <div className={styles.nutritionCanvas}>
+      <div className={`${styles.nutritionCanvas} ${styles.column}`}>
         <TodayPanel model={{ kind: 'NOT_CONFIGURED' }} signInHref="" />
       </div>
     );
@@ -24,7 +24,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
 
   const params = await searchParams;
   return (
-    <div className={styles.nutritionCanvas}>
+    <div className={`${styles.nutritionCanvas} ${styles.column}`}>
       {/* Keyed on the raw selector so one subject's panel can never paint under another's. */}
       <Suspense
         key={JSON.stringify(params.person ?? null)}

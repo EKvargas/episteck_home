@@ -13,7 +13,7 @@ type SearchParams = Record<string, string | string[] | undefined>;
 export default async function ProfilePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   if (SERVER_CONFIGURATION.mode === 'MOCK') {
     return (
-      <div className={styles.nutritionCanvas}>
+      <div className={`${styles.nutritionCanvas} ${styles.column}`}>
         <ProfilePanel model={{ kind: 'NOT_CONFIGURED' }} signInHref="" />
       </div>
     );
@@ -21,7 +21,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
 
   const params = await searchParams;
   return (
-    <div className={styles.nutritionCanvas}>
+    <div className={`${styles.nutritionCanvas} ${styles.column}`}>
       {/* Keyed on the raw selector so one subject's panel can never paint under another's. */}
       <Suspense
         key={JSON.stringify(params.person ?? null)}

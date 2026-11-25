@@ -5,7 +5,7 @@ import panel from '@/components/features/nutrition/NutrientPanel.module.css';
 /** Spanish not-found for an unknown nutrient code; a plain link back, no read, no mint. */
 export default function NutrientNotFound() {
   return (
-    <div className={styles.nutritionCanvas}>
+    <div className={`${styles.nutritionCanvas} ${styles.column}`}>
       <section lang="es" className={`${panel.panel} ${panel.warn}`}>
         <h1 className={panel.name}>Nutriente no encontrado</h1>
         <p className={panel.body}>No existe ese nutriente.</p>

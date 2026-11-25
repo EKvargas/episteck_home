@@ -23,7 +23,7 @@ export default async function NutrientPage({ params, searchParams }: {
 
   if (SERVER_CONFIGURATION.mode === 'MOCK') {
     return (
-      <div className={styles.nutritionCanvas}>
+      <div className={`${styles.nutritionCanvas} ${styles.column}`}>
         <NutrientPanel model={{ kind: 'NOT_CONFIGURED' }} signInHref="" />
       </div>
     );
@@ -33,7 +33,7 @@ export default async function NutrientPage({ params, searchParams }: {
   const range = parseRange(query.rango);
   const person = typeof query.person === 'string' ? query.person : null;
   return (
-    <div className={styles.nutritionCanvas}>
+    <div className={`${styles.nutritionCanvas} ${styles.column}`}>
       {/* Keyed on the raw selector, the nutrient and the range so one panel never paints under another's. */}
       <Suspense
         key={JSON.stringify([query.person ?? null, code, range])}

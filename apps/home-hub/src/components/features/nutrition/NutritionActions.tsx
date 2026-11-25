@@ -1,5 +1,6 @@
 'use client';
 
+import { CaretRight } from '@phosphor-icons/react';
 import { useAppContext } from '@/components/providers/AppProvider';
 import { useCopyResult } from './ChatPrompt';
 import styles from './NutritionActions.module.css';
@@ -71,7 +72,10 @@ export function NutritionActions({ title = 'Acciones en Telegram' }: { title?: s
             {note && <p className={styles.note}>{note}</p>}
             {actions.map((action) => (
               <details className={styles.action} key={action.title}>
-                <summary>{action.title}</summary>
+                <summary>
+                  <span className={styles.summaryText}>{action.title}</span>
+                  <CaretRight className={styles.caret} weight="bold" aria-hidden="true" />
+                </summary>
                 <div className={styles.example}>
                   <p>{action.prompt}</p>
                   <button

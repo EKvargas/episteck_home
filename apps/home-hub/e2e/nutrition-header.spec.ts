@@ -95,6 +95,31 @@ test('the header at 390 px never scrolls sideways', async ({ page }) => {
   }
 });
 
+test('at 1440 px the header furniture stays within the content column', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page, 'days-pregnancy', newRun());
+  const pages: Array<[string, string]> = [
+    ['/app/nutrition/hoy', 'today-panel'],
+    ['/app/nutrition/dias', 'period-panel'],
+    ['/app/nutrition/nutriente/iron_mg', 'nutrient-panel'],
+    ['/app/nutrition/perfil', 'profile-panel'],
+  ];
+  for (const [path, testId] of pages) {
+    await page.goto(path);
+    const content = (await page.getByTestId(testId).first().boundingBox())!;
+    const header = page.getByRole('heading', { level: 1, name: 'Nutrición' }).locator('xpath=../..');
+    const furniture: Array<[string, import('@playwright/test').Locator]> = [
+      ['header and its hairline', header],
+      ['person switcher', page.getByRole('navigation', { name: 'Context switcher' })],
+      ['profile chip', chip(page)],
+    ];
+    for (const [name, locator] of furniture) {
+      const box = (await locator.boundingBox())!;
+      expect(box.x + box.width, `${path}: ${name}`).toBeLessThanOrEqual(content.x + content.width + 1);
+    }
+  }
+});
+
 test('the help page shows the header with the plain Perfil chip and no extra read', async ({ page, request }) => {
   const run = newRun();
   await signIn(page, 'days-three', run);

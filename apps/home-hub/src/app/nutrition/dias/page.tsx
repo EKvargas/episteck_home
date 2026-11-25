@@ -14,7 +14,7 @@ type SearchParams = Record<string, string | string[] | undefined>;
 export default async function DaysPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   if (SERVER_CONFIGURATION.mode === 'MOCK') {
     return (
-      <div className={styles.nutritionCanvas}>
+      <div className={`${styles.nutritionCanvas} ${styles.column}`}>
         <PeriodPanel model={{ kind: 'NOT_CONFIGURED' }} signInHref="" />
       </div>
     );
@@ -24,7 +24,7 @@ export default async function DaysPage({ searchParams }: { searchParams: Promise
   const range = parseRange(params.dias);
   const person = typeof params.person === 'string' ? params.person : null;
   return (
-    <div className={styles.nutritionCanvas}>
+    <div className={`${styles.nutritionCanvas} ${styles.column}`}>
       {/* Keyed on the raw selector and the range so one subject's or window's panel never paints under another's. */}
       <Suspense
         key={JSON.stringify([params.person ?? null, range])}
