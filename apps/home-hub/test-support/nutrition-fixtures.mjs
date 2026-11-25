@@ -42,7 +42,7 @@ export const PRESENT = {
     training_note: 'Yoga', goal: 'MAINTAIN', pre_pregnancy_weight_kg: '58',
     UNKNOWN_FIELD_SENTINEL: 'x',
   },
-  food: { preferences: 'PRIVATE_PREF_SENTINEL', dislikes: 'PRIVATE_DISLIKE_SENTINEL', intolerances: 'lactosa' },
+  food: { preferences: 'PRIVATE_PREF_SENTINEL', dislikes: 'PRIVATE_DISLIKE_SENTINEL', intolerances: 'lactosa; frutos secos' },
   targets: { energy_kcal: '9999.9', calcium_mg: '1000' },
   target_set: {
     method: 'episteck-targets-1', on: '2026-11-24', items: [{ ...ENERGY }, { ...PROTEIN }],

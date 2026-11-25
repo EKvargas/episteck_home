@@ -1,6 +1,7 @@
 import type { DataEnvelope } from '../state/DataEnvelope.ts';
 import { isSafeUIErrorCode, type SafeUIErrorCode } from '../state/SafeUIErrorCode.ts';
 import type { NutritionProfile, ProfileRead } from './profile-contract.ts';
+import { panelError } from '../../components/features/nutrition/panel-error.ts';
 import {
   TRIMESTERS, fieldLabel, longDate, measurement, nutrientLabel, shortDate, targetValue,
 } from './nutrition-format.ts';
@@ -13,9 +14,10 @@ export type ProfilePanelModel =
       kind: 'PROFILE';
       subjectName: string | null;
       modePill: string | null;
+      dueDate: string | null;
       onboarded: boolean;
       basics: { label: string; value: string }[];
-      food: { label: string; value: string }[];
+      food: { label: string; chips: string[] }[];
       targets: { label: string; value: string; source: string }[];
       targetsSince: string;
       missing: string[];
@@ -67,7 +69,6 @@ function basicsOf(p: NutritionProfile): Row[] {
   });
   if (pregnancy) {
     rows.push({ label: 'Peso antes del embarazo', value: i.prePregnancyWeightKg === null ? MISSING : `${measurement(i.prePregnancyWeightKg)} kg` });
-    rows.push({ label: 'Fecha prevista de parto', value: p.dueDate === null ? MISSING : longDate(p.dueDate) });
   }
   rows.push({
     label: 'Actividad diaria',
@@ -123,17 +124,18 @@ function historyOf(p: NutritionProfile): string[] {
 }
 
 function profileModel(p: NutritionProfile, subjectName: string | null): Profile {
-  const orNone = (v: string | null) => v ?? '—';
+  const chips = (v: string | null) => (v ?? '').split(/[,;]/).map((c) => c.trim()).filter((c) => c !== '');
   return {
     kind: 'PROFILE',
     subjectName,
     modePill: p.mode === 'PREGNANCY' ? (p.trimester === null ? 'Embarazo' : `Embarazo · ${TRIMESTERS[p.trimester]}`) : null,
+    dueDate: p.dueDate === null ? null : longDate(p.dueDate),
     onboarded: p.onboarded,
     basics: basicsOf(p),
     food: [
-      { label: 'Preferencias', value: orNone(p.food.preferences) },
-      { label: 'No le gusta', value: orNone(p.food.dislikes) },
-      { label: 'Intolerancias', value: orNone(p.food.intolerances) },
+      { label: 'Preferencias', chips: chips(p.food.preferences) },
+      { label: 'No le gusta', chips: chips(p.food.dislikes) },
+      { label: 'Intolerancias', chips: chips(p.food.intolerances) },
     ],
     targets: targetsOf(p),
     targetsSince: `vigentes desde ${shortDate(p.validFrom)}`,
@@ -151,27 +153,9 @@ export function outcomeLabel(envelope: DataEnvelope<ProfileRead>): string {
 }
 
 function errorModel(code: SafeUIErrorCode | undefined, subjectName: string | null): ProfilePanelModel {
-  if (code === undefined) return { kind: 'UNAVAILABLE', subjectName };
-  switch (code) {
-    case 'ACCESS_DENIED':
-      return { kind: 'DENIED', subjectName };
-    case 'SESSION_INVALID':
-    case 'SESSION_REQUIRED':
-      return { kind: 'SESSION' };
-    case 'NOT_CONFIGURED':
-      return { kind: 'NOT_CONFIGURED' };
-    case 'INVALID_RESPONSE':
-      return { kind: 'INVALID', subjectName };
-    case 'SERVICE_UNAVAILABLE':
-    case 'OFFLINE':
-    case 'RESOURCE_NOT_AVAILABLE':
-      return { kind: 'UNAVAILABLE', subjectName };
-    default: {
-      const unmapped: never = code;
-      void unmapped;
-      return { kind: 'UNAVAILABLE', subjectName };
-    }
-  }
+  // The kinds match panelError exactly; only the subject name rides along on the ones that name a person.
+  const kind = panelError(code);
+  return kind === 'SESSION' || kind === 'NOT_CONFIGURED' ? { kind } : { kind, subjectName };
 }
 
 /** Map one adapter envelope to exactly one deliberate panel. Pure; no React, no server imports. */

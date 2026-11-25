@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { HUB, captureHubBodies, expectNoSecrets, newRun, observed, signIn, trackCspViolations } from './nutrition-support';
+import { HUB, captureHubBodies, expectNoSecrets, expectTouchTarget, newRun, observed, signIn, trackCspViolations } from './nutrition-support';
 
 const panel = (page: Page) => page.getByTestId('profile-panel');
 const MOCK_STRINGS = /Protein|Carbs|Mealie|View Dashboard|Pregnancy Nutrition|Consent required/i;
@@ -13,13 +13,31 @@ test('PRESENT shows the full profile, nothing unknown, one mint, one call, no se
   await expect(panel(page)).toContainText('Embarazo · 2.º trimestre');
   await expect(panel(page)).toContainText('≈ 2.250 kcal');
   await expect(panel(page)).toContainText('vigentes desde 24 nov');
-  await expect(panel(page)).toContainText('24 nov: perfil creado por chat');
+  // The due date sits at the top, before the targets.
+  const text = await panel(page).innerText();
+  expect(text.indexOf('Fecha prevista de parto')).toBeGreaterThan(-1);
+  expect(text.indexOf('Fecha prevista de parto')).toBeLessThan(text.indexOf('Objetivos diarios'));
+  expect(text.indexOf('1 mar 2027')).toBeLessThan(text.indexOf('Objetivos diarios'));
+  // Explanation and source stay behind the ⓘ disclosure until it is opened.
+  const sourceText = 'Mifflin-St Jeor';
+  await expect(panel(page).getByText(sourceText).first()).toBeHidden();
+  const info = page.locator('summary[aria-label="De dónde sale: Energía"]');
+  expectTouchTarget(await info.boundingBox());
+  await info.click();
+  await expect(panel(page).getByText(sourceText).first()).toBeVisible();
+  // History is collapsed until Historial is opened.
+  await expect(panel(page).getByText('24 nov: perfil creado por chat')).toBeHidden();
+  await panel(page).getByText('Historial', { exact: true }).click();
+  await expect(panel(page).getByText('24 nov: perfil creado por chat')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Cambiar en el chat' })).toHaveCount(1);
   expect(await page.content()).not.toContain('UNKNOWN_FIELD_SENTINEL');
   // The legacy flat targets map is ignored: only target_set is shown.
   expect(await panel(page).innerText()).not.toContain('9.999');
   const food = panel(page).locator('section', { hasText: 'Comida' }).first();
   await expect(food).toContainText('PRIVATE_PREF_SENTINEL');
   await expect(food).toContainText('PRIVATE_DISLIKE_SENTINEL');
+  await expect(food.getByText('lactosa', { exact: true })).toBeVisible();
+  await expect(food.getByText('frutos secos', { exact: true })).toBeVisible();
   const { mints, calls } = await observed(request, run);
   expect(mints).toBe(1);
   expect(calls).toEqual([{ path: '/profile/PSN-00001', hasCookie: false }]);
@@ -212,9 +230,9 @@ test('ABSENT offers the copy-ready "Quiero crear mi perfil"', async ({ page, con
 test("another subject's Perfil shows no chat prompts", async ({ page }) => {
   await signIn(page, 'present', newRun());
   await page.goto('/app/nutrition/perfil');
-  await expect(page.getByRole('button', { name: 'Cambiar en el chat' })).toHaveCount(2);
+  await expect(page.getByRole('button', { name: 'Cambiar en el chat' })).toHaveCount(1);
   await page.goto('/app/nutrition/perfil?person=PSN-00007');
-  await expect(panel(page)).toContainText('Datos básicos');
+  await expect(panel(page).getByRole('heading', { name: 'Datos' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Cambiar en el chat' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Copiar «Quiero crear mi perfil»' })).toHaveCount(0);
 });
@@ -231,7 +249,7 @@ test("another subject's Perfil omits the text addressed to the subject (ABSENT a
   await expect(panel(page)).toContainText('Tu bot te hace unas ocho preguntas');
   await page.goto('/app/nutrition/perfil?person=PSN-00007');
   await expect(panel(page)).toContainText('Todavía no hay perfil completo.');
-  await expect(panel(page)).toContainText('Datos básicos');
+  await expect(panel(page).getByRole('heading', { name: 'Datos' })).toBeVisible();
   await expect(panel(page)).not.toContainText('Tu bot te hace');
 });
 
