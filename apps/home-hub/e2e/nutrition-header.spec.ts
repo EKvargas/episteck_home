@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { newRun, observed, signIn } from './nutrition-support';
+import { expectTouchTarget, newRun, observed, signIn } from './nutrition-support';
 
 const chip = (page: import('@playwright/test').Page) => page.getByTestId('profile-chip');
 const tabs = (page: import('@playwright/test').Page) => page.getByRole('navigation', { name: 'Nutrición', exact: true });
@@ -66,7 +66,7 @@ test('one person sees no switcher; two see it with chips at least 44 px tall', a
   await expect(options).toHaveCount(2);
   for (const option of await options.all()) {
     const box = await option.boundingBox();
-    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expectTouchTarget(box);
   }
 });
 

@@ -85,3 +85,8 @@ const SECRETS = ['DELEGATION_SENTINEL', 'COOKIE_SENTINEL', 'episteck_home_sessio
 export function expectNoSecrets(text: string, cookieValue: string) {
   for (const secret of [...SECRETS, cookieValue]) expect(text, secret).not.toContain(secret);
 }
+
+/** A touch target is at least 44 px tall; getBoundingClientRect can read 43.99999 for a 44 px box. */
+export function expectTouchTarget(box: { height: number } | null) {
+  expect(box?.height ?? 0, 'touch target height in px').toBeGreaterThanOrEqual(43.99);
+}

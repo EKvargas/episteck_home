@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { berlinDaysAgo, HUB, newRun, observed, signIn } from './nutrition-support';
+import { berlinDaysAgo, expectTouchTarget, HUB, newRun, observed, signIn } from './nutrition-support';
 
 const panel = (page: Page) => page.getByTestId('today-panel');
 const weekly = (page: Page) => page.getByTestId('weekly-panel');
@@ -171,7 +171,7 @@ test('a vitamin group opens inline and each nutrient links to its detail', async
   await expect(iron).toContainText('objetivo ≥ 27 mg');
   await expect(iron).toContainText('corto');
   await expect(iron).toContainText('con 4 días');
-  expect((await iron.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  expectTouchTarget(await iron.boundingBox());
   await weekly(page).getByText('Faltan datos: 3').click();
   await expect(weekly(page)).toContainText('pocos días (2)');
   await expect(weekly(page)).toContainText('pocos días (1)');
