@@ -266,7 +266,7 @@ Editorial Ledger adds a hand-drawn ink circle (`.ledger-ink-circle`, an irregula
 
 ### Do:
 - **Do** read color, font, radius, shadow and blur from `--olin-*` tokens so every theme works.
-- **Do** keep one accent per screen region and use `--olin-status-*` for success, attention and error.
+- **Do** keep one accent per screen region and use `--olin-status-*` for status: success, caution, unknown and progress (no red), each with its word.
 - **Do** keep touch targets at least 44px and give every interactive element a 2px accent `:focus-visible` outline with 3px offset.
 - **Do** honor `prefers-reduced-motion`; new animation must be covered by the global rule or its own media query.
 - **Do** add a new themed region as a seven-file family (one component per theme plus default) behind the same props interface.

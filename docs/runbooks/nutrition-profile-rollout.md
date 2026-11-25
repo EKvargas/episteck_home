@@ -244,11 +244,10 @@ Plan 3 and its nutrition UI redesign add the read-only Hub pages Hoy (`/app/nutr
 
 4. `[OPERATOR]` Apply: `ROLL home-hub apply $SHA`. It backs up the Quadlet and prints the rollback command. Keep the printed backup directory.
 
-5. `[CLAUDE VERIFY]` `ROLL home-hub verify` is `PASS`, and anonymous `/app/nutrition/dias`, `/app/nutrition/hoy` and `/app/nutrition/nutriente/iron_mg` each return 307:
+5. `[CLAUDE VERIFY]` `ROLL home-hub verify` is `PASS`, and anonymous `/app/nutrition`, `/app/nutrition/perfil`, `/app/nutrition/hoy`, `/app/nutrition/dias`, `/app/nutrition/ayuda` and `/app/nutrition/nutriente/iron_mg` each return 307 (the layout sends anonymous users to login):
 
    ```bash
-   for p in dias hoy nutriente/iron_mg; do $SSH "curl -s -o /dev/null -w '%{http_code}
-' http://127.0.0.1:9940/app/nutrition/$p"; done
+   for p in "" /perfil /hoy /dias /ayuda /nutriente/iron_mg; do $SSH "curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:9940/app/nutrition$p"; done
    ```
 
 6. `[OPERATOR INPUT]` Phone checks (spec 7, acceptance 2 to 6):
@@ -260,7 +259,7 @@ Plan 3 and its nutrition UI redesign add the read-only Hub pages Hoy (`/app/nutr
    - Ana's Perfil, opened through the profile chip and again through Ajustes, shows `Embarazo · 2.º trimestre`, `≈ 2.250 kcal` with its source line, and `24 nov: perfil creado por chat`.
    - Erick's Perfil shows the onboarding offer until he onboards (C3), then his targets.
    - An old `/app/nutrition` link lands on Hoy.
-   - Cross-person check, as the first person (Erick) and then as the other (Ana), with no consent grant between them: open the other person's pages as `/app/nutrition/hoy?person=<other PSN>` and `/app/nutrition/perfil?person=<other PSN>`. Pass: either the denial (`Acceso restringido` on Perfil, `No tienes acceso a este historial de días.` on Días) or the page switching to the viewer's own data
+   - Cross-person check, as the first person (Erick) and then as the other (Ana), with no consent grant between them: open the other person's pages as `/app/nutrition/hoy?person=<other PSN>`, `/app/nutrition/perfil?person=<other PSN>` and `/app/nutrition/dias?person=<other PSN>`. Pass: either the denial (`Acceso restringido` on Perfil, `No tienes acceso a este historial de días.` on Días) or the page switching to the viewer's own data (Home lists no relationship between them, so `?person=` is treated as stale). Fail: any of the other person's data on screen.
 
 7. `[CLAUDE VERIFY]` The Hub logs carry only `nutrition.<view> outcome=<KIND>` lines for these pages. Count the outcomes (counts only; no IDs, names or numbers). The outcome lines include `nutrition.week` and `nutrition.nutrient` next to `nutrition.today`, `nutrition.period` and `nutrition.profile`:
 
@@ -274,7 +273,7 @@ Plan 3 and its nutrition UI redesign add the read-only Hub pages Hoy (`/app/nutr
    $SSH 'cd /; sudo -n -u svc-home-hub env XDG_RUNTIME_DIR=/run/user/$(id -u svc-home-hub) podman logs svc-home-hub 2>&1 | grep "nutrition\." | grep -cE "PSN-|[0-9]{3,}"'
    ```
 
-**Verification:** `ROLL home-hub verify` is `PASS`, the anonymous `/app/nutrition/dias`, `/hoy` and `/nutriente/iron_mg` checks return 307, the phone checks pass, the logs show only outcome lines, and the negative log check prints `0`.
+**Verification:** `ROLL home-hub verify` is `PASS`, the anonymous `/app/nutrition`, `/perfil`, `/hoy`, `/dias`, `/ayuda` and `/nutriente/iron_mg` checks return 307, the phone checks pass, the logs show only outcome lines, and the negative log check prints `0`.
 **Rollback:** `ROLL home-hub rollback <backup dir>` (the directory `apply` printed). Nutrition and the agents are untouched by this stage.
 
 ## Acceptance checklist
@@ -285,4 +284,4 @@ Plan 3 and its nutrition UI redesign add the read-only Hub pages Hoy (`/app/nutr
 - [ ] C3: all seven checks pass.
 - [ ] C4: `ANA verify` passes; `ANA cron` re-run; second-trimester supplement shown.
 - [ ] C5: seven days, no restarts, no errors; the third-trimester supplement checked at week 28.
-- [ ] C6: ROLL home-hub verify PASS; anonymous /app/nutrition/dias, /hoy and /nutriente/iron_mg 307; Hoy, Días (7 and 14), a nutrient detail and Perfil checked on Ana's phone; `nutrition.week` and `nutrition.nutrient` outcomes logged; access refused across people without consent.
+- [ ] C6: ROLL home-hub verify PASS; anonymous /app/nutrition, /perfil, /hoy, /dias, /ayuda and /nutriente/iron_mg 307; Hoy, Días (7 and 14), a nutrient detail and Perfil checked on Ana's phone; `nutrition.week` and `nutrition.nutrient` outcomes logged; access refused across people without consent.
