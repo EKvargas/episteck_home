@@ -349,10 +349,10 @@ test('a vitamin group opens inline and each nutrient links to its detail', async
   await weekly(page).getByText('Corto: hierro, folato, vitamina D, colina').click();
   await expect(iron).toBeVisible();
   await expect(iron).toHaveAttribute('href', '/app/nutrition/nutriente/iron_mg?rango=7');
-  await expect(iron).toContainText('media 9,8 mg');
+  await expect(iron).toContainText('media 8,4 mg');
   await expect(iron).toContainText('objetivo ≥ 27 mg');
   await expect(iron).toContainText('corto');
-  await expect(iron).toContainText('con 4 días');
+  await expect(iron).toContainText('con 3 días');
   expectTouchTarget(await iron.boundingBox());
   await weekly(page).getByText('Faltan datos: 3').click();
   await expect(weekly(page)).toContainText('pocos días (2)');

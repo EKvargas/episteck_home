@@ -259,22 +259,46 @@ const wday = (date, dayStatus, c) => ({
     energy_kcal: wblock('energy_kcal', c.energy[0], c.energy[1], c.energy[2]),
     protein_g: wblock('protein_g', c.protein[0], c.protein[1], c.protein[2]),
     fiber_g: wblock('fiber_g', c.fiber[0], c.fiber[1], c.fiber[2]),
-    ...Object.fromEntries(Object.entries(PREG_OTHERS).map(([code, [known, percent]]) => [
-      code, c.empty ? wblock(code, null, null, 'NONE') : wblock(code, known, percent, c.others ?? 'KNOWN'),
-    ])),
+    ...Object.fromEntries(Object.entries(PREG_OTHERS).map(([code, [known, percent]]) => {
+      if (c.empty) return [code, wblock(code, null, null, 'NONE')];
+      const [k, p, status = 'KNOWN'] = c.micro?.[code] ?? [known, percent, c.others];
+      return [code, wblock(code, k, p, status)];
+    })),
   }),
   free_sugars: c.sugar,
 });
 const NONE_C = { energy: [null, null, 'NONE'], protein: [null, null, 'NONE'], fiber: [null, null, 'NONE'] };
+// [known, percent, status] of the other nutrients on the three closed days that count for them.
+// WEEK_AVERAGES are their means: vitamin B12 is never known, iodine is partial on day 3, DHA on days 2 and 3.
+const MICRO = [
+  {
+    fat_g: ['70.5', '94'], carb_g: ['255.0', null], calcium_mg: ['1080.0', '108'], iron_mg: ['7.2', '27'],
+    folate_ug: ['300.0', '55'], vitamin_b12_ug: [null, null, 'NONE'], vitamin_d_ug: ['2.0', '10'],
+    iodine_ug: ['120.0', '55'], zinc_mg: ['11.5', '105'], selenium_ug: ['72.0', '120'], choline_mg: ['240.0', '50'],
+    dha_g: ['0.1', '50'],
+  },
+  {
+    fat_g: ['69.0', '92'], carb_g: ['260.0', null], calcium_mg: ['990.0', '99'], iron_mg: ['9.6', '36'],
+    folate_ug: ['310.0', '56'], vitamin_b12_ug: [null, null, 'NONE'], vitamin_d_ug: ['2.2', '11'],
+    iodine_ug: ['120.0', '55'], zinc_mg: ['10.6', '96'], selenium_ug: ['66.0', '110'], choline_mg: ['260.0', '54'],
+    dha_g: ['0.1', '50', 'PARTIAL'],
+  },
+  {
+    fat_g: ['71.1', '95'], carb_g: ['265.0', null], calcium_mg: ['1080.0', '108'], iron_mg: ['8.4', '31'],
+    folate_ug: ['320.0', '58'], vitamin_b12_ug: [null, null, 'NONE'], vitamin_d_ug: ['2.4', '12'],
+    iodine_ug: ['100.0', '45', 'PARTIAL'], zinc_mg: ['11.5', '105'], selenium_ug: ['72.0', '120'], choline_mg: ['280.0', '58'],
+    dha_g: ['0.1', '50', 'PARTIAL'],
+  },
+];
 const WEEK_DAYS = [
   wday('2026-11-18', 'COMPLETE', {
-    energy: ['2105', '94'], protein: ['70', '108'], fiber: ['31', '103'], sugar: wsugar('18.0', 'KNOWN', '36'),
+    energy: ['2105', '94'], protein: ['70', '108'], fiber: ['31', '103'], sugar: wsugar('18.0', 'KNOWN', '36'), micro: MICRO[0],
   }),
   wday('2026-11-19', 'COMPLETE', {
-    energy: ['1980', '88'], protein: ['60', '92'], fiber: ['22', '73'], sugar: wsugar('55.0', 'KNOWN', '110'),
+    energy: ['1980', '88'], protein: ['60', '92'], fiber: ['22', '73'], sugar: wsugar('55.0', 'KNOWN', '110'), micro: MICRO[1],
   }),
   wday('2026-11-20', 'COMPLETE', {
-    energy: ['2300', '103'], protein: ['66', '102'], fiber: ['30', '100'], sugar: wsugar('20.0', 'KNOWN', '40'),
+    energy: ['2300', '103'], protein: ['66', '102'], fiber: ['30', '100'], sugar: wsugar('20.0', 'KNOWN', '40'), micro: MICRO[2],
   }),
   wday('2026-11-21', 'COMPLETE', {
     energy: ['2600', '116'], protein: ['50', '77', 'PARTIAL'], fiber: ['25', '83'], sugar: wsugar(null, 'PARTIAL', null),
@@ -289,15 +313,17 @@ const WEEK_DAYS = [
     sugar: wsugar('12.0', 'PARTIAL', '24'), others: 'PARTIAL',
   }),
 ];
+// The week has 2 open days, 1 without entries and 4 closed; closed days a nutrient cannot use are `partial`.
 const wavg = (known, percent, used) => ({
-  average_known: known, average_percent: percent, days_used: used, left_out: { open: 2, no_entries: 1, partial: 1 },
+  average_known: known, average_percent: percent, days_used: used, left_out: { open: 2, no_entries: 1, partial: 4 - used },
 });
+// The mean of each nutrient over the closed days on which it is fully known (see MICRO and WEEK_DAYS).
 const WEEK_AVERAGES = fullAverages({
-  energy_kcal: wavg('2246.3', '100', 4), protein_g: wavg('61.5', '95', 3), fiber_g: wavg('27.0', '90', 4),
-  free_sugars_g: wavg('31.0', '62', 3), fat_g: wavg('70.2', '94', 4), carb_g: wavg('260.0', null, 4),
-  iron_mg: wavg('9.8', '36', 4), folate_ug: wavg('310.0', '56', 4), vitamin_d_ug: wavg('2.1', '11', 4),
-  choline_mg: wavg('260.0', '54', 4), calcium_mg: wavg('1050.0', '105', 4), zinc_mg: wavg('11.2', '102', 4),
-  selenium_ug: wavg('70.0', '117', 4), vitamin_b12_ug: wavg(null, null, 0), iodine_ug: wavg('120.0', '55', 2),
+  energy_kcal: wavg('2246.3', '100', 4), protein_g: wavg('65.3', '101', 3), fiber_g: wavg('27.0', '90', 4),
+  free_sugars_g: wavg('31.0', '62', 3), fat_g: wavg('70.2', '94', 3), carb_g: wavg('260.0', null, 3),
+  iron_mg: wavg('8.4', '31', 3), folate_ug: wavg('310.0', '56', 3), vitamin_d_ug: wavg('2.2', '11', 3),
+  choline_mg: wavg('260.0', '54', 3), calcium_mg: wavg('1050.0', '105', 3), zinc_mg: wavg('11.2', '102', 3),
+  selenium_ug: wavg('70.0', '117', 3), vitamin_b12_ug: wavg(null, null, 0), iodine_ug: wavg('120.0', '55', 2),
   dha_g: wavg('0.1', '50', 1),
 });
 
@@ -310,8 +336,12 @@ const shiftDate = (iso, days) => {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 };
+// The same week twice, so the same means over twice the days: 4 open, 2 without entries, 8 closed.
+const twice = (a) => ({
+  ...a, days_used: a.days_used * 2, left_out: { open: 4, no_entries: 2, partial: 8 - a.days_used * 2 },
+});
 export const PERIOD_FOURTEEN = {
   start: '2026-11-11', end: '2026-11-24', has_profile: true,
   days: [...WEEK_DAYS.map((d) => ({ ...d, date: shiftDate(d.date, -7) })), ...WEEK_DAYS],
-  averages: WEEK_AVERAGES,
+  averages: Object.fromEntries(Object.entries(WEEK_AVERAGES).map(([code, a]) => [code, twice(a)])),
 };

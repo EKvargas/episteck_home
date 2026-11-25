@@ -36,11 +36,13 @@ test('every closed day carries its state word; days without a bar carry their re
   assert.deepEqual(m.days.filter((d) => d.bar === null).map((d) => d.bar), [null, null, null]);
 });
 
-test('iron reads corto con 4 días against ≥ 27 mg', () => {
+test('iron reads corto con 3 días against ≥ 27 mg, from the three closed, complete days', () => {
   const m = detail(toNutrientDetailModel(week(), 'iron_mg', true, null));
-  assert.equal(m.average, '9,8 mg');
+  assert.equal(m.average, '8,4 mg');
   assert.equal(m.target, '≥ 27 mg');
-  assert.deepEqual(m.state, { tone: 'caution', word: 'corto', detail: 'con 4 días' });
+  assert.deepEqual(m.state, { tone: 'caution', word: 'corto', detail: 'con 3 días' });
+  assert.deepEqual(m.days.slice(0, 3).map((d) => d.value), ['7,2 mg', '9,6 mg', '8,4 mg']);
+  assert.equal(m.days[3].word, 'faltan datos');
   assert.equal(m.targetLine, 'Objetivo diario: al menos 27 mg.');
   assert.equal(m.days[0].bar?.mark, 'tick');
 });

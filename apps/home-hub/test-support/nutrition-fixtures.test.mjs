@@ -58,6 +58,49 @@ test('the pregnancy day matches the brief on its headline numbers', () => {
   assert.equal(d.entries[0].items[1].withFacts.includes('fiber_g'), false);
 });
 
+// Like Nutrition: an average uses only closed (COMPLETE) days on which the nutrient is fully known;
+// open, empty and partial days are left out and counted in `left_out`.
+for (const [name, period] of [['week', PERIOD_WEEK_PREGNANCY], ['fourteen days', PERIOD_FOURTEEN]]) {
+  test(`the pregnancy ${name}: every average, days_used and left_out agree with the days`, () => {
+    const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+    for (const code of AVERAGE_CODES) {
+      const blocks = period.days.map((d) => ({ status: d.day_status, b: code === 'free_sugars_g' ? d.free_sugars : d.nutrients[code] }));
+      const used = blocks.filter(({ status, b }) => status === 'COMPLETE' && b.status === 'KNOWN');
+      const avg = period.averages[code];
+      assert.equal(avg.days_used, used.length, `${code} days_used`);
+      assert.deepEqual(avg.left_out, {
+        open: blocks.filter(({ status }) => status === 'OPEN').length,
+        no_entries: blocks.filter(({ status }) => status === 'NO_ENTRIES').length,
+        partial: blocks.filter(({ status }) => status === 'COMPLETE').length - used.length,
+      }, `${code} left_out`);
+      if (used.length === 0) {
+        assert.equal(avg.average_known, null, `${code} average_known`);
+        assert.equal(avg.average_percent, null, `${code} average_percent`);
+        continue;
+      }
+      const known = mean(used.map(({ b }) => Number(b.known)));
+      assert.ok(Math.abs(known - Number(avg.average_known)) <= 0.05 + 1e-9, `${code} average ${avg.average_known} vs ${known}`);
+      const percents = used.map(({ b }) => b.percent);
+      if (percents.every((p) => p === null)) {
+        assert.equal(avg.average_percent, null, `${code} average_percent`);
+      } else {
+        const percent = mean(percents.map(Number));
+        assert.ok(Math.abs(percent - Number(avg.average_percent)) <= 1, `${code} percent ${avg.average_percent} vs ${percent}`);
+      }
+    }
+  });
+}
+
+test('every pregnancy-period day percent is its known value over its target', () => {
+  for (const day of [...PERIOD_WEEK_PREGNANCY.days, ...PERIOD_FOURTEEN.days]) {
+    for (const [code, b] of Object.entries(day.nutrients)) {
+      if (b.percent === null) continue;
+      const exact = (Number(b.known) / Number(b.target.value)) * 100;
+      assert.ok(Math.abs(exact - Number(b.percent)) <= 0.5 + 1e-9, `${day.date} ${code} ${b.percent} vs ${exact}`);
+    }
+  }
+});
+
 test('the pregnancy week reports the pinned averages', () => {
   const p = parsePeriodWire(PERIOD_WEEK_PREGNANCY);
   assert.equal(p.averages.energy_kcal.averageKnown, '2246.3');

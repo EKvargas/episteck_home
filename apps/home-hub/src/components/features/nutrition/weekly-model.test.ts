@@ -12,8 +12,8 @@ test('the pregnancy week groups as Corto (4), Bien (3), Faltan datos (3)', () =>
   const g = microGroups(summary, 7, 'PSN-00007');
   assert.deepEqual(g.map((x) => x.summary), ['Corto: hierro, folato, vitamina D, colina', 'Bien: 3', 'Faltan datos: 3']);
   assert.deepEqual(g[0].items[0], {
-    code: 'iron_mg', name: 'Hierro', average: '9,8 mg', target: '≥ 27 mg',
-    state: { tone: 'caution', word: 'corto', detail: 'con 4 días' },
+    code: 'iron_mg', name: 'Hierro', average: '8,4 mg', target: '≥ 27 mg',
+    state: { tone: 'caution', word: 'corto', detail: 'con 3 días' },
     href: '/app/nutrition/nutriente/iron_mg?person=PSN-00007&rango=7',
   });
   assert.deepEqual(g[2].items.map((r) => r.state.word), ['faltan datos', 'pocos días (2)', 'pocos días (1)']);

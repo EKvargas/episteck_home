@@ -21,8 +21,12 @@ test('top: name, average against target with the state word; range links keep th
   await signIn(page, 'days-pregnancy', newRun());
   await page.goto('/app/nutrition/nutriente/iron_mg?person=PSN-00001');
   await expect(panel(page).getByRole('heading', { name: 'Hierro' })).toBeVisible();
-  await expect(panel(page)).toContainText('Media 9,8 mg · objetivo ≥ 27 mg');
-  await expect(page.getByTestId('detail-state')).toHaveText('corto · con 4 días');
+  await expect(panel(page)).toContainText('Media 8,4 mg · objetivo ≥ 27 mg');
+  await expect(page.getByTestId('detail-state')).toHaveText('corto · con 3 días');
+  // The average is the mean of the three closed, complete days the page shows; the partial day is left out.
+  const text = (await days(page).allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim());
+  expect(text.slice(0, 3).map((t) => /\d+,\d mg/.exec(t)?.[0])).toEqual(['7,2 mg', '9,6 mg', '8,4 mg']);
+  expect(text[3]).toContain('faltan datos');
   const links = page.getByRole('navigation', { name: 'Rango de días' });
   await expect(links.getByRole('link', { name: '7 días' })).toHaveAttribute('aria-current', 'page');
   await expect(links.getByRole('link', { name: '3 días' })).toHaveAttribute('href', /\/nutrition\/nutriente\/iron_mg\?person=PSN-00001&rango=3$/);
@@ -110,5 +114,4 @@ test('the detail at 390 px never scrolls sideways and its targets are 44 px', as
     expectTouchTarget(await link.boundingBox());
   }
   expectTouchTarget(await panel(page).getByRole('link', { name: /Ver de dónde sale/ }).boundingBox());
-  await page.screenshot({ path: '../../.superpowers/sdd/2026-11-24-nutrition-ui-redesign/task-9-nutriente.png', fullPage: true });
 });
