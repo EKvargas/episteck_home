@@ -1,7 +1,7 @@
 import { amount, dayOfMonth, nutrientLabel, unitLabel, unitOf, weekdayInitial } from '../../../integration/nutrition/nutrition-format.ts';
 import { nutritionHref } from '../../../integration/nutrition/nutrition-href.ts';
 import {
-  dayPhase, dayState, limitTarget, type DayInput, type Tone, type WeeklyGroup,
+  CAUTION_WORDS, dayPhase, dayState, limitTarget, markOf, type DayInput, type DotMark, type Tone, type WeeklyGroup,
 } from '../../../integration/nutrition/nutrient-status.ts';
 import type { AveragedNutrient, PeriodDay, PeriodSummary } from '../../../integration/nutrition/period-contract.ts';
 import type { RangeDays } from '../../../integration/nutrition/period-range.ts';
@@ -10,9 +10,10 @@ import { panelError, type PanelErrorKind } from './panel-error.ts';
 import type { HeadlineCode } from './today-panel-model.ts';
 import { microGroups, type WeeklyRow } from './weekly-model.ts';
 
-export interface GridCell { tone: Tone; text: string }
+export type { DotMark };
+export interface GridCell { tone: Tone; mark: DotMark; text: string }
 export interface GridRow { code: HeadlineCode; name: string; href: string; cells: GridCell[]; average: string | null }
-export interface LegendItem { tone: Tone; words: string }
+export interface LegendItem { tone: Tone; mark: DotMark; words: string }
 export interface Grid { columns: { initial: string; day: string; date: string }[]; rows: GridRow[] }
 export type PeriodPanelModel =
   | { kind: 'LOADING' | PanelErrorKind }
@@ -47,8 +48,9 @@ function inputFor(day: PeriodDay, code: HeadlineCode): DayInput {
 function cellFor(day: PeriodDay, code: HeadlineCode, isToday: boolean): GridCell {
   const input = inputFor(day, code);
   const state = dayState(input, dayPhase(day.dayStatus, isToday));
-  if (state.word !== null) return { tone: state.tone, text: state.word };
-  return { tone: state.tone, text: input.known === null ? 'sin dato' : withUnit(input.known, unitOf(code)) };
+  const mark = markOf(state.tone, state.word);
+  if (state.word !== null) return { tone: state.tone, mark, text: state.word };
+  return { tone: state.tone, mark, text: input.known === null ? 'sin dato' : withUnit(input.known, unitOf(code)) };
 }
 
 function averageFor(summary: PeriodSummary, code: HeadlineCode): string {
@@ -57,25 +59,25 @@ function averageFor(summary: PeriodSummary, code: HeadlineCode): string {
   return withUnit(a.averageKnown, unitOf(code));
 }
 
-const LEGEND_ORDER: Tone[] = ['ok', 'caution', 'progress', 'unclosed', 'unknown', 'empty', 'plain'];
-const CAUTION_WORDS = ['corto', 'bajo', 'por encima', 'pasado del límite'];
+const LEGEND_ORDER: DotMark[] = ['ok', 'under', 'over', 'progress', 'unclosed', 'unknown', 'empty', 'plain'];
 
-/** The states the grids actually show, in status-language order, each with the words its dot stands for. */
+/** The marks the grids actually show, in status-language order, each with the words its dot stands for. */
 export function legendFor(grids: Grid[]): LegendItem[] {
-  const seen = new Map<Tone, Set<string>>();
+  const seen = new Map<DotMark, { tone: Tone; words: Set<string> }>();
   for (const grid of grids) {
     for (const row of grid.rows) {
       for (const cell of row.cells) {
         // A dot's word: the state word, with "en curso · faltan X" cut to "en curso"; a plain cell has none.
         const word = cell.tone === 'plain' ? 'sin objetivo' : cell.text.split(' · ')[0];
-        seen.set(cell.tone, (seen.get(cell.tone) ?? new Set()).add(word));
+        const entry = seen.get(cell.mark) ?? { tone: cell.tone, words: new Set<string>() };
+        seen.set(cell.mark, { ...entry, words: entry.words.add(word) });
       }
     }
   }
-  return LEGEND_ORDER.filter((tone) => seen.has(tone)).map((tone) => {
-    const words = [...seen.get(tone)!];
-    if (tone === 'caution') words.sort((a, b) => CAUTION_WORDS.indexOf(a) - CAUTION_WORDS.indexOf(b));
-    return { tone, words: words.join(' · ') };
+  return LEGEND_ORDER.filter((mark) => seen.has(mark)).map((mark) => {
+    const { tone, words } = seen.get(mark)!;
+    const sorted = [...words].sort((a, b) => CAUTION_WORDS.indexOf(a) - CAUTION_WORDS.indexOf(b));
+    return { tone, mark, words: sorted.join(' o ') };
   });
 }
 

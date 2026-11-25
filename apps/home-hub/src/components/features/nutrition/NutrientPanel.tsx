@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { markOf } from '@/integration/nutrition/nutrient-status';
 import type { NutrientDetailModel } from './nutrient-detail-model';
 import { RetryButton } from './RetryButton';
 import { StatusBar } from './StatusBar';
@@ -59,7 +60,12 @@ export function NutrientPanel({ model, signInHref }: { model: NutrientDetailMode
               {model.target !== null && <span> · objetivo {model.target}</span>}
             </p>
             {model.state.word !== null && (
-              <p className={styles.state} data-tone={model.state.tone} data-testid="detail-state">
+              <p
+                className={styles.state}
+                data-tone={model.state.tone}
+                data-mark={markOf(model.state.tone, model.state.word)}
+                data-testid="detail-state"
+              >
                 <span className={styles.mark} aria-hidden="true" />
                 <span>
                   {model.state.word}

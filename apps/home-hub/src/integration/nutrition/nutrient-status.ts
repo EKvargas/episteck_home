@@ -15,6 +15,20 @@ export interface Headline { code: string; kind: 'ABOUT' | 'MIN' | 'MAX' | null; 
 export type GroupKey = 'short' | 'fine' | 'missing' | 'plain';
 export interface WeeklyGroup<T> { key: GroupKey; summary: string; items: T[] }
 
+/** A state's shape. It follows the tone, except that caution splits into under and over. */
+export type DotMark = Exclude<Tone, 'caution'> | 'under' | 'over';
+
+const UNDER_WORDS = ['corto', 'bajo'];
+const OVER_WORDS = ['por encima', 'pasado del límite'];
+/** The caution words in status-language order: under first, then over. */
+export const CAUTION_WORDS = [...UNDER_WORDS, ...OVER_WORDS];
+
+/** Under (corto, bajo) and over (por encima, pasado del límite) share amber but never the shape. */
+export function markOf(tone: Tone, word: string | null): DotMark {
+  if (tone !== 'caution') return tone;
+  return word !== null && OVER_WORDS.includes(word) ? 'over' : 'under';
+}
+
 const state = (tone: Tone, word: string | null, detail: string | null = null): NutrientState => ({ tone, word, detail });
 const NO_DATA = (): NutrientState => state('unknown', 'faltan datos');
 

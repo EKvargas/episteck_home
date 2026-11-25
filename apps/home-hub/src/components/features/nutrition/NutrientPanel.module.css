@@ -37,6 +37,8 @@
 .mark { flex: none; width: 0.75rem; height: 0.75rem; border-radius: 50%; background: var(--olin-status-unknown); }
 .state[data-tone='ok'] .mark { background: var(--olin-status-success); }
 .state[data-tone='caution'] .mark { background: var(--olin-status-caution); border-radius: 2px; transform: rotate(45deg) scale(0.85); }
+/* Over (por encima, pasado del límite) is the up-triangle Días uses; under keeps the diamond. */
+.state[data-mark='over'] .mark { width: 0.875rem; border-radius: 0; transform: none; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
 .state[data-tone='unknown'] .mark { border-radius: 2px; }
 
 .days {

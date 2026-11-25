@@ -21,10 +21,14 @@ test('one 7-day grid: initials, day numbers, tones by phase, Media on the last g
   assert.deepEqual(m.grids[0].columns.map((c) => `${c.initial} ${c.day}`), ['X 18', 'J 19', 'V 20', 'S 21', 'D 22', 'L 23', 'M 24']);
   assert.deepEqual(m.grids[0].rows.map((r) => r.name), ['Energía', 'Proteína', 'Fibra', 'Azúcares libres']);
   assert.deepEqual(m.grids[0].rows[0].cells.map((c) => c.tone), ['ok', 'caution', 'ok', 'caution', 'unclosed', 'empty', 'progress']);
+  // Under and over share the caution colour but never the shape.
+  assert.deepEqual(m.grids[0].rows[0].cells.map((c) => c.mark), ['ok', 'under', 'ok', 'over', 'unclosed', 'empty', 'progress']);
   assert.deepEqual(m.grids[0].rows[0].cells.map((c) => c.text),
     ['bien', 'bajo', 'bien', 'por encima', 'sin cerrar', 'Sin registros', 'en curso · faltan ~610 kcal']);
   assert.equal(m.grids[0].rows[0].average, '2.246 kcal');
   assert.deepEqual(m.grids[0].rows[3].cells.slice(0, 4).map((c) => c.text), ['bien', 'pasado del límite', 'bien', 'faltan datos']);
+  assert.equal(m.grids[0].rows[3].cells[1].mark, 'over');
+  assert.deepEqual(m.grids[0].rows[1].cells.slice(0, 2).map((c) => [c.text, c.mark]), [['bien', 'ok'], ['corto', 'under']]);
   assert.equal(m.profileHint, false);
 });
 
@@ -68,18 +72,27 @@ test('no profile: plain cells carry their values and the hint shows', () => {
   assert.doesNotMatch(JSON.stringify(m.grids), /(^|\D)0 (g|kcal|%)/);
 });
 
-test('the legend lists only the states the grids show, in status-language order', () => {
+test('the legend lists only the marks the grids show, in status-language order, one phrase per mark', () => {
   const week = period(toPeriodPanelModel(ready(parsePeriodWire(PERIOD_WEEK_PREGNANCY)), 7, null));
   assert.deepEqual(week.legend, [
-    { tone: 'ok', words: 'bien' },
-    { tone: 'caution', words: 'corto · bajo · por encima · pasado del límite' },
-    { tone: 'progress', words: 'en curso' },
-    { tone: 'unclosed', words: 'sin cerrar' },
-    { tone: 'unknown', words: 'faltan datos' },
-    { tone: 'empty', words: 'Sin registros' },
+    { tone: 'ok', mark: 'ok', words: 'bien' },
+    { tone: 'caution', mark: 'under', words: 'corto o bajo' },
+    { tone: 'caution', mark: 'over', words: 'por encima o pasado del límite' },
+    { tone: 'progress', mark: 'progress', words: 'en curso' },
+    { tone: 'unclosed', mark: 'unclosed', words: 'sin cerrar' },
+    { tone: 'unknown', mark: 'unknown', words: 'faltan datos' },
+    { tone: 'empty', mark: 'empty', words: 'Sin registros' },
   ]);
   const none = period(toPeriodPanelModel(ready(parsePeriodWire(PERIOD_NO_PROFILE)), 3, null));
-  assert.ok(none.legend.some((l) => l.tone === 'plain' && l.words === 'sin objetivo'));
+  assert.ok(none.legend.some((l) => l.mark === 'plain' && l.words === 'sin objetivo'));
+});
+
+test('a grid with only one side of caution lists only that mark', () => {
+  // The first three days of the week, with day 2's free sugars under the limit: short and low, nothing over.
+  const week = parsePeriodWire(PERIOD_WEEK_PREGNANCY);
+  const days = week.days.slice(0, 3).map((d) => ({ ...d, freeSugars: { ...d.freeSugars, known: '20.0' } }));
+  const m = period(toPeriodPanelModel(ready({ ...week, days }), 3, null));
+  assert.deepEqual(m.legend.filter((l) => l.tone === 'caution'), [{ tone: 'caution', mark: 'under', words: 'corto o bajo' }]);
 });
 
 test('errors and MOCK map to deliberate panels', () => {

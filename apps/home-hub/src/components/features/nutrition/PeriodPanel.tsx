@@ -90,6 +90,7 @@ function GridView({ grid, many }: { grid: Grid; many: boolean }) {
                   role="img"
                   className={styles.dot}
                   data-tone={cell.tone}
+                  data-mark={cell.mark}
                   aria-label={`${row.name}, ${shortDate(grid.columns[i].date)}: ${cell.text}`}
                 />
               </td>
@@ -134,13 +135,13 @@ export function PeriodPanel({ model, signInHref }: { model: PeriodPanelModel; si
     case 'PERIOD':
       return (
         <Frame>
-          <div className={styles.card}>
+          <div className={`${styles.card} ${styles.gridCard}`}>
             <h2 className={styles.heading}>{model.title}</h2>
             {model.grids.map((grid) => <GridView key={grid.columns[0].date} grid={grid} many={model.grids.length > 1} />)}
             <ul className={styles.legend} aria-label="Leyenda">
               {model.legend.map((item) => (
-                <li key={item.tone} className={styles.legendItem} data-testid="legend-item">
-                  <span className={styles.dot} data-tone={item.tone} aria-hidden="true" />
+                <li key={item.mark} className={styles.legendItem} data-testid="legend-item">
+                  <span className={styles.dot} data-tone={item.tone} data-mark={item.mark} aria-hidden="true" />
                   {item.words}
                 </li>
               ))}

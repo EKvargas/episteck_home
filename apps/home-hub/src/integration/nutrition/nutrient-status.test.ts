@@ -1,9 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  barFor, dayPhase, dayState, groupWeekly, latestTarget, limitTarget, missingAmount, verdict, weeklyState,
+  barFor, dayPhase, dayState, groupWeekly, latestTarget, limitTarget, markOf, missingAmount, verdict, weeklyState,
   type Headline, type NutrientState, type Target, type Tone,
 } from './nutrient-status.ts';
+
+test('markOf: caution splits into under and over by its word; every other tone is its own mark', () => {
+  assert.equal(markOf('caution', 'corto'), 'under');
+  assert.equal(markOf('caution', 'bajo'), 'under');
+  assert.equal(markOf('caution', 'por encima'), 'over');
+  assert.equal(markOf('caution', 'pasado del límite'), 'over');
+  for (const tone of ['ok', 'unknown', 'progress', 'unclosed', 'empty', 'plain'] as const) assert.equal(markOf(tone, null), tone);
+  assert.equal(markOf('progress', 'en curso · faltan 17 g'), 'progress');
+});
 
 const MIN = { value: '65', displayValue: '65', unit: 'g', kind: 'MIN' } as const;
 const ABOUT = { value: '2241.6', displayValue: '2250', unit: 'kcal', kind: 'ABOUT' } as const;

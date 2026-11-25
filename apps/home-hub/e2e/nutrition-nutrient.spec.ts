@@ -23,6 +23,8 @@ test('top: name, average against target with the state word; range links keep th
   await expect(panel(page).getByRole('heading', { name: 'Hierro' })).toBeVisible();
   await expect(panel(page)).toContainText('Media 8,4 mg · objetivo ≥ 27 mg');
   await expect(page.getByTestId('detail-state')).toHaveText('corto · con 3 días');
+  // Short is the under mark, the same diamond as on Días.
+  await expect(page.getByTestId('detail-state')).toHaveAttribute('data-mark', 'under');
   // The average is the mean of the three closed, complete days the page shows; the partial day is left out.
   const text = (await days(page).allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim());
   expect(text.slice(0, 3).map((t) => /\d+,\d mg/.exec(t)?.[0])).toEqual(['7,2 mg', '9,6 mg', '8,4 mg']);
