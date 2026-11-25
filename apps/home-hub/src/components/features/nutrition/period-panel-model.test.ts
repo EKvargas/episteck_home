@@ -68,6 +68,20 @@ test('no profile: plain cells carry their values and the hint shows', () => {
   assert.doesNotMatch(JSON.stringify(m.grids), /(^|\D)0 (g|kcal|%)/);
 });
 
+test('the legend lists only the states the grids show, in status-language order', () => {
+  const week = period(toPeriodPanelModel(ready(parsePeriodWire(PERIOD_WEEK_PREGNANCY)), 7, null));
+  assert.deepEqual(week.legend, [
+    { tone: 'ok', words: 'bien' },
+    { tone: 'caution', words: 'corto · bajo · por encima · pasado del límite' },
+    { tone: 'progress', words: 'en curso' },
+    { tone: 'unclosed', words: 'sin cerrar' },
+    { tone: 'unknown', words: 'faltan datos' },
+    { tone: 'empty', words: 'Sin registros' },
+  ]);
+  const none = period(toPeriodPanelModel(ready(parsePeriodWire(PERIOD_NO_PROFILE)), 3, null));
+  assert.ok(none.legend.some((l) => l.tone === 'plain' && l.words === 'sin objetivo'));
+});
+
 test('errors and MOCK map to deliberate panels', () => {
   const err = (errorCode: string): DataEnvelope<PeriodSummary> =>
     ({ delivery: 'ERROR', authorization: 'INDETERMINATE', freshness: 'UNKNOWN', environment: 'LIVE', errorCode } as DataEnvelope<PeriodSummary>);

@@ -12,6 +12,7 @@ import { microGroups, type WeeklyRow } from './weekly-model.ts';
 
 export interface GridCell { tone: Tone; text: string }
 export interface GridRow { code: HeadlineCode; name: string; href: string; cells: GridCell[]; average: string | null }
+export interface LegendItem { tone: Tone; words: string }
 export interface Grid { columns: { initial: string; day: string; date: string }[]; rows: GridRow[] }
 export type PeriodPanelModel =
   | { kind: 'LOADING' | PanelErrorKind }
@@ -20,6 +21,7 @@ export type PeriodPanelModel =
       range: RangeDays;
       title: string;
       grids: Grid[];
+      legend: LegendItem[];
       micro: WeeklyGroup<WeeklyRow>[];
       profileHint: boolean;
     };
@@ -55,6 +57,28 @@ function averageFor(summary: PeriodSummary, code: HeadlineCode): string {
   return withUnit(a.averageKnown, unitOf(code));
 }
 
+const LEGEND_ORDER: Tone[] = ['ok', 'caution', 'progress', 'unclosed', 'unknown', 'empty', 'plain'];
+const CAUTION_WORDS = ['corto', 'bajo', 'por encima', 'pasado del límite'];
+
+/** The states the grids actually show, in status-language order, each with the words its dot stands for. */
+export function legendFor(grids: Grid[]): LegendItem[] {
+  const seen = new Map<Tone, Set<string>>();
+  for (const grid of grids) {
+    for (const row of grid.rows) {
+      for (const cell of row.cells) {
+        // A dot's word: the state word, with "en curso · faltan X" cut to "en curso"; a plain cell has none.
+        const word = cell.tone === 'plain' ? 'sin objetivo' : cell.text.split(' · ')[0];
+        seen.set(cell.tone, (seen.get(cell.tone) ?? new Set()).add(word));
+      }
+    }
+  }
+  return LEGEND_ORDER.filter((tone) => seen.has(tone)).map((tone) => {
+    const words = [...seen.get(tone)!];
+    if (tone === 'caution') words.sort((a, b) => CAUTION_WORDS.indexOf(a) - CAUTION_WORDS.indexOf(b));
+    return { tone, words: words.join(' · ') };
+  });
+}
+
 function toPeriod(summary: PeriodSummary, range: RangeDays, person: string | null): PeriodPanelModel {
   const grids: Grid[] = [];
   for (let from = 0; from < summary.days.length; from += GRID_DAYS) {
@@ -76,6 +100,7 @@ function toPeriod(summary: PeriodSummary, range: RangeDays, person: string | nul
     range,
     title: `Últimos ${range} días`,
     grids,
+    legend: legendFor(grids),
     micro: microGroups(summary, range, person),
     profileHint: !summary.hasProfile,
   };

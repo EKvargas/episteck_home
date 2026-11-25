@@ -135,6 +135,14 @@ export function PeriodPanel({ model, signInHref }: { model: PeriodPanelModel; si
           <div className={styles.card}>
             <h2 className={styles.heading}>{model.title}</h2>
             {model.grids.map((grid) => <GridView key={grid.columns[0].date} grid={grid} many={model.grids.length > 1} />)}
+            <ul className={styles.legend} aria-label="Leyenda">
+              {model.legend.map((item) => (
+                <li key={item.tone} className={styles.legendItem} data-testid="legend-item">
+                  <span className={styles.dot} data-tone={item.tone} aria-hidden="true" />
+                  {item.words}
+                </li>
+              ))}
+            </ul>
             <p className={styles.note}>La media usa solo días cerrados y completos.</p>
             {model.profileHint && (
               <div className={styles.hint}>

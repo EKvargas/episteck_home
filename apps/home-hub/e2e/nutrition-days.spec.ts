@@ -57,6 +57,18 @@ test('the grid: four rows, a dot per day with its word for assistive tech, and t
   await expect(panel(page)).toContainText('La media usa solo días cerrados y completos.');
 });
 
+test('a legend names every dot state in words, once for the page', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(page, 'days-fourteen', newRun());
+  await page.goto('/app/nutrition/dias?dias=14');
+  const items = panel(page).getByTestId('legend-item');
+  await expect(panel(page).getByRole('list', { name: 'Leyenda' })).toHaveCount(1);
+  await expect(items).toHaveText(['bien', 'corto · bajo · por encima · pasado del límite', 'en curso', 'sin cerrar', 'faltan datos', 'Sin registros']);
+  for (const item of await items.all()) await expect(item).toBeVisible();
+  expect(await panel(page).getByRole('list', { name: 'Leyenda' }).evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await expect(items.first().locator('[aria-hidden="true"]')).toHaveCount(1);
+});
+
 test('an unclosed past day is a grey ring with "sin cerrar"; today open is a neutral ring', async ({ page }) => {
   await signIn(page, 'days-pregnancy', newRun());
   await page.goto('/app/nutrition/dias');
