@@ -95,8 +95,8 @@ components:
     height: "44px"
     padding: "0 0.75rem"
   chip-active:
-    backgroundColor: "{colors.terracotta}"
-    textColor: "#ffffff"
+    backgroundColor: "{colors.terracotta-wash}"
+    textColor: "{colors.terracotta-deep-text}"
     rounded: "{rounded.pill}"
     padding: "0.35rem 0.75rem"
 ---
@@ -175,12 +175,12 @@ All five families are loaded with `next/font/google` in `layout.tsx` (`display: 
 - **Settings title** (600, 2rem, line-height 1.1, letter-spacing -0.04em).
 - **Greeting / hero** (700, 1.75rem): slot today headers.
 - **Section title** (700, 1.5rem, line-height 1.25): action sections. Card titles in slots are 700 at about 1.05rem.
-- **Hero number** (600, 2.25rem, letter-spacing -0.03em, `text-wrap: balance`): the daily-total line on the nutrition Today panel; 1.75rem under 768px. The older calorie ring uses 3.5rem / 700 / -0.04em.
+- **Verdict** (600, 1.25rem, line-height 1.35, letter-spacing -0.01em, `text-wrap: pretty`, body font): the one-line answer at the top of Hoy. Nutrition has no hero number; only the demo calorie ring (`NutritionDemoCluster`) keeps 3.5rem / 700 / -0.04em.
 - **Body** (400-600, 1rem): `--olin-font-body`; muted copy 0.875-0.9rem.
 - **Label** (600, 0.72-0.75rem, +0.04em tracking, mono): tags and badges; the calorie label is 0.875rem uppercase with 0.05em tracking.
 
 ### Named Rules
-**The Tabular Time Rule.** Times and quantities use `font-variant-numeric: tabular-nums` (the nutrition timeline does) so columns align.
+**The Tabular Time Rule.** Times and quantities use `font-variant-numeric: tabular-nums` (Hoy's amounts and meal times, the Días day numbers and Media column, Perfil's target values) so columns align.
 
 **The Theme Font Rule.** Set `font-family` via `--olin-font-headline`, `--olin-font-body` or `--olin-font-mono`, never a literal family. (Slot CSS sometimes reaches for `--ep-font-mono` directly; prefer the olin alias.)
 
@@ -188,7 +188,7 @@ All five families are loaded with `next/font/google` in `layout.tsx` (`display: 
 
 Mobile-first. The shell (`AppShell`) is a flex row: a 240px sidebar (80px collapsed) from 768px up, and a fixed 60px bottom nav below 768px with 60px of bottom padding on the content. Page canvases pad 1.5rem, often 6rem at the bottom to clear the nav. Settings pages center a 900px container with `--ep-space-10` / `--ep-space-6` padding, growing to `--ep-space-16` / `--ep-space-12` at 768px.
 
-Content grids are single column, becoming two equal columns at 768px, with `1.5rem` gaps; hero cards span all columns. Breakpoints in use: 640px (most common), 768px (shell switch), 900px, 1024px, 1600px.
+Content grids are single column, becoming two equal columns at 768px, with `1.5rem` gaps; hero cards span all columns. The nutrition pages (Hoy, Días, a nutrient, Perfil, ayuda) read as one column at most 42rem wide, left-aligned: the header furniture (title row, profile chip, person switcher, tabs, hairline) and the range pills never run wider than the content under them. Breakpoints in use: 640px (most common), 768px (shell switch), 900px, 1024px, 1600px.
 
 Spacing scale (`--ep-space-*`): 4, 8, 12, 16, 24, 32, 40, 48, 64px. Slot and feature CSS mostly uses rem values (0.5, 0.75, 1, 1.25, 1.5rem) that fall on the same rhythm. Touch targets are at least 44px tall on the nutrition links, buttons and disclosure summaries.
 
@@ -211,7 +211,7 @@ Depth is theme-defined and comes from one token, `--olin-shadow-elevation`, plus
 
 ## Shapes
 
-Corner radius is a theme token. Cards use `--olin-card-radius`: 1.6rem (Warm), 1.85rem (Ambient, Organic), 1.25rem (Hardware), 0.35rem (Editorial), 2.1rem (Canvas). Pills and nav items use `--olin-pill-radius`: 1.4rem (Warm), 9999px (Ambient, Canvas, Organic), 0.75rem (Hardware), 0.35rem (Editorial). Inner elements step down: task rows 0.85rem, checkboxes 0.35rem, tags 0.4rem, meters 4px, ghost buttons 0.5rem. Borders are 1px hairlines in `--olin-surface-border`; a 4px left border in `--olin-accent` marks a notice card.
+Corner radius is a theme token. Cards use `--olin-card-radius`: 1.6rem (Warm), 1.85rem (Ambient, Organic), 1.25rem (Hardware), 0.35rem (Editorial), 2.1rem (Canvas). Pills and nav items use `--olin-pill-radius`: 1.4rem (Warm), 9999px (Ambient, Canvas, Organic), 0.75rem (Hardware), 0.35rem (Editorial). Inner elements step down: task rows 0.85rem, checkboxes 0.35rem, tags 0.4rem, meters 4px, ghost buttons 0.5rem. Borders are 1px hairlines in `--olin-surface-border`. Nutrition state messages (denied, unavailable, invalid) are plain cards with that hairline; Perfil's error frame recolours it to `--olin-accent`. No nutrition card carries a coloured side border. (Observed outside nutrition: the Memory attention card and some calendar items still use a 4px accent left border; not a pattern to copy.)
 
 Editorial Ledger adds a hand-drawn ink circle (`.ledger-ink-circle`, an irregular 54/46 radius with a 2px accent border) and Nordic Hardware a conic-gradient rotary knob (`.rotary-knob`); both are global utility classes in `globals.css`.
 
@@ -233,6 +233,7 @@ Editorial Ledger adds a hand-drawn ink circle (`.ledger-ink-circle`, an irregula
 
 ### Chips and switchers
 - Relationship switcher: a pill track (`--olin-surface-card`, 1px border, 9999px) holding chips; the active chip is the badge pair (`--olin-badge-bg` fill, `--olin-badge-text` text, weight 600) with a 2px inset ring in `--olin-accent`. The default set recolors only the ring by mode (care for another person: #8b5cf6; family: `--olin-surface-border-strong`). Each theme restyles this region in its own slot.
+- Range pills (3 / 7 / 14 días on Días and a nutrient): 44px outlined pills on the card fill. The current one wears the same badge pair over the card fill, weight 700, with the 2px inset accent ring, so it reads at 4.5:1 in every theme (`status-tokens.test.ts`). Never white on the accent.
 
 ### Badges / tags
 - Mono 0.72-0.75rem, weight 600, `--olin-badge-bg` fill, `--olin-badge-text` text, 1px border, 0.375-0.4rem radius.
@@ -241,10 +242,12 @@ Editorial Ledger adds a hand-drawn ink circle (`.ledger-ink-circle`, an irregula
 - Spanish labels: Inicio, Memoria, Nutrición (`ForkKnife` icon), Salud, Calendario, Ajustes. In the bottom nav the current tab is text-main at weight 700.
 - Sidebar items: pill radius, muted text, 0.95rem; hover fills `--olin-surface-card-hover`; active state is card fill, main text, weight 600, elevation shadow and 1px border. Brand motif is a 14px ring in the accent. Mobile bottom nav: 60px, card fill, blur, top hairline, icon over 0.75rem label.
 - Page-level links on nutrition: underlined, 600, 44px tall, current page is text-main at 700 with a 3px accent underline (Hoy · Días tabs).
+- Disclosures (Hoy's meals, Fuentes and vitamin groups, Perfil's Historial, the ayuda examples): native `<details>` with the marker hidden and a Phosphor `CaretRight` (aria-hidden, muted) that turns 90° when open, on a summary at least 44px tall.
 
 ### Meters and progress
 - Status bar (`StatusBar`): a 0–150 % track in `--olin-badge-bg`, 8px high, so the target (100 %) sits two thirds along. A tick marks a minimum, a 90–110 % band an "about" target, a heavier cap a limit. The fill takes its tone from the `--olin-status-*` token for the state; its width is a CSS ratio of raw wire decimals (`--bar-value` / `--bar-scale`), never a computed percentage.
-- Status dots and legend (Días): one dot per day, shape per state (filled circle bien, rotated diamond caution, square unknown, ringed circle en curso, dashed ring sin cerrar, dash Sin registros), with a legend of the same words beneath.
+- Status dots and legend (Días): one dot per day, shape per state (filled circle bien, rotated diamond for under (corto, bajo), up-triangle for over (por encima, pasado del límite), square unknown, ringed circle en curso, dashed ring sin cerrar, dash Sin registros), with a legend beneath that shows each shape once beside its words ("corto o bajo", "por encima o pasado del límite"). Each dot's accessible name carries its exact word, and the nutrient page's state mark uses the same shapes (`markOf` in `nutrient-status.ts`). The whole row is one link to the nutrient; its tap area is anchored to the row's name cell (not the `<tr>`, which older WebKit cannot position), so it never covers the links around the grid.
+- The Media column keeps each value on one line with its unit.
 - Other meters and skeletons reuse the badge fill and a 1.2s opacity pulse.
 
 ### Slot components (signature)

@@ -252,14 +252,15 @@ Plan 3 and its nutrition UI redesign add the read-only Hub pages Hoy (`/app/nutr
 
 6. `[OPERATOR INPUT]` Phone checks (spec 7, acceptance 2 to 6):
    - The Home Screen shortcut opens Hoy.
-   - Ana's Hoy shows the verdict and the four bars (Energía, Proteína, Fibra, Azúcares libres) on the first screen, with `Energía` reading `… de 2.250 kcal`.
+   - The pregnant member's Hoy shows the verdict and the four bars (Energía, Proteína, Fibra, Azúcares libres) on the first screen, with `Energía` reading `… de 2.250 kcal`.
    - The vitamins group opens and its rows link to the nutrient detail page.
-   - Ana's Días shows the 7-day grid and, with `14 días`, two stacked weeks, matching what her bot says for the same days.
+   - The pregnant member's Días shows the 7-day grid and, with `14 días`, two stacked weeks, matching what her bot says for the same days.
+   - On the iPhone, on Días, tap a range link and the Hoy tab: they must work, not open a nutrient page.
    - The detail page for one nutrient (for example iron) shows its daily bars and the target mark.
-   - Ana's Perfil, opened through the profile chip and again through Ajustes, shows `Embarazo · 2.º trimestre`, `≈ 2.250 kcal` with its source line, and `24 nov: perfil creado por chat`.
+   - The pregnant member's Perfil, opened through the profile chip and again through Ajustes, shows `Embarazo · 2.º trimestre` on the profile chip, `≈ 2.250 kcal` with its source line, and `24 nov: perfil creado por chat`.
    - Erick's Perfil shows the onboarding offer until he onboards (C3), then his targets.
    - An old `/app/nutrition` link lands on Hoy.
-   - Cross-person check, as the first person (Erick) and then as the other (Ana), with no consent grant between them: open the other person's pages as `/app/nutrition/hoy?person=<other PSN>`, `/app/nutrition/perfil?person=<other PSN>` and `/app/nutrition/dias?person=<other PSN>`. Pass: either the denial (`Acceso restringido` on Perfil, `No tienes acceso a este historial de días.` on Días) or the page switching to the viewer's own data (Home lists no relationship between them, so `?person=` is treated as stale). Fail: any of the other person's data on screen.
+   - Cross-person check, as the owner and then as the pregnant member, with no consent grant between them: open the other person's pages as `/app/nutrition/hoy?person=<other PSN>`, `/app/nutrition/perfil?person=<other PSN>` and `/app/nutrition/dias?person=<other PSN>`. Pass: either the denial (`Acceso restringido` on Perfil, `No tienes acceso a este historial de días.` on Días) or the page switching to the viewer's own data (Home lists no relationship between them, so `?person=` is treated as stale). Fail: any of the other person's data on screen.
 
 7. `[CLAUDE VERIFY]` The Hub logs carry only `nutrition.<view> outcome=<KIND>` lines for these pages. Count the outcomes (counts only; no IDs, names or numbers). The outcome lines include `nutrition.week` and `nutrition.nutrient` next to `nutrition.today`, `nutrition.period` and `nutrition.profile`:
 
@@ -284,4 +285,4 @@ Plan 3 and its nutrition UI redesign add the read-only Hub pages Hoy (`/app/nutr
 - [ ] C3: all seven checks pass.
 - [ ] C4: `ANA verify` passes; `ANA cron` re-run; second-trimester supplement shown.
 - [ ] C5: seven days, no restarts, no errors; the third-trimester supplement checked at week 28.
-- [ ] C6: ROLL home-hub verify PASS; anonymous /app/nutrition, /perfil, /hoy, /dias, /ayuda and /nutriente/iron_mg 307; Hoy, Días (7 and 14), a nutrient detail and Perfil checked on Ana's phone; `nutrition.week` and `nutrition.nutrient` outcomes logged; access refused across people without consent.
+- [ ] C6: ROLL home-hub verify PASS; anonymous /app/nutrition, /perfil, /hoy, /dias, /ayuda and /nutriente/iron_mg 307; Hoy, Días (7 and 14), a nutrient detail and Perfil checked on the pregnant member's phone; Días range links and tabs work on the iPhone; `nutrition.week` and `nutrition.nutrient` outcomes logged; access refused across people without consent.
