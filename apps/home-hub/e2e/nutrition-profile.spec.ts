@@ -10,8 +10,16 @@ test('PRESENT shows the full profile, nothing unknown, one mint, one call, no se
   const cspViolations = await trackCspViolations(page);
   const hubBodies = await captureHubBodies(page);
   const response = await page.goto('/app/nutrition/perfil');
-  await expect(panel(page)).toContainText('Embarazo · 2.º trimestre');
+  // The mode is said once, by the header chip: no badge under the title and no Modo row in Datos.
+  await expect(page.getByTestId('profile-chip')).toHaveText('Embarazo · 2.º trimestre');
   await expect(panel(page)).toContainText('≈ 2.250 kcal');
+  await expect(panel(page)).not.toContainText('Embarazo');
+  const datos = panel(page).locator('section', { has: page.getByRole('heading', { name: 'Datos' }) });
+  const facts = await datos.locator('dl > div').evaluateAll((els) =>
+    els.map((el) => [el.querySelector('dt')?.textContent, el.querySelector('dd')?.textContent]));
+  expect(facts.map(([label]) => label)).not.toContain('Modo');
+  // Actividad diaria in words, without the activity coefficient.
+  expect(facts).toContainEqual(['Actividad diaria', 'Sentado, con algo de caminar o estar de pie']);
   await expect(panel(page)).toContainText('vigentes desde 24 nov');
   // The due date sits at the top, before the targets.
   const text = await panel(page).innerText();
@@ -29,7 +37,9 @@ test('PRESENT shows the full profile, nothing unknown, one mint, one call, no se
   await expect(panel(page).getByText('24 nov: perfil creado por chat')).toBeHidden();
   await panel(page).getByText('Historial', { exact: true }).click();
   await expect(panel(page).getByText('24 nov: perfil creado por chat')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Cambiar en el chat' })).toHaveCount(1);
+  // Like Hoy's prompt, the button names the copy action.
+  await expect(page.getByRole('button', { name: 'Copiar «Quiero cambiar mi perfil»' })).toHaveCount(1);
+  await expect(panel(page)).toContainText('Los cambios del perfil se hacen en el chat.');
   expect(await page.content()).not.toContain('UNKNOWN_FIELD_SENTINEL');
   // The legacy flat targets map is ignored: only target_set is shown.
   expect(await panel(page).innerText()).not.toContain('9.999');
@@ -211,7 +221,7 @@ test('a mode-only profile offers onboarding and still shows the due date', async
   await page.goto('/app/nutrition/perfil');
   await expect(panel(page)).toContainText('Todavía no hay perfil completo.');
   await expect(panel(page)).toContainText('Tu bot te hace unas ocho preguntas y calcula tus objetivos.');
-  await expect(panel(page)).toContainText('Embarazo · 2.º trimestre');
+  await expect(page.getByTestId('profile-chip')).toHaveText('Embarazo · 2.º trimestre');
   await expect(panel(page)).toContainText('1 mar 2027');
   await expect(panel(page)).not.toContainText('Sin perfil de nutrición');
   await expect(page.getByRole('button', { name: 'Copiar «Quiero crear mi perfil»' })).toBeVisible();
@@ -230,10 +240,11 @@ test('ABSENT offers the copy-ready "Quiero crear mi perfil"', async ({ page, con
 test("another subject's Perfil shows no chat prompts", async ({ page }) => {
   await signIn(page, 'present', newRun());
   await page.goto('/app/nutrition/perfil');
-  await expect(page.getByRole('button', { name: 'Cambiar en el chat' })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'Copiar «Quiero cambiar mi perfil»' })).toHaveCount(1);
   await page.goto('/app/nutrition/perfil?person=PSN-00007');
   await expect(panel(page).getByRole('heading', { name: 'Datos' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Cambiar en el chat' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Copiar «Quiero cambiar mi perfil»' })).toHaveCount(0);
+  await expect(panel(page)).not.toContainText('Los cambios del perfil');
   await expect(page.getByRole('button', { name: 'Copiar «Quiero crear mi perfil»' })).toHaveCount(0);
 });
 

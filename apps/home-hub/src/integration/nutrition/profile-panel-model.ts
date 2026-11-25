@@ -3,7 +3,7 @@ import { isSafeUIErrorCode, type SafeUIErrorCode } from '../state/SafeUIErrorCod
 import type { NutritionProfile, ProfileRead } from './profile-contract.ts';
 import { panelError } from '../../components/features/nutrition/panel-error.ts';
 import {
-  TRIMESTERS, fieldLabel, longDate, measurement, nutrientLabel, shortDate, targetValue,
+  fieldLabel, longDate, measurement, nutrientLabel, shortDate, targetValue,
 } from './nutrition-format.ts';
 
 export type ProfilePanelModel =
@@ -13,7 +13,6 @@ export type ProfilePanelModel =
   | {
       kind: 'PROFILE';
       subjectName: string | null;
-      modePill: string | null;
       dueDate: string | null;
       onboarded: boolean;
       basics: { label: string; value: string }[];
@@ -29,11 +28,12 @@ type Profile = Extract<ProfilePanelModel, { kind: 'PROFILE' }>;
 type Row = { label: string; value: string };
 
 const MISSING = 'falta';
+// The words only: the activity coefficient behind each level stays in the profile, not on screen.
 const PAL_LABELS = new Map<number, string>([
-  [1.4, 'Sobre todo sentado, poca actividad (1,4)'],
-  [1.6, 'Sentado, con algo de caminar o estar de pie (1,6)'],
-  [1.8, 'Sobre todo de pie o caminando (1,8)'],
-  [2.0, 'Trabajo físico intenso (2,0)'],
+  [1.4, 'Sobre todo sentado, poca actividad'],
+  [1.6, 'Sentado, con algo de caminar o estar de pie'],
+  [1.8, 'Sobre todo de pie o caminando'],
+  [2.0, 'Trabajo físico intenso'],
 ]);
 const GOAL_LABELS = { MAINTAIN: 'Mantener', LOSE_FAT: 'Perder grasa', BUILD_MUSCLE: 'Ganar músculo', PERFORMANCE: 'Rendimiento' } as const;
 const NUTRIENT_ORDER = [
@@ -76,7 +76,7 @@ function basicsOf(p: NutritionProfile): Row[] {
   });
   rows.push({ label: 'Entrenamiento', value: trainingValue(i.trainingSessionsPerWeek, i.trainingNote) });
   if (!pregnancy) rows.push({ label: 'Objetivo', value: i.goal === null ? MISSING : GOAL_LABELS[i.goal] });
-  rows.push({ label: 'Modo', value: pregnancy ? 'Embarazo' : 'General' });
+  // No mode row: the header chip names the mode.
   return rows;
 }
 
@@ -128,7 +128,6 @@ function profileModel(p: NutritionProfile, subjectName: string | null): Profile 
   return {
     kind: 'PROFILE',
     subjectName,
-    modePill: p.mode === 'PREGNANCY' ? (p.trimester === null ? 'Embarazo' : `Embarazo · ${TRIMESTERS[p.trimester]}`) : null,
     dueDate: p.dueDate === null ? null : longDate(p.dueDate),
     onboarded: p.onboarded,
     basics: basicsOf(p),

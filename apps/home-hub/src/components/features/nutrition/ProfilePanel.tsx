@@ -7,7 +7,9 @@ import styles from './ProfilePanel.module.css';
 
 const CREATE_PROMPT = { label: 'Copiar «Quiero crear mi perfil»', prompt: 'Quiero crear mi perfil' };
 const BOT_LEAD = 'Tu bot te hace unas ocho preguntas y calcula tus objetivos.';
-const CHANGE_LABEL = 'Cambiar en el chat';
+// Like Hoy's prompt: the label names the copy action and quotes the start of the message.
+const CHANGE_LABEL = 'Copiar «Quiero cambiar mi perfil»';
+const CHANGE_LEAD = 'Los cambios del perfil se hacen en el chat.';
 const CHANGE_PROMPT = 'Quiero cambiar mi perfil: [dato] ahora es [valor]. Si es sobre la comida: [lo que me gusta, lo que no me gusta o intolerancias]. Muéstrame los objetivos nuevos antes de guardar.';
 
 /** Error and empty states keep today's framed panel; the profile itself is an open page with one surface per group. */
@@ -53,7 +55,6 @@ export function ProfilePanel({ model, signInHref }: { model: ProfilePanelModel; 
         <section className={styles.panel} lang="es" data-testid="profile-panel">
           <header className={styles.top}>
             <h2 className={styles.name}>{model.subjectName ? `Perfil de ${model.subjectName}` : 'Perfil'}</h2>
-            {model.modePill && <span className={styles.pill}>{model.modePill}</span>}
             {model.dueDate && (
               <p className={styles.due}>
                 <span className={styles.dueLabel}>Fecha prevista de parto</span>
@@ -124,7 +125,7 @@ export function ProfilePanel({ model, signInHref }: { model: ProfilePanelModel; 
               {model.history.map((line, index) => <li key={`${index}-${line}`}>{line}</li>)}
             </ul>
           </details>
-          <ChatPrompt label={CHANGE_LABEL} prompt={CHANGE_PROMPT} />
+          <ChatPrompt label={CHANGE_LABEL} prompt={CHANGE_PROMPT} lead={CHANGE_LEAD} />
         </section>
       );
     case 'ABSENT':

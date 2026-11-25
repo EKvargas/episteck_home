@@ -28,10 +28,6 @@
   text-wrap: balance;
   overflow-wrap: anywhere;
 }
-.pill {
-  font-size: 0.875rem; font-weight: 600; background: var(--olin-badge-bg);
-  padding: 0.25rem 0.75rem; border-radius: 999px; color: var(--olin-text-main);
-}
 .due { margin: 0; display: flex; flex-wrap: wrap; gap: 0 0.5rem; color: var(--olin-text-main); }
 .dueLabel { color: var(--olin-text-muted); }
 .dueValue { font-weight: 600; }
