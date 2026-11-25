@@ -78,3 +78,17 @@ button {
   box-shadow: inset 0 2px 3px rgba(255,255,255,0.2), 0 8px 18px rgba(0,0,0,0.7);
 }
 
+
+/* Text for assistive technology only. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

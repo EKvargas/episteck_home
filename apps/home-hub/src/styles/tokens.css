@@ -54,7 +54,10 @@
   --olin-shadow-elevation: 0 10px 30px -5px rgba(78, 48, 25, 0.08), 0 2px 8px rgba(0,0,0,0.02);
 
   /* Semantic UI Colors (Ensuring high contrast/accessibility) */
-  --olin-status-success: #3c7849;
+  --olin-status-success: #2a5d3b;
+  --olin-status-caution: #a5640d;
+  --olin-status-unknown: #66605b;
+  --olin-status-progress: #1f406b;
   --olin-status-attention: #c4643c;
   --olin-status-error: #a83232;
   --olin-kiosk-time-color: #2b1f1a;
@@ -90,7 +93,10 @@
   --olin-pill-radius: 9999px;
   --olin-shadow-elevation: 0 20px 45px -15px rgba(0, 5, 20, 0.7);
 
-  --olin-status-success: #10d290;
+  --olin-status-success: #57b476;
+  --olin-status-caution: #f4bf7b;
+  --olin-status-unknown: #b8b4af;
+  --olin-status-progress: #5b8dcf;
   --olin-status-attention: #f6ab63;
   --olin-status-error: #ef4444;
   --olin-kiosk-time-color: #ffffff;
@@ -125,7 +131,10 @@
   --olin-pill-radius: 0.75rem;
   --olin-shadow-elevation: 0 16px 40px -8px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 
-  --olin-status-success: #10d290;
+  --olin-status-success: #57b476;
+  --olin-status-caution: #f4bf7b;
+  --olin-status-unknown: #b8b4af;
+  --olin-status-progress: #5b8dcf;
   --olin-status-attention: #f58e2a;
   --olin-status-error: #ef4444;
   --olin-kiosk-time-color: #f58e2a;
@@ -160,7 +169,10 @@
   --olin-pill-radius: 0.35rem;
   --olin-shadow-elevation: 4px 4px 0px #141414;
 
-  --olin-status-success: #1d7335;
+  --olin-status-success: #2a5d3b;
+  --olin-status-caution: #a5640d;
+  --olin-status-unknown: #66605b;
+  --olin-status-progress: #1f406b;
   --olin-status-attention: #9e641c;
   --olin-status-error: #781c22;
   --olin-kiosk-time-color: #141414;
@@ -195,7 +207,10 @@
   --olin-pill-radius: 9999px;
   --olin-shadow-elevation: 0 14px 34px -8px rgba(35, 52, 90, 0.12);
 
-  --olin-status-success: #0bb579;
+  --olin-status-success: #2a5d3b;
+  --olin-status-caution: #a5640d;
+  --olin-status-unknown: #66605b;
+  --olin-status-progress: #1f406b;
   --olin-status-attention: #f58e2a;
   --olin-status-error: #ff5c38;
   --olin-kiosk-time-color: #16202e;
@@ -230,7 +245,10 @@
   --olin-pill-radius: 9999px;
   --olin-shadow-elevation: 0 12px 28px -5px rgba(34, 54, 37, 0.08);
 
-  --olin-status-success: #49714c;
+  --olin-status-success: #2a5d3b;
+  --olin-status-caution: #a5640d;
+  --olin-status-unknown: #66605b;
+  --olin-status-progress: #1f406b;
   --olin-status-attention: #d97742;
   --olin-status-error: #b54545;
   --olin-kiosk-time-color: #1d2d20;
