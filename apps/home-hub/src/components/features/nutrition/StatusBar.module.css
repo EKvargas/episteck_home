@@ -1,0 +1,81 @@
+/* One nutrient's track. It spans 0–150 % of the target, so the target (100 %) sits two thirds along. */
+.bar {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 0.875rem;
+}
+
+/* The track. */
+.bar::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  height: 0.5rem;
+  margin-top: -0.25rem;
+  border-radius: 9999px;
+  background: var(--olin-badge-bg);
+}
+
+/* The known value as a share of the track, clipped at 150 %. Both numbers are raw wire decimals. */
+.fill {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 0.5rem;
+  margin-top: -0.25rem;
+  width: min(100%, calc(var(--bar-value) / var(--bar-scale) * 100% / 1.5));
+  border-radius: 9999px;
+  background: var(--olin-status-unknown);
+}
+
+.bar[data-tone='ok'] .fill { background: var(--olin-status-success); }
+.bar[data-tone='caution'] .fill { background: var(--olin-status-caution); }
+.bar[data-tone='progress'] .fill { background: var(--olin-status-progress); }
+.bar[data-tone='unknown'] .fill,
+.bar[data-tone='unclosed'] .fill { background: var(--olin-status-unknown); }
+
+/* The target mark, drawn over the fill with a thin card-coloured knockout so it stays visible. */
+.mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  outline: 1px solid var(--olin-surface-card);
+}
+
+/* A minimum: a tick at 100 %. */
+.bar[data-mark='tick'] .mark {
+  left: calc(100% / 1.5);
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--olin-text-main);
+}
+
+/* An about target: a band from 90 % to 110 %. */
+.bar[data-mark='band'] .mark {
+  left: calc(90% / 1.5);
+  width: calc(20% / 1.5);
+  border-inline: 2px solid var(--olin-text-main);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--olin-text-main) 10%, transparent);
+}
+
+/* A limit: a heavier cap line at 100 % that stands a little proud of the track. */
+.bar[data-mark='cap'] .mark {
+  top: -2px;
+  bottom: -2px;
+  left: calc(100% / 1.5);
+  width: 3px;
+  margin-left: -1.5px;
+  border-radius: 1px;
+  background: var(--olin-text-main);
+}
+
+@media (forced-colors: active) {
+  .bar::before { border: 1px solid CanvasText; }
+  .fill { background: Highlight; forced-color-adjust: none; }
+  .mark { background: CanvasText; forced-color-adjust: none; }
+  .bar[data-mark='band'] .mark { background: transparent; border-color: CanvasText; }
+}

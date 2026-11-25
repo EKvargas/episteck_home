@@ -65,11 +65,12 @@ function profile(m: ProfilePanelModel): Profile {
   return m as Profile;
 }
 
-test('Ana: pregnancy pill, pregnancy rows, no goal or sex row, the trimester-2 note', () => {
+test('a pregnancy profile: pregnancy rows, no goal, sex or mode row, the trimester-2 note', () => {
   const m = profile(toProfilePanelModel(ready(ana()), 'Ana'));
-  assert.equal(m.modePill, 'Embarazo · 2.º trimestre');
+  // The header chip carries the mode; Perfil does not repeat it.
+  assert.equal('modePill' in m, false);
   assert.deepEqual(m.basics.map((b) => b.label),
-    ['Edad', 'Altura', 'Peso', 'Peso antes del embarazo', 'Fecha prevista de parto', 'Actividad diaria', 'Entrenamiento', 'Modo']);
+    ['Edad', 'Altura', 'Peso', 'Peso antes del embarazo', 'Actividad diaria', 'Entrenamiento']);
   assert.deepEqual(m.targets[0], { label: 'Energía', value: '≈ 2.250 kcal',
     source: 'Gasto en reposo (Mifflin-St Jeor) por actividad, más 250 kcal por el trimestre 2 · Mifflin-St Jeor (1990); DGE/D-A-CH' });
   assert.equal(m.targets[1].label, 'Proteína');
@@ -85,15 +86,15 @@ test('Ana basics carry the exact Spanish values', () => {
   assert.equal(v['Altura'], '165 cm');
   assert.equal(v['Peso'], '64 kg (20 nov)');
   assert.equal(v['Peso antes del embarazo'], '58 kg');
-  assert.equal(v['Fecha prevista de parto'], '12 abr 2027');
-  assert.equal(v['Actividad diaria'], 'Sobre todo sentado, poca actividad (1,4)');
+  assert.equal(v['Fecha prevista de parto'], undefined);
+  assert.equal(v['Actividad diaria'], 'Sobre todo sentado, poca actividad');
   assert.equal(v['Entrenamiento'], 'Sin entrenamiento');
-  assert.equal(v['Modo'], 'Embarazo');
+  assert.equal(v['Modo'], undefined);
 });
 
 test('Erick: sex and goal rows, training with its note, no pill', () => {
   const m = profile(toProfilePanelModel(ready(erick()), 'Erick'));
-  assert.equal(m.modePill, null);
+  assert.ok(!m.basics.some((b) => b.label === 'Modo'));
   assert.ok(m.basics.some((b) => b.label === 'Sexo' && b.value === 'Hombre'));
   assert.ok(m.basics.some((b) => b.label === 'Objetivo' && b.value === 'Rendimiento'));
   assert.ok(m.basics.some((b) => b.label === 'Entrenamiento' && b.value === '3 sesiones por semana · fútbol: 2 entrenos + 1 partido'));
@@ -104,9 +105,8 @@ test('Erick: sex and goal rows, training with its note, no pill', () => {
 test('a mode-only pregnancy profile shows mode and due date, falta rows, missing targets and onboarded false', () => {
   const m = profile(toProfilePanelModel(ready(modeOnly()), 'Ana'));
   assert.equal(m.onboarded, false);
-  assert.equal(m.modePill, 'Embarazo · 2.º trimestre');
   assert.ok(m.basics.some((b) => b.label === 'Altura' && b.value === 'falta'));
-  assert.ok(m.basics.some((b) => b.label === 'Fecha prevista de parto' && b.value === '12 abr 2027'));
+  assert.equal(m.dueDate, '12 abr 2027');
   assert.deepEqual(m.missing, ['Energía: falta fecha de nacimiento, altura, peso antes del embarazo, actividad diaria']);
   assert.deepEqual(m.targets.map((t) => t.label), ['Fibra', 'Azúcares libres']);
 });
@@ -162,20 +162,37 @@ test('measurements use es-ES decimals and activity levels compare numerically', 
   const v = Object.fromEntries(m.basics.map((b) => [b.label, b.value]));
   assert.equal(v['Altura'], '165 cm');
   assert.equal(v['Peso'], '62,5 kg');
-  assert.equal(v['Actividad diaria'], 'Trabajo físico intenso (2,0)');
+  assert.equal(v['Actividad diaria'], 'Trabajo físico intenso');
   const q = base({ inputs: { ...NO_INPUTS, activityPal: '1.60' } });
   const w = Object.fromEntries(profile(toProfilePanelModel(ready(read(q)), 'E')).basics.map((b) => [b.label, b.value]));
-  assert.equal(w['Actividad diaria'], 'Sentado, con algo de caminar o estar de pie (1,6)');
+  assert.equal(w['Actividad diaria'], 'Sentado, con algo de caminar o estar de pie');
+  // A level outside the four named ones is shown as given rather than guessed.
+  const odd = base({ inputs: { ...NO_INPUTS, activityPal: '1.5' } });
+  const o = Object.fromEntries(profile(toProfilePanelModel(ready(read(odd)), 'E')).basics.map((b) => [b.label, b.value]));
+  assert.equal(o['Actividad diaria'], '1.5');
 });
 
-test('food fields: null reads —, text is kept as given', () => {
-  const p = base({ food: { preferences: 'Mucha verdura', dislikes: null, intolerances: 'Lactosa' } });
+test('the due date moves to the top and out of Datos', () => {
+  const m = profile(toProfilePanelModel(ready(modeOnly()), 'Synthetic Member'));
+  assert.equal(m.dueDate, '12 abr 2027');
+  assert.ok(!m.basics.some((b) => b.label === 'Fecha prevista de parto'));
+  assert.equal(profile(toProfilePanelModel(ready(read(base({}))), 'Synthetic Viewer')).dueDate, null);
+});
+
+test('food text becomes chips split on commas and semicolons', () => {
+  const p = base({ food: { preferences: 'Mucha verdura, pescado', dislikes: null, intolerances: 'lactosa; frutos secos;; ' } });
   const m = profile(toProfilePanelModel(ready(read(p)), 'E'));
   assert.deepEqual(m.food, [
-    { label: 'Preferencias', value: 'Mucha verdura' },
-    { label: 'No le gusta', value: '—' },
-    { label: 'Intolerancias', value: 'Lactosa' },
+    { label: 'Preferencias', chips: ['Mucha verdura', 'pescado'] },
+    { label: 'No le gusta', chips: [] },
+    { label: 'Intolerancias', chips: ['lactosa', 'frutos secos'] },
   ]);
+});
+
+test('a 500-character food text without separators stays one chip', () => {
+  const long = 'P'.repeat(500);
+  const m = profile(toProfilePanelModel(ready(read(base({ food: { preferences: long, dislikes: null, intolerances: null } }))), 'E'));
+  assert.deepEqual(m.food[0].chips, [long]);
 });
 
 test('pregnancy notes: trimester 1, 3 and unknown', () => {
@@ -184,7 +201,6 @@ test('pregnancy notes: trimester 1, 3 and unknown', () => {
   assert.equal(note(1).note, 'Al entrar en el 2.º trimestre, la energía sube sola (+250 kcal, DGE).');
   assert.match(note(3).note, /^Si cambias tu peso/);
   assert.match(note(null).note, /^Si cambias tu peso/);
-  assert.equal(note(null).modePill, 'Embarazo');
 });
 
 test('authorized ABSENT is its own state', () => {

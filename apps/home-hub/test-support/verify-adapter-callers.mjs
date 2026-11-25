@@ -2,7 +2,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export const ALLOWED_ADAPTER_IMPORTERS = ['src/app/nutrition/LiveProfilePanel.tsx'];
+export const ALLOWED_ADAPTER_IMPORTERS = ['src/app/nutrition/perfil/LiveProfilePanel.tsx'];
 /** Each Nutrition read is a pair: one server adapter, one loader only that adapter may reach. */
 const PAIRS = [
   {
@@ -27,7 +27,11 @@ const PAIRS = [
     loader: 'src/integration/nutrition/period-loader.ts',
     adapterPattern: /period\.server/,
     loaderPattern: /period-loader/,
-    allowed: ['src/app/nutrition/dias/LivePeriodPanel.tsx'],
+    allowed: [
+      'src/app/nutrition/dias/LivePeriodPanel.tsx',
+      'src/app/nutrition/hoy/LiveWeeklyPanel.tsx',
+      'src/app/nutrition/nutriente/LiveNutrientPanel.tsx',
+    ],
   },
 ];
 const USE_SERVER = /^\s*['"]use server['"]/m;

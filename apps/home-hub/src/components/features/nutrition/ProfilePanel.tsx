@@ -1,4 +1,5 @@
-import { Fragment, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
+import { CaretRight, Info } from '@phosphor-icons/react/ssr';
 import type { ProfilePanelModel } from '@/integration/nutrition/profile-panel-model';
 import { ChatPrompt } from './ChatPrompt';
 import { RetryButton } from './RetryButton';
@@ -6,49 +7,38 @@ import styles from './ProfilePanel.module.css';
 
 const CREATE_PROMPT = { label: 'Copiar «Quiero crear mi perfil»', prompt: 'Quiero crear mi perfil' };
 const BOT_LEAD = 'Tu bot te hace unas ocho preguntas y calcula tus objetivos.';
-const CHANGE_LABEL = 'Cambiar en el chat';
-const CHANGE_BASICS = 'Quiero cambiar mi perfil: [dato] ahora es [valor]. Muéstrame los objetivos nuevos antes de guardar.';
-const CHANGE_FOOD = 'Quiero cambiar mis preferencias de comida: [lo que me gusta, lo que no me gusta o intolerancias]. Muéstramelo antes de guardar.';
+// Like Hoy's prompt: the label names the copy action and quotes the start of the message.
+const CHANGE_LABEL = 'Copiar «Quiero cambiar mi perfil»';
+const CHANGE_LEAD = 'Los cambios del perfil se hacen en el chat.';
+const CHANGE_PROMPT = 'Quiero cambiar mi perfil: [dato] ahora es [valor]. Si es sobre la comida: [lo que me gusta, lo que no me gusta o intolerancias]. Muéstrame los objetivos nuevos antes de guardar.';
 
-function Frame({ title, pill, role, tone, busy, children }: {
-  title: string; pill?: string | null; role?: 'status' | 'alert'; tone?: 'warn'; busy?: boolean; children?: ReactNode;
+/** Error and empty states keep today's framed panel; the profile itself is an open page with one surface per group. */
+function Frame({ title, role, tone, busy, children }: {
+  title: string; role?: 'status' | 'alert'; tone?: 'warn'; busy?: boolean; children?: ReactNode;
 }) {
   return (
     <section
-      className={`${styles.panel} ${tone === 'warn' ? styles.warn : ''}`}
+      className={`${styles.panel} ${styles.framed} ${tone === 'warn' ? styles.warn : ''}`}
       role={role}
       aria-busy={busy || undefined}
       lang="es"
       data-testid="profile-panel"
     >
-      <h2 className={styles.title}>
-        {title}
-        {pill && <span className={styles.pill}>{pill}</span>}
-      </h2>
+      <h2 className={styles.title}>{title}</h2>
       {children}
     </section>
   );
 }
 
-function Card({ id, title, aside, children }: { id: string; title: string; aside?: string; children: ReactNode }) {
+function Group({ id, title, aside, children }: { id: string; title: string; aside?: string; children: ReactNode }) {
   return (
-    <section className={styles.card} aria-labelledby={id}>
-      <div className={styles.cardHead}>
-        <h3 id={id} className={styles.cardTitle}>{title}</h3>
+    <section className={styles.group} aria-labelledby={id}>
+      <div className={styles.groupHead}>
+        <h3 id={id} className={styles.groupTitle}>{title}</h3>
         {aside && <span className={styles.aside}>{aside}</span>}
       </div>
       {children}
     </section>
-  );
-}
-
-function Facts({ rows }: { rows: { label: string; value: string }[] }) {
-  return (
-    <dl className={styles.facts}>
-      {rows.map((row) => (
-        <Fragment key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></Fragment>
-      ))}
-    </dl>
   );
 }
 
@@ -62,42 +52,81 @@ export function ProfilePanel({ model, signInHref }: { model: ProfilePanelModel; 
       );
     case 'PROFILE':
       return (
-        <Frame title={model.subjectName ? `Perfil de ${model.subjectName}` : 'Perfil'} pill={model.modePill}>
+        <section className={styles.panel} lang="es" data-testid="profile-panel">
+          <header className={styles.top}>
+            <h2 className={styles.name}>{model.subjectName ? `Perfil de ${model.subjectName}` : 'Perfil'}</h2>
+            {model.dueDate && (
+              <p className={styles.due}>
+                <span className={styles.dueLabel}>Fecha prevista de parto</span>
+                <span className={styles.dueValue}>{model.dueDate}</span>
+              </p>
+            )}
+          </header>
           {!model.onboarded && (
             <div className={styles.offer}>
               <p className={styles.body}>Todavía no hay perfil completo.</p>
               <ChatPrompt {...CREATE_PROMPT} lead={BOT_LEAD} />
             </div>
           )}
-          <Card id="perfil-basicos" title="Datos básicos">
-            <Facts rows={model.basics} />
-            <ChatPrompt label={CHANGE_LABEL} prompt={CHANGE_BASICS} />
-          </Card>
-          <Card id="perfil-comida" title="Comida">
-            <Facts rows={model.food} />
-            <ChatPrompt label={CHANGE_LABEL} prompt={CHANGE_FOOD} />
-          </Card>
-          <Card id="perfil-objetivos" title="Objetivos diarios" aside={model.targetsSince}>
+          <Group id="perfil-objetivos" title="Objetivos diarios" aside={model.targetsSince}>
             {model.targets.length > 0 && (
-              <ul className={styles.targets}>
+              <ul className={`${styles.surface} ${styles.targets}`}>
                 {model.targets.map((t) => (
                   <li key={t.label} className={styles.target}>
                     <span className={styles.targetLabel}>{t.label}</span>
                     <span className={styles.targetValue}>{t.value}</span>
-                    <span className={styles.targetSource}>{t.source}</span>
+                    <details className={styles.why}>
+                      <summary className={styles.whySummary} aria-label={`De dónde sale: ${t.label}`}>
+                        <Info className={styles.whyIcon} weight="bold" aria-hidden="true" />
+                      </summary>
+                      <p className={styles.whyBody}>{t.source}</p>
+                    </details>
                   </li>
                 ))}
               </ul>
             )}
-            {model.missing.map((line) => <p key={line} className={styles.missing}>{line}</p>)}
+            {model.missing.length > 0 && (
+              <div className={styles.missing}>
+                <p className={styles.missingTitle}>Faltan datos para…</p>
+                <ul className={styles.missingList}>
+                  {model.missing.map((line) => <li key={line}>{line}</li>)}
+                </ul>
+              </div>
+            )}
             <p className={styles.note}>{model.note}</p>
-          </Card>
-          <Card id="perfil-historial" title="Historial">
-            <ul className={styles.history}>
+          </Group>
+          <Group id="perfil-datos" title="Datos">
+            <dl className={`${styles.surface} ${styles.facts}`}>
+              {model.basics.map((row) => (
+                <div key={row.label} className={styles.fact}><dt>{row.label}</dt><dd>{row.value}</dd></div>
+              ))}
+            </dl>
+          </Group>
+          <Group id="perfil-comida" title="Comida">
+            <div className={`${styles.surface} ${styles.food}`}>
+              {model.food.map((row) => (
+                <div key={row.label} className={styles.foodRow}>
+                  <p className={styles.foodLabel}>{row.label}</p>
+                  {row.chips.length === 0 ? <p className={styles.none}>—</p> : (
+                    <ul className={styles.chips}>
+                      {row.chips.map((chip, index) => <li key={`${index}-${chip}`} className={styles.chip}>{chip}</li>)}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Group>
+          <details className={styles.history}>
+            <summary className={styles.historySummary}>
+              <CaretRight className={styles.caret} weight="bold" aria-hidden="true" />
+              Historial
+            </summary>
+            <ul className={styles.historyList}>
               {model.history.map((line, index) => <li key={`${index}-${line}`}>{line}</li>)}
             </ul>
-          </Card>
-        </Frame>
+          </details>
+          <ChatPrompt label={CHANGE_LABEL} prompt={CHANGE_PROMPT} lead={CHANGE_LEAD} />
+        </section>
       );
     case 'ABSENT':
       return (

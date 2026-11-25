@@ -1,5 +1,6 @@
 'use client';
 
+import { CaretRight } from '@phosphor-icons/react';
 import { useAppContext } from '@/components/providers/AppProvider';
 import { useCopyResult } from './ChatPrompt';
 import styles from './NutritionActions.module.css';
@@ -47,14 +48,14 @@ const groups = [
   },
 ];
 
-export function NutritionActions() {
+export function NutritionActions({ title = 'Acciones en Telegram' }: { title?: string }) {
   const { activeContext, viewer } = useAppContext();
   const { result: copyResult, copy } = useCopyResult();
 
   if (activeContext.personId !== viewer.id) {
     return (
       <section id="acciones-en-telegram" className={styles.section} lang="es" aria-labelledby="nutrition-actions-title" tabIndex={-1}>
-        <h2 id="nutrition-actions-title" className={styles.title}>Acciones en Telegram</h2>
+        <h2 id="nutrition-actions-title" className={styles.title}>{title}</h2>
         <p className={styles.intro}>Telegram usa tu propio diario. Selecciona tu nombre para ver las acciones.</p>
       </section>
     );
@@ -62,8 +63,8 @@ export function NutritionActions() {
 
   return (
     <section id="acciones-en-telegram" className={styles.section} lang="es" aria-labelledby="nutrition-actions-title" tabIndex={-1}>
-      <h2 id="nutrition-actions-title" className={styles.title}>Acciones en Telegram</h2>
-      <p className={styles.intro}>Adapta un ejemplo en tu chat de Nutrición. Después de guardar un cambio, vuelve y toca Actualizar diario.</p>
+      <h2 id="nutrition-actions-title" className={styles.title}>{title}</h2>
+      <p className={styles.intro}>Adapta un ejemplo en tu chat de Nutrición. Después de guardar un cambio, vuelve y toca Actualizar.</p>
       <div className={styles.groups}>
         {groups.map(({ title, note, actions }) => (
           <div className={styles.group} key={title}>
@@ -71,7 +72,10 @@ export function NutritionActions() {
             {note && <p className={styles.note}>{note}</p>}
             {actions.map((action) => (
               <details className={styles.action} key={action.title}>
-                <summary>{action.title}</summary>
+                <summary>
+                  <span className={styles.summaryText}>{action.title}</span>
+                  <CaretRight className={styles.caret} weight="bold" aria-hidden="true" />
+                </summary>
                 <div className={styles.example}>
                   <p>{action.prompt}</p>
                   <button

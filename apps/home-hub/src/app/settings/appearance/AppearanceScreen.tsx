@@ -29,6 +29,9 @@ export function AppearanceScreen() {
         <Link href={`/settings/privacy?person=${encodeURIComponent(activeContext.personId)}`} className={styles.tabLink}>
           Privacy &amp; Data
         </Link>
+        <Link href={`/nutrition/perfil?person=${encodeURIComponent(activeContext.personId)}`} prefetch={false} className={styles.tabLink}>
+          Perfil de nutrición
+        </Link>
       </nav>
       
       <div className={styles.grid}>

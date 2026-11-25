@@ -75,7 +75,7 @@ export default async function RootLayout({
           {bootstrap ? (
             <Suspense fallback={<AppShell><div role="status">Loading context…</div></AppShell>}>
               <AppProvider>
-                <AppShell demoContent liveRoutes={SERVER_CONFIGURATION.mode === 'LIVE' ? ['/', '/nutrition', '/nutrition/hoy', '/nutrition/dias'] : []}>{children}</AppShell>
+                <AppShell demoContent liveRoutes={SERVER_CONFIGURATION.mode === 'LIVE' ? ['/', '/nutrition', '/nutrition/hoy', '/nutrition/dias', '/nutrition/perfil', '/nutrition/ayuda', '/nutrition/nutriente/'] : []}>{children}</AppShell>
               </AppProvider>
             </Suspense>
           ) : (

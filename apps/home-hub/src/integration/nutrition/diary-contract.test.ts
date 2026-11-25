@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseDayWire } from './diary-contract.ts';
+import { DAY_NUTRIENTS, parseDayWire } from './diary-contract.ts';
 
 const item = (over: Record<string, unknown> = {}) => ({
   label: 'manzana', food_id: 'F1', food_name: 'Manzana', amount: 1.5, unit: 'unit', grams: '180',
@@ -13,11 +13,16 @@ const block = (over: Record<string, unknown> = {}) => ({
   known: '1640.3', items_total: 2, items_uncounted: 0, status: 'KNOWN',
   target: { value: '2241.6', display_value: '2250', unit: 'kcal', kind: 'ABOUT' }, percent: '73', ...over,
 });
+const none = () => block({ known: null, status: 'NONE', items_total: 0, target: null, percent: null });
 const nutrients = (over: Record<string, unknown> = {}) => ({
   energy_kcal: block(),
   protein_g: block({ known: '72.4', target: { value: '60', display_value: '60', unit: 'g', kind: 'MIN' }, percent: null }),
   fiber_g: block({ known: null, status: 'NONE', target: null, percent: null }),
-  fat_g: { ignored: true },
+  fat_g: block({ known: '58.0', target: { value: '75', display_value: '75', unit: 'g', kind: 'ABOUT' }, percent: '77' }),
+  carb_g: block({ known: '190.4', target: null, percent: null }),
+  calcium_mg: none(), iron_mg: block({ known: '14.2', status: 'PARTIAL', items_uncounted: 1, target: { value: '27', display_value: '27', unit: 'mg', kind: 'MIN' }, percent: '53' }),
+  folate_ug: none(), vitamin_b12_ug: none(), vitamin_d_ug: none(), iodine_ug: none(), zinc_mg: none(),
+  selenium_ug: none(), choline_mg: none(), dha_g: none(),
   ...over,
 });
 const day = (over: Record<string, unknown> = {}) => ({
@@ -37,7 +42,7 @@ test('maps a full day to camelCase, keeping amount as a string', () => {
   assert.equal(d.freeSugarsKnownG, '12.5');
   assert.deepEqual(d.limit, { valueG: '25', sources: [{ title: 'WHO', url: 'https://who.int' }] });
   assert.deepEqual(d.entries[0].items[0], {
-    label: 'manzana', amount: '1.5', unit: 'unit', grams: '180', method: 'PRESET', source: 'USDA', freeSugarsG: '0.5',
+    label: 'manzana', amount: '1.5', unit: 'unit', grams: '180', method: 'PRESET', source: 'USDA', freeSugarsG: '0.5', withFacts: [],
   });
   assert.equal(JSON.stringify(d).includes('ignored'), false);
 });
@@ -60,17 +65,42 @@ test('an empty day parses to NO_ENTRIES with a null total', () => {
   assert.deepEqual(d.entries, []);
 });
 
-test('maps the three shown nutrient blocks and profile_version', () => {
+test("maps all fifteen nutrient blocks in Nutrition's order", () => {
   const d = parseDayWire(day());
   assert.equal(d.profileVersion, 2);
-  assert.deepEqual(Object.keys(d.nutrients), ['energy_kcal', 'protein_g', 'fiber_g']);
+  assert.deepEqual(Object.keys(d.nutrients), [...DAY_NUTRIENTS]);
   assert.deepEqual(d.nutrients.energy_kcal, {
     known: '1640.3', itemsTotal: 2, itemsUncounted: 0, status: 'KNOWN',
     target: { value: '2241.6', displayValue: '2250', unit: 'kcal', kind: 'ABOUT' }, percent: '73',
   });
+  assert.deepEqual(d.nutrients.iron_mg, {
+    known: '14.2', itemsTotal: 2, itemsUncounted: 1, status: 'PARTIAL',
+    target: { value: '27', displayValue: '27', unit: 'mg', kind: 'MIN' }, percent: '53',
+  });
   assert.equal(d.nutrients.fiber_g.target, null);
   assert.equal(d.nutrients.fiber_g.known, null);
   assert.equal(parseDayWire(day({ profile_version: null })).profileVersion, null);
+});
+
+test('rejects a day missing one of the fifteen', () => {
+  const n = nutrients() as Record<string, unknown>;
+  delete n.dha_g;
+  assert.throws(() => parseDayWire(day({ nutrients: n })), /dha_g/);
+});
+
+test('withFacts lists the headline nutrients the food data has', () => {
+  const entry = (it: unknown) => [{ id: 'E1', consumed_at: 't', items: [it] }];
+  const withFacts = (it: unknown) => parseDayWire(day({ entries: entry(it) })).entries[0].items[0].withFacts;
+  const facts = { nutrients_per_100g: { energy_kcal: '52', protein_g: '0.3', calcium_mg: '5' }, source: 'USDA' };
+  assert.deepEqual(withFacts(item({ facts })), ['energy_kcal', 'protein_g']);
+  assert.deepEqual(withFacts(item({ facts: null })), []);
+});
+
+test('rejects facts whose nutrients_per_100g is not an object', () => {
+  const entries = (facts: unknown) => [{ id: 'E1', consumed_at: 't', items: [item({ facts })] }];
+  assert.throws(() => parseDayWire(day({ entries: entries({ source: 'USDA' }) })), TypeError);
+  assert.throws(() => parseDayWire(day({ entries: entries({ source: 'USDA', nutrients_per_100g: [] }) })), TypeError);
+  assert.throws(() => parseDayWire(day({ entries: entries({ source: 'USDA', nutrients_per_100g: 'x' }) })), TypeError);
 });
 
 const bad: Array<[string, unknown]> = [

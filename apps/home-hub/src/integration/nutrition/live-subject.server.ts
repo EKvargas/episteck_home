@@ -4,7 +4,7 @@ import type { F3ActiveContext } from '../home/active-context';
 import { pickSubject, type SearchParamsRecord } from './live-subject';
 
 export type LiveSubject =
-  | { status: 'OK'; context: F3ActiveContext; subjectName: string | null; stale: boolean }
+  | { status: 'OK'; context: F3ActiveContext; subjectName: string | null; stale: boolean; self: boolean; linkPerson: string | null }
   | { status: 'SESSION' }
   | { status: 'UNAVAILABLE' };
 

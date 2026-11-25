@@ -1,10 +1,13 @@
 import { Suspense } from 'react';
 import { TodayPanel } from '@/components/features/nutrition/TodayPanel';
-import { NutritionActions } from '@/components/features/nutrition/NutritionActions';
+import { WeeklyPanel } from '@/components/features/nutrition/WeeklyPanel';
+import { WEEKLY_TITLE } from '@/components/features/nutrition/weekly-model';
+import { UNKNOWN_CHIP } from '@/integration/nutrition/profile-chip';
 import { SERVER_CONFIGURATION } from '@/integration/state/Environment.server';
 import { NutritionHeader } from '../NutritionHeader';
 import styles from '../page.module.css';
 import { LiveTodayPanel } from './LiveTodayPanel';
+import { LiveWeeklyPanel } from './LiveWeeklyPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +16,7 @@ type SearchParams = Record<string, string | string[] | undefined>;
 export default async function TodayPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   if (SERVER_CONFIGURATION.mode === 'MOCK') {
     return (
-      <div className={styles.nutritionCanvas}>
+      <div className={`${styles.nutritionCanvas} ${styles.column}`}>
         <TodayPanel model={{ kind: 'NOT_CONFIGURED' }} signInHref="" />
       </div>
     );
@@ -21,16 +24,26 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
 
   const params = await searchParams;
   return (
-    <div className={styles.nutritionCanvas}>
-      <NutritionHeader view="diary" />
+    <div className={`${styles.nutritionCanvas} ${styles.column}`}>
       {/* Keyed on the raw selector so one subject's panel can never paint under another's. */}
       <Suspense
         key={JSON.stringify(params.person ?? null)}
-        fallback={<TodayPanel model={{ kind: 'LOADING' }} signInHref="" />}
+        fallback={
+          <>
+            <NutritionHeader view="diary" chip={UNKNOWN_CHIP} updatedAt={null} />
+            <TodayPanel model={{ kind: 'LOADING' }} signInHref="" />
+          </>
+        }
       >
-        <LiveTodayPanel searchParams={params} />
+        <LiveTodayPanel
+          searchParams={params}
+          weekly={(
+            <Suspense fallback={<WeeklyPanel model={{ kind: 'LOADING' }} title={WEEKLY_TITLE} />}>
+              <LiveWeeklyPanel searchParams={params} />
+            </Suspense>
+          )}
+        />
       </Suspense>
-      <NutritionActions />
     </div>
   );
 }

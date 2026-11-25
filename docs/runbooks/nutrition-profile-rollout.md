@@ -226,7 +226,7 @@ Later, once: when Ana reaches pregnancy week 28, her energy target steps up to t
 
 ## C6. Hub (plan 3)
 
-Plan 3 adds three read-only Hub pages: Perfil (`/app/nutrition`), Hoy (`/app/nutrition/hoy`) and Días (`/app/nutrition/dias`, live in LIVE mode). `SHA` here is plan 3's merge commit. The Hub running today is `1ff95d8`; no Hub change has landed on `main` since. Nutrition and the agents are untouched by this stage.
+Plan 3 and its nutrition UI redesign add the read-only Hub pages Hoy (`/app/nutrition/hoy`), Días (`/app/nutrition/dias`), Perfil (`/app/nutrition/perfil`), the nutrient detail (`/app/nutrition/nutriente/<code>`) and ayuda (`/app/nutrition/ayuda`); `/app/nutrition` redirects to Hoy. `SHA` here is the merge commit of this redesign, which includes plan 3. The Hub running today is `1ff95d8`; no Hub change has landed on `main` since. Nutrition and the agents are untouched by this stage.
 
 1. `[PREP]` Record the running Hub image (read-only baseline; on 2026-11-24 it is `1ff95d8`):
 
@@ -244,20 +244,25 @@ Plan 3 adds three read-only Hub pages: Perfil (`/app/nutrition`), Hoy (`/app/nut
 
 4. `[OPERATOR]` Apply: `ROLL home-hub apply $SHA`. It backs up the Quadlet and prints the rollback command. Keep the printed backup directory.
 
-5. `[CLAUDE VERIFY]` `ROLL home-hub verify` is `PASS`, and anonymous `/app/nutrition/dias` returns 307:
+5. `[CLAUDE VERIFY]` `ROLL home-hub verify` is `PASS`, and anonymous `/app/nutrition`, `/app/nutrition/perfil`, `/app/nutrition/hoy`, `/app/nutrition/dias`, `/app/nutrition/ayuda` and `/app/nutrition/nutriente/iron_mg` each return 307 (the layout sends anonymous users to login):
 
    ```bash
-   $SSH 'curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:9940/app/nutrition/dias'
+   for p in "" /perfil /hoy /dias /ayuda /nutriente/iron_mg; do $SSH "curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:9940/app/nutrition$p"; done
    ```
 
 6. `[OPERATOR INPUT]` Phone checks (spec 7, acceptance 2 to 6):
-   - Ana's Perfil shows `Embarazo · 2.º trimestre`, `≈ 2.250 kcal` with its source line, and `24 nov: perfil creado por chat`.
-   - Ana's Hoy shows `Energía: … de 2.250 kcal`.
-   - Ana's Días (7 days) matches what her bot says for the same days.
+   - The Home Screen shortcut opens Hoy.
+   - The pregnant member's Hoy shows the verdict and the four bars (Energía, Proteína, Fibra, Azúcares libres) on the first screen, with `Energía` reading `… de 2.250 kcal`.
+   - The vitamins group opens and its rows link to the nutrient detail page.
+   - The pregnant member's Días shows the 7-day grid and, with `14 días`, two stacked weeks, matching what her bot says for the same days.
+   - On the iPhone, on Días, tap a range link and the Hoy tab: they must work, not open a nutrient page.
+   - The detail page for one nutrient (for example iron) shows its daily bars and the target mark.
+   - The pregnant member's Perfil, opened through the profile chip and again through Ajustes, shows `Embarazo · 2.º trimestre` on the profile chip, `≈ 2.250 kcal` with its source line, and `24 nov: perfil creado por chat`.
    - Erick's Perfil shows the onboarding offer until he onboards (C3), then his targets.
-   - Cross-person check, as the first person (Erick) and then as the other (Ana), with no consent grant between them: open the other person's pages as `/app/nutrition?person=<other PSN>` and `/app/nutrition/dias?person=<other PSN>`. Pass: either the denial (`Acceso restringido` on Perfil, `No tienes acceso a este historial de días.` on Días) or the page switching to the viewer's own data (Home lists no relationship between them, so `?person=` is treated as stale). Fail: any of the other person's data on screen.
+   - An old `/app/nutrition` link lands on Hoy.
+   - Cross-person check, as the owner and then as the pregnant member, with no consent grant between them: open the other person's pages as `/app/nutrition/hoy?person=<other PSN>`, `/app/nutrition/perfil?person=<other PSN>` and `/app/nutrition/dias?person=<other PSN>`. Pass: either the denial (`Acceso restringido` on Perfil, `No tienes acceso a este historial de días.` on Días) or the page switching to the viewer's own data (Home lists no relationship between them, so `?person=` is treated as stale). Fail: any of the other person's data on screen.
 
-7. `[CLAUDE VERIFY]` The Hub logs carry only `nutrition.<view> outcome=<KIND>` lines for these pages. Count the outcomes (counts only; no IDs, names or numbers):
+7. `[CLAUDE VERIFY]` The Hub logs carry only `nutrition.<view> outcome=<KIND>` lines for these pages. Count the outcomes (counts only; no IDs, names or numbers). The outcome lines include `nutrition.week` and `nutrition.nutrient` next to `nutrition.today`, `nutrition.period` and `nutrition.profile`:
 
    ```bash
    $SSH 'cd /; sudo -n -u svc-home-hub env XDG_RUNTIME_DIR=/run/user/$(id -u svc-home-hub) podman logs svc-home-hub 2>&1 | grep -o "nutrition\.[a-z]* outcome=[A-Z_]*" | sort | uniq -c'
@@ -269,7 +274,7 @@ Plan 3 adds three read-only Hub pages: Perfil (`/app/nutrition`), Hoy (`/app/nut
    $SSH 'cd /; sudo -n -u svc-home-hub env XDG_RUNTIME_DIR=/run/user/$(id -u svc-home-hub) podman logs svc-home-hub 2>&1 | grep "nutrition\." | grep -cE "PSN-|[0-9]{3,}"'
    ```
 
-**Verification:** `ROLL home-hub verify` is `PASS`, the anonymous `/app/nutrition/dias` check returns 307, the phone checks pass, the logs show only outcome lines, and the negative log check prints `0`.
+**Verification:** `ROLL home-hub verify` is `PASS`, the anonymous `/app/nutrition`, `/perfil`, `/hoy`, `/dias`, `/ayuda` and `/nutriente/iron_mg` checks return 307, the phone checks pass, the logs show only outcome lines, and the negative log check prints `0`.
 **Rollback:** `ROLL home-hub rollback <backup dir>` (the directory `apply` printed). Nutrition and the agents are untouched by this stage.
 
 ## Acceptance checklist
@@ -280,4 +285,4 @@ Plan 3 adds three read-only Hub pages: Perfil (`/app/nutrition`), Hoy (`/app/nut
 - [ ] C3: all seven checks pass.
 - [ ] C4: `ANA verify` passes; `ANA cron` re-run; second-trimester supplement shown.
 - [ ] C5: seven days, no restarts, no errors; the third-trimester supplement checked at week 28.
-- [ ] C6: ROLL home-hub verify PASS; anonymous /app/nutrition/dias 307; Ana's Perfil, Hoy and Días checked on her phone; access refused across people without consent.
+- [ ] C6: ROLL home-hub verify PASS; anonymous /app/nutrition, /perfil, /hoy, /dias, /ayuda and /nutriente/iron_mg 307; Hoy, Días (7 and 14), a nutrient detail and Perfil checked on the pregnant member's phone; Días range links and tabs work on the iPhone; `nutrition.week` and `nutrition.nutrient` outcomes logged; access refused across people without consent.

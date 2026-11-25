@@ -8,7 +8,7 @@ import { findViolations } from './verify-adapter-callers.mjs';
 
 const APP_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const GOOD_SERVER = "import 'server-only';\nimport { loadNutritionProfile } from './profile-loader';\nexport async function readNutritionProfile(context) {\n  assertIssuedContext(context);\n  return cookies();\n}\n";
-const ALLOWED = 'src/app/nutrition/LiveProfilePanel.tsx';
+const ALLOWED = 'src/app/nutrition/perfil/LiveProfilePanel.tsx';
 const GOOD_DIARY_SERVER = "import 'server-only';\nimport { loadDiaryToday } from './diary-loader';\nexport async function readDiaryToday(context) {\n  assertIssuedContext(context);\n  return cookies();\n}\n";
 const GOOD_PERIOD_SERVER = "import 'server-only';\nimport { loadDiaryPeriod } from './period-loader';\nexport async function readDiaryPeriod(context) {\n  assertIssuedContext(context);\n  return cookies();\n}\n";
 const PERIOD_ALLOWED = 'src/app/nutrition/dias/LivePeriodPanel.tsx';
@@ -166,4 +166,24 @@ test('a tree with only profile.server.ts and diary.server.ts reports period.serv
     assert.equal(v.length, 1);
     assert.match(v[0], /period\.server\.ts: not found/);
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('LiveWeeklyPanel may import period.server; LiveTodayPanel still may not', async () => {
+  const WEEKLY_ALLOWED = 'src/app/nutrition/hoy/LiveWeeklyPanel.tsx';
+  assert.deepEqual(await violationsFor({
+    [WEEKLY_ALLOWED]: "import { readDiaryPeriod } from '@/integration/nutrition/period.server';\n",
+  }), []);
+  const today = await violationsFor({ [DIARY_ALLOWED]: "import { readDiaryPeriod } from '@/integration/nutrition/period.server';\n" });
+  assert.equal(today.length, 1);
+  assert.match(today[0], /LiveTodayPanel/);
+  // the weekly panel may not read the day or the profile
+  assert.equal((await violationsFor({ [WEEKLY_ALLOWED]: "import { readDiaryToday } from '@/integration/nutrition/diary.server';\n" })).length, 1);
+});
+
+test('LiveNutrientPanel may import period.server; the profile and day adapters stay closed to it', async () => {
+  const NUTRIENT_ALLOWED = 'src/app/nutrition/nutriente/LiveNutrientPanel.tsx';
+  assert.deepEqual(await violationsFor({
+    [NUTRIENT_ALLOWED]: "import { readDiaryPeriod } from '@/integration/nutrition/period.server';\n",
+  }), []);
+  assert.equal((await violationsFor({ [NUTRIENT_ALLOWED]: "import { readDiaryToday } from '@/integration/nutrition/diary.server';\n" })).length, 1);
 });

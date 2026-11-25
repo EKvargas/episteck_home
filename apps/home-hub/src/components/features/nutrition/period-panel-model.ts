@@ -1,100 +1,111 @@
-import type { NutrientBlock } from '../../../integration/nutrition/diary-contract.ts';
-import { amount, weekdayDay } from '../../../integration/nutrition/nutrition-format.ts';
-import type { PeriodAverage, PeriodDay, PeriodSummary } from '../../../integration/nutrition/period-contract.ts';
+import { amount, dayOfMonth, nutrientLabel, unitLabel, unitOf, weekdayInitial } from '../../../integration/nutrition/nutrition-format.ts';
+import { nutritionHref } from '../../../integration/nutrition/nutrition-href.ts';
+import {
+  CAUTION_WORDS, dayPhase, dayState, limitTarget, markOf, type DayInput, type DotMark, type Tone, type WeeklyGroup,
+} from '../../../integration/nutrition/nutrient-status.ts';
+import type { AveragedNutrient, PeriodDay, PeriodSummary } from '../../../integration/nutrition/period-contract.ts';
 import type { RangeDays } from '../../../integration/nutrition/period-range.ts';
 import type { DataEnvelope } from '../../../integration/state/DataEnvelope.ts';
-import type { SafeUIErrorCode } from '../../../integration/state/SafeUIErrorCode.ts';
+import { panelError, type PanelErrorKind } from './panel-error.ts';
+import type { HeadlineCode } from './today-panel-model.ts';
+import { microGroups, type WeeklyRow } from './weekly-model.ts';
 
-export type Cell = { value: string; detail: string | null; unknown: boolean };
-export type PeriodRow = {
-  day: string;
-  status: string | null;
-  tone: 'ok' | 'open' | 'none' | null;
-  cells: [Cell, Cell, Cell, Cell];
-};
+export type { DotMark };
+export interface GridCell { tone: Tone; mark: DotMark; text: string }
+export interface GridRow { code: HeadlineCode; name: string; href: string; cells: GridCell[]; average: string | null }
+export interface LegendItem { tone: Tone; mark: DotMark; words: string }
+export interface Grid { columns: { initial: string; day: string; date: string }[]; rows: GridRow[] }
 export type PeriodPanelModel =
-  | { kind: 'LOADING' | 'DENIED' | 'SESSION' | 'UNAVAILABLE' | 'INVALID' | 'NOT_CONFIGURED' }
-  | { kind: 'PERIOD'; range: RangeDays; title: string; rows: PeriodRow[]; average: PeriodRow; profileHint: boolean };
+  | { kind: 'LOADING' | PanelErrorKind }
+  | {
+      kind: 'PERIOD';
+      range: RangeDays;
+      title: string;
+      grids: Grid[];
+      legend: LegendItem[];
+      micro: WeeklyGroup<WeeklyRow>[];
+      profileHint: boolean;
+    };
 
-const UNKNOWN: Cell = { value: 'sin dato', detail: null, unknown: true };
-const NO_ENTRIES: Cell = { value: '—', detail: null, unknown: false };
-const STATUS: Record<PeriodDay['dayStatus'], { label: string; tone: 'ok' | 'open' | 'none' }> = {
-  COMPLETE: { label: 'Cerrado', tone: 'ok' },
-  OPEN: { label: 'Abierto', tone: 'open' },
-  NO_ENTRIES: { label: 'Sin registros', tone: 'none' },
-};
-
-/** `<percent> %`, then `parcial` when the figure leaves food out. */
-function dayCell(known: string | null, percent: string | null, partial: boolean, unit: string): Cell {
-  if (known === null) return { ...UNKNOWN };
-  const parts = [percent === null ? null : `${percent} %`, partial ? 'parcial' : null].filter((p) => p !== null);
-  return { value: withUnit(known, unit), detail: parts.length > 0 ? parts.join(' · ') : null, unknown: false };
-}
+const GRID_DAYS = 7;
+const ROWS: HeadlineCode[] = ['energy_kcal', 'protein_g', 'fiber_g', 'free_sugars_g'];
 
 function withUnit(decimal: string, unit: string): string {
-  const text = amount(decimal, unit);
-  return unit === 'kcal' ? text : `${text} ${unit}`;
+  return `${amount(decimal, unit)} ${unitLabel(unit)}`;
 }
 
-function blockCell(block: NutrientBlock, unit: string): Cell {
-  return dayCell(block.known, block.percent, block.status === 'PARTIAL', unit);
-}
-
-function averageCell(a: PeriodAverage, unit: string): Cell {
-  if (a.daysUsed === 0 || a.averageKnown === null) return { ...UNKNOWN };
-  const days = `${a.daysUsed} ${a.daysUsed === 1 ? 'día' : 'días'}`;
+function inputFor(day: PeriodDay, code: HeadlineCode): DayInput {
+  if (code !== 'free_sugars_g') return day.nutrients[code];
+  const { freeSugars } = day;
   return {
-    value: withUnit(a.averageKnown, unit),
-    detail: a.averagePercent === null ? days : `${a.averagePercent} % · ${days}`,
-    unknown: false,
+    known: freeSugars.known,
+    status: freeSugars.status,
+    target: freeSugars.limitG === null ? null : limitTarget(freeSugars.limitG),
+    percent: null,
   };
 }
 
-function toRow(day: PeriodDay): PeriodRow {
-  const status = STATUS[day.dayStatus];
-  const cells: [Cell, Cell, Cell, Cell] = day.dayStatus === 'NO_ENTRIES'
-    ? [{ ...NO_ENTRIES }, { ...NO_ENTRIES }, { ...NO_ENTRIES }, { ...NO_ENTRIES }]
-    : [
-        blockCell(day.nutrients.energy_kcal, 'kcal'),
-        blockCell(day.nutrients.protein_g, 'g'),
-        blockCell(day.nutrients.fiber_g, 'g'),
-        dayCell(day.freeSugars.known, day.freeSugars.percent, day.freeSugars.status === 'PARTIAL', 'g'),
-      ];
-  return { day: weekdayDay(day.date), status: status.label, tone: status.tone, cells };
+function cellFor(day: PeriodDay, code: HeadlineCode, isToday: boolean): GridCell {
+  const input = inputFor(day, code);
+  const state = dayState(input, dayPhase(day.dayStatus, isToday));
+  const mark = markOf(state.tone, state.word);
+  if (state.word !== null) return { tone: state.tone, mark, text: state.word };
+  return { tone: state.tone, mark, text: input.known === null ? 'sin dato' : withUnit(input.known, unitOf(code)) };
 }
 
-function toPeriod(summary: PeriodSummary, range: RangeDays): PeriodPanelModel {
-  const a = summary.averages;
+function averageFor(summary: PeriodSummary, code: HeadlineCode): string {
+  const a = summary.averages[code as AveragedNutrient];
+  if (a.daysUsed === 0 || a.averageKnown === null) return 'sin dato';
+  return withUnit(a.averageKnown, unitOf(code));
+}
+
+const LEGEND_ORDER: DotMark[] = ['ok', 'under', 'over', 'progress', 'unclosed', 'unknown', 'empty', 'plain'];
+
+/** The marks the grids actually show, in status-language order, each with the words its dot stands for. */
+export function legendFor(grids: Grid[]): LegendItem[] {
+  const seen = new Map<DotMark, { tone: Tone; words: Set<string> }>();
+  for (const grid of grids) {
+    for (const row of grid.rows) {
+      for (const cell of row.cells) {
+        // A dot's word: the state word, with "en curso · faltan X" cut to "en curso"; a plain cell has none.
+        const word = cell.tone === 'plain' ? 'sin objetivo' : cell.text.split(' · ')[0];
+        const entry = seen.get(cell.mark) ?? { tone: cell.tone, words: new Set<string>() };
+        seen.set(cell.mark, { ...entry, words: entry.words.add(word) });
+      }
+    }
+  }
+  return LEGEND_ORDER.filter((mark) => seen.has(mark)).map((mark) => {
+    const { tone, words } = seen.get(mark)!;
+    const sorted = [...words].sort((a, b) => CAUTION_WORDS.indexOf(a) - CAUTION_WORDS.indexOf(b));
+    return { tone, mark, words: sorted.join(' o ') };
+  });
+}
+
+function toPeriod(summary: PeriodSummary, range: RangeDays, person: string | null): PeriodPanelModel {
+  const grids: Grid[] = [];
+  for (let from = 0; from < summary.days.length; from += GRID_DAYS) {
+    const days = summary.days.slice(from, from + GRID_DAYS);
+    const last = from + GRID_DAYS >= summary.days.length;
+    grids.push({
+      columns: days.map((d) => ({ initial: weekdayInitial(d.date), day: dayOfMonth(d.date), date: d.date })),
+      rows: ROWS.map((code) => ({
+        code,
+        name: nutrientLabel(code),
+        href: nutritionHref(`/nutrition/nutriente/${code}`, person, { rango: String(range) }),
+        cells: days.map((d) => cellFor(d, code, d.date === summary.end)),
+        average: last ? averageFor(summary, code) : null,
+      })),
+    });
+  }
   return {
     kind: 'PERIOD',
     range,
     title: `Últimos ${range} días`,
-    rows: summary.days.map(toRow),
-    average: {
-      day: 'Media', status: null, tone: null,
-      cells: [
-        averageCell(a.energy_kcal, 'kcal'), averageCell(a.protein_g, 'g'),
-        averageCell(a.fiber_g, 'g'), averageCell(a.free_sugars_g, 'g'),
-      ],
-    },
+    grids,
+    legend: legendFor(grids),
+    micro: microGroups(summary, range, person),
     profileHint: !summary.hasProfile,
   };
-}
-
-function errorModel(code: SafeUIErrorCode | undefined): PeriodPanelModel {
-  switch (code) {
-    case 'ACCESS_DENIED':
-      return { kind: 'DENIED' };
-    case 'SESSION_INVALID':
-    case 'SESSION_REQUIRED':
-      return { kind: 'SESSION' };
-    case 'NOT_CONFIGURED':
-      return { kind: 'NOT_CONFIGURED' };
-    case 'INVALID_RESPONSE':
-      return { kind: 'INVALID' };
-    default:
-      return { kind: 'UNAVAILABLE' };
-  }
 }
 
 /** Fixed-vocabulary label for the one log line per read. */
@@ -103,17 +114,19 @@ export function periodOutcome(model: PeriodPanelModel): string {
 }
 
 /** Map one adapter envelope to exactly one deliberate panel. Pure; formats, never calculates. */
-export function toPeriodPanelModel(envelope: DataEnvelope<PeriodSummary>, range: RangeDays): PeriodPanelModel {
+export function toPeriodPanelModel(
+  envelope: DataEnvelope<PeriodSummary>, range: RangeDays, person: string | null,
+): PeriodPanelModel {
   switch (envelope.delivery) {
     case 'LOADING':
       return { kind: 'LOADING' };
     case 'ERROR':
-      return errorModel(envelope.errorCode);
+      return { kind: panelError(envelope.errorCode) };
     case 'READY':
       if (envelope.environment !== 'LIVE' || envelope.authorization !== 'GRANTED' || !envelope.data) {
         return { kind: 'NOT_CONFIGURED' };
       }
-      return toPeriod(envelope.data, range);
+      return toPeriod(envelope.data, range, person);
     default:
       return { kind: 'UNAVAILABLE' };
   }

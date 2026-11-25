@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import styles from './AppShell.module.css';
 import { Sidebar } from './Sidebar';
 import { BottomNav } from './BottomNav';
+import { isLiveRoute } from './live-routes';
 
 export function AppShell({ children, demoContent = false, liveRoutes = [] }: {
   children: React.ReactNode; demoContent?: boolean; liveRoutes?: string[];
@@ -12,7 +13,7 @@ export function AppShell({ children, demoContent = false, liveRoutes = [] }: {
   // skipTrailingSlashRedirect serves /nutrition/ as-is, and the client pathname keeps the slash.
   const route = usePathname().replace(/\/+$/, '') || '/';
 
-  const demoNotice = demoContent && !liveRoutes.includes(route) ? (
+  const demoNotice = demoContent && !isLiveRoute(route, liveRoutes) ? (
     <div role="note" aria-label="Demo mock data" className={styles.demoNotice}>
       DEMO / MOCK DATA — domain content is illustrative and is not data or access for the selected person.
     </div>

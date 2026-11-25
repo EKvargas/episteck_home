@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { DAY_NUTRIENTS } from './diary-contract.ts';
 import { loadDiaryPeriod } from './period-loader.ts';
 
 type Call = { url: string; init: RequestInit | undefined };
@@ -23,12 +24,12 @@ const AVG = { average_known: null, average_percent: null, days_used: 0, left_out
 const DAY = {
   date: '2026-11-18', day_status: 'NO_ENTRIES', mode: 'GENERAL', trimester: null, profile_version: null,
   free_sugars_known_g: null, items_uncounted: 0,
-  nutrients: { energy_kcal: BLOCK, protein_g: BLOCK, fiber_g: BLOCK },
+  nutrients: Object.fromEntries(DAY_NUTRIENTS.map((c) => [c, BLOCK])),
   free_sugars: { known: null, items_uncounted: 0, status: 'NONE', limit_g: null, percent: null },
 };
 const PERIOD = {
   start: '2026-11-18', end: '2026-11-18', has_profile: false, days: [DAY],
-  averages: { energy_kcal: AVG, protein_g: AVG, fiber_g: AVG, free_sugars_g: AVG },
+  averages: Object.fromEntries([...DAY_NUTRIENTS, 'free_sugars_g'].map((c) => [c, AVG])),
 };
 const live = {
   mode: 'LIVE' as const,

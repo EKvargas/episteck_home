@@ -49,15 +49,39 @@
   border-top: 1px solid var(--olin-surface-border);
 }
 
+/* The same disclosure as Hoy's meals: a drawn caret on the right that turns when open, no native marker. */
 .action summary {
-  padding: 0.625rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   min-height: 44px;
+  padding: 0.5rem 0;
+  list-style: none;
   cursor: pointer;
   font-weight: 600;
 }
 
-.action summary::marker {
-  color: var(--olin-accent);
+.action summary::-webkit-details-marker {
+  display: none;
+}
+
+.summaryText {
+  flex: 1;
+  min-width: 0;
+}
+
+.caret {
+  flex: none;
+  color: var(--olin-text-muted);
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.action[open] > summary .caret {
+  transform: rotate(90deg);
+}
+
+.action summary:hover .caret {
+  color: var(--olin-text-main);
 }
 
 .example {
@@ -95,5 +119,11 @@
 @media (min-width: 768px) {
   .groups {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caret {
+    transition: none;
   }
 }
