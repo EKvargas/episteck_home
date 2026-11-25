@@ -179,3 +179,11 @@ test('LiveWeeklyPanel may import period.server; LiveTodayPanel still may not', a
   // the weekly panel may not read the day or the profile
   assert.equal((await violationsFor({ [WEEKLY_ALLOWED]: "import { readDiaryToday } from '@/integration/nutrition/diary.server';\n" })).length, 1);
 });
+
+test('LiveNutrientPanel may import period.server; the profile and day adapters stay closed to it', async () => {
+  const NUTRIENT_ALLOWED = 'src/app/nutrition/nutriente/LiveNutrientPanel.tsx';
+  assert.deepEqual(await violationsFor({
+    [NUTRIENT_ALLOWED]: "import { readDiaryPeriod } from '@/integration/nutrition/period.server';\n",
+  }), []);
+  assert.equal((await violationsFor({ [NUTRIENT_ALLOWED]: "import { readDiaryToday } from '@/integration/nutrition/diary.server';\n" })).length, 1);
+});

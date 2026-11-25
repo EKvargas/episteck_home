@@ -48,7 +48,7 @@ export async function LivePeriodPanel({ searchParams, range }: { searchParams: S
   return (
     <>
       <NutritionHeader view="days" chip={resolved.chip} updatedAt={updatedAt} />
-      <RangeLinks range={range} person={person} />
+      <RangeLinks range={range} path="/nutrition/dias" param="dias" person={person} />
       <PeriodPanel model={resolved.model} signInHref={signInHref} />
     </>
   );

@@ -78,7 +78,7 @@ export function NutritionHeader({ view, chip = UNKNOWN_CHIP, updatedAt = null }:
           </a>
         ))}
       </nav>
-      {(view === 'diary' || view === 'days') && updatedAt !== null && (
+      {(view === 'diary' || view === 'days' || view === 'detail') && updatedAt !== null && (
         <p className={styles.updated}>
           <span>Actualizado {updatedAt}</span>
           <RetryButton label="Actualizar" pendingLabel="Actualizando…" className={styles.refreshSmall} />

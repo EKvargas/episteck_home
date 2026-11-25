@@ -31,7 +31,7 @@ export default async function DaysPage({ searchParams }: { searchParams: Promise
         fallback={
           <>
             <NutritionHeader view="days" chip={UNKNOWN_CHIP} updatedAt={null} />
-            <RangeLinks range={range} person={person} />
+            <RangeLinks range={range} path="/nutrition/dias" param="dias" person={person} />
             <PeriodPanel model={{ kind: 'LOADING' }} signInHref="" />
           </>
         }

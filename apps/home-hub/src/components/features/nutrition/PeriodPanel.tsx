@@ -26,18 +26,20 @@ function Frame({ role, tone, busy, children }: {
   );
 }
 
-/** Links `?dias=<n>`; keeps `person` only when it is in the URL. */
-export function RangeLinks({ range, person }: { range: RangeDays; person: string | null }) {
+/** Links `?<param>=<n>` on `path`; keeps `person` only when it is in the URL. */
+export function RangeLinks({ range, path, param, person }: {
+  range: RangeDays; path: string; param: 'dias' | 'rango'; person: string | null;
+}) {
   return (
     <nav lang="es" aria-label="Rango de días" className={styles.range}>
       {RANGES.map((n) => {
         const query = new URLSearchParams();
         if (person !== null) query.set('person', person);
-        query.set('dias', String(n));
+        query.set(param, String(n));
         return (
           <a
             key={n}
-            href={`${HUB_BASE_PATH}/nutrition/dias?${query.toString()}`}
+            href={`${HUB_BASE_PATH}${path}?${query.toString()}`}
             aria-current={n === range ? 'page' : undefined}
             className={n === range ? styles.rangeActive : undefined}
           >
