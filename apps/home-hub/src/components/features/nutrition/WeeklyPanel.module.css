@@ -6,8 +6,11 @@
   gap: 0.75rem;
   padding: 1.25rem 1.25rem 0.5rem;
   background: var(--olin-surface-card);
+  backdrop-filter: var(--olin-surface-blur);
+  -webkit-backdrop-filter: var(--olin-surface-blur);
   border: 1px solid var(--olin-surface-border);
   border-radius: var(--olin-card-radius, 16px);
+  box-shadow: var(--olin-shadow-elevation);
 }
 .title { margin: 0; font-size: 1.125rem; color: var(--olin-text-main); text-wrap: balance; }
 .body { margin: 0; color: var(--olin-text-muted); max-width: 40rem; }

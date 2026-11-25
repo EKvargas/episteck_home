@@ -1,12 +1,12 @@
 import { unstable_rethrow } from 'next/navigation';
 import { WeeklyPanel } from '@/components/features/nutrition/WeeklyPanel';
-import { toWeeklyPanelModel, weeklyOutcome, type WeeklyPanelModel } from '@/components/features/nutrition/weekly-model';
+import {
+  toWeeklyPanelModel, weeklyOutcome, WEEKLY_TITLE, type WeeklyPanelModel,
+} from '@/components/features/nutrition/weekly-model';
 import { resolveLiveSubject } from '@/integration/nutrition/live-subject.server';
 import { readDiaryPeriod } from '@/integration/nutrition/period.server';
 
 type SearchParams = Record<string, string | string[] | undefined>;
-
-export const WEEKLY_TITLE = 'Vitaminas y minerales · últimos 7 días';
 
 /** Exactly one line per panel render, fixed vocabulary only: never IDs, names, dates, or values. */
 function logOutcome(outcome: string) {

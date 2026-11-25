@@ -9,6 +9,9 @@ import type { RangeDays } from '../../../integration/nutrition/period-range.ts';
 import type { DataEnvelope } from '../../../integration/state/DataEnvelope.ts';
 import { panelError, type PanelErrorKind } from './panel-error.ts';
 
+/** Hoy's heading for the grouped weekly status; the panel reads 7 days. The no-break space keeps "·" off a line start. */
+export const WEEKLY_TITLE = 'Vitaminas y minerales\u00a0· últimos 7 días';
+
 export interface WeeklyRow {
   code: Micronutrient;
   name: string;

@@ -1,12 +1,13 @@
 import { Suspense } from 'react';
 import { TodayPanel } from '@/components/features/nutrition/TodayPanel';
 import { WeeklyPanel } from '@/components/features/nutrition/WeeklyPanel';
+import { WEEKLY_TITLE } from '@/components/features/nutrition/weekly-model';
 import { UNKNOWN_CHIP } from '@/integration/nutrition/profile-chip';
 import { SERVER_CONFIGURATION } from '@/integration/state/Environment.server';
 import { NutritionHeader } from '../NutritionHeader';
 import styles from '../page.module.css';
 import { LiveTodayPanel } from './LiveTodayPanel';
-import { LiveWeeklyPanel, WEEKLY_TITLE } from './LiveWeeklyPanel';
+import { LiveWeeklyPanel } from './LiveWeeklyPanel';
 
 export const dynamic = 'force-dynamic';
 

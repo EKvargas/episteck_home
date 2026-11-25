@@ -187,9 +187,9 @@ export const PREGNANCY_DAY = {
   limit: { value_g: '50', sources: [{ title: 'WHO', url: 'https://example.test/who' }] },
   entries: [
     { id: 'p-1', consumed_at: '2026-11-24T08:10:00+01:00', items: [
-      { label: 'Avena con leche', amount: '1', unit: 'bowl', grams: '250', conversion: { method: 'PRESET' },
+      { label: 'Avena con leche', amount: '1', unit: 'cup', grams: '250', conversion: { method: 'PRESET' },
         facts: { ...meta, source: 'USDA', nutrients_per_100g: nut100() }, free_sugars_g: '2.5' },
-      { label: 'Plátano', amount: '1', unit: 'unit', grams: '120', conversion: { method: 'PRESET' },
+      { label: 'Plátano', amount: '1', unit: 'piece', grams: '120', conversion: { method: 'AGENT_ESTIMATE' },
         facts: { ...meta, source: 'USDA', nutrients_per_100g: withoutFiber(nut100({ energy_kcal: '89' })) }, free_sugars_g: '0.5' },
     ] },
     { id: 'p-2', consumed_at: '2026-11-24T13:30:00+01:00', items: [

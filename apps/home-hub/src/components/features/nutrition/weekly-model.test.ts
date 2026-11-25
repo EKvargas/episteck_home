@@ -3,7 +3,7 @@ import test from 'node:test';
 import { parsePeriodWire } from '../../../integration/nutrition/period-contract.ts';
 import { EnvelopeFactory, type DataEnvelope } from '../../../integration/state/DataEnvelope.ts';
 import { PERIOD_THREE, PERIOD_WEEK_PREGNANCY } from '../../../../test-support/nutrition-fixtures.mjs';
-import { microGroups, toWeeklyPanelModel, weeklyOutcome } from './weekly-model.ts';
+import { microGroups, toWeeklyPanelModel, weeklyOutcome, WEEKLY_TITLE } from './weekly-model.ts';
 import type { PeriodSummary } from '../../../integration/nutrition/period-contract.ts';
 
 const summary = parsePeriodWire(PERIOD_WEEK_PREGNANCY);
@@ -49,4 +49,9 @@ test('a ready LIVE envelope becomes a WEEK; MOCK is not configured', () => {
   assert.equal(model.kind, 'WEEK');
   assert.equal(weeklyOutcome(model), 'WEEK');
   assert.equal(toWeeklyPanelModel(EnvelopeFactory.ready(summary, 'MOCK'), null).kind, 'NOT_CONFIGURED');
+});
+
+test('the Hoy title keeps "·" off a line start with a no-break space', () => {
+  assert.equal(WEEKLY_TITLE, 'Vitaminas y minerales\u00a0· últimos 7 días');
+  assert.equal(WEEKLY_TITLE.replace(/\s+/g, ' '), 'Vitaminas y minerales · últimos 7 días');
 });

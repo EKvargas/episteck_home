@@ -116,16 +116,17 @@ test('changing the Home context clears the previous diary and runs the new acces
   }]);
   await page.goto('/app');
   const diary = page.getByTestId('today-panel');
-  await expect(diary).toContainText('Azúcares libres: 17 g de 50 g');
+  const sugars = diary.locator('[data-code="free_sugars_g"]');
+  await expect(sugars).toContainText('17 de 50 g');
   await page.getByRole('tab', { name: /Synthetic Care Context/ }).click();
   await expect(page).toHaveURL(/\/app\/?\?person=PSN-00007$/);
   await expect(diary).toContainText('No tienes acceso a este diario.');
-  await expect(diary).not.toContainText('17 g');
+  await expect(diary).not.toContainText('17 de 50 g');
   await expect(page.getByText('Telegram usa tu propio diario.')).toBeVisible();
   await expect(page.getByText('Registrar una comida', { exact: true })).toHaveCount(0);
   await page.getByRole('tab', { name: /Synthetic Viewer/ }).click();
   await expect(page).toHaveURL(/\/app\/?\?person=PSN-00001$/);
-  await expect(diary).toContainText('Azúcares libres: 17 g de 50 g');
+  await expect(sugars).toContainText('17 de 50 g');
 });
 
 test('context route rejects unavailable bootstrap without mock identity', async ({ request }) => {
