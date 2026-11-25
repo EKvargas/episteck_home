@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { TodayPanel } from '@/components/features/nutrition/TodayPanel';
+import { UNKNOWN_CHIP } from '@/integration/nutrition/profile-chip';
 import { SERVER_CONFIGURATION } from '@/integration/state/Environment.server';
 import { NutritionHeader } from '../NutritionHeader';
 import styles from '../page.module.css';
@@ -21,11 +22,15 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const params = await searchParams;
   return (
     <div className={styles.nutritionCanvas}>
-      <NutritionHeader view="diary" />
       {/* Keyed on the raw selector so one subject's panel can never paint under another's. */}
       <Suspense
         key={JSON.stringify(params.person ?? null)}
-        fallback={<TodayPanel model={{ kind: 'LOADING' }} signInHref="" />}
+        fallback={
+          <>
+            <NutritionHeader view="diary" chip={UNKNOWN_CHIP} updatedAt={null} />
+            <TodayPanel model={{ kind: 'LOADING' }} signInHref="" />
+          </>
+        }
       >
         <LiveTodayPanel searchParams={params} />
       </Suspense>

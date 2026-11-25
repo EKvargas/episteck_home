@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { PeriodPanel, RangeLinks } from '@/components/features/nutrition/PeriodPanel';
 import { parseRange } from '@/integration/nutrition/period-range';
+import { UNKNOWN_CHIP } from '@/integration/nutrition/profile-chip';
 import { SERVER_CONFIGURATION } from '@/integration/state/Environment.server';
 import { NutritionHeader } from '../NutritionHeader';
 import styles from '../page.module.css';
@@ -24,12 +25,16 @@ export default async function DaysPage({ searchParams }: { searchParams: Promise
   const person = typeof params.person === 'string' ? params.person : null;
   return (
     <div className={styles.nutritionCanvas}>
-      <NutritionHeader view="days" />
-      <RangeLinks range={range} person={person} />
       {/* Keyed on the raw selector and the range so one subject's or window's panel never paints under another's. */}
       <Suspense
         key={JSON.stringify([params.person ?? null, range])}
-        fallback={<PeriodPanel model={{ kind: 'LOADING' }} signInHref="" />}
+        fallback={
+          <>
+            <NutritionHeader view="days" chip={UNKNOWN_CHIP} updatedAt={null} />
+            <RangeLinks range={range} person={person} />
+            <PeriodPanel model={{ kind: 'LOADING' }} signInHref="" />
+          </>
+        }
       >
         <LivePeriodPanel searchParams={params} range={range} />
       </Suspense>

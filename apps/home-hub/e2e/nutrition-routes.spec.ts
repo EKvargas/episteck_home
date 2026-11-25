@@ -23,8 +23,7 @@ test('Perfil lives at /app/nutrition/perfil with no demo banner', async ({ page,
   await page.goto('/app/nutrition/perfil');
   await expect(page.getByTestId('profile-panel')).toContainText('Sin perfil de nutrición');
   await expect(page.getByRole('note', { name: 'Demo mock data' })).toHaveCount(0);
-  const tabs = page.getByRole('navigation', { name: 'Nutrición' });
-  await expect(tabs.getByRole('link', { name: 'Perfil', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('profile-chip')).toHaveAttribute('aria-current', 'page');
   expect((await observed(request, run)).mints).toBe(1);
 });
 

@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { ProfilePanel } from '@/components/features/nutrition/ProfilePanel';
+import { UNKNOWN_CHIP } from '@/integration/nutrition/profile-chip';
 import { SERVER_CONFIGURATION } from '@/integration/state/Environment.server';
 import { NutritionHeader } from '../NutritionHeader';
 import styles from '../page.module.css';
@@ -21,17 +22,20 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
   const params = await searchParams;
   return (
     <div className={styles.nutritionCanvas}>
-      <NutritionHeader view="profile" />
-      {/* A div, not <main>: AppShell already renders the page's one main landmark. */}
-      <div className={styles.grid}>
-        {/* Keyed on the raw selector so one subject's panel can never paint under another's. */}
-        <Suspense
-          key={JSON.stringify(params.person ?? null)}
-          fallback={<ProfilePanel model={{ kind: 'LOADING', subjectName: null }} signInHref="" />}
-        >
-          <LiveProfilePanel searchParams={params} />
-        </Suspense>
-      </div>
+      {/* Keyed on the raw selector so one subject's panel can never paint under another's. */}
+      <Suspense
+        key={JSON.stringify(params.person ?? null)}
+        fallback={
+          <>
+            <NutritionHeader view="profile" chip={UNKNOWN_CHIP} updatedAt={null} />
+            <div className={styles.grid}>
+              <ProfilePanel model={{ kind: 'LOADING', subjectName: null }} signInHref="" />
+            </div>
+          </>
+        }
+      >
+        <LiveProfilePanel searchParams={params} />
+      </Suspense>
     </div>
   );
 }

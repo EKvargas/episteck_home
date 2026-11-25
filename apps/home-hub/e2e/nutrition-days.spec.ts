@@ -109,18 +109,19 @@ test('Días at 390 px: the page never scrolls sideways; the table scrolls inside
   expect(sizes.overflowX).toBe('auto');
 });
 
-test('tabs Perfil · Hoy · Días link to each other and keep ?person=', async ({ page }) => {
+test('tabs Hoy · Días and the profile chip link to each other and keep ?person=', async ({ page }) => {
   await signIn(page, 'days-three', newRun());
   await page.goto('/app/nutrition/dias?person=PSN-00001');
   await expect(page.getByRole('heading', { level: 1, name: 'Nutrición' })).toBeVisible();
-  const tabs = page.getByRole('navigation', { name: 'Nutrición' });
+  const tabs = page.getByRole('navigation', { name: 'Nutrición', exact: true });
   await expect(tabs.getByRole('link', { name: 'Días', exact: true })).toHaveAttribute('aria-current', 'page');
-  await expect(tabs.getByRole('link', { name: 'Perfil', exact: true })).toHaveAttribute('href', /\/nutrition\/perfil\?person=PSN-00001$/);
+  await expect(tabs.getByRole('link', { name: 'Perfil' })).toHaveCount(0);
+  await expect(page.getByTestId('profile-chip')).toHaveAttribute('href', /\/nutrition\/perfil\?person=PSN-00001$/);
   await expect(tabs.getByRole('link', { name: 'Hoy', exact: true })).toHaveAttribute('href', /\/nutrition\/hoy\?person=PSN-00001$/);
   await expect(tabs.getByRole('link', { name: 'Días', exact: true })).toHaveAttribute('href', /\/nutrition\/dias\?person=PSN-00001$/);
   await expect(tabs.getByRole('link', { name: 'Acciones en Telegram' })).toHaveCount(0);
 
   await page.goto('/app/nutrition/perfil');
-  await expect(tabs.getByRole('link', { name: 'Perfil', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('profile-chip')).toHaveAttribute('aria-current', 'page');
   await expect(tabs.getByRole('link', { name: 'Días', exact: true })).toHaveAttribute('href', /\/nutrition\/dias$/);
 });
