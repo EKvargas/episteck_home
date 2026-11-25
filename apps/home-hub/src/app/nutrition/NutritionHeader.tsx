@@ -72,7 +72,7 @@ export function NutritionHeader({ view, chip = UNKNOWN_CHIP, updatedAt = null }:
           <a
             key={tab.view}
             href={`${HUB_BASE_PATH}${tab.path}${personId ? `?person=${encodeURIComponent(personId)}` : ''}`}
-            aria-current={tab.view === view ? 'page' : undefined}
+            aria-current={tab.view === view || (view === 'detail' && tab.view === 'days') ? 'page' : undefined}
           >
             {tab.label}
           </a>

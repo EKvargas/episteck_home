@@ -83,7 +83,8 @@ function dayFor(day: PeriodDay, code: DetailCode, isToday: boolean, unit: string
   if (phase === 'NO_ENTRIES') return { ...base, value: null, bar: null, word: null, note: 'sin registros' };
   if (phase === 'OPEN_TODAY') return { ...base, value, bar: null, word: null, note: 'abierto' };
   if (phase === 'OPEN_PAST') return { ...base, value, bar: null, word: null, note: 'sin cerrar' };
-  if (input.target === null) return { ...base, value, bar: null, word: null, note: null };
+  // A closed day with no target is never an empty row: the value (or sin dato) and the reason there is no bar.
+  if (input.target === null) return { ...base, value: value ?? 'sin dato', bar: null, word: null, note: 'sin objetivo' };
   if (input.known === null) return { ...base, value: null, bar: null, word: null, note: 'faltan datos' };
   return { ...base, value, bar: barFor(input.target, input.known, phase), word: state.word, note: null };
 }

@@ -27,7 +27,7 @@ test('top: name, average against target with the state word; range links keep th
   await expect(links.getByRole('link', { name: '7 días' })).toHaveAttribute('aria-current', 'page');
   await expect(links.getByRole('link', { name: '3 días' })).toHaveAttribute('href', /\/nutrition\/nutriente\/iron_mg\?person=PSN-00001&rango=3$/);
   await expect(page.getByRole('navigation', { name: 'Nutrición', exact: true }).getByRole('link', { name: 'Días', exact: true }))
-    .not.toHaveAttribute('aria-current', 'page');
+    .toHaveAttribute('aria-current', 'page');
   await expect(panel(page).getByText('Objetivo diario: al menos 27 mg.')).toBeVisible();
 });
 
@@ -53,10 +53,12 @@ test('an unknown nutrient code shows the not-found content', async ({ page, requ
   const run = newRun();
   await signIn(page, 'days-pregnancy', run);
   await page.goto('/app/nutrition/nutriente/magnesium_mg');
-  await expect(page.getByText('This page could not be found.')).toBeVisible();
+  await expect(page.getByText('No existe ese nutriente.')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Ver Días' })).toHaveAttribute('href', '/app/nutrition/dias');
+  await expect(page.locator('main, body').first()).not.toContainText('This page could not be found');
   await expect(panel(page)).toHaveCount(0);
   await page.goto('/app/nutrition/nutriente/..%2Fx');
-  await expect(page.getByText('This page could not be found.')).toBeVisible();
+  await expect(page.getByText('No existe ese nutriente.')).toBeVisible();
   // It never reads: no period call for a code that is not a nutrient.
   expect((await observed(request, run)).calls).toEqual([]);
 });
@@ -85,6 +87,8 @@ test('without a profile there is no target line and no bars', async ({ page }) =
   await page.goto('/app/nutrition/nutriente/calcium_mg');
   await expect(panel(page)).not.toContainText('Objetivo diario');
   await expect(panel(page).locator('[data-mark]')).toHaveCount(0);
+  // No row is empty: every day carries a word.
+  for (const text of await days(page).allInnerTexts()) expect(text).toMatch(/sin objetivo|abierto|sin cerrar|sin registros/);
 });
 
 test('an error reads in Spanish and offers Reintentar', async ({ page }) => {

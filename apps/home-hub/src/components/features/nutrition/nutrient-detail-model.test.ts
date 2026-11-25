@@ -112,3 +112,23 @@ test('the outcome is the fixed kind', () => {
   assert.equal(nutrientDetailOutcome({ kind: 'DENIED' }), 'DENIED');
   assert.equal(nutrientDetailOutcome(detail(toNutrientDetailModel(week(), 'iron_mg', true, null))), 'DETAIL');
 });
+
+test('a closed day with no target is never an empty row: the value or sin dato, plus sin objetivo', () => {
+  const base = parsePeriodWire(PERIOD_WEEK_PREGNANCY);
+  const stripped: PeriodSummary = {
+    ...base,
+    days: base.days.map((d, i) => ({
+      ...d,
+      nutrients: { ...d.nutrients, energy_kcal: {
+        ...d.nutrients.energy_kcal, target: null, ...(i === 1 ? { known: null } : {}),
+      } },
+    })),
+  };
+  const m = detail(toNutrientDetailModel(ready(stripped), 'energy_kcal', true, null));
+  assert.equal(m.days[0].value, '2.105 kcal');
+  assert.equal(m.days[0].note, 'sin objetivo');
+  assert.equal(m.days[0].bar, null);
+  assert.equal(m.days[1].value, 'sin dato');
+  assert.equal(m.days[1].note, 'sin objetivo');
+  for (const d of m.days) assert.ok(d.word !== null || d.note !== null, d.day);
+});
