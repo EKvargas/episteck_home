@@ -1,4 +1,4 @@
-import { DAY_NUTRIENTS_SHOWN, type DiaryDay, type DiaryItem } from '../../../integration/nutrition/diary-contract.ts';
+import { HEADLINE_NUTRIENTS, type DiaryDay, type DiaryItem } from '../../../integration/nutrition/diary-contract.ts';
 import { amount, nutrientLabel, unitLabel } from '../../../integration/nutrition/nutrition-format.ts';
 import type { DataEnvelope } from '../../../integration/state/DataEnvelope.ts';
 import type { SafeUIErrorCode } from '../../../integration/state/SafeUIErrorCode.ts';
@@ -83,7 +83,7 @@ function nutrientNote(item: DiaryItem): string | null {
 
 function nutrientLines(day: DiaryDay): TodayPanelModelToday['nutrientLines'] {
   const lines: TodayPanelModelToday['nutrientLines'] = [];
-  for (const code of DAY_NUTRIENTS_SHOWN) {
+  for (const code of HEADLINE_NUTRIENTS) {
     const block = day.nutrients[code];
     if (block.target === null) continue;
     const label = nutrientLabel(code);

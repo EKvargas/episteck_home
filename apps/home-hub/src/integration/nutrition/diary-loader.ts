@@ -1,7 +1,7 @@
 import type { DataEnvelope } from '../state/DataEnvelope.ts';
 import type { SafeUIErrorCode } from '../state/SafeUIErrorCode.ts';
 import { discardBody, FETCH_TIMEOUT_MS } from '../state/fetch-timeout.ts';
-import { parseDayWire, type DiaryDay } from './diary-contract.ts';
+import { DAY_NUTRIENTS, parseDayWire, type DayNutrient, type DiaryDay } from './diary-contract.ts';
 import {
   DELEGATION_HEADER,
   failedEnvelope,
@@ -35,7 +35,7 @@ function emptyDay(): DiaryDay {
   const none = { known: null, itemsTotal: 0, itemsUncounted: 0, status: 'NONE', target: null, percent: null } as const;
   return {
     profileVersion: null,
-    nutrients: { energy_kcal: none, protein_g: none, fiber_g: none },
+    nutrients: Object.fromEntries(DAY_NUTRIENTS.map((c) => [c, none])) as Record<DayNutrient, typeof none>,
     date: '', mode: 'GENERAL', trimester: null, dayStatus: 'NO_ENTRIES', sugarStatus: 'NONE',
     freeSugarsKnownG: null, itemsTotal: 0, itemsUncounted: 0, limit: null, entries: [], attribution: [],
   };

@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { DataEnvelope } from '../../../integration/state/DataEnvelope.ts';
-import type { DiaryDay, DiaryItem, NutrientBlock, DayNutrient } from '../../../integration/nutrition/diary-contract.ts';
+import { DAY_NUTRIENTS, type DiaryDay, type DiaryItem, type NutrientBlock, type DayNutrient } from '../../../integration/nutrition/diary-contract.ts';
 import { toTodayPanelModel, type TodayPanelModel } from './today-panel-model.ts';
 
 const item = (over: Partial<DiaryItem> = {}): DiaryItem => ({
-  label: 'Zumo', amount: '1', unit: 'glass', grams: '200', method: 'PRESET', source: null, freeSugarsG: '17.0', ...over,
+  label: 'Zumo', amount: '1', unit: 'glass', grams: '200', method: 'PRESET', source: null, freeSugarsG: '17.0', withFacts: [], ...over,
 });
 const block = (known: string | null, target: NutrientBlock['target'], over: Partial<NutrientBlock> = {}): NutrientBlock => ({
   known, itemsTotal: 1, itemsUncounted: 0, status: known === null ? 'NONE' : 'KNOWN', target, percent: null, ...over,
@@ -15,7 +15,10 @@ const TARGETS = {
   protein: { value: '60', displayValue: '60', unit: 'g', kind: 'MIN' } as const,
   fiber: { value: '30', displayValue: '30', unit: 'g', kind: 'MIN' } as const,
 };
+const noBlocks = (): Record<DayNutrient, NutrientBlock> =>
+  Object.fromEntries(DAY_NUTRIENTS.map((c) => [c, block(null, null)])) as Record<DayNutrient, NutrientBlock>;
 const blocks = (known: { energy?: string | null; protein?: string | null; fiber?: string | null } = {}): Record<DayNutrient, NutrientBlock> => ({
+  ...noBlocks(),
   energy_kcal: block(known.energy === undefined ? '1640.3' : known.energy, TARGETS.energy),
   protein_g: block(known.protein === undefined ? '72.4' : known.protein, TARGETS.protein),
   fiber_g: block(known.fiber === undefined ? '14.0' : known.fiber, TARGETS.fiber),

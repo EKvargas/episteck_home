@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { DAY_NUTRIENTS } from './diary-contract.ts';
 import { parsePeriodWire } from './period-contract.ts';
 
 const block = (known: string | null, percent: string | null = null, over: Record<string, unknown> = {}) => ({
@@ -11,23 +12,28 @@ const avg = (known: string | null, percent: string | null, used: number) => ({
   average_known: known, average_percent: percent, days_used: used,
   left_out: { open: 1, no_entries: 0, partial: 0 },
 });
+const ALL = [...DAY_NUTRIENTS];
+const allBlocks = (over: Record<string, unknown> = {}) =>
+  ({ ...Object.fromEntries(ALL.map((c) => [c, block(null)])), ...over });
+const allAverages = (over: Record<string, unknown> = {}) =>
+  ({ ...Object.fromEntries([...ALL, 'free_sugars_g'].map((c) => [c, avg(null, null, 0)])), ...over });
 const day = (date: string, over: Record<string, unknown> = {}) => ({
   date, day_status: 'COMPLETE', mode: 'PREGNANCY', trimester: 2, profile_version: 2,
   free_sugars_known_g: '17.0', items_uncounted: 0,
-  nutrients: {
+  nutrients: allBlocks({
     energy_kcal: block('2510', '90'), protein_g: block('72.4', '120'), fiber_g: block('14.0', '47'),
     fat_g: block('80'),
-  },
+  }),
   free_sugars: { known: '17.0', items_uncounted: 0, status: 'KNOWN', limit_g: '50', percent: '34' },
   ...over,
 });
 const wire = (over: Record<string, unknown> = {}) => ({
   start: '2026-11-20', end: '2026-11-21', has_profile: true,
   days: [day('2026-11-20'), day('2026-11-21', { day_status: 'OPEN', trimester: null, mode: 'GENERAL' })],
-  averages: {
+  averages: allAverages({
     energy_kcal: avg('2375', '85', 2), protein_g: avg('70', '110', 2), fiber_g: avg(null, null, 0),
     free_sugars_g: avg('17.0', '34', 2), fat_g: avg('80', null, 2),
-  },
+  }),
   ...over,
 });
 
@@ -41,7 +47,7 @@ test('maps days, averages and has_profile', () => {
   assert.equal(p.days[0].trimester, 2);
   assert.equal(p.days[0].nutrients.energy_kcal.known, '2510');
   assert.equal(p.days[0].nutrients.energy_kcal.percent, '90');
-  assert.equal('fat_g' in p.days[0].nutrients, false);
+  assert.equal(p.days[0].nutrients.fat_g.known, '80');
   assert.deepEqual(p.days[0].freeSugars, { known: '17.0', itemsUncounted: 0, status: 'KNOWN', limitG: '50', percent: '34' });
   assert.equal(p.days[1].trimester, null);
   assert.deepEqual(p.averages.energy_kcal, {
@@ -49,7 +55,18 @@ test('maps days, averages and has_profile', () => {
   });
   assert.equal(p.averages.fiber_g.averageKnown, null);
   assert.equal(p.averages.free_sugars_g.averagePercent, '34');
-  assert.equal('fat_g' in p.averages, false);
+  assert.equal(p.averages.fat_g.averageKnown, '80');
+});
+
+test('maps fifteen nutrients per day and sixteen averages', () => {
+  const p = parsePeriodWire(wire());
+  assert.deepEqual(Object.keys(p.days[0].nutrients), ALL);
+  assert.deepEqual(Object.keys(p.averages), [...ALL, 'free_sugars_g']);
+});
+
+test('rejects a period missing the iodine_ug average', () => {
+  const rest = Object.fromEntries(Object.entries(wire().averages).filter(([k]) => k !== 'iodine_ug'));
+  assert.throws(() => parsePeriodWire(wire({ averages: rest })), /iodine_ug/);
 });
 
 test('rejects more than 31 days, an unknown day_status, a missing average key', () => {

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { DataEnvelope } from '../../../integration/state/DataEnvelope.ts';
-import type { NutrientBlock } from '../../../integration/nutrition/diary-contract.ts';
-import type { PeriodAverage, PeriodDay, PeriodSummary } from '../../../integration/nutrition/period-contract.ts';
+import { DAY_NUTRIENTS, type DayNutrient, type NutrientBlock } from '../../../integration/nutrition/diary-contract.ts';
+import type { AveragedNutrient, PeriodAverage, PeriodDay, PeriodSummary } from '../../../integration/nutrition/period-contract.ts';
 import { periodOutcome, toPeriodPanelModel, type PeriodPanelModel } from './period-panel-model.ts';
 
 const block = (known: string | null, percent: string | null = null, over: Partial<NutrientBlock> = {}): NutrientBlock => ({
@@ -11,33 +11,37 @@ const block = (known: string | null, percent: string | null = null, over: Partia
 });
 const sugars = (known: string | null, percent: string | null, status: 'NONE' | 'KNOWN' | 'PARTIAL' = 'KNOWN') =>
   ({ known, itemsUncounted: 0, status, limitG: percent === null ? null : '50', percent });
+const allBlocks = (over: Partial<Record<DayNutrient, NutrientBlock>>): Record<DayNutrient, NutrientBlock> =>
+  ({ ...Object.fromEntries(DAY_NUTRIENTS.map((c) => [c, block(null)])), ...over }) as Record<DayNutrient, NutrientBlock>;
 const mkDay = (date: string, dayStatus: PeriodDay['dayStatus'], over: Partial<PeriodDay> = {}): PeriodDay => ({
   date, dayStatus, mode: 'GENERAL', trimester: null,
-  nutrients: {
+  nutrients: allBlocks({
     energy_kcal: block('2510', '90'), protein_g: block('98.4', '120'), fiber_g: block('24.0', '80'),
-  },
+  }),
   freeSugars: sugars('17.0', '34'), ...over,
 });
 const avg = (known: string | null, percent: string | null, used: number): PeriodAverage => ({
   averageKnown: known, averagePercent: percent, daysUsed: used, leftOut: { open: 1, noEntries: 0, partial: 0 },
 });
+const allAverages = (over: Partial<Record<AveragedNutrient, PeriodAverage>>): Record<AveragedNutrient, PeriodAverage> =>
+  ({ ...Object.fromEntries([...DAY_NUTRIENTS, 'free_sugars_g'].map((c) => [c, avg(null, null, 0)])), ...over }) as Record<AveragedNutrient, PeriodAverage>;
 const threeDays = (over: Partial<PeriodSummary> = {}): PeriodSummary => ({
   start: '2026-11-20', end: '2026-11-22', hasProfile: true,
   days: [
     mkDay('2026-11-20', 'COMPLETE'),
     mkDay('2026-11-21', 'COMPLETE', { freeSugars: sugars(null, null, 'NONE') }),
     mkDay('2026-11-22', 'OPEN', {
-      nutrients: {
+      nutrients: allBlocks({
         energy_kcal: block('1200', '53'), protein_g: block('40', null, { status: 'PARTIAL' }),
         fiber_g: block(null),
-      },
+      }),
       freeSugars: sugars('12.0', null, 'PARTIAL'),
     }),
   ],
-  averages: {
+  averages: allAverages({
     energy_kcal: avg('2375', '85', 2), protein_g: avg('90', '110', 2), fiber_g: avg('24.0', null, 1),
     free_sugars_g: avg(null, null, 0),
-  },
+  }),
   ...over,
 });
 const ready = (data: PeriodSummary, environment: 'LIVE' | 'MOCK' = 'LIVE'): DataEnvelope<PeriodSummary> =>
@@ -80,7 +84,7 @@ test('a partial energy figure keeps its percent and adds parcial', () => {
 
 test('a day without entries shows — and never 0', () => {
   const none = mkDay('2026-11-22', 'NO_ENTRIES', {
-    nutrients: { energy_kcal: block(null), protein_g: block(null), fiber_g: block(null) },
+    nutrients: allBlocks({}),
     freeSugars: sugars(null, null, 'NONE'),
   });
   const m = period(toPeriodPanelModel(ready(threeDays({ days: [none] })), 7));
@@ -95,15 +99,16 @@ test('without a profile: no percentages and the hint', () => {
   const days = threeDays().days.map((d) => ({
     ...d,
     nutrients: {
+      ...d.nutrients,
       energy_kcal: { ...d.nutrients.energy_kcal, percent: null },
       protein_g: { ...d.nutrients.protein_g, percent: null },
       fiber_g: { ...d.nutrients.fiber_g, percent: null },
     },
   }));
-  const averages = {
+  const averages = allAverages({
     energy_kcal: avg('2375', null, 2), protein_g: avg('90', null, 2), fiber_g: avg('24.0', null, 2),
     free_sugars_g: avg('17.0', '34', 2),
-  };
+  });
   const m = period(toPeriodPanelModel(ready(threeDays({ hasProfile: false, days, averages })), 3));
   assert.equal(m.profileHint, true);
   // Energy, protein and fiber carry no percent; the free-sugar limit always applies, so sugars keep theirs.

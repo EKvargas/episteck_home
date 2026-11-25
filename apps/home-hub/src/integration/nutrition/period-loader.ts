@@ -1,6 +1,7 @@
 import type { DataEnvelope } from '../state/DataEnvelope.ts';
 import type { SafeUIErrorCode } from '../state/SafeUIErrorCode.ts';
 import { discardBody, FETCH_TIMEOUT_MS } from '../state/fetch-timeout.ts';
+import { DAY_NUTRIENTS } from './diary-contract.ts';
 import { parsePeriodWire, type AveragedNutrient, type PeriodAverage, type PeriodSummary } from './period-contract.ts';
 import {
   DELEGATION_HEADER,
@@ -38,7 +39,7 @@ function emptyPeriod(start: string): PeriodSummary {
   const none: PeriodAverage = {
     averageKnown: null, averagePercent: null, daysUsed: 0, leftOut: { open: 0, noEntries: 0, partial: 0 },
   };
-  const averages = { energy_kcal: none, protein_g: none, fiber_g: none, free_sugars_g: none } as Record<AveragedNutrient, PeriodAverage>;
+  const averages = Object.fromEntries([...DAY_NUTRIENTS, 'free_sugars_g'].map((c) => [c, none])) as Record<AveragedNutrient, PeriodAverage>;
   return { start, end: start, hasProfile: false, days: [], averages };
 }
 

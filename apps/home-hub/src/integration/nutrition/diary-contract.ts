@@ -14,14 +14,27 @@ export interface DiaryItem {
   source: string | null;
   /** free_sugars_g; null means unknown, never zero. */
   freeSugarsG: string | null;
+  /** The headline nutrient codes present as keys of facts.nutrients_per_100g; empty when facts is null. */
+  withFacts: HeadlineNutrient[];
 }
 /** consumed_at on the wire. */
 export interface DiaryEntry { id: string; consumedAt: string; items: DiaryItem[] }
 /** value_g on the wire. */
 export interface DiaryLimit { valueG: string; sources: { title: string; url: string }[] }
-export type DayNutrient = 'energy_kcal' | 'protein_g' | 'fiber_g';
-/** The nutrients Hoy shows, in display order. Others on the wire are ignored. */
-export const DAY_NUTRIENTS_SHOWN: readonly DayNutrient[] = ['energy_kcal', 'protein_g', 'fiber_g'];
+/** The fifteen nutrients of a day, in Nutrition's order (DAY_NUTRIENTS in nutrient_totals.py). */
+export const DAY_NUTRIENTS = [
+  'energy_kcal', 'protein_g', 'fat_g', 'carb_g', 'fiber_g', 'calcium_mg', 'iron_mg', 'folate_ug',
+  'vitamin_b12_ug', 'vitamin_d_ug', 'iodine_ug', 'zinc_mg', 'selenium_ug', 'choline_mg', 'dha_g',
+] as const;
+export type DayNutrient = (typeof DAY_NUTRIENTS)[number];
+/** The nutrients Hoy leads with, in display order. */
+export const HEADLINE_NUTRIENTS = ['energy_kcal', 'protein_g', 'fiber_g'] as const;
+export type HeadlineNutrient = (typeof HEADLINE_NUTRIENTS)[number];
+export const MICRONUTRIENTS = [
+  'calcium_mg', 'iron_mg', 'folate_ug', 'vitamin_b12_ug', 'vitamin_d_ug', 'iodine_ug', 'zinc_mg',
+  'selenium_ug', 'choline_mg', 'dha_g',
+] as const;
+export type Micronutrient = (typeof MICRONUTRIENTS)[number];
 export interface NutrientBlock {
   /** Sum of the known amounts; null means unknown, never zero. */
   known: string | null;
@@ -34,7 +47,7 @@ export interface NutrientBlock {
 export interface DiaryDay {
   /** profile_version; null when the person has no profile version yet. */
   profileVersion: number | null;
-  /** The three nutrients Hoy shows, from day.nutrients. */
+  /** All fifteen nutrients, from day.nutrients. */
   nutrients: Record<DayNutrient, NutrientBlock>;
   date: string;
   mode: 'GENERAL' | 'PREGNANCY';
@@ -139,9 +152,12 @@ function parseItem(raw: unknown): DiaryItem {
   const method = obj(item.conversion, 'conversion').method;
   if (typeof method !== 'string' || !METHODS.includes(method)) bad('conversion method');
   let source: string | null = null;
+  const withFacts: HeadlineNutrient[] = [];
   if (item.facts !== null && item.facts !== undefined) {
     const facts = obj(item.facts, 'facts');
     if (facts.source !== null && facts.source !== undefined) source = str(facts.source, 'facts source');
+    const per100g = obj(facts.nutrients_per_100g, 'facts nutrients_per_100g');
+    for (const code of HEADLINE_NUTRIENTS) if (code in per100g) withFacts.push(code);
   }
   return {
     label: str(item.label, 'label'),
@@ -151,6 +167,7 @@ function parseItem(raw: unknown): DiaryItem {
     method: method as ConversionMethod,
     source,
     freeSugarsG: decimalOrNull(item.free_sugars_g, 'free_sugars_g'),
+    withFacts,
   };
 }
 
@@ -183,7 +200,7 @@ export function parseDayWire(body: unknown): DiaryDay {
   const wireNutrients = obj(day.nutrients, 'nutrients');
   const profileVersion = day.profile_version === undefined ? null : day.profile_version;
   const nutrients = {} as Record<DayNutrient, NutrientBlock>;
-  for (const code of DAY_NUTRIENTS_SHOWN) nutrients[code] = parseNutrientBlock(wireNutrients[code], code);
+  for (const code of DAY_NUTRIENTS) nutrients[code] = parseNutrientBlock(wireNutrients[code], code);
   return {
     profileVersion: profileVersion === null ? null : count(profileVersion, 'profile_version'),
     nutrients,
