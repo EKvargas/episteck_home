@@ -201,6 +201,8 @@ export const PREGNANCY_DAY = {
   ],
   attribution: ['Bundeslebensmittelschlüssel (BLS) 4.0, Max Rubner-Institut'],
 };
+// The same day read earlier, before the breakfast was logged: only the lunch.
+export const PREGNANCY_DAY_LUNCH = { ...PREGNANCY_DAY, entries: [PREGNANCY_DAY.entries[1]] };
 
 // ----------------------------------------------------------------- periods
 const pblock = (known, percent, over = {}) => ({

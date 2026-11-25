@@ -5,10 +5,10 @@ import { parsePeriodWire } from '../src/integration/nutrition/period-contract.ts
 import { parseProfileWire } from '../src/integration/nutrition/profile-contract.ts';
 import {
   EMPTY_DAY, LONG_TEXT, MODE_ONLY, NO_PROFILE_DAY, PARTIAL_DAY, PERIOD_FOURTEEN, PERIOD_NO_PROFILE, PERIOD_THREE,
-  PERIOD_WEEK_PREGNANCY, PREGNANCY_DAY, PRESENT, AVERAGE_CODES, DAY_CODES,
+  PERIOD_WEEK_PREGNANCY, PREGNANCY_DAY, PREGNANCY_DAY_LUNCH, PRESENT, AVERAGE_CODES, DAY_CODES,
 } from './nutrition-fixtures.mjs';
 
-const DAYS = [EMPTY_DAY, PARTIAL_DAY, NO_PROFILE_DAY, PREGNANCY_DAY];
+const DAYS = [EMPTY_DAY, PARTIAL_DAY, NO_PROFILE_DAY, PREGNANCY_DAY, PREGNANCY_DAY_LUNCH];
 const PERIODS = [PERIOD_THREE, PERIOD_NO_PROFILE, PERIOD_WEEK_PREGNANCY, PERIOD_FOURTEEN];
 
 test('every day fixture parses with the real day mapper', () => {

@@ -18,7 +18,16 @@ export function panelError(code: SafeUIErrorCode | undefined): PanelErrorKind {
       return 'NOT_CONFIGURED';
     case 'INVALID_RESPONSE':
       return 'INVALID';
-    default:
+    case 'RESOURCE_NOT_AVAILABLE':
+    case 'SERVICE_UNAVAILABLE':
+    case 'OFFLINE':
+    case undefined:
       return 'UNAVAILABLE';
+    default: {
+      // A new SafeUIErrorCode fails tsc here until it is mapped; at runtime it still reads as unavailable.
+      const unmapped: never = code;
+      void unmapped;
+      return 'UNAVAILABLE';
+    }
   }
 }

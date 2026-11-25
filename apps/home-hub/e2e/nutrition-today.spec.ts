@@ -141,6 +141,14 @@ test('a consent viewer sees neutral copy and no prompt', async ({ page }) => {
   await expect(page.getByRole('button', { name: /^Copiar/ })).toHaveCount(0);
 });
 
+test('while the day loads, a consent viewer reads neutral copy', async ({ page }) => {
+  test.setTimeout(30_000);
+  await signIn(page, 'today-hang', newRun());
+  await page.goto('/app/nutrition/hoy?person=PSN-00007', { waitUntil: 'commit' });
+  await expect(panel(page)).toContainText('Cargando el día…');
+  await expect(panel(page)).not.toContainText('tu día');
+});
+
 test('pregnancy shows the prenatal note under the week; a GENERAL day does not', async ({ page }) => {
   await signIn(page, 'today-pregnancy', newRun());
   await page.goto('/app/nutrition/hoy');
@@ -257,6 +265,22 @@ test('refreshing Hoy fetches the latest diary after a meal changes in Telegram',
   await expect.poll(async () => (await observed(request, run)).mints).toBe(4);
   await expect.poll(() => paths(request, run)).toEqual([DAY, DAY, week(), week()]);
   await expect(weekly(page)).toContainText('Sin objetivo: 10');
+});
+
+test('an open meal stays open when a refresh adds an earlier meal above it', async ({ page }) => {
+  await signIn(page, 'today-meal-added', newRun());
+  await page.goto('/app/nutrition/hoy');
+  const meal = (summary: string) => panel(page).locator('details', { has: page.locator('summary', { hasText: summary }) });
+  const lunch = meal('13:30 · Lentejas con arroz, Tarta casera');
+  const breakfast = meal('08:10 · Avena con leche, Plátano');
+  await expect(breakfast).toHaveCount(0);
+  await lunch.locator('summary').click();
+  await expect(lunch).toHaveJSProperty('open', true);
+  await page.getByRole('button', { name: 'Actualizar', exact: true }).click();
+  await expect(breakfast).toHaveCount(1);
+  // The open state follows the meal, not its position in the list.
+  await expect(lunch).toHaveJSProperty('open', true);
+  await expect(breakfast).toHaveJSProperty('open', false);
 });
 
 // ------------------------------------------------------------- home card

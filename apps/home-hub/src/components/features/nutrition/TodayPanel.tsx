@@ -56,7 +56,8 @@ function DayState({ model, signInHref }: { model: StateModel; signInHref: string
     case 'LOADING':
       return (
         <Frame card role="status" busy>
-          <p className={styles.body}>Cargando tu día…</p>
+          {/* The subject is not known yet while the day loads, so the copy addresses no one. */}
+          <p className={styles.body}>Cargando el día…</p>
           <div className={styles.skeletonRows} aria-hidden="true">
             {[0, 1, 2, 3].map((i) => <div key={i} className={styles.skeleton} />)}
           </div>
@@ -134,13 +135,28 @@ function CompactDay({ model }: { model: DayModel }) {
   );
 }
 
+/**
+ * One key per meal from what it shows (time and summary), so an open meal stays open when a refresh adds a
+ * meal above it. A meal logged twice gets a count, so twins never share a key.
+ */
+function mealKeys(meals: MealLine[]): string[] {
+  const seen = new Map<string, number>();
+  return meals.map((meal) => {
+    const base = `${meal.time} ${meal.summary}`;
+    const count = (seen.get(base) ?? 0) + 1;
+    seen.set(base, count);
+    return count === 1 ? base : `${base} (${count})`;
+  });
+}
+
 function Meals({ meals }: { meals: MealLine[] }) {
+  const keys = mealKeys(meals);
   return (
     <section className={`${styles.card} ${styles.listCard}`} aria-labelledby="today-meals-title">
       <h2 id="today-meals-title" className={styles.title}>Comidas de hoy</h2>
       <div>
         {meals.map((meal, i) => (
-          <details key={i} className={styles.meal}>
+          <details key={keys[i]} className={styles.meal}>
             <summary className={styles.summary}>
               <span className={styles.summaryText}>{meal.summary}</span>
               <CaretRight className={styles.caret} weight="bold" aria-hidden="true" />

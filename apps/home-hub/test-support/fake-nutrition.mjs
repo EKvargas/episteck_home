@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 
 import {
   EMPTY_DAY, LONG_TEXT, MODE_ONLY, NO_PROFILE_DAY, PARTIAL_DAY, PERIOD_FOURTEEN, PERIOD_NO_PROFILE, PERIOD_THREE,
-  PERIOD_WEEK_PREGNANCY, PREGNANCY_DAY, PRESENT,
+  PERIOD_WEEK_PREGNANCY, PREGNANCY_DAY, PREGNANCY_DAY_LUNCH, PRESENT,
 } from './nutrition-fixtures.mjs';
 
 const calls = new Map();
@@ -60,6 +60,9 @@ createServer((request, response) => {
       case 'today-pregnancy': return json(200, PREGNANCY_DAY);
       case 'today-denied': return json(403, { detail: 'ACCESS_DENIED' });
       case 'today-error': return json(500, { detail: 'boom' });
+      case 'today-hang': return undefined; // never answer: Hoy shows its loading state until the Hub times out
+      case 'today-meal-added': // the second day read carries a breakfast logged before the lunch already shown
+        return json(200, list.filter((call) => call.path.includes('/days/today')).length === 1 ? PREGNANCY_DAY_LUNCH : PREGNANCY_DAY);
       default: return json(200, EMPTY_DAY);
     }
   }
