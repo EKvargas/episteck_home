@@ -1,49 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { parsePeriodWire, type PeriodSummary } from '../../../integration/nutrition/period-contract.ts';
 import type { DataEnvelope } from '../../../integration/state/DataEnvelope.ts';
-import { DAY_NUTRIENTS, type DayNutrient, type NutrientBlock } from '../../../integration/nutrition/diary-contract.ts';
-import type { AveragedNutrient, PeriodAverage, PeriodDay, PeriodSummary } from '../../../integration/nutrition/period-contract.ts';
+import { PERIOD_FOURTEEN, PERIOD_NO_PROFILE, PERIOD_WEEK_PREGNANCY } from '../../../../test-support/nutrition-fixtures.mjs';
 import { periodOutcome, toPeriodPanelModel, type PeriodPanelModel } from './period-panel-model.ts';
 
-const block = (known: string | null, percent: string | null = null, over: Partial<NutrientBlock> = {}): NutrientBlock => ({
-  known, itemsTotal: known === null ? 0 : 2, itemsUncounted: 0, status: known === null ? 'NONE' : 'KNOWN',
-  target: null, percent, ...over,
-});
-const sugars = (known: string | null, percent: string | null, status: 'NONE' | 'KNOWN' | 'PARTIAL' = 'KNOWN') =>
-  ({ known, itemsUncounted: 0, status, limitG: percent === null ? null : '50', percent });
-const allBlocks = (over: Partial<Record<DayNutrient, NutrientBlock>>): Record<DayNutrient, NutrientBlock> =>
-  ({ ...Object.fromEntries(DAY_NUTRIENTS.map((c) => [c, block(null)])), ...over }) as Record<DayNutrient, NutrientBlock>;
-const mkDay = (date: string, dayStatus: PeriodDay['dayStatus'], over: Partial<PeriodDay> = {}): PeriodDay => ({
-  date, dayStatus, mode: 'GENERAL', trimester: null,
-  nutrients: allBlocks({
-    energy_kcal: block('2510', '90'), protein_g: block('98.4', '120'), fiber_g: block('24.0', '80'),
-  }),
-  freeSugars: sugars('17.0', '34'), ...over,
-});
-const avg = (known: string | null, percent: string | null, used: number): PeriodAverage => ({
-  averageKnown: known, averagePercent: percent, daysUsed: used, leftOut: { open: 1, noEntries: 0, partial: 0 },
-});
-const allAverages = (over: Partial<Record<AveragedNutrient, PeriodAverage>>): Record<AveragedNutrient, PeriodAverage> =>
-  ({ ...Object.fromEntries([...DAY_NUTRIENTS, 'free_sugars_g'].map((c) => [c, avg(null, null, 0)])), ...over }) as Record<AveragedNutrient, PeriodAverage>;
-const threeDays = (over: Partial<PeriodSummary> = {}): PeriodSummary => ({
-  start: '2026-11-20', end: '2026-11-22', hasProfile: true,
-  days: [
-    mkDay('2026-11-20', 'COMPLETE'),
-    mkDay('2026-11-21', 'COMPLETE', { freeSugars: sugars(null, null, 'NONE') }),
-    mkDay('2026-11-22', 'OPEN', {
-      nutrients: allBlocks({
-        energy_kcal: block('1200', '53'), protein_g: block('40', null, { status: 'PARTIAL' }),
-        fiber_g: block(null),
-      }),
-      freeSugars: sugars('12.0', null, 'PARTIAL'),
-    }),
-  ],
-  averages: allAverages({
-    energy_kcal: avg('2375', '85', 2), protein_g: avg('90', '110', 2), fiber_g: avg('24.0', null, 1),
-    free_sugars_g: avg(null, null, 0),
-  }),
-  ...over,
-});
 const ready = (data: PeriodSummary, environment: 'LIVE' | 'MOCK' = 'LIVE'): DataEnvelope<PeriodSummary> =>
   ({ delivery: 'READY', authorization: 'GRANTED', freshness: 'FRESH', environment, data });
 type Period = Extract<PeriodPanelModel, { kind: 'PERIOD' }>;
@@ -52,84 +13,70 @@ const period = (model: PeriodPanelModel): Period => {
   return model as Period;
 };
 
-test('rows, cells and the average row', () => {
-  const m = period(toPeriodPanelModel(ready(threeDays()), 3));
-  assert.equal(m.title, 'Últimos 3 días');
-  assert.equal(m.range, 3);
-  assert.deepEqual(m.rows.map((r) => [r.day, r.status]), [['Vie 20', 'Cerrado'], ['Sáb 21', 'Cerrado'], ['Dom 22', 'Abierto']]);
-  assert.deepEqual(m.rows.map((r) => r.tone), ['ok', 'ok', 'open']);
-  assert.deepEqual(m.rows[0].cells[0], { value: '2.510', detail: '90 %', unknown: false });
-  assert.deepEqual(m.rows[0].cells[1], { value: '98 g', detail: '120 %', unknown: false });
-  assert.deepEqual(m.rows[0].cells[3], { value: '17 g', detail: '34 %', unknown: false });
-  assert.deepEqual(m.rows[1].cells[3], { value: 'sin dato', detail: null, unknown: true });
-  assert.deepEqual(m.rows[2].cells[1], { value: '40 g', detail: 'parcial', unknown: false });
-  assert.deepEqual(m.rows[2].cells[3], { value: '12 g', detail: 'parcial', unknown: false });
-  assert.deepEqual(m.rows[2].cells[2], { value: 'sin dato', detail: null, unknown: true });
-  assert.equal(m.average.day, 'Media');
-  assert.equal(m.average.status, null);
-  assert.equal(m.average.tone, null);
-  assert.deepEqual(m.average.cells[0], { value: '2.375', detail: '85 % · 2 días', unknown: false });
-  assert.deepEqual(m.average.cells[2], { value: '24 g', detail: '1 día', unknown: false });
-  assert.deepEqual(m.average.cells[3], { value: 'sin dato', detail: null, unknown: true });
+test('one 7-day grid: initials, day numbers, tones by phase, Media on the last grid', () => {
+  const m = period(toPeriodPanelModel(ready(parsePeriodWire(PERIOD_WEEK_PREGNANCY)), 7, null));
+  assert.equal(m.title, 'Últimos 7 días');
+  assert.equal(m.range, 7);
+  assert.equal(m.grids.length, 1);
+  assert.deepEqual(m.grids[0].columns.map((c) => `${c.initial} ${c.day}`), ['X 18', 'J 19', 'V 20', 'S 21', 'D 22', 'L 23', 'M 24']);
+  assert.deepEqual(m.grids[0].rows.map((r) => r.name), ['Energía', 'Proteína', 'Fibra', 'Azúcares libres']);
+  assert.deepEqual(m.grids[0].rows[0].cells.map((c) => c.tone), ['ok', 'caution', 'ok', 'caution', 'unclosed', 'empty', 'progress']);
+  assert.deepEqual(m.grids[0].rows[0].cells.map((c) => c.text),
+    ['bien', 'bajo', 'bien', 'por encima', 'sin cerrar', 'Sin registros', 'en curso · faltan ~610 kcal']);
+  assert.equal(m.grids[0].rows[0].average, '2.246 kcal');
+  assert.deepEqual(m.grids[0].rows[3].cells.slice(0, 4).map((c) => c.text), ['bien', 'pasado del límite', 'bien', 'faltan datos']);
+  assert.equal(m.profileHint, false);
 });
 
-test('a partial energy figure keeps its percent and adds parcial', () => {
-  const days = threeDays().days;
-  days[0] = mkDay('2026-11-20', 'OPEN', {
-    nutrients: { ...days[0].nutrients, energy_kcal: block('1000', '44', { status: 'PARTIAL' }) },
-  });
-  const m = period(toPeriodPanelModel(ready(threeDays({ days })), 3));
-  assert.equal(m.rows[0].cells[0].detail, '44 % · parcial');
+test('14 days: two stacked grids, Media only on the second', () => {
+  const m = period(toPeriodPanelModel(ready(parsePeriodWire(PERIOD_FOURTEEN)), 14, null));
+  assert.equal(m.title, 'Últimos 14 días');
+  assert.equal(m.grids.length, 2);
+  assert.deepEqual(m.grids.map((g) => g.columns.length), [7, 7]);
+  assert.equal(m.grids[0].columns[0].day, '11');
+  assert.equal(m.grids[1].columns[0].day, '18');
+  for (const r of m.grids[0].rows) assert.equal(r.average, null);
+  assert.equal(m.grids[1].rows[0].average, '2.246 kcal');
 });
 
-test('a day without entries shows — and never 0', () => {
-  const none = mkDay('2026-11-22', 'NO_ENTRIES', {
-    nutrients: allBlocks({}),
-    freeSugars: sugars(null, null, 'NONE'),
-  });
-  const m = period(toPeriodPanelModel(ready(threeDays({ days: [none] })), 7));
-  assert.equal(m.rows[0].status, 'Sin registros');
-  assert.equal(m.rows[0].tone, 'none');
-  for (const cell of m.rows[0].cells) assert.deepEqual(cell, { value: '—', detail: null, unknown: false });
-  const text = JSON.stringify(m);
-  assert.doesNotMatch(text, /(^|\D)0 (g|kcal|%)/);
+test('rows link to the nutrient detail for the same range, keeping the person', () => {
+  const m = period(toPeriodPanelModel(ready(parsePeriodWire(PERIOD_FOURTEEN)), 14, 'PSN-00007'));
+  assert.deepEqual(m.grids[0].rows.map((r) => r.href), [
+    '/app/nutrition/nutriente/energy_kcal?person=PSN-00007&rango=14',
+    '/app/nutrition/nutriente/protein_g?person=PSN-00007&rango=14',
+    '/app/nutrition/nutriente/fiber_g?person=PSN-00007&rango=14',
+    '/app/nutrition/nutriente/free_sugars_g?person=PSN-00007&rango=14',
+  ]);
+  const own = period(toPeriodPanelModel(ready(parsePeriodWire(PERIOD_WEEK_PREGNANCY)), 7, null));
+  assert.equal(own.grids[0].rows[2].href, '/app/nutrition/nutriente/fiber_g?rango=7');
 });
 
-test('without a profile: no percentages and the hint', () => {
-  const days = threeDays().days.map((d) => ({
-    ...d,
-    nutrients: {
-      ...d.nutrients,
-      energy_kcal: { ...d.nutrients.energy_kcal, percent: null },
-      protein_g: { ...d.nutrients.protein_g, percent: null },
-      fiber_g: { ...d.nutrients.fiber_g, percent: null },
-    },
-  }));
-  const averages = allAverages({
-    energy_kcal: avg('2375', null, 2), protein_g: avg('90', null, 2), fiber_g: avg('24.0', null, 2),
-    free_sugars_g: avg('17.0', '34', 2),
-  });
-  const m = period(toPeriodPanelModel(ready(threeDays({ hasProfile: false, days, averages })), 3));
+test('the micronutrient groups follow the range', () => {
+  const week = period(toPeriodPanelModel(ready(parsePeriodWire(PERIOD_WEEK_PREGNANCY)), 7, 'PSN-00007'));
+  assert.deepEqual(week.micro.map((g) => g.summary), ['Corto: hierro, folato, vitamina D, colina', 'Bien: 3', 'Faltan datos: 3']);
+  assert.equal(week.micro[0].items[0].href, '/app/nutrition/nutriente/iron_mg?person=PSN-00007&rango=7');
+  const two = period(toPeriodPanelModel(ready(parsePeriodWire(PERIOD_FOURTEEN)), 14, null));
+  assert.equal(two.micro[0].items[0].href, '/app/nutrition/nutriente/iron_mg?rango=14');
+});
+
+test('no profile: plain cells carry their values and the hint shows', () => {
+  const m = period(toPeriodPanelModel(ready(parsePeriodWire(PERIOD_NO_PROFILE)), 3, null));
   assert.equal(m.profileHint, true);
-  // Energy, protein and fiber carry no percent; the free-sugar limit always applies, so sugars keep theirs.
-  for (const cells of [m.rows[0].cells, m.average.cells]) {
-    for (const cell of cells.slice(0, 3)) assert.doesNotMatch(cell.detail ?? '', /%/);
-  }
-  assert.match(m.rows[0].cells[3].detail ?? '', /34 %/);
-  assert.match(m.average.cells[3].detail ?? '', /34 %/);
-  assert.equal(m.average.cells[0].detail, '2 días');
-  assert.equal(period(toPeriodPanelModel(ready(threeDays()), 3)).profileHint, false);
+  const energy = m.grids[0].rows[0].cells[0];
+  assert.equal(energy.tone, 'plain');
+  assert.equal(energy.text, '2.510 kcal');
+  assert.doesNotMatch(JSON.stringify(m.grids), /(^|\D)0 (g|kcal|%)/);
 });
 
 test('errors and MOCK map to deliberate panels', () => {
   const err = (errorCode: string): DataEnvelope<PeriodSummary> =>
     ({ delivery: 'ERROR', authorization: 'INDETERMINATE', freshness: 'UNKNOWN', environment: 'LIVE', errorCode } as DataEnvelope<PeriodSummary>);
-  assert.equal(toPeriodPanelModel(err('ACCESS_DENIED'), 7).kind, 'DENIED');
-  assert.equal(toPeriodPanelModel(err('SESSION_INVALID'), 7).kind, 'SESSION');
-  assert.equal(toPeriodPanelModel(err('SESSION_REQUIRED'), 7).kind, 'SESSION');
-  assert.equal(toPeriodPanelModel(err('INVALID_RESPONSE'), 7).kind, 'INVALID');
-  assert.equal(toPeriodPanelModel(err('NOT_CONFIGURED'), 7).kind, 'NOT_CONFIGURED');
-  assert.equal(toPeriodPanelModel(err('SERVICE_UNAVAILABLE'), 7).kind, 'UNAVAILABLE');
-  assert.equal(toPeriodPanelModel(ready(threeDays(), 'MOCK'), 7).kind, 'NOT_CONFIGURED');
+  assert.equal(toPeriodPanelModel(err('ACCESS_DENIED'), 7, null).kind, 'DENIED');
+  assert.equal(toPeriodPanelModel(err('SESSION_INVALID'), 7, null).kind, 'SESSION');
+  assert.equal(toPeriodPanelModel(err('SESSION_REQUIRED'), 7, null).kind, 'SESSION');
+  assert.equal(toPeriodPanelModel(err('INVALID_RESPONSE'), 7, null).kind, 'INVALID');
+  assert.equal(toPeriodPanelModel(err('NOT_CONFIGURED'), 7, null).kind, 'NOT_CONFIGURED');
+  assert.equal(toPeriodPanelModel(err('SERVICE_UNAVAILABLE'), 7, null).kind, 'UNAVAILABLE');
+  assert.equal(toPeriodPanelModel(ready(parsePeriodWire(PERIOD_WEEK_PREGNANCY), 'MOCK'), 7, null).kind, 'NOT_CONFIGURED');
   assert.equal(periodOutcome({ kind: 'DENIED' }), 'DENIED');
 });

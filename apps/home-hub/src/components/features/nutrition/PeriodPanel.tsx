@@ -1,12 +1,13 @@
 import type { ReactNode } from 'react';
 import { HUB_BASE_PATH } from '@/integration/basePath';
 import type { RangeDays } from '@/integration/nutrition/period-range';
+import { shortDate } from '@/integration/nutrition/nutrition-format';
 import { ChatPrompt } from './ChatPrompt';
-import type { Cell, PeriodPanelModel, PeriodRow } from './period-panel-model';
+import type { Grid, PeriodPanelModel } from './period-panel-model';
 import { RetryButton } from './RetryButton';
+import { WeeklyStatus } from './WeeklyStatus';
 import styles from './PeriodPanel.module.css';
 
-const COLUMNS = ['Energía', 'Prot.', 'Fibra', 'Azúcares'];
 const RANGES: RangeDays[] = [3, 7, 14];
 
 function Frame({ role, tone, busy, children }: {
@@ -48,26 +49,54 @@ export function RangeLinks({ range, person }: { range: RangeDays; person: string
   );
 }
 
-function CellView({ cell }: { cell: Cell }) {
+function GridView({ grid, many }: { grid: Grid; many: boolean }) {
+  const hasAverage = grid.rows[0]?.average !== null;
+  const first = grid.columns[0];
+  const last = grid.columns[grid.columns.length - 1];
   return (
-    <td className={cell.unknown ? styles.unknown : undefined}>
-      <span className={styles.value}>{cell.value}</span>
-      {cell.detail && <span className={styles.detail}>{cell.detail}</span>}
-    </td>
-  );
-}
-
-function RowView({ row, average }: { row: PeriodRow; average?: boolean }) {
-  return (
-    <tr className={average ? styles.average : undefined}>
-      <th scope="row">
-        <span className={styles.day}>{row.day}</span>
-        {row.status && row.tone && (
-          <span className={`${styles.pill} ${styles[row.tone]}`}>{row.status}</span>
-        )}
-      </th>
-      {row.cells.map((cell, i) => <CellView key={i} cell={cell} />)}
-    </tr>
+    <table className={styles.table}>
+      <caption className={many ? styles.caption : 'visually-hidden'}>
+        {first.date === last.date ? shortDate(first.date) : `${shortDate(first.date)} – ${shortDate(last.date)}`}
+      </caption>
+      {/* Both grids reserve the Media column, so the days line up when two are stacked. */}
+      <colgroup>
+        <col className={styles.nameCol} />
+        {grid.columns.map((c) => <col key={c.date} />)}
+        <col className={styles.averageCol} />
+      </colgroup>
+      <thead>
+        <tr>
+          <th scope="col"><span className="visually-hidden">Nutriente</span></th>
+          {grid.columns.map((c) => (
+            <th key={c.date} scope="col" className={styles.dayHead}>
+              <span className={styles.initial}>{c.initial}</span>
+              <span className={styles.number}>{c.day}</span>
+            </th>
+          ))}
+          {hasAverage && <th scope="col" className={styles.averageHead}>Media</th>}
+        </tr>
+      </thead>
+      <tbody>
+        {grid.rows.map((row) => (
+          <tr key={row.code} className={styles.row}>
+            <th scope="row" className={styles.name}>
+              <a href={row.href} className={styles.link}>{row.name}</a>
+            </th>
+            {row.cells.map((cell, i) => (
+              <td key={grid.columns[i].date} className={styles.cell}>
+                <span
+                  role="img"
+                  className={styles.dot}
+                  data-tone={cell.tone}
+                  aria-label={`${row.name}, ${shortDate(grid.columns[i].date)}: ${cell.text}`}
+                />
+              </td>
+            ))}
+            {row.average !== null && <td className={styles.average}>{row.average}</td>}
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -105,23 +134,8 @@ export function PeriodPanel({ model, signInHref }: { model: PeriodPanelModel; si
         <Frame>
           <div className={styles.card}>
             <h2 className={styles.heading}>{model.title}</h2>
-            <div className={styles.scroller} role="region" aria-label={model.title} tabIndex={0}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th scope="col">Día</th>
-                    {COLUMNS.map((c) => <th key={c} scope="col">{c}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {model.rows.map((row, i) => <RowView key={i} row={row} />)}
-                  <RowView row={model.average} average />
-                </tbody>
-              </table>
-            </div>
-            <p className={styles.note}>
-              La media usa solo días cerrados y completos. Un día abierto o un dato que falta se muestra tal cual, nunca como 0.
-            </p>
+            {model.grids.map((grid) => <GridView key={grid.columns[0].date} grid={grid} many={model.grids.length > 1} />)}
+            <p className={styles.note}>La media usa solo días cerrados y completos.</p>
             {model.profileHint && (
               <div className={styles.hint}>
                 <p className={styles.note}>Sin perfil completo no hay objetivos de energía ni proteína con que comparar.</p>
@@ -129,16 +143,10 @@ export function PeriodPanel({ model, signInHref }: { model: PeriodPanelModel; si
               </div>
             )}
           </div>
-          <div className={styles.placeholders}>
-            <div className={styles.placeholder}>
-              <h3 className={styles.placeholderTitle}>Actividad y partidos</h3>
-              <p className={styles.note}>Llega con el registro de salud (proyecto 2).</p>
-            </div>
-            <div className={styles.placeholder}>
-              <h3 className={styles.placeholderTitle}>Patrones</h3>
-              <p className={styles.note}>Llega en el proyecto 3, para que los confirmes o descartes.</p>
-            </div>
-          </div>
+          <section className={styles.card} aria-labelledby="micro-title">
+            <h2 id="micro-title" className={styles.heading}>Vitaminas y minerales{' '}· media</h2>
+            <WeeklyStatus groups={model.micro} />
+          </section>
         </Frame>
       );
   }

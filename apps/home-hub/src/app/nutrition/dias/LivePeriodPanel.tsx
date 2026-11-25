@@ -27,7 +27,7 @@ async function resolvePanel(searchParams: SearchParams, range: RangeDays): Promi
     return { model: { kind: 'LOADING' }, chip: UNKNOWN_CHIP };
   }
   const envelope = await readDiaryPeriod(subject.context, range);
-  const model = toPeriodPanelModel(envelope, range);
+  const model = toPeriodPanelModel(envelope, range, subject.linkPerson);
   // The chip comes from this same payload: no second mint or read.
   return { model, chip: model.kind === 'PERIOD' && envelope.data ? chipFromPeriod(envelope.data) : UNKNOWN_CHIP };
 }
@@ -43,9 +43,11 @@ export async function LivePeriodPanel({ searchParams, range }: { searchParams: S
   }
   logOutcome(periodOutcome(resolved.model));
   const person = typeof searchParams.person === 'string' ? searchParams.person : null;
+  // "Actualizado" and the refresh only over data that read: a state message carries its own action.
+  const updatedAt = resolved.model.kind === 'PERIOD' ? berlinClock(new Date()) : null;
   return (
     <>
-      <NutritionHeader view="days" chip={resolved.chip} updatedAt={berlinClock(new Date())} />
+      <NutritionHeader view="days" chip={resolved.chip} updatedAt={updatedAt} />
       <RangeLinks range={range} person={person} />
       <PeriodPanel model={resolved.model} signInHref={signInHref} />
     </>
