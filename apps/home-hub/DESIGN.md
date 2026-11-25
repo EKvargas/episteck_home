@@ -13,7 +13,10 @@ colors:
   terracotta-deep-text: "#923f1e"
   terracotta-wash: "#fae7db"
   sage: "#57704e"
-  status-success: "#3c7849"
+  status-success: "#2a5d3b"
+  status-caution: "#a5640d"
+  status-unknown: "#66605b"
+  status-progress: "#1f406b"
   status-attention: "#c4643c"
   status-error: "#a83232"
   ambient-canvas: "#02070f"
@@ -132,14 +135,14 @@ The palette is theme-relative. Always consume a role token, never a hex. Roles a
 - `--olin-text-main`, `--olin-text-muted`: primary and secondary text.
 - `--olin-accent`, `--olin-accent-glow`, `--olin-accent-secondary`: the single action/identity color, its glow shadow, and a supporting hue.
 - `--olin-badge-bg`, `--olin-badge-text`: tinted label pair; also reused as the track color for meters and skeletons.
-- `--olin-status-success`, `--olin-status-attention`, `--olin-status-error`, plus `--olin-kiosk-time-color` for the large clock.
+- `--olin-status-success` (on track, green), `--olin-status-caution` (short, low, over or past a limit, amber), `--olin-status-unknown` (data incomplete, day not closed, no entries, grey) and `--olin-status-progress` (day still open, neutral blue): the nutrition status language, with no red. Also `--olin-status-attention`, `--olin-status-error`, and `--olin-kiosk-time-color` for the large clock.
 
 ### Default theme: Warm Household
 - **Parchment** (#f5ede4) canvas under a 135deg gradient (#e8dacb, #f6eee5 at 45%, #ebdcd0) with a faint terracotta glow at the upper right.
 - **Paper White** (#fffdfa) cards, #ffffff on hover; **Sand Line** (#e0d0bf) border; **Terracotta Edge** (#c26941) strong border.
 - **Cocoa Ink** (#2b1f1a) text; **Clay Muted** (#79675b) secondary text.
 - **Terracotta** (#c4643c) is the accent; **Sage** (#57704e) the secondary. Badge pair is #fae7db on #923f1e.
-- Status: success #3c7849, attention #c4643c, error #a83232.
+- Status: success #2a5d3b, caution #a5640d, unknown #66605b, progress #1f406b, attention #c4643c, error #a83232. The four nutrition status colours hold these values in every light theme (Warm, Editorial, Family Canvas, Organic); Ambient Future and Nordic Hardware use the lighter set success #57b476, caution #f4bf7b, unknown #b8b4af, progress #5b8dcf.
 
 ### Other themes (accent and ground only; full sets in tokens.css)
 - **Ambient Future**: night-blue ground (#02070f to #10263f), sky accent #5eb2f8, amber secondary #f6ab63, translucent glass cards with a 28px blur.
@@ -152,6 +155,8 @@ The palette is theme-relative. Always consume a role token, never a hex. Roles a
 **The Role Token Rule.** Components read `--olin-*` roles. A hex literal in a component is a bug, because it will not follow the theme. (Observed violation: the Warm slot CSS hard-codes #c4643c, #fae8dc, #fbf7f2 and #ebdcd0 in places, so those slots do not re-theme.)
 
 **The One Accent Rule.** Each theme has one accent. It marks the action, the active state, the focus ring and progress fills. Use `--olin-accent-secondary` sparingly as support, not as a second brand color.
+
+**The Status Words Rule.** Status always carries a word (`bien`, `corto`, `faltan datos`, `sin cerrar`, `en curso`), and shape differs per state in the day dots, so colour never carries meaning alone. Status colours reach 4.5:1 on the card in every theme, proved by `src/styles/status-tokens.test.ts`.
 
 **The Status Is Not Accent Rule.** Success, attention and error come from `--olin-status-*`, never from the accent, even when a theme's attention color equals its accent (Warm does).
 
@@ -227,17 +232,20 @@ Editorial Ledger adds a hand-drawn ink circle (`.ledger-ink-circle`, an irregula
 - **Disabled:** opacity 0.6 and `cursor: progress`.
 
 ### Chips and switchers
-- Relationship switcher: a pill track (`--olin-surface-card`, 1px border, 9999px) holding chips; the active chip fills with `--olin-accent`, white text, weight 600. The default set recolors the active chip by mode (care for another person: #8b5cf6 with a violet glow; family: `--olin-surface-border-strong`). Each theme restyles this region in its own slot.
+- Relationship switcher: a pill track (`--olin-surface-card`, 1px border, 9999px) holding chips; the active chip is the badge pair (`--olin-badge-bg` fill, `--olin-badge-text` text, weight 600) with a 2px inset ring in `--olin-accent`. The default set recolors only the ring by mode (care for another person: #8b5cf6; family: `--olin-surface-border-strong`). Each theme restyles this region in its own slot.
 
 ### Badges / tags
 - Mono 0.72-0.75rem, weight 600, `--olin-badge-bg` fill, `--olin-badge-text` text, 1px border, 0.375-0.4rem radius.
 
 ### Navigation
+- Spanish labels: Inicio, Memoria, Nutrición (`ForkKnife` icon), Salud, Calendario, Ajustes. In the bottom nav the current tab is text-main at weight 700.
 - Sidebar items: pill radius, muted text, 0.95rem; hover fills `--olin-surface-card-hover`; active state is card fill, main text, weight 600, elevation shadow and 1px border. Brand motif is a 14px ring in the accent. Mobile bottom nav: 60px, card fill, blur, top hairline, icon over 0.75rem label.
-- Page-level links on nutrition: underlined, 600, 44px tall, current page 3px underline in the accent.
+- Page-level links on nutrition: underlined, 600, 44px tall, current page is text-main at 700 with a 3px accent underline (Hoy · Días tabs).
 
 ### Meters and progress
-- Track `--olin-badge-bg`, fill `--olin-accent`, 8px high with 4px radius, width animates over 1s ease. Skeletons reuse the badge fill and a 1.2s opacity pulse.
+- Status bar (`StatusBar`): a 0–150 % track in `--olin-badge-bg`, 8px high, so the target (100 %) sits two thirds along. A tick marks a minimum, a 90–110 % band an "about" target, a heavier cap a limit. The fill takes its tone from the `--olin-status-*` token for the state; its width is a CSS ratio of raw wire decimals (`--bar-value` / `--bar-scale`), never a computed percentage.
+- Status dots and legend (Días): one dot per day, shape per state (filled circle bien, rotated diamond caution, square unknown, ringed circle en curso, dashed ring sin cerrar, dash Sin registros), with a legend of the same words beneath.
+- Other meters and skeletons reuse the badge fill and a 1.2s opacity pulse.
 
 ### Slot components (signature)
 - Seven regions x seven sets (six themes plus default). Each takes the same typed props (`src/components/slots/types.ts`) so a theme can change structure freely while data and handlers stay identical.
@@ -250,8 +258,8 @@ Editorial Ledger adds a hand-drawn ink circle (`.ledger-ink-circle`, an irregula
 - Nutrition copy is Spanish, imperative and plain ("Registrar una comida", "Anular un registro"); prompts use [bracketed placeholders] and ask the assistant to wait for confirmation before changing records. Tags and eyebrows are short and mono. The app name reads "Episteck Home - Olin Family OS".
 
 ### Observed divergence: live nutrition pages vs themed slots
-- The live nutrition routes (`/nutrition`, `/nutrition/hoy`, `/nutrition/dias`) render plain feature cards from `components/features/nutrition/*` and `app/nutrition/page.module.css`, not the themed slot components. They do consume the `--olin-*` tokens, so color, font and card radius follow the active theme, but structure does not change per theme.
-- Several of those panels use fixed radii (24px hero, 22px timeline, 8px buttons) and fixed paddings (30px, 26px) instead of `--olin-card-radius` / spacing tokens, and the hero has no `--olin-shadow-elevation`. In Editorial (0.35rem radius, hard shadow) these cards therefore look softer than the rest of the app; in Warm they are close.
+- The live nutrition routes are `/nutrition/hoy`, `/nutrition/dias`, `/nutrition/perfil`, `/nutrition/nutriente/<code>` and `/nutrition/ayuda`; `/nutrition` redirects to Hoy. They render plain feature cards from `components/features/nutrition/*` and `app/nutrition/page.module.css`, not the themed slot components. They consume the `--olin-*` tokens, including the status tokens above, so color, font, card radius and shadow follow the active theme, but structure does not change per theme.
+- Remaining fixed values: some panels still use literal radii (16px cards, 8px buttons) and rem paddings next to `--olin-card-radius`; the detector reports these as advisories.
 - The nutrition canvas re-paints `--olin-bg-gradient` on its own wrapper, duplicating the body background.
 
 ## Do's and Don'ts
